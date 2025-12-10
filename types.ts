@@ -55,6 +55,48 @@ export interface NFTData {
   ownership: Array<{ holder: string; percentage: number }>;
 }
 
+export interface PreservationEvent {
+  eventType: string; // e.g., "ingestion", "cleaning", "tokenization"
+  timestamp: string;
+  agent: string;
+  outcome: "SUCCESS" | "FAILURE";
+}
+
+// Strictly typed SQL-like Schema for Historical Documents
+export interface HistoricalDocumentMetadata {
+  ASSET_ID: string;
+  LOCAL_TIMESTAMP: string;
+  OCR_DERIVED_TIMESTAMP: string | null;
+  NLP_DERIVED_TIMESTAMP: string | null;
+  LOCAL_GIS_ZONE: string;
+  OCR_DERIVED_GIS_ZONE: string | null;
+  NLP_DERIVED_GIS_ZONE: string | null;
+  NODE_COUNT: number;
+  NLP_NODE_CATEGORIZATION: string;
+  RAW_OCR_TRANSCRIPTION: string;
+  PREPROCESS_OCR_TRANSCRIPTION: string;
+  SOURCE_COLLECTION: string;
+  DOCUMENT_TITLE: string;
+  DOCUMENT_DESCRIPTION: string;
+  FILE_FORMAT: string;
+  FILE_SIZE_BYTES: number;
+  RESOLUTION_DPI: number;
+  COLOR_MODE: string;
+  CREATOR_AGENT: string | null;
+  RIGHTS_STATEMENT: string;
+  LANGUAGE_CODE: string;
+  FIXITY_CHECKSUM: string; // SHA-256
+  INGEST_DATE: string;
+  LAST_MODIFIED: string;
+  PROCESSING_STATUS: AssetStatus;
+  CONFIDENCE_SCORE: number;
+  ENTITIES_EXTRACTED: string[]; // List of named entities
+  RELATED_ASSETS: string[];
+  PRESERVATION_EVENTS: PreservationEvent[];
+  KEYWORDS_TAGS: string[];
+  ACCESS_RESTRICTIONS: boolean;
+}
+
 export interface DigitalAsset {
   id: string;
   imageUrl: string;
@@ -67,4 +109,7 @@ export interface DigitalAsset {
   nft?: NFTData;
   status: AssetStatus;
   processingAnalysis?: string; // Raw LLM thoughts
+  
+  // The structured DB record
+  sqlRecord?: HistoricalDocumentMetadata;
 }

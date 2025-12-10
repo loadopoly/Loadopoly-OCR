@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { GISMetadata, GraphData, TokenizationData, DigitalAsset, AssetStatus } from "../types";
+import { GISMetadata, GraphData, TokenizationData, AssetStatus } from "../types";
 
 const GEMINI_MODEL = "gemini-2.5-flash";
 
@@ -23,11 +23,28 @@ export const fileToGenerativePart = async (file: File): Promise<{ inlineData: { 
 };
 
 interface ProcessResponse {
+  // Original Props
   ocrText: string;
   gisMetadata: GISMetadata;
   graphData: GraphData;
   tokenization: TokenizationData;
   analysis: string;
+
+  // New Structured DB Props
+  ocrDerivedTimestamp: string | null;
+  nlpDerivedTimestamp: string | null;
+  ocrDerivedGisZone: string | null;
+  nlpDerivedGisZone: string | null;
+  nlpNodeCategorization: string;
+  preprocessOcrTranscription: string;
+  documentTitle: string;
+  documentDescription: string;
+  creatorAgent: string | null;
+  rightsStatement: string;
+  languageCode: string;
+  confidenceScore: number;
+  keywordsTags: string[];
+  accessRestrictions: boolean;
 }
 
 export const processImageWithGemini = async (
@@ -44,27 +61,46 @@ export const processImageWithGemini = async (
 
   const locString = location 
     ? `The image was captured at Latitude: ${location.lat}, Longitude: ${location.lng}.` 
-    : "No geolocation data available for this image.";
+    : "No geolocation data available for this image. Infer location context solely from visual cues.";
 
   const prompt = `
-    Analyze the provided image for a digital archival system.
+    Analyze the provided image for a strict SQL-based historical archival system.
     ${locString}
 
-    Perform the following tasks:
-    1. **OCR**: Transcribe all visible text accurately.
-    2. **GIS Inference**: Based on the image visual context and coordinates (if provided), infer GIS-style metadata (zone type, terrain, potential landmarks).
-    3. **Graph Extraction**: Identify key entities (Nodes) such as People, Places, Organizations, Dates, and Concepts. Determine relationships (Links) between them.
-    4. **Tokenization Analysis**: Identify key tokens useful for LLM training and simulate an embedding vector preview (5 random floats).
-    5. **Contextual Analysis**: A brief summary of what this document/image represents in a legal or geospatial context.
+    Perform the following complex extraction tasks:
 
-    Return the result as a strict JSON object.
+    1. **OCR & Cleaning**: 
+       - Transcribe all visible text (RAW_OCR). 
+       - Create a "Preprocessed" version (PREPROCESS_OCR) by correcting scanning errors and bias.
+    
+    2. **Deep Metadata Extraction**:
+       - **Timestamps**: Find specific dates in text (OCR_DERIVED) and infer general time periods (NLP_DERIVED, e.g., "Late 19th Century" based on style/content).
+       - **GIS Zones**: 
+          - LOCAL_GIS_ZONE: What is the visual environment? (Urban, Rural, etc.)
+          - OCR_DERIVED_GIS_ZONE: Are there specific city/state names in the text?
+          - NLP_DERIVED_GIS_ZONE: Based on context (e.g., mention of "Confederacy" implies US South), what is the region?
+       - **Provenance**: Identify the Creator Agent (Author/Org) and Rights Statement (Public Domain, Copyright).
+    
+    3. **Graph & NLP**: 
+       - Identify Nodes (People, Places, Orgs).
+       - Categorize the overall topic (NLP_NODE_CATEGORIZATION).
+       - Generate a Title (Dublin Core) and Description (PREMIS).
+
+    4. **Safety & Tokenization**:
+       - Flag access restrictions (Sensitive topics).
+       - Provide token count and embedding preview.
+
+    Return the result as a strict JSON object matching the schema.
   `;
 
   const schema: Schema = {
     type: Type.OBJECT,
     properties: {
-      ocrText: { type: Type.STRING, description: "Full text transcription" },
+      ocrText: { type: Type.STRING, description: "Raw full text transcription" },
+      preprocessOcrTranscription: { type: Type.STRING, description: "Cleaned text for NLP" },
       analysis: { type: Type.STRING, description: "Brief contextual summary" },
+      
+      // GIS
       gisMetadata: {
         type: Type.OBJECT,
         properties: {
@@ -76,6 +112,27 @@ export const processImageWithGemini = async (
         },
         required: ["zoneType", "environmentalContext"]
       },
+      ocrDerivedGisZone: { type: Type.STRING, nullable: true },
+      nlpDerivedGisZone: { type: Type.STRING, nullable: true },
+
+      // Timestamps
+      ocrDerivedTimestamp: { type: Type.STRING, nullable: true, description: "Specific date found in text" },
+      nlpDerivedTimestamp: { type: Type.STRING, nullable: true, description: "Inferred era/period" },
+
+      // Document Metadata
+      documentTitle: { type: Type.STRING },
+      documentDescription: { type: Type.STRING },
+      creatorAgent: { type: Type.STRING, nullable: true },
+      rightsStatement: { type: Type.STRING },
+      languageCode: { type: Type.STRING },
+      
+      // Classification
+      nlpNodeCategorization: { type: Type.STRING },
+      keywordsTags: { type: Type.ARRAY, items: { type: Type.STRING } },
+      accessRestrictions: { type: Type.BOOLEAN },
+      confidenceScore: { type: Type.NUMBER, description: "0.0 to 1.0 confidence in extraction" },
+
+      // Graph
       graphData: {
         type: Type.OBJECT,
         properties: {
@@ -107,6 +164,8 @@ export const processImageWithGemini = async (
         },
         required: ["nodes", "links"]
       },
+
+      // Tokenization
       tokenization: {
         type: Type.OBJECT,
         properties: {
@@ -127,7 +186,10 @@ export const processImageWithGemini = async (
         required: ["tokenCount", "topTokens"]
       }
     },
-    required: ["ocrText", "gisMetadata", "graphData", "tokenization", "analysis"]
+    required: [
+      "ocrText", "preprocessOcrTranscription", "gisMetadata", "graphData", "tokenization", "analysis",
+      "documentTitle", "documentDescription", "rightsStatement", "languageCode", "keywordsTags"
+    ]
   };
 
   try {
@@ -149,7 +211,26 @@ export const processImageWithGemini = async (
     const text = response.text;
     if (!text) throw new Error("No response from Gemini");
     
-    return JSON.parse(text) as ProcessResponse;
+    // Parse and Sanitize to ensure arrays exist
+    const parsed = JSON.parse(text) as ProcessResponse;
+
+    return {
+      ...parsed,
+      keywordsTags: parsed.keywordsTags || [],
+      gisMetadata: {
+        ...parsed.gisMetadata,
+        nearbyLandmarks: parsed.gisMetadata?.nearbyLandmarks || []
+      },
+      graphData: {
+        nodes: parsed.graphData?.nodes || [],
+        links: parsed.graphData?.links || []
+      },
+      tokenization: {
+        ...parsed.tokenization,
+        topTokens: parsed.tokenization?.topTokens || [],
+        embeddingVectorPreview: parsed.tokenization?.embeddingVectorPreview || []
+      }
+    };
 
   } catch (error) {
     console.error("Gemini Processing Error:", error);
