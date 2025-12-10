@@ -15,11 +15,23 @@ import {
   Table as TableIcon,
   Search,
   Download,
-  Code
+  Code,
+  Filter,
+  ShieldCheck,
+  Eye,
+  EyeOff
 } from 'lucide-react';
-import { AssetStatus, DigitalAsset, LocationData } from './types';
+import { AssetStatus, DigitalAsset, LocationData, PreservationEvent, HistoricalDocumentMetadata } from './types';
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
 import GraphVisualizer from './components/GraphVisualizer';
+
+// --- Helper Functions ---
+async function calculateSHA256(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
 
 // --- Sub-components ---
 
@@ -57,6 +69,7 @@ export default function App() {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [geoPermission, setGeoPermission] = useState<boolean>(false);
+  const [sourceCollectionFilter, setSourceCollectionFilter] = useState('ALL');
 
   // Stats derivation
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
@@ -75,21 +88,69 @@ export default function App() {
 
     setIsProcessing(true);
     
-    // Create placeholder asset
-    const newAsset: DigitalAsset = {
-      id: Math.random().toString(36).substring(7),
-      imageUrl: URL.createObjectURL(file),
-      timestamp: new Date().toISOString(),
-      ocrText: "",
-      status: AssetStatus.PROCESSING
-    };
-
-    setAssets(prev => [newAsset, ...prev]);
-    setActiveTab('assets');
-    setSelectedAssetId(newAsset.id);
-
     try {
-      // Get Location
+      // 1. Calculate Technical Metadata (PREMIS)
+      const checksum = await calculateSHA256(file);
+      const ingestDate = new Date().toISOString();
+      const fileSize = file.size;
+      const fileType = file.type;
+
+      // 2. Create placeholder asset
+      const newAsset: DigitalAsset = {
+        id: Math.random().toString(36).substring(7),
+        imageUrl: URL.createObjectURL(file),
+        timestamp: ingestDate,
+        ocrText: "",
+        status: AssetStatus.PROCESSING,
+        // Init SQL record with empty processing fields but populated tech metadata
+        sqlRecord: {
+          ASSET_ID: "", // Set later
+          LOCAL_TIMESTAMP: ingestDate,
+          OCR_DERIVED_TIMESTAMP: null,
+          NLP_DERIVED_TIMESTAMP: null,
+          LOCAL_GIS_ZONE: "PENDING",
+          OCR_DERIVED_GIS_ZONE: null,
+          NLP_DERIVED_GIS_ZONE: null,
+          NODE_COUNT: 0,
+          NLP_NODE_CATEGORIZATION: "PENDING",
+          RAW_OCR_TRANSCRIPTION: "",
+          PREPROCESS_OCR_TRANSCRIPTION: "",
+          SOURCE_COLLECTION: "General Upload", // Default
+          DOCUMENT_TITLE: "Processing...",
+          DOCUMENT_DESCRIPTION: "Pending Analysis",
+          FILE_FORMAT: fileType,
+          FILE_SIZE_BYTES: fileSize,
+          RESOLUTION_DPI: 72, // Placeholder
+          COLOR_MODE: "RGB",
+          CREATOR_AGENT: null,
+          RIGHTS_STATEMENT: "Pending",
+          LANGUAGE_CODE: "en-US",
+          FIXITY_CHECKSUM: checksum,
+          INGEST_DATE: ingestDate,
+          LAST_MODIFIED: ingestDate,
+          PROCESSING_STATUS: AssetStatus.PROCESSING,
+          CONFIDENCE_SCORE: 0,
+          ENTITIES_EXTRACTED: [],
+          RELATED_ASSETS: [],
+          PRESERVATION_EVENTS: [{
+             eventType: "INGESTION",
+             timestamp: ingestDate,
+             agent: "SYSTEM_USER",
+             outcome: "SUCCESS"
+          }],
+          KEYWORDS_TAGS: [],
+          ACCESS_RESTRICTIONS: false
+        }
+      };
+
+      // Set ID correctly in sub-object
+      if (newAsset.sqlRecord) newAsset.sqlRecord.ASSET_ID = newAsset.id;
+
+      setAssets(prev => [newAsset, ...prev]);
+      setActiveTab('database');
+      setSelectedAssetId(newAsset.id);
+
+      // 3. Get Location
       let location: {lat: number, lng: number} | null = null;
       if (navigator.geolocation) {
         try {
@@ -105,12 +166,42 @@ export default function App() {
         }
       }
 
-      // Process with Gemini
+      // 4. Process with Gemini
       const analysis = await processImageWithGemini(file, location);
       
-      // Update Asset with Result
+      // 5. Update Asset with Result
       setAssets(prev => prev.map(a => {
         if (a.id === newAsset.id) {
+          
+          // Construct the final SQL record
+          const updatedSqlRecord: HistoricalDocumentMetadata = {
+            ...a.sqlRecord!,
+            OCR_DERIVED_TIMESTAMP: analysis.ocrDerivedTimestamp,
+            NLP_DERIVED_TIMESTAMP: analysis.nlpDerivedTimestamp,
+            LOCAL_GIS_ZONE: analysis.gisMetadata?.zoneType || "Unknown",
+            OCR_DERIVED_GIS_ZONE: analysis.ocrDerivedGisZone,
+            NLP_DERIVED_GIS_ZONE: analysis.nlpDerivedGisZone,
+            NODE_COUNT: analysis.graphData?.nodes?.length || 0,
+            NLP_NODE_CATEGORIZATION: analysis.nlpNodeCategorization,
+            RAW_OCR_TRANSCRIPTION: analysis.ocrText,
+            PREPROCESS_OCR_TRANSCRIPTION: analysis.preprocessOcrTranscription,
+            DOCUMENT_TITLE: analysis.documentTitle,
+            DOCUMENT_DESCRIPTION: analysis.documentDescription,
+            CREATOR_AGENT: analysis.creatorAgent,
+            RIGHTS_STATEMENT: analysis.rightsStatement,
+            LANGUAGE_CODE: analysis.languageCode,
+            LAST_MODIFIED: new Date().toISOString(),
+            PROCESSING_STATUS: AssetStatus.MINTED,
+            CONFIDENCE_SCORE: analysis.confidenceScore,
+            ENTITIES_EXTRACTED: analysis.graphData?.nodes ? analysis.graphData.nodes.map(n => n.label) : [],
+            KEYWORDS_TAGS: analysis.keywordsTags || [],
+            ACCESS_RESTRICTIONS: analysis.accessRestrictions,
+            PRESERVATION_EVENTS: [
+              ...a.sqlRecord!.PRESERVATION_EVENTS,
+              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }
+            ]
+          };
+
           return {
             ...a,
             status: AssetStatus.MINTED,
@@ -120,7 +211,8 @@ export default function App() {
             tokenization: analysis.tokenization,
             processingAnalysis: analysis.analysis,
             location: location ? { latitude: location.lat, longitude: location.lng, accuracy: 1 } : undefined,
-            nft: simulateNFTMinting(a.id)
+            nft: simulateNFTMinting(a.id),
+            sqlRecord: updatedSqlRecord
           };
         }
         return a;
@@ -128,23 +220,28 @@ export default function App() {
 
     } catch (err) {
       console.error(err);
-      setAssets(prev => prev.map(a => a.id === newAsset.id ? { ...a, status: AssetStatus.FAILED } : a));
+      setAssets(prev => prev.map(a => a.id === selectedAssetId ? { ...a, status: AssetStatus.FAILED } : a));
     } finally {
       setIsProcessing(false);
     }
   };
 
   const downloadJSON = (asset: DigitalAsset) => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(asset, null, 2));
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(asset.sqlRecord, null, 2));
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href",     dataStr);
-    downloadAnchorNode.setAttribute("download", `geograph-asset-${asset.id}.json`);
+    downloadAnchorNode.setAttribute("download", `GEOGRAPH_DB_${asset.id}.json`);
     document.body.appendChild(downloadAnchorNode);
     downloadAnchorNode.click();
     downloadAnchorNode.remove();
   };
 
   const selectedAsset = assets.find(a => a.id === selectedAssetId);
+
+  // Filter for Database view
+  const filteredAssets = sourceCollectionFilter === 'ALL' 
+    ? assets 
+    : assets.filter(a => a.sqlRecord?.SOURCE_COLLECTION === sourceCollectionFilter);
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30">
@@ -186,12 +283,12 @@ export default function App() {
         
         {/* Header */}
         <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-950/80 backdrop-blur z-10">
-          <h2 className="text-lg font-semibold text-white capitalize">{activeTab === 'database' ? 'Structured Data Repository' : activeTab}</h2>
+          <h2 className="text-lg font-semibold text-white capitalize">{activeTab === 'database' ? 'HISTORICAL DOCUMENTS DATABASE' : activeTab}</h2>
           <div className="flex items-center gap-4">
              <label className={`flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                 {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Camera size={18} />}
-                <span>{isProcessing ? 'Processing...' : 'Scan / Upload'}</span>
-                <input type="file" className="hidden" accept="image/*" onChange={handleFileUpload} disabled={isProcessing} />
+                <span>{isProcessing ? 'Ingest & Process' : 'New Ingest'}</span>
+                <input type="file" className="hidden" accept="image/*, application/pdf" onChange={handleFileUpload} disabled={isProcessing} />
              </label>
           </div>
         </header>
@@ -203,7 +300,7 @@ export default function App() {
             <div className="space-y-8 max-w-6xl mx-auto">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <StatCard label="Total Assets" value={assets.length} icon={FileText} color="text-blue-500" />
-                <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes.length || 0), 0)} icon={Network} color="text-purple-500" />
+                <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} icon={Network} color="text-purple-500" />
                 <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" />
                 <StatCard label="Market Cap (ETH)" value={`Ξ ${totalValue.toFixed(2)}`} icon={Coins} color="text-amber-500" />
               </div>
@@ -247,89 +344,94 @@ export default function App() {
             </div>
           )}
 
-          {/* Structured Database View */}
+          {/* Structured Database View - UPDATED TO SQL STYLE */}
           {activeTab === 'database' && (
-             <div className="max-w-6xl mx-auto space-y-6">
-               <div className="flex flex-col gap-2">
-                 <div className="flex items-center gap-2">
-                   <Code className="text-primary-500" size={24}/>
-                   <h2 className="text-2xl font-bold text-white">Repository Database</h2>
-                 </div>
-                 <p className="text-slate-400">Query and export structured relational data derived from unstructured inputs.</p>
+             <div className="h-full flex flex-col gap-4">
+               {/* Controls */}
+               <div className="flex justify-between items-end bg-slate-900 p-4 rounded-xl border border-slate-800">
+                   <div className="space-y-1">
+                      <h3 className="text-white font-bold flex items-center gap-2">
+                          <Database size={18} className="text-primary-500" /> Repository Master List
+                      </h3>
+                      <p className="text-xs text-slate-400">Manage, query, and sell datum derived from unstructured inputs.</p>
+                   </div>
+                   <div className="flex gap-4">
+                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700">
+                           <Filter size={14} className="text-slate-400" />
+                           <select 
+                             className="bg-transparent border-none text-xs text-slate-300 focus:outline-none"
+                             value={sourceCollectionFilter}
+                             onChange={(e) => setSourceCollectionFilter(e.target.value)}
+                           >
+                               <option value="ALL">All Sources</option>
+                               <option value="General Upload">General Upload</option>
+                               <option value="Texas THC Archive">Texas THC Archive</option>
+                           </select>
+                       </div>
+                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 w-64">
+                          <Search size={14} className="text-slate-400" />
+                          <input type="text" placeholder="SQL Query..." className="bg-transparent border-none text-xs text-slate-300 focus:outline-none w-full" />
+                       </div>
+                   </div>
                </div>
 
-               {/* Mock Query Interface */}
-               <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 flex gap-4 items-center shadow-lg">
-                  <span className="text-primary-500 font-mono font-bold">{`>`}</span>
-                  <input type="text" placeholder="SELECT * FROM assets WHERE zone_type = 'Urban' AND token_count > 500" className="flex-1 bg-transparent border-none focus:outline-none text-slate-200 font-mono text-sm placeholder:text-slate-600" />
-                  <button className="p-2 bg-slate-800 rounded hover:bg-slate-700 text-slate-300 transition-colors"><Search size={18}/></button>
-               </div>
-
-               {/* Table */}
-               <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-xl">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm text-slate-400">
-                      <thead className="bg-slate-950 text-slate-200 uppercase font-bold text-xs">
+               {/* SQL GRID */}
+               <div className="flex-1 overflow-auto bg-slate-900 border border-slate-800 rounded-xl shadow-inner scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
+                  <table className="w-full text-left border-collapse">
+                      <thead className="bg-slate-950 sticky top-0 z-10">
                         <tr>
-                          <th className="px-6 py-4">Asset ID</th>
-                          <th className="px-6 py-4">Timestamp</th>
-                          <th className="px-6 py-4">GIS Zone</th>
-                          <th className="px-6 py-4 text-center">Nodes</th>
-                          <th className="px-6 py-4 text-center">Tokens</th>
-                          <th className="px-6 py-4 text-center">Shards</th>
-                          <th className="px-6 py-4">Status</th>
-                          <th className="px-6 py-4 text-right">Action</th>
+                          {['ASSET_ID', 'DOC_TITLE', 'LOCAL_TIMESTAMP', 'OCR_TIMESTAMP', 'NLP_TIMESTAMP', 'LOCAL_GIS', 'OCR_GIS', 'NLP_GIS', 'NODES', 'CATEGORY', 'RIGHTS', 'FORMAT', 'SIZE (B)', 'FIXITY (SHA256)', 'CONFIDENCE', 'ACCESS', 'ACTION'].map(h => (
+                              <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-r border-slate-800 whitespace-nowrap">
+                                  {h}
+                              </th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-800">
-                        {assets.map(asset => (
-                          <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors">
-                            <td className="px-6 py-4 font-mono text-xs text-slate-500">{asset.id.substring(0,8)}...</td>
-                            <td className="px-6 py-4">{new Date(asset.timestamp).toLocaleDateString()}</td>
-                            <td className="px-6 py-4">
-                               <span className={`px-2 py-1 rounded text-xs ${asset.gisMetadata ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'text-slate-600 bg-slate-800'}`}>
-                                 {asset.gisMetadata?.zoneType || 'N/A'}
-                               </span>
-                            </td>
-                            <td className="px-6 py-4 text-center font-mono">{asset.graphData?.nodes.length || '-'}</td>
-                            <td className="px-6 py-4 text-center font-mono">{asset.tokenization?.tokenCount || '-'}</td>
-                            <td className="px-6 py-4 text-center font-mono">{asset.nft?.totalShards || '-'}</td>
-                            <td className="px-6 py-4">
-                               <span className={`flex items-center gap-2 ${asset.status === 'MINTED' ? 'text-blue-400' : 'text-amber-400'}`}>
-                                  {asset.status === 'MINTED' ? <CheckCircle size={14}/> : <div className="w-2 h-2 rounded-full bg-current animate-pulse"/>}
-                                  {asset.status}
-                               </span>
-                            </td>
-                            <td className="px-6 py-4 text-right">
-                               <button 
-                                  onClick={() => downloadJSON(asset)}
-                                  className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs transition-colors border border-slate-700 hover:border-slate-500"
-                               >
-                                   <Download size={14} /> JSON
-                               </button>
-                            </td>
-                          </tr>
-                        ))}
-                        {assets.length === 0 && (
-                           <tr>
-                               <td colSpan={8} className="px-6 py-12 text-center text-slate-600 italic">
-                                   <div className="flex flex-col items-center gap-2">
-                                      <Database className="opacity-20" size={32}/>
-                                      <p>No records found in database.</p>
-                                   </div>
-                               </td>
-                           </tr>
-                        )}
+                         {filteredAssets.map(asset => {
+                             const rec = asset.sqlRecord;
+                             if (!rec) return null;
+                             return (
+                                 <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
+                                     <td className="px-4 py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{rec.ASSET_ID.substring(0,8)}...</td>
+                                     <td className="px-4 py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate" title={rec.DOCUMENT_TITLE}>{rec.DOCUMENT_TITLE}</td>
+                                     <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{new Date(rec.LOCAL_TIMESTAMP).toLocaleDateString()}</td>
+                                     <td className="px-4 py-3 text-primary-400 border-r border-slate-800 whitespace-nowrap">{rec.OCR_DERIVED_TIMESTAMP || '-'}</td>
+                                     <td className="px-4 py-3 text-indigo-400 border-r border-slate-800 whitespace-nowrap">{rec.NLP_DERIVED_TIMESTAMP || '-'}</td>
+                                     <td className="px-4 py-3 text-emerald-400 border-r border-slate-800 whitespace-nowrap">{rec.LOCAL_GIS_ZONE}</td>
+                                     <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{rec.OCR_DERIVED_GIS_ZONE || '-'}</td>
+                                     <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{rec.NLP_DERIVED_GIS_ZONE || '-'}</td>
+                                     <td className="px-4 py-3 text-center border-r border-slate-800">{rec.NODE_COUNT}</td>
+                                     <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap max-w-[150px] truncate">{rec.NLP_NODE_CATEGORIZATION}</td>
+                                     <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap">{rec.RIGHTS_STATEMENT}</td>
+                                     <td className="px-4 py-3 border-r border-slate-800">{rec.FILE_FORMAT}</td>
+                                     <td className="px-4 py-3 border-r border-slate-800 text-right">{rec.FILE_SIZE_BYTES.toLocaleString()}</td>
+                                     <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap text-[9px] text-slate-600" title={rec.FIXITY_CHECKSUM}>{rec.FIXITY_CHECKSUM.substring(0,8)}...</td>
+                                     <td className="px-4 py-3 border-r border-slate-800 text-center">
+                                         <span className={`px-1.5 py-0.5 rounded ${rec.CONFIDENCE_SCORE > 0.8 ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>
+                                             {(rec.CONFIDENCE_SCORE * 100).toFixed(0)}%
+                                         </span>
+                                     </td>
+                                     <td className="px-4 py-3 border-r border-slate-800 text-center">
+                                         {rec.ACCESS_RESTRICTIONS ? <EyeOff size={12} className="text-red-500 mx-auto"/> : <Eye size={12} className="text-green-500 mx-auto"/>}
+                                     </td>
+                                     <td className="px-4 py-3 text-center">
+                                        <button onClick={() => downloadJSON(asset)} className="text-primary-500 hover:text-white">
+                                            <Download size={14} />
+                                        </button>
+                                     </td>
+                                 </tr>
+                             )
+                         })}
+                         {filteredAssets.length === 0 && (
+                            <tr>
+                                <td colSpan={17} className="px-6 py-12 text-center text-slate-600 italic">
+                                    No records match the current filter.
+                                </td>
+                            </tr>
+                         )}
                       </tbody>
-                    </table>
-                  </div>
-                  <div className="bg-slate-950 px-6 py-3 border-t border-slate-800 flex justify-between items-center text-xs text-slate-500">
-                     <span>Showing {assets.length} records</span>
-                     <div className="flex gap-2">
-                        <button className="px-3 py-1 bg-slate-900 border border-slate-700 rounded hover:bg-slate-800 transition-colors">Previous</button>
-                        <button className="px-3 py-1 bg-slate-900 border border-slate-700 rounded hover:bg-slate-800 transition-colors">Next</button>
-                     </div>
-                  </div>
+                  </table>
                </div>
              </div>
           )}
@@ -348,14 +450,19 @@ export default function App() {
                         className={`w-full text-left p-3 rounded-lg border transition-all ${selectedAssetId === asset.id ? 'bg-primary-600/10 border-primary-500/50' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
                      >
                        <div className="flex items-center justify-between mb-2">
-                         <span className="text-xs font-mono text-slate-500">ID: {asset.id}</span>
+                         <span className="text-xs font-mono text-slate-500">ID: {asset.id.substring(0,8)}</span>
                          {asset.status === AssetStatus.MINTED && <CheckCircle size={12} className="text-emerald-500"/>}
                          {asset.status === AssetStatus.PROCESSING && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"/>}
                        </div>
-                       <div className="w-full h-24 bg-slate-950 rounded mb-2 overflow-hidden">
+                       <div className="w-full h-24 bg-slate-950 rounded mb-2 overflow-hidden relative">
                           <img src={asset.imageUrl} className="w-full h-full object-cover opacity-80" alt="asset" />
+                          {asset.sqlRecord?.ACCESS_RESTRICTIONS && (
+                              <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
+                                  <ShieldCheck className="text-red-500" />
+                              </div>
+                          )}
                        </div>
-                       <p className="text-xs text-slate-400 truncate">{asset.gisMetadata?.zoneType || 'Unknown Zone'}</p>
+                       <p className="text-xs text-slate-400 truncate">{asset.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</p>
                      </button>
                    ))}
                  </div>
@@ -366,9 +473,11 @@ export default function App() {
                  <div className="flex-1 overflow-y-auto pr-2">
                     <div className="flex items-start justify-between mb-6">
                         <div>
-                            <h2 className="text-2xl font-bold text-white mb-1">Asset Analysis</h2>
+                            <h2 className="text-2xl font-bold text-white mb-1">{selectedAsset.sqlRecord?.DOCUMENT_TITLE || 'Loading...'}</h2>
                             <p className="text-slate-400 text-sm flex items-center gap-2">
                                 <Map size={14} /> {selectedAsset.location ? `${selectedAsset.location.latitude.toFixed(4)}, ${selectedAsset.location.longitude.toFixed(4)}` : 'No Geo-Tag'}
+                                <span className="text-slate-600">|</span>
+                                <span className="font-mono text-xs text-primary-400">{selectedAsset.sqlRecord?.NLP_DERIVED_TIMESTAMP || 'Time Period Unknown'}</span>
                             </p>
                         </div>
                         <div className="flex gap-2">
@@ -401,19 +510,22 @@ export default function App() {
                                             <span className="text-emerald-400">{selectedAsset.gisMetadata?.zoneType}</span>
                                         </div>
                                         <div className="flex justify-between border-b border-slate-800 pb-2">
-                                            <span className="text-slate-500">Environment</span>
-                                            <span className="text-slate-300">{selectedAsset.gisMetadata?.environmentalContext}</span>
+                                            <span className="text-slate-500">Text-Derived Location</span>
+                                            <span className="text-slate-300">{selectedAsset.sqlRecord?.OCR_DERIVED_GIS_ZONE || 'N/A'}</span>
                                         </div>
                                         <div className="flex justify-between border-b border-slate-800 pb-2">
-                                            <span className="text-slate-500">Elevation Estimate</span>
-                                            <span className="text-slate-300">{selectedAsset.gisMetadata?.estimatedElevation}</span>
+                                            <span className="text-slate-500">Inferred Region</span>
+                                            <span className="text-indigo-400">{selectedAsset.sqlRecord?.NLP_DERIVED_GIS_ZONE || 'N/A'}</span>
                                         </div>
                                         <div className="flex flex-col gap-2 mt-4">
                                             <span className="text-slate-500 text-xs">Identified Landmarks</span>
                                             <div className="flex flex-wrap gap-2">
-                                                {selectedAsset.gisMetadata?.nearbyLandmarks.map(l => (
+                                                {selectedAsset.gisMetadata?.nearbyLandmarks?.map(l => (
                                                     <span key={l} className="px-2 py-1 bg-slate-800 rounded text-xs text-slate-300 border border-slate-700">{l}</span>
                                                 ))}
+                                                {(!selectedAsset.gisMetadata?.nearbyLandmarks || selectedAsset.gisMetadata.nearbyLandmarks.length === 0) && (
+                                                    <span className="text-slate-600 text-xs italic">No landmarks identified</span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
@@ -425,7 +537,7 @@ export default function App() {
                                     </h3>
                                     <div className="flex-1 overflow-auto max-h-48">
                                          <div className="flex flex-wrap gap-1">
-                                             {selectedAsset.tokenization?.topTokens.map((t, i) => (
+                                             {selectedAsset.tokenization?.topTokens?.map((t, i) => (
                                                  <span key={i} className="px-1.5 py-0.5 bg-indigo-500/20 text-indigo-300 rounded text-xs cursor-help" title={`Freq: ${t.frequency}`}>
                                                      {t.token}
                                                  </span>
@@ -435,7 +547,7 @@ export default function App() {
                                     <div className="mt-4 pt-4 border-t border-slate-800">
                                         <div className="text-xs text-slate-500 mb-2">Vector Embedding Preview</div>
                                         <div className="flex gap-1 h-8 items-end">
-                                            {selectedAsset.tokenization?.embeddingVectorPreview.map((v, i) => (
+                                            {selectedAsset.tokenization?.embeddingVectorPreview?.map((v, i) => (
                                                 <div key={i} style={{ height: `${(v + 1) * 50}%` }} className="flex-1 bg-indigo-600 rounded-t opacity-70 hover:opacity-100 transition-opacity"></div>
                                             ))}
                                         </div>
@@ -447,17 +559,31 @@ export default function App() {
                             <div className="bg-slate-900 p-1 rounded-xl border border-slate-800">
                                 <div className="p-4 border-b border-slate-800 mb-2 flex justify-between items-center">
                                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Semantic Knowledge Graph</h3>
-                                    <span className="text-xs text-slate-500">{selectedAsset.graphData?.nodes.length} Nodes • {selectedAsset.graphData?.links.length} Links</span>
+                                    <span className="text-xs text-slate-500">{selectedAsset.graphData?.nodes?.length || 0} Nodes • {selectedAsset.graphData?.links?.length || 0} Links</span>
                                 </div>
                                 {selectedAsset.graphData && <GraphVisualizer data={selectedAsset.graphData} width={800} height={400} />}
                             </div>
 
                             {/* OCR Text */}
                             <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-                                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Raw OCR Transcription</h3>
-                                <p className="font-mono text-sm text-slate-300 leading-relaxed whitespace-pre-wrap bg-slate-950 p-4 rounded border border-slate-800">
-                                    {selectedAsset.ocrText}
-                                </p>
+                                <div className="flex justify-between items-center mb-4">
+                                   <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Provenance & Transcription</h3>
+                                   <span className="text-xs text-slate-500">Rights: {selectedAsset.sqlRecord?.RIGHTS_STATEMENT}</span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                   <div>
+                                      <h4 className="text-xs text-slate-500 mb-2">RAW OCR</h4>
+                                      <p className="font-mono text-xs text-slate-400 leading-relaxed whitespace-pre-wrap bg-slate-950 p-4 rounded border border-slate-800 h-64 overflow-y-auto">
+                                          {selectedAsset.ocrText}
+                                      </p>
+                                   </div>
+                                   <div>
+                                      <h4 className="text-xs text-slate-500 mb-2">PREPROCESSED (CLEAN)</h4>
+                                      <p className="font-mono text-xs text-emerald-400/80 leading-relaxed whitespace-pre-wrap bg-slate-950 p-4 rounded border border-slate-800 h-64 overflow-y-auto">
+                                          {selectedAsset.sqlRecord?.PREPROCESS_OCR_TRANSCRIPTION}
+                                      </p>
+                                   </div>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -490,8 +616,8 @@ export default function App() {
                               <div className="p-5">
                                   <div className="flex justify-between items-start mb-4">
                                       <div>
-                                          <h4 className="text-white font-bold">{asset.gisMetadata?.zoneType || 'Unknown Data Asset'}</h4>
-                                          <p className="text-xs text-slate-500">{asset.location ? 'Geospatial Verified' : 'Standard OCR'}</p>
+                                          <h4 className="text-white font-bold">{asset.sqlRecord?.DOCUMENT_TITLE || 'Unnamed Asset'}</h4>
+                                          <p className="text-xs text-slate-500">{asset.sqlRecord?.NLP_NODE_CATEGORIZATION}</p>
                                       </div>
                                       <div className="text-right">
                                           <p className="text-amber-500 font-bold">Ξ {asset.nft?.pricePerShard}</p>

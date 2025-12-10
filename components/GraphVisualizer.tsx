@@ -13,7 +13,8 @@ const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ data, width = 600, he
   const [selectedNode, setSelectedNode] = useState<GraphNode | null>(null);
 
   useEffect(() => {
-    if (!svgRef.current || !data.nodes.length) return;
+    // Defensive check: Ensure nodes exist and have length before proceeding
+    if (!svgRef.current || !data || !data.nodes || !data.nodes.length) return;
 
     const svg = d3.select(svgRef.current);
     svg.selectAll("*").remove(); // Clear previous
@@ -23,8 +24,9 @@ const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ data, width = 600, he
       .range(['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#6366f1']);
 
     // Deep copy to prevent mutation issues with React state in StrictMode
-    const nodes = data.nodes.map(d => ({ ...d }));
-    const links = data.links.map(d => ({ ...d }));
+    // Safe fallback to empty array if undefined
+    const nodes = (data.nodes || []).map(d => ({ ...d }));
+    const links = (data.links || []).map(d => ({ ...d }));
 
     const simulation = d3.forceSimulation(nodes as any)
       .force("link", d3.forceLink(links).id((d: any) => d.id).distance(100))
@@ -110,6 +112,14 @@ const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ data, width = 600, he
       simulation.stop();
     };
   }, [data, width, height]);
+
+  if (!data || !data.nodes || data.nodes.length === 0) {
+    return (
+      <div className="flex items-center justify-center w-full h-full bg-slate-900/50 border border-slate-700 rounded-lg text-slate-500 text-xs">
+        No Graph Data Available
+      </div>
+    )
+  }
 
   return (
     <div className="relative rounded-lg overflow-hidden border border-slate-700 bg-slate-900/50">
