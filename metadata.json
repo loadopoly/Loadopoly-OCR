@@ -1,0 +1,8 @@
+{
+  "name": "GeoGraph OCR Node",
+  "description": "An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP processing, and sharded NFT asset management for LLM training data.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
