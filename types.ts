@@ -113,3 +113,12 @@ export interface DigitalAsset {
   // The structured DB record
   sqlRecord?: HistoricalDocumentMetadata;
 }
+
+export interface BatchItem {
+  id: string;
+  file: File;
+  status: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'ERROR';
+  progress: number; // 0-100
+  errorMsg?: string;
+  assetId?: string; // Link to the created asset
+}

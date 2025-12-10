@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Camera, 
   Map, 
@@ -15,13 +15,23 @@ import {
   Table as TableIcon,
   Search,
   Download,
-  Code,
   Filter,
   ShieldCheck,
   Eye,
-  EyeOff
+  EyeOff,
+  ChevronLeft,
+  ChevronRight,
+  Package,
+  Grid,
+  List,
+  Zap,
+  Image as ImageIcon,
+  Maximize2,
+  RefreshCw,
+  Trash2,
+  X
 } from 'lucide-react';
-import { AssetStatus, DigitalAsset, LocationData, PreservationEvent, HistoricalDocumentMetadata } from './types';
+import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem } from './types';
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
 import GraphVisualizer from './components/GraphVisualizer';
 
@@ -69,7 +79,19 @@ export default function App() {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [geoPermission, setGeoPermission] = useState<boolean>(false);
+  
+  // Database State
   const [sourceCollectionFilter, setSourceCollectionFilter] = useState('ALL');
+  const [groupBy, setGroupBy] = useState<'NONE' | 'SOURCE' | 'ZONE' | 'CATEGORY'>('NONE');
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 50;
+
+  // Batch Processing State
+  const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
+  const batchInputRef = useRef<HTMLInputElement>(null);
+
+  // Asset View State
+  const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   // Stats derivation
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
@@ -82,29 +104,23 @@ export default function App() {
     });
   }, []);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  // --- Processing Logic ---
 
-    setIsProcessing(true);
-    
-    try {
-      // 1. Calculate Technical Metadata (PREMIS)
+  const createInitialAsset = async (file: File): Promise<DigitalAsset> => {
       const checksum = await calculateSHA256(file);
       const ingestDate = new Date().toISOString();
       const fileSize = file.size;
       const fileType = file.type;
+      const id = Math.random().toString(36).substring(7);
 
-      // 2. Create placeholder asset
-      const newAsset: DigitalAsset = {
-        id: Math.random().toString(36).substring(7),
+      return {
+        id: id,
         imageUrl: URL.createObjectURL(file),
         timestamp: ingestDate,
         ocrText: "",
         status: AssetStatus.PROCESSING,
-        // Init SQL record with empty processing fields but populated tech metadata
         sqlRecord: {
-          ASSET_ID: "", // Set later
+          ASSET_ID: id,
           LOCAL_TIMESTAMP: ingestDate,
           OCR_DERIVED_TIMESTAMP: null,
           NLP_DERIVED_TIMESTAMP: null,
@@ -115,12 +131,12 @@ export default function App() {
           NLP_NODE_CATEGORIZATION: "PENDING",
           RAW_OCR_TRANSCRIPTION: "",
           PREPROCESS_OCR_TRANSCRIPTION: "",
-          SOURCE_COLLECTION: "General Upload", // Default
-          DOCUMENT_TITLE: "Processing...",
+          SOURCE_COLLECTION: "Batch Ingest",
+          DOCUMENT_TITLE: file.name,
           DOCUMENT_DESCRIPTION: "Pending Analysis",
           FILE_FORMAT: fileType,
           FILE_SIZE_BYTES: fileSize,
-          RESOLUTION_DPI: 72, // Placeholder
+          RESOLUTION_DPI: 72,
           COLOR_MODE: "RGB",
           CREATOR_AGENT: null,
           RIGHTS_STATEMENT: "Pending",
@@ -142,40 +158,23 @@ export default function App() {
           ACCESS_RESTRICTIONS: false
         }
       };
+  };
 
-      // Set ID correctly in sub-object
-      if (newAsset.sqlRecord) newAsset.sqlRecord.ASSET_ID = newAsset.id;
-
-      setAssets(prev => [newAsset, ...prev]);
-      setActiveTab('database');
-      setSelectedAssetId(newAsset.id);
-
-      // 3. Get Location
+  const processAssetPipeline = async (asset: DigitalAsset, file: File) => {
       let location: {lat: number, lng: number} | null = null;
       if (navigator.geolocation) {
         try {
           const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 5000 });
+             navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 });
           });
-          location = {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude
-          };
-        } catch (e) {
-          console.warn("Geolocation failed or denied", e);
-        }
+          location = { lat: position.coords.latitude, lng: position.coords.longitude };
+        } catch (e) { /* ignore */ }
       }
 
-      // 4. Process with Gemini
       const analysis = await processImageWithGemini(file, location);
       
-      // 5. Update Asset with Result
-      setAssets(prev => prev.map(a => {
-        if (a.id === newAsset.id) {
-          
-          // Construct the final SQL record
-          const updatedSqlRecord: HistoricalDocumentMetadata = {
-            ...a.sqlRecord!,
+      const updatedSqlRecord: HistoricalDocumentMetadata = {
+            ...asset.sqlRecord!,
             OCR_DERIVED_TIMESTAMP: analysis.ocrDerivedTimestamp,
             NLP_DERIVED_TIMESTAMP: analysis.nlpDerivedTimestamp,
             LOCAL_GIS_ZONE: analysis.gisMetadata?.zoneType || "Unknown",
@@ -197,13 +196,13 @@ export default function App() {
             KEYWORDS_TAGS: analysis.keywordsTags || [],
             ACCESS_RESTRICTIONS: analysis.accessRestrictions,
             PRESERVATION_EVENTS: [
-              ...a.sqlRecord!.PRESERVATION_EVENTS,
+              ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
               { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }
             ]
-          };
+      };
 
-          return {
-            ...a,
+      return {
+            ...asset,
             status: AssetStatus.MINTED,
             ocrText: analysis.ocrText,
             gisMetadata: analysis.gisMetadata,
@@ -211,22 +210,100 @@ export default function App() {
             tokenization: analysis.tokenization,
             processingAnalysis: analysis.analysis,
             location: location ? { latitude: location.lat, longitude: location.lng, accuracy: 1 } : undefined,
-            nft: simulateNFTMinting(a.id),
+            nft: simulateNFTMinting(asset.id),
             sqlRecord: updatedSqlRecord
-          };
-        }
-        return a;
-      }));
+      };
+  };
+
+  const handleSingleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsProcessing(true);
+    try {
+      const newAsset = await createInitialAsset(file);
+      setAssets(prev => [newAsset, ...prev]);
+      setActiveTab('assets'); // Switch to Assets view
+      
+      const processedAsset = await processAssetPipeline(newAsset, file);
+      setAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
 
     } catch (err) {
       console.error(err);
-      setAssets(prev => prev.map(a => a.id === selectedAssetId ? { ...a, status: AssetStatus.FAILED } : a));
+      setAssets(prev => prev.map(a => a.status === AssetStatus.PROCESSING ? { ...a, status: AssetStatus.FAILED } : a));
     } finally {
       setIsProcessing(false);
     }
   };
 
+  const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files;
+      if (!files || files.length === 0) return;
+
+      const newQueueItems: BatchItem[] = Array.from(files).map(file => ({
+          id: Math.random().toString(36).substring(7),
+          file,
+          status: 'QUEUED',
+          progress: 0
+      }));
+
+      setBatchQueue(prev => [...prev, ...newQueueItems]);
+      
+      // Start processing queue (simple recursive processor)
+      processNextBatchItem();
+  };
+
+  const processNextBatchItem = async () => {
+      setBatchQueue(currentQueue => {
+          const nextItemIndex = currentQueue.findIndex(i => i.status === 'QUEUED');
+          if (nextItemIndex === -1) return currentQueue; // Done
+
+          const itemToProcess = currentQueue[nextItemIndex];
+          
+          // Trigger async process without blocking UI updates completely
+          (async () => {
+             try {
+                // Update to Processing
+                setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'PROCESSING', progress: 10 } : i));
+
+                // 1. Init Asset
+                const newAsset = await createInitialAsset(itemToProcess.file);
+                if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = "Batch 001"; // Grouping
+                
+                setAssets(prev => [newAsset, ...prev]);
+                
+                // 2. Process Pipeline
+                const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
+                
+                // 3. Update Asset and Queue
+                setAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+                setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+
+             } catch (e) {
+                 console.error("Batch Error", e);
+                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: "Processing Failed" } : i));
+             } finally {
+                 // Next!
+                 processNextBatchItem();
+             }
+          })();
+
+          return currentQueue;
+      });
+  };
+
+  const retryBatchItem = (itemId: string) => {
+      setBatchQueue(prev => prev.map(i => i.id === itemId ? { ...i, status: 'QUEUED', progress: 0, errorMsg: undefined } : i));
+      processNextBatchItem(); // Kickstart if stopped
+  };
+
+  const removeBatchItem = (itemId: string) => {
+      setBatchQueue(prev => prev.filter(i => i.id !== itemId));
+  };
+
+
   const downloadJSON = (asset: DigitalAsset) => {
+    if (!asset.sqlRecord) return;
     const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(asset.sqlRecord, null, 2));
     const downloadAnchorNode = document.createElement('a');
     downloadAnchorNode.setAttribute("href",     dataStr);
@@ -236,12 +313,45 @@ export default function App() {
     downloadAnchorNode.remove();
   };
 
+  const downloadBulkJSON = (data: DigitalAsset[], groupName: string) => {
+    const records = data.map(a => a.sqlRecord).filter(r => r !== undefined);
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(records, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href",     dataStr);
+    downloadAnchorNode.setAttribute("download", `GEOGRAPH_DATASET_${groupName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  };
+
   const selectedAsset = assets.find(a => a.id === selectedAssetId);
 
-  // Filter for Database view
+  // --- Filtering & Aggregation Logic ---
+
   const filteredAssets = sourceCollectionFilter === 'ALL' 
     ? assets 
     : assets.filter(a => a.sqlRecord?.SOURCE_COLLECTION === sourceCollectionFilter);
+
+  // Pagination for List View
+  const totalPages = Math.ceil(filteredAssets.length / ITEMS_PER_PAGE);
+  const paginatedAssets = filteredAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  // Aggregation for Grouped View
+  const getAggregatedGroups = () => {
+    const groups: Record<string, DigitalAsset[]> = {};
+    filteredAssets.forEach(asset => {
+        let key = 'Unknown';
+        if (groupBy === 'SOURCE') key = asset.sqlRecord?.SOURCE_COLLECTION || 'Unknown';
+        if (groupBy === 'ZONE') key = asset.sqlRecord?.LOCAL_GIS_ZONE || 'Unknown';
+        if (groupBy === 'CATEGORY') key = asset.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized';
+        
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(asset);
+    });
+    return groups;
+  };
+
+  const aggregatedGroups = getAggregatedGroups();
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30">
@@ -258,7 +368,8 @@ export default function App() {
 
         <nav className="flex-1 space-y-1">
           <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-          <SidebarItem icon={FileText} label="Assets & OCR" active={activeTab === 'assets'} onClick={() => setActiveTab('assets')} />
+          <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => setActiveTab('batch')} />
+          <SidebarItem icon={ImageIcon} label="Assets & OCR" active={activeTab === 'assets'} onClick={() => setActiveTab('assets')} />
           <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => setActiveTab('graph')} />
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
           <SidebarItem icon={Coins} label="Data Marketplace" active={activeTab === 'market'} onClick={() => setActiveTab('market')} />
@@ -283,17 +394,19 @@ export default function App() {
         
         {/* Header */}
         <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-950/80 backdrop-blur z-10">
-          <h2 className="text-lg font-semibold text-white capitalize">{activeTab === 'database' ? 'HISTORICAL DOCUMENTS DATABASE' : activeTab}</h2>
+          <h2 className="text-lg font-semibold text-white capitalize">{activeTab === 'database' ? 'HISTORICAL DOCUMENTS DATABASE' : activeTab === 'batch' ? 'HIGH THROUGHPUT INGESTION' : activeTab}</h2>
           <div className="flex items-center gap-4">
-             <label className={`flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
-                {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Camera size={18} />}
-                <span>{isProcessing ? 'Ingest & Process' : 'New Ingest'}</span>
-                <input type="file" className="hidden" accept="image/*, application/pdf" onChange={handleFileUpload} disabled={isProcessing} />
-             </label>
+             {activeTab !== 'batch' && (
+                <label className={`flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+                    {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Camera size={18} />}
+                    <span>{isProcessing ? 'Ingest & Process' : 'New Ingest'}</span>
+                    <input type="file" className="hidden" accept="image/*, application/pdf" onChange={handleSingleFileUpload} disabled={isProcessing} />
+                </label>
+             )}
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-8">
+        <div className="flex-1 overflow-auto p-8 relative">
           
           {/* Dashboard View */}
           {activeTab === 'dashboard' && (
@@ -344,104 +457,392 @@ export default function App() {
             </div>
           )}
 
-          {/* Structured Database View - UPDATED TO SQL STYLE */}
+          {/* Quick Processing / Batch Tab */}
+          {activeTab === 'batch' && (
+             <div className="max-w-6xl mx-auto h-full flex flex-col">
+                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
+                    <div className="flex justify-between items-start mb-4">
+                       <div>
+                          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                             <Zap className="text-amber-500" /> Batch Processor
+                          </h3>
+                          <p className="text-slate-400 text-sm mt-1">
+                             Optimized for 500+ documents/hr. Drag and drop folders or multiple files.
+                          </p>
+                       </div>
+                       <div className="text-right">
+                          <p className="text-2xl font-mono text-white">{batchQueue.filter(i => i.status === 'COMPLETED').length} <span className="text-sm text-slate-500">/ {batchQueue.length}</span></p>
+                          <p className="text-xs text-slate-500">Processed</p>
+                       </div>
+                    </div>
+                    
+                    <div 
+                      onClick={() => batchInputRef.current?.click()}
+                      className="border-2 border-dashed border-slate-700 hover:border-primary-500 hover:bg-slate-800/50 transition-all rounded-lg h-32 flex flex-col items-center justify-center cursor-pointer group"
+                    >
+                        <Upload className="text-slate-500 group-hover:text-primary-400 mb-2" size={32} />
+                        <span className="text-slate-400 group-hover:text-slate-200 text-sm font-medium">Click to select files or drag entire folder here</span>
+                        <input 
+                           type="file" 
+                           multiple 
+                           className="hidden" 
+                           ref={batchInputRef} 
+                           onChange={handleBatchUpload}
+                           accept="image/*, application/pdf"
+                        />
+                    </div>
+                </div>
+
+                {/* Queue Table */}
+                <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+                    <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+                        <h4 className="text-xs font-bold text-slate-400 uppercase">Processing Queue</h4>
+                        {batchQueue.length > 0 && (
+                            <button onClick={() => setBatchQueue([])} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
+                                <Trash2 size={12} /> Clear All
+                            </button>
+                        )}
+                    </div>
+                    <div className="flex-1 overflow-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead className="bg-slate-950 sticky top-0">
+                                <tr>
+                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Status</th>
+                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">File Name</th>
+                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Size</th>
+                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Message</th>
+                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-800">
+                                {batchQueue.map((item) => (
+                                    <tr key={item.id} className="text-xs group hover:bg-slate-800/30">
+                                        <td className="px-4 py-2">
+                                            {item.status === 'QUEUED' && <span className="inline-block w-2 h-2 rounded-full bg-slate-600" title="Queued"></span>}
+                                            {item.status === 'PROCESSING' && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Processing"></div>}
+                                            {item.status === 'COMPLETED' && <CheckCircle size={14} className="text-emerald-500" />}
+                                            {item.status === 'ERROR' && <AlertCircle size={14} className="text-red-500" />}
+                                        </td>
+                                        <td className="px-4 py-2 text-slate-300 font-mono">{item.file.name}</td>
+                                        <td className="px-4 py-2 text-slate-500">{(item.file.size / 1024).toFixed(1)} KB</td>
+                                        <td className="px-4 py-2">
+                                            {item.status === 'ERROR' ? (
+                                                <span className="text-red-400">{item.errorMsg}</span>
+                                            ) : item.status === 'COMPLETED' ? (
+                                                <span className="text-emerald-500/70">Ingested to DB</span>
+                                            ) : (
+                                                <span className="text-slate-600">Waiting for worker...</span>
+                                            )}
+                                        </td>
+                                        <td className="px-4 py-2 text-right">
+                                            {item.status === 'ERROR' && (
+                                                <button onClick={() => retryBatchItem(item.id)} className="text-primary-500 hover:text-white mr-2" title="Retry">
+                                                    <RefreshCw size={14} />
+                                                </button>
+                                            )}
+                                            <button onClick={() => removeBatchItem(item.id)} className="text-slate-600 hover:text-red-500" title="Remove">
+                                                <X size={14} />
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {batchQueue.length === 0 && (
+                                    <tr>
+                                        <td colSpan={5} className="py-12 text-center text-slate-600 italic">Queue is empty. Add files above.</td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+             </div>
+          )}
+
+          {/* Assets Exploratory View (Redesigned) */}
+          {activeTab === 'assets' && (
+             <div className="h-full overflow-y-auto">
+                 <div className="flex justify-between items-center mb-6">
+                     <h3 className="text-lg font-bold text-white">Exploratory Analysis</h3>
+                     <div className="flex gap-2 text-xs text-slate-400 bg-slate-900 px-3 py-1 rounded border border-slate-800">
+                         <span>Showing {assets.length} assets</span>
+                     </div>
+                 </div>
+
+                 {/* Masonry Grid Simulation */}
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
+                     {assets.map(asset => (
+                         <div key={asset.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:shadow-lg hover:shadow-primary-900/10 transition-all hover:-translate-y-1 group">
+                             {/* Image Header */}
+                             <div className="relative h-48 bg-slate-950 group overflow-hidden">
+                                 <img src={asset.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" />
+                                 <button 
+                                    onClick={() => setExpandedImage(asset.imageUrl)}
+                                    className="absolute top-2 right-2 p-1.5 bg-black/60 rounded text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black"
+                                 >
+                                     <Maximize2 size={14} />
+                                 </button>
+                                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 pt-12">
+                                     <div className="flex justify-between items-end">
+                                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${asset.sqlRecord?.CONFIDENCE_SCORE && asset.sqlRecord.CONFIDENCE_SCORE > 0.8 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'}`}>
+                                             Conf: {(asset.sqlRecord?.CONFIDENCE_SCORE || 0) * 100}%
+                                         </span>
+                                         {asset.sqlRecord?.ACCESS_RESTRICTIONS && <ShieldCheck size={16} className="text-red-500" />}
+                                     </div>
+                                 </div>
+                             </div>
+
+                             {/* Card Body */}
+                             <div className="p-4">
+                                 <h4 className="font-bold text-white text-sm mb-1 truncate" title={asset.sqlRecord?.DOCUMENT_TITLE}>{asset.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
+                                 <p className="text-xs text-slate-500 mb-3">{asset.sqlRecord?.NLP_NODE_CATEGORIZATION}</p>
+
+                                 {/* Key Stats Row */}
+                                 <div className="flex justify-between items-center py-3 border-t border-b border-slate-800 mb-3">
+                                     <div className="text-center">
+                                         <p className="text-[10px] text-slate-500 uppercase">Nodes</p>
+                                         <p className="text-sm font-mono text-primary-400">{asset.sqlRecord?.NODE_COUNT || 0}</p>
+                                     </div>
+                                     <div className="h-6 w-px bg-slate-800"></div>
+                                     <div className="text-center">
+                                         <p className="text-[10px] text-slate-500 uppercase">Year</p>
+                                         <p className="text-sm font-mono text-indigo-400">{asset.sqlRecord?.NLP_DERIVED_TIMESTAMP?.substring(0, 4) || 'N/A'}</p>
+                                     </div>
+                                     <div className="h-6 w-px bg-slate-800"></div>
+                                     <div className="text-center">
+                                         <p className="text-[10px] text-slate-500 uppercase">Zone</p>
+                                         <p className="text-sm font-mono text-emerald-400 max-w-[80px] truncate" title={asset.sqlRecord?.LOCAL_GIS_ZONE}>{asset.sqlRecord?.LOCAL_GIS_ZONE || 'N/A'}</p>
+                                     </div>
+                                 </div>
+                                 
+                                 {/* Entities Preview */}
+                                 <div className="flex flex-wrap gap-1 mb-4 h-12 overflow-hidden content-start">
+                                     {asset.sqlRecord?.ENTITIES_EXTRACTED?.slice(0, 4).map((e, i) => (
+                                         <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded border border-slate-700">{e}</span>
+                                     ))}
+                                     {(asset.sqlRecord?.ENTITIES_EXTRACTED?.length || 0) > 4 && (
+                                         <span className="text-[10px] px-1.5 py-0.5 text-slate-600">+{(asset.sqlRecord?.ENTITIES_EXTRACTED?.length || 0) - 4}</span>
+                                     )}
+                                 </div>
+
+                                 <div className="flex gap-2 mt-auto">
+                                     <button onClick={() => { setSelectedAssetId(asset.id); setActiveTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 transition-colors">
+                                         View Graph
+                                     </button>
+                                     <button onClick={() => downloadJSON(asset)} className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded border border-slate-700 transition-colors">
+                                         <Download size={14} />
+                                     </button>
+                                 </div>
+                             </div>
+                         </div>
+                     ))}
+                     
+                     {/* Placeholder if empty */}
+                     {assets.length === 0 && (
+                         <div className="col-span-full py-20 text-center">
+                             <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-800">
+                                 <ImageIcon className="text-slate-600" size={32} />
+                             </div>
+                             <h3 className="text-slate-400 font-bold">No assets found</h3>
+                             <p className="text-slate-600 text-sm mt-2">Upload items in Dashboard or Batch Processing to populate the grid.</p>
+                         </div>
+                     )}
+                 </div>
+             </div>
+          )}
+
+          {/* Structured Database View - UPDATED FOR SCALING */}
           {activeTab === 'database' && (
              <div className="h-full flex flex-col gap-4">
                {/* Controls */}
-               <div className="flex justify-between items-end bg-slate-900 p-4 rounded-xl border border-slate-800">
+               <div className="flex flex-col md:flex-row justify-between items-end bg-slate-900 p-4 rounded-xl border border-slate-800 gap-4">
                    <div className="space-y-1">
                       <h3 className="text-white font-bold flex items-center gap-2">
                           <Database size={18} className="text-primary-500" /> Repository Master List
                       </h3>
-                      <p className="text-xs text-slate-400">Manage, query, and sell datum derived from unstructured inputs.</p>
+                      <p className="text-xs text-slate-400">Aggregated view for {assets.length} items. Manage thousands of lines via groups.</p>
                    </div>
-                   <div className="flex gap-4">
-                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700">
-                           <Filter size={14} className="text-slate-400" />
-                           <select 
-                             className="bg-transparent border-none text-xs text-slate-300 focus:outline-none"
-                             value={sourceCollectionFilter}
-                             onChange={(e) => setSourceCollectionFilter(e.target.value)}
-                           >
-                               <option value="ALL">All Sources</option>
-                               <option value="General Upload">General Upload</option>
-                               <option value="Texas THC Archive">Texas THC Archive</option>
-                           </select>
+                   
+                   <div className="flex flex-wrap gap-4">
+                       {/* Aggregation Toggles */}
+                       <div className="flex bg-slate-950 rounded border border-slate-700 p-1">
+                          <button 
+                             onClick={() => setGroupBy('NONE')}
+                             className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-2 ${groupBy === 'NONE' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`}
+                          >
+                             <List size={14} /> Datum List
+                          </button>
+                          <button 
+                             onClick={() => setGroupBy('CATEGORY')}
+                             className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-2 ${groupBy !== 'NONE' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`}
+                          >
+                             <Grid size={14} /> Dataset Aggregation
+                          </button>
                        </div>
-                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 w-64">
+
+                       {groupBy !== 'NONE' && (
+                         <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700">
+                             <Package size={14} className="text-slate-400" />
+                             <select 
+                               className="bg-transparent border-none text-xs text-slate-300 focus:outline-none cursor-pointer"
+                               value={groupBy}
+                               onChange={(e) => setGroupBy(e.target.value as any)}
+                             >
+                                 <option value="SOURCE">Group by Source Collection</option>
+                                 <option value="ZONE">Group by GIS Zone</option>
+                                 <option value="CATEGORY">Group by NLP Category</option>
+                             </select>
+                         </div>
+                       )}
+
+                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 w-48">
                           <Search size={14} className="text-slate-400" />
-                          <input type="text" placeholder="SQL Query..." className="bg-transparent border-none text-xs text-slate-300 focus:outline-none w-full" />
+                          <input type="text" placeholder="Search Filter..." className="bg-transparent border-none text-xs text-slate-300 focus:outline-none w-full" />
                        </div>
                    </div>
                </div>
 
-               {/* SQL GRID */}
-               <div className="flex-1 overflow-auto bg-slate-900 border border-slate-800 rounded-xl shadow-inner scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900">
-                  <table className="w-full text-left border-collapse">
-                      <thead className="bg-slate-950 sticky top-0 z-10">
-                        <tr>
-                          {['ASSET_ID', 'DOC_TITLE', 'LOCAL_TIMESTAMP', 'OCR_TIMESTAMP', 'NLP_TIMESTAMP', 'LOCAL_GIS', 'OCR_GIS', 'NLP_GIS', 'NODES', 'CATEGORY', 'RIGHTS', 'FORMAT', 'SIZE (B)', 'FIXITY (SHA256)', 'CONFIDENCE', 'ACCESS', 'ACTION'].map(h => (
-                              <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-r border-slate-800 whitespace-nowrap">
-                                  {h}
-                              </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-800">
-                         {filteredAssets.map(asset => {
-                             const rec = asset.sqlRecord;
-                             if (!rec) return null;
-                             return (
-                                 <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
-                                     <td className="px-4 py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{rec.ASSET_ID.substring(0,8)}...</td>
-                                     <td className="px-4 py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate" title={rec.DOCUMENT_TITLE}>{rec.DOCUMENT_TITLE}</td>
-                                     <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{new Date(rec.LOCAL_TIMESTAMP).toLocaleDateString()}</td>
-                                     <td className="px-4 py-3 text-primary-400 border-r border-slate-800 whitespace-nowrap">{rec.OCR_DERIVED_TIMESTAMP || '-'}</td>
-                                     <td className="px-4 py-3 text-indigo-400 border-r border-slate-800 whitespace-nowrap">{rec.NLP_DERIVED_TIMESTAMP || '-'}</td>
-                                     <td className="px-4 py-3 text-emerald-400 border-r border-slate-800 whitespace-nowrap">{rec.LOCAL_GIS_ZONE}</td>
-                                     <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{rec.OCR_DERIVED_GIS_ZONE || '-'}</td>
-                                     <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{rec.NLP_DERIVED_GIS_ZONE || '-'}</td>
-                                     <td className="px-4 py-3 text-center border-r border-slate-800">{rec.NODE_COUNT}</td>
-                                     <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap max-w-[150px] truncate">{rec.NLP_NODE_CATEGORIZATION}</td>
-                                     <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap">{rec.RIGHTS_STATEMENT}</td>
-                                     <td className="px-4 py-3 border-r border-slate-800">{rec.FILE_FORMAT}</td>
-                                     <td className="px-4 py-3 border-r border-slate-800 text-right">{rec.FILE_SIZE_BYTES.toLocaleString()}</td>
-                                     <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap text-[9px] text-slate-600" title={rec.FIXITY_CHECKSUM}>{rec.FIXITY_CHECKSUM.substring(0,8)}...</td>
-                                     <td className="px-4 py-3 border-r border-slate-800 text-center">
-                                         <span className={`px-1.5 py-0.5 rounded ${rec.CONFIDENCE_SCORE > 0.8 ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>
-                                             {(rec.CONFIDENCE_SCORE * 100).toFixed(0)}%
-                                         </span>
-                                     </td>
-                                     <td className="px-4 py-3 border-r border-slate-800 text-center">
-                                         {rec.ACCESS_RESTRICTIONS ? <EyeOff size={12} className="text-red-500 mx-auto"/> : <Eye size={12} className="text-green-500 mx-auto"/>}
-                                     </td>
-                                     <td className="px-4 py-3 text-center">
-                                        <button onClick={() => downloadJSON(asset)} className="text-primary-500 hover:text-white">
-                                            <Download size={14} />
-                                        </button>
-                                     </td>
-                                 </tr>
-                             )
-                         })}
-                         {filteredAssets.length === 0 && (
-                            <tr>
-                                <td colSpan={17} className="px-6 py-12 text-center text-slate-600 italic">
-                                    No records match the current filter.
-                                </td>
-                            </tr>
-                         )}
-                      </tbody>
-                  </table>
-               </div>
+               {/* VIEW: AGGREGATED CARDS */}
+               {groupBy !== 'NONE' && (
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto pb-4">
+                    {Object.entries(aggregatedGroups).map(([groupName, groupAssets]) => (
+                       <div key={groupName} className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-primary-500/40 transition-colors">
+                          <div className="flex justify-between items-start mb-4">
+                             <div>
+                                <h4 className="text-lg font-bold text-white mb-1">{groupName}</h4>
+                                <p className="text-xs text-slate-500 font-mono uppercase">Dataset Group</p>
+                             </div>
+                             <div className="bg-primary-500/10 text-primary-400 px-3 py-1 rounded-full text-xs font-bold border border-primary-500/20">
+                                {groupAssets.length} Items
+                             </div>
+                          </div>
+                          
+                          <div className="space-y-3 mb-6">
+                             <div className="flex justify-between text-xs border-b border-slate-800 pb-2">
+                                <span className="text-slate-400">Avg Confidence</span>
+                                <span className="text-slate-200">
+                                  {(groupAssets.reduce((acc, curr) => acc + (curr.sqlRecord?.CONFIDENCE_SCORE || 0), 0) / groupAssets.length * 100).toFixed(1)}%
+                                </span>
+                             </div>
+                             <div className="flex justify-between text-xs border-b border-slate-800 pb-2">
+                                <span className="text-slate-400">Total Nodes</span>
+                                <span className="text-slate-200">
+                                  {groupAssets.reduce((acc, curr) => acc + (curr.sqlRecord?.NODE_COUNT || 0), 0).toLocaleString()}
+                                </span>
+                             </div>
+                             <div className="flex justify-between text-xs border-b border-slate-800 pb-2">
+                                <span className="text-slate-400">Total Size</span>
+                                <span className="text-slate-200">
+                                  {(groupAssets.reduce((acc, curr) => acc + (curr.sqlRecord?.FILE_SIZE_BYTES || 0), 0) / 1024 / 1024).toFixed(2)} MB
+                                </span>
+                             </div>
+                          </div>
+
+                          <button 
+                             onClick={() => downloadBulkJSON(groupAssets, groupName)}
+                             className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm rounded border border-slate-700 flex items-center justify-center gap-2 transition-colors"
+                          >
+                             <Download size={16} /> Export Dataset JSON
+                          </button>
+                       </div>
+                    ))}
+                 </div>
+               )}
+
+               {/* VIEW: PAGINATED LIST */}
+               {groupBy === 'NONE' && (
+               <>
+                 <div className="flex-1 overflow-auto bg-slate-900 border border-slate-800 rounded-xl shadow-inner scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900 relative">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-950 sticky top-0 z-10 shadow-sm">
+                          <tr>
+                            {['ASSET_ID', 'DOC_TITLE', 'LOCAL_TIMESTAMP', 'OCR_TIMESTAMP', 'NLP_TIMESTAMP', 'LOCAL_GIS', 'OCR_GIS', 'NLP_GIS', 'NODES', 'CATEGORY', 'RIGHTS', 'FORMAT', 'SIZE (B)', 'FIXITY (SHA256)', 'CONFIDENCE', 'ACCESS', 'ACTION'].map(h => (
+                                <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">
+                                    {h}
+                                </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                           {paginatedAssets.map(asset => {
+                               const rec = asset.sqlRecord;
+                               if (!rec) return null;
+                               return (
+                                   <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
+                                       <td className="px-4 py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{rec.ASSET_ID.substring(0,8)}...</td>
+                                       <td className="px-4 py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate" title={rec.DOCUMENT_TITLE}>{rec.DOCUMENT_TITLE}</td>
+                                       <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{new Date(rec.LOCAL_TIMESTAMP).toLocaleDateString()}</td>
+                                       <td className="px-4 py-3 text-primary-400 border-r border-slate-800 whitespace-nowrap">{rec.OCR_DERIVED_TIMESTAMP || '-'}</td>
+                                       <td className="px-4 py-3 text-indigo-400 border-r border-slate-800 whitespace-nowrap">{rec.NLP_DERIVED_TIMESTAMP || '-'}</td>
+                                       <td className="px-4 py-3 text-emerald-400 border-r border-slate-800 whitespace-nowrap">{rec.LOCAL_GIS_ZONE}</td>
+                                       <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{rec.OCR_DERIVED_GIS_ZONE || '-'}</td>
+                                       <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{rec.NLP_DERIVED_GIS_ZONE || '-'}</td>
+                                       <td className="px-4 py-3 text-center border-r border-slate-800">{rec.NODE_COUNT}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap max-w-[150px] truncate">{rec.NLP_NODE_CATEGORIZATION}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap">{rec.RIGHTS_STATEMENT}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800">{rec.FILE_FORMAT}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 text-right">{rec.FILE_SIZE_BYTES.toLocaleString()}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap text-[9px] text-slate-600" title={rec.FIXITY_CHECKSUM}>{rec.FIXITY_CHECKSUM.substring(0,8)}...</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 text-center">
+                                           <span className={`px-1.5 py-0.5 rounded ${rec.CONFIDENCE_SCORE > 0.8 ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>
+                                               {(rec.CONFIDENCE_SCORE * 100).toFixed(0)}%
+                                           </span>
+                                       </td>
+                                       <td className="px-4 py-3 border-r border-slate-800 text-center">
+                                           {rec.ACCESS_RESTRICTIONS ? <EyeOff size={12} className="text-red-500 mx-auto"/> : <Eye size={12} className="text-green-500 mx-auto"/>}
+                                       </td>
+                                       <td className="px-4 py-3 text-center">
+                                          <button onClick={() => downloadJSON(asset)} className="text-primary-500 hover:text-white">
+                                              <Download size={14} />
+                                          </button>
+                                       </td>
+                                   </tr>
+                               )
+                           })}
+                           {paginatedAssets.length === 0 && (
+                              <tr>
+                                  <td colSpan={17} className="px-6 py-12 text-center text-slate-600 italic">
+                                      No records match the current filter.
+                                  </td>
+                              </tr>
+                           )}
+                        </tbody>
+                    </table>
+                 </div>
+                 
+                 {/* Pagination Controls */}
+                 <div className="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-800 text-xs text-slate-400">
+                    <div>
+                        Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredAssets.length)} of {filteredAssets.length} entries
+                    </div>
+                    <div className="flex gap-2">
+                        <button 
+                           onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                           disabled={currentPage === 1}
+                           className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ChevronLeft size={16} />
+                        </button>
+                        <span className="flex items-center px-2 font-mono text-white">Page {currentPage} of {totalPages || 1}</span>
+                        <button 
+                           onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                           disabled={currentPage === totalPages || totalPages === 0}
+                           className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
+                 </div>
+               </>
+               )}
              </div>
           )}
 
-          {/* Assets View (Detailed) */}
-          {(activeTab === 'assets' || activeTab === 'graph') && (
+          {/* Graph Tab (Separated from Assets) */}
+          {activeTab === 'graph' && (
             <div className="flex gap-6 h-full">
                {/* List */}
                <div className="w-72 flex-shrink-0 border-r border-slate-800 pr-6 overflow-y-auto">
-                 <h3 className="text-xs font-bold text-slate-500 uppercase mb-4">Repository Assets</h3>
+                 <h3 className="text-xs font-bold text-slate-500 uppercase mb-4">Knowledge Graph Nodes</h3>
                  <div className="space-y-2">
                    {assets.map(asset => (
                      <button 
@@ -454,15 +855,8 @@ export default function App() {
                          {asset.status === AssetStatus.MINTED && <CheckCircle size={12} className="text-emerald-500"/>}
                          {asset.status === AssetStatus.PROCESSING && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"/>}
                        </div>
-                       <div className="w-full h-24 bg-slate-950 rounded mb-2 overflow-hidden relative">
-                          <img src={asset.imageUrl} className="w-full h-full object-cover opacity-80" alt="asset" />
-                          {asset.sqlRecord?.ACCESS_RESTRICTIONS && (
-                              <div className="absolute inset-0 bg-black/80 flex items-center justify-center">
-                                  <ShieldCheck className="text-red-500" />
-                              </div>
-                          )}
-                       </div>
-                       <p className="text-xs text-slate-400 truncate">{asset.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</p>
+                       <p className="text-xs text-slate-400 truncate font-bold">{asset.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</p>
+                       <p className="text-[10px] text-slate-500 mt-1">{asset.graphData?.nodes?.length || 0} Nodes Linked</p>
                      </button>
                    ))}
                  </div>
@@ -475,114 +869,39 @@ export default function App() {
                         <div>
                             <h2 className="text-2xl font-bold text-white mb-1">{selectedAsset.sqlRecord?.DOCUMENT_TITLE || 'Loading...'}</h2>
                             <p className="text-slate-400 text-sm flex items-center gap-2">
-                                <Map size={14} /> {selectedAsset.location ? `${selectedAsset.location.latitude.toFixed(4)}, ${selectedAsset.location.longitude.toFixed(4)}` : 'No Geo-Tag'}
-                                <span className="text-slate-600">|</span>
-                                <span className="font-mono text-xs text-primary-400">{selectedAsset.sqlRecord?.NLP_DERIVED_TIMESTAMP || 'Time Period Unknown'}</span>
+                                <Network size={14} /> Knowledge Graph Visualization
                             </p>
                         </div>
-                        <div className="flex gap-2">
-                            <span className="px-3 py-1 rounded-full bg-slate-800 border border-slate-700 text-xs font-mono text-slate-300">
-                                {selectedAsset.nft?.tokenId || 'NOT TOKENIZED'}
-                            </span>
-                        </div>
                     </div>
-
-                    {selectedAsset.status === AssetStatus.PROCESSING && (
-                        <div className="flex flex-col items-center justify-center h-64 text-center">
-                            <div className="w-16 h-16 border-4 border-primary-500 border-t-transparent rounded-full animate-spin mb-4"></div>
-                            <h3 className="text-lg font-medium text-white">Running Modular NLP Pipeline</h3>
-                            <p className="text-slate-500 mt-2">Extracting entities, inferring GIS data, and minting shards...</p>
-                        </div>
-                    )}
 
                     {selectedAsset.status === AssetStatus.MINTED && (
                         <div className="space-y-8 animate-in fade-in duration-500">
                             
-                            {/* GIS & Context Section */}
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                        <Layers size={16}/> GIS Metadata Layer
-                                    </h3>
-                                    <div className="space-y-3 font-mono text-sm">
-                                        <div className="flex justify-between border-b border-slate-800 pb-2">
-                                            <span className="text-slate-500">Zone Classification</span>
-                                            <span className="text-emerald-400">{selectedAsset.gisMetadata?.zoneType}</span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-slate-800 pb-2">
-                                            <span className="text-slate-500">Text-Derived Location</span>
-                                            <span className="text-slate-300">{selectedAsset.sqlRecord?.OCR_DERIVED_GIS_ZONE || 'N/A'}</span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-slate-800 pb-2">
-                                            <span className="text-slate-500">Inferred Region</span>
-                                            <span className="text-indigo-400">{selectedAsset.sqlRecord?.NLP_DERIVED_GIS_ZONE || 'N/A'}</span>
-                                        </div>
-                                        <div className="flex flex-col gap-2 mt-4">
-                                            <span className="text-slate-500 text-xs">Identified Landmarks</span>
-                                            <div className="flex flex-wrap gap-2">
-                                                {selectedAsset.gisMetadata?.nearbyLandmarks?.map(l => (
-                                                    <span key={l} className="px-2 py-1 bg-slate-800 rounded text-xs text-slate-300 border border-slate-700">{l}</span>
-                                                ))}
-                                                {(!selectedAsset.gisMetadata?.nearbyLandmarks || selectedAsset.gisMetadata.nearbyLandmarks.length === 0) && (
-                                                    <span className="text-slate-600 text-xs italic">No landmarks identified</span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div className="bg-slate-900 p-5 rounded-xl border border-slate-800 flex flex-col">
-                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                        <Cpu size={16}/> LLM Training Tokens
-                                    </h3>
-                                    <div className="flex-1 overflow-auto max-h-48">
-                                         <div className="flex flex-wrap gap-1">
-                                             {selectedAsset.tokenization?.topTokens?.map((t, i) => (
-                                                 <span key={i} className="px-1.5 py-0.5 bg-indigo-500/20 text-indigo-300 rounded text-xs cursor-help" title={`Freq: ${t.frequency}`}>
-                                                     {t.token}
-                                                 </span>
-                                             ))}
-                                         </div>
-                                    </div>
-                                    <div className="mt-4 pt-4 border-t border-slate-800">
-                                        <div className="text-xs text-slate-500 mb-2">Vector Embedding Preview</div>
-                                        <div className="flex gap-1 h-8 items-end">
-                                            {selectedAsset.tokenization?.embeddingVectorPreview?.map((v, i) => (
-                                                <div key={i} style={{ height: `${(v + 1) * 50}%` }} className="flex-1 bg-indigo-600 rounded-t opacity-70 hover:opacity-100 transition-opacity"></div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
                             {/* Graph Viz */}
                             <div className="bg-slate-900 p-1 rounded-xl border border-slate-800">
                                 <div className="p-4 border-b border-slate-800 mb-2 flex justify-between items-center">
                                     <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Semantic Knowledge Graph</h3>
                                     <span className="text-xs text-slate-500">{selectedAsset.graphData?.nodes?.length || 0} Nodes • {selectedAsset.graphData?.links?.length || 0} Links</span>
                                 </div>
-                                {selectedAsset.graphData && <GraphVisualizer data={selectedAsset.graphData} width={800} height={400} />}
+                                {selectedAsset.graphData && <GraphVisualizer data={selectedAsset.graphData} width={800} height={500} />}
                             </div>
 
-                            {/* OCR Text */}
+                            {/* Node List */}
                             <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-                                <div className="flex justify-between items-center mb-4">
-                                   <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Provenance & Transcription</h3>
-                                   <span className="text-xs text-slate-500">Rights: {selectedAsset.sqlRecord?.RIGHTS_STATEMENT}</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                   <div>
-                                      <h4 className="text-xs text-slate-500 mb-2">RAW OCR</h4>
-                                      <p className="font-mono text-xs text-slate-400 leading-relaxed whitespace-pre-wrap bg-slate-950 p-4 rounded border border-slate-800 h-64 overflow-y-auto">
-                                          {selectedAsset.ocrText}
-                                      </p>
-                                   </div>
-                                   <div>
-                                      <h4 className="text-xs text-slate-500 mb-2">PREPROCESSED (CLEAN)</h4>
-                                      <p className="font-mono text-xs text-emerald-400/80 leading-relaxed whitespace-pre-wrap bg-slate-950 p-4 rounded border border-slate-800 h-64 overflow-y-auto">
-                                          {selectedAsset.sqlRecord?.PREPROCESS_OCR_TRANSCRIPTION}
-                                      </p>
-                                   </div>
+                                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Extracted Entities</h3>
+                                <div className="flex flex-wrap gap-2">
+                                    {selectedAsset.graphData?.nodes?.map((node, i) => (
+                                        <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs ${
+                                            node.type === 'PERSON' ? 'bg-blue-900/20 border-blue-800 text-blue-300' :
+                                            node.type === 'LOCATION' ? 'bg-emerald-900/20 border-emerald-800 text-emerald-300' :
+                                            node.type === 'ORGANIZATION' ? 'bg-amber-900/20 border-amber-800 text-amber-300' :
+                                            'bg-slate-800 border-slate-700 text-slate-300'
+                                        }`}>
+                                            <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
+                                            <span className="font-bold">{node.label}</span>
+                                            <span className="opacity-50 ml-1 text-[10px] uppercase">{node.type}</span>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
@@ -590,7 +909,7 @@ export default function App() {
                  </div>
                ) : (
                  <div className="flex-1 flex items-center justify-center text-slate-600">
-                    <p>Select an asset to view details</p>
+                    <p>Select an asset to view knowledge graph</p>
                  </div>
                )}
             </div>
@@ -616,7 +935,7 @@ export default function App() {
                               <div className="p-5">
                                   <div className="flex justify-between items-start mb-4">
                                       <div>
-                                          <h4 className="text-white font-bold">{asset.sqlRecord?.DOCUMENT_TITLE || 'Unnamed Asset'}</h4>
+                                          <h4 className="text-white font-bold max-w-[150px] truncate">{asset.sqlRecord?.DOCUMENT_TITLE || 'Unnamed Asset'}</h4>
                                           <p className="text-xs text-slate-500">{asset.sqlRecord?.NLP_NODE_CATEGORIZATION}</p>
                                       </div>
                                       <div className="text-right">
@@ -657,6 +976,17 @@ export default function App() {
           )}
 
         </div>
+        
+        {/* Full Screen Image Modal */}
+        {expandedImage && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm" onClick={() => setExpandedImage(null)}>
+                <button className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white">
+                    <X size={24} />
+                </button>
+                <img src={expandedImage} className="max-w-full max-h-full p-4 object-contain select-none" alt="Expanded Asset" />
+            </div>
+        )}
+
       </main>
     </div>
   );
