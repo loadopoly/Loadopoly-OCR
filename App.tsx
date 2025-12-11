@@ -36,7 +36,7 @@ import {
   Settings,
   Gift
 } from 'lucide-react';
-import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle } from './types';
+import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG } from './types';
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
 import { createBundles } from './services/bundleService';
 import { initSync } from './lib/syncEngine';
@@ -49,6 +49,7 @@ import SemanticCanvas from './components/SemanticCanvas';
 import CameraCapture from './components/CameraCapture';
 import BatchImporter from './components/BatchImporter';
 import SettingsPanel from './components/SettingsPanel';
+import SmartUploadSelector from './components/SmartUploadSelector';
 
 // --- Helper Functions ---
 async function calculateSHA256(file: File): Promise<string> {
@@ -122,6 +123,7 @@ export default function App() {
 
   // Batch Processing State
   const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
+  const [selectedScanType, setSelectedScanType] = useState<ScanType | null>(null);
 
   // Asset View State
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
@@ -185,6 +187,9 @@ export default function App() {
       const fileType = file.type;
       const id = Math.random().toString(36).substring(7);
 
+      // Extract scan type if attached during batch upload
+      const scanType = (file as any).scanType || ScanType.DOCUMENT;
+
       return {
         id: id,
         imageUrl: URL.createObjectURL(file),
@@ -228,6 +233,7 @@ export default function App() {
           }],
           KEYWORDS_TAGS: [],
           ACCESS_RESTRICTIONS: false,
+          scan_type: scanType, // From selector
           CONTRIBUTOR_ID: null,
           CONTRIBUTED_AT: null,
           DATA_LICENSE: 'GEOGRAPH_CORPUS_1.0',
@@ -313,6 +319,7 @@ export default function App() {
       setAssets(prev => [newAsset, ...prev]);
       
       // Auto-switch to assets tab if it's a single upload or camera capture
+      // But NOT for Auto-Sync (background)
       if (source !== "Batch Folder" && source !== "Auto-Sync") {
         setActiveTab('assets');
       }
@@ -345,7 +352,8 @@ export default function App() {
           id: Math.random().toString(36).substring(7),
           file,
           status: 'QUEUED',
-          progress: 0
+          progress: 0,
+          scanType: (file as any).scanType || selectedScanType || ScanType.DOCUMENT
       }));
 
       setBatchQueue(prev => [...prev, ...newQueueItems]);
@@ -363,6 +371,12 @@ export default function App() {
           (async () => {
              try {
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'PROCESSING', progress: 10 } : i));
+                
+                // Ensure the file has the scan type attached for createInitialAsset
+                if (itemToProcess.scanType) {
+                    (itemToProcess.file as any).scanType = itemToProcess.scanType;
+                }
+
                 const newAsset = await createInitialAsset(itemToProcess.file);
                 if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = "Batch Ingest"; 
                 setAssets(prev => [newAsset, ...prev]);
@@ -616,88 +630,110 @@ export default function App() {
           {/* Quick Processing / Batch Tab */}
           {activeTab === 'batch' && (
              <div className="max-w-6xl mx-auto h-full flex flex-col">
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
-                    <div className="flex justify-between items-start mb-4">
-                       <div>
-                          <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                             <Zap className="text-amber-500" /> Batch Processor
-                          </h3>
-                          <p className="text-slate-400 text-sm mt-1">
-                             Optimized for 500+ documents/hr. Automatic bundling by time & location.
-                          </p>
-                       </div>
-                       <div className="text-right">
-                          <p className="text-2xl font-mono text-white">{batchQueue.filter(i => i.status === 'COMPLETED').length} <span className="text-sm text-slate-500">/ {batchQueue.length}</span></p>
-                          <p className="text-xs text-slate-500">Processed</p>
-                       </div>
+                {!selectedScanType ? (
+                  <SmartUploadSelector onTypeSelected={setSelectedScanType} />
+                ) : (
+                  <>
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                              <button 
+                                onClick={() => setSelectedScanType(null)}
+                                className="mb-2 text-slate-400 hover:text-white flex items-center gap-2 text-sm"
+                              >
+                                ← Back to Selection
+                              </button>
+                              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <Zap className="text-amber-500" /> Batch Processor: <span className="text-primary-400">{SCAN_TYPE_CONFIG[selectedScanType].label}</span>
+                              </h3>
+                              <p className="text-slate-400 text-sm mt-1">
+                                Optimized for 500+ documents/hr. Automatic bundling by time & location.
+                              </p>
+                          </div>
+                          <div className="text-right">
+                              <p className="text-2xl font-mono text-white">{batchQueue.filter(i => i.status === 'COMPLETED').length} <span className="text-sm text-slate-500">/ {batchQueue.length}</span></p>
+                              <p className="text-xs text-slate-500">Processed</p>
+                          </div>
+                        </div>
+                        
+                        {/* Replaced Upload Area with BatchImporter */}
+                        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
+                            <BatchImporter 
+                                onFilesSelected={(files) => {
+                                  // Auto-tag every file with the selected type for memory persistence
+                                  files.forEach(file => {
+                                    (file as any).scanType = selectedScanType;
+                                  });
+                                  handleBatchFiles(files);
+                                }}
+                                isProcessing={isProcessing}
+                            />
+                        </div>
                     </div>
-                    
-                    {/* Replaced Upload Area with BatchImporter */}
-                    <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
-                        <BatchImporter 
-                            onFilesSelected={handleBatchFiles}
-                            isProcessing={isProcessing}
-                        />
-                    </div>
-                </div>
 
-                {/* Queue Table */}
-                <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
-                    <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase">Processing Queue</h4>
-                        {batchQueue.length > 0 && (
-                            <button onClick={() => setBatchQueue([])} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
-                                <Trash2 size={12} /> Clear All
-                            </button>
-                        )}
-                    </div>
-                    <div className="flex-1 overflow-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="bg-slate-950 sticky top-0">
-                                <tr>
-                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Status</th>
-                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">File Name</th>
-                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Size</th>
-                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Message</th>
-                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase text-right">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-800">
-                                {batchQueue.map((item) => (
-                                    <tr key={item.id} className="text-xs group hover:bg-slate-800/30">
-                                        <td className="px-4 py-2">
-                                            {item.status === 'QUEUED' && <span className="inline-block w-2 h-2 rounded-full bg-slate-600" title="Queued"></span>}
-                                            {item.status === 'PROCESSING' && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Processing"></div>}
-                                            {item.status === 'COMPLETED' && <CheckCircle size={14} className="text-emerald-500" />}
-                                            {item.status === 'ERROR' && <AlertCircle size={14} className="text-red-500" />}
-                                        </td>
-                                        <td className="px-4 py-2 text-slate-300 font-mono">{item.file.name}</td>
-                                        <td className="px-4 py-2 text-slate-500">{(item.file.size / 1024).toFixed(1)} KB</td>
-                                        <td className="px-4 py-2">
-                                            {item.status === 'ERROR' ? (
-                                                <span className="text-red-400">{item.errorMsg}</span>
-                                            ) : item.status === 'COMPLETED' ? (
-                                                <span className="text-emerald-500/70">Ingested to DB</span>
-                                            ) : (
-                                                <span className="text-slate-600">Waiting for worker...</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-2 text-right">
-                                            {item.status === 'ERROR' && (
-                                                <button onClick={() => retryBatchItem(item.id)} className="text-primary-500 hover:text-white mr-2" title="Retry">
-                                                    <RefreshCw size={14} />
-                                                </button>
-                                            )}
-                                            <button onClick={() => removeBatchItem(item.id)} className="text-slate-600 hover:text-red-500" title="Remove">
-                                                <X size={14} />
-                                            </button>
-                                        </td>
+                    {/* Queue Table */}
+                    <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+                        <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase">Processing Queue</h4>
+                            {batchQueue.length > 0 && (
+                                <button onClick={() => setBatchQueue([])} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
+                                    <Trash2 size={12} /> Clear All
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex-1 overflow-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-slate-950 sticky top-0">
+                                    <tr>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Status</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Type</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">File Name</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Size</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Message</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase text-right">Action</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800">
+                                    {batchQueue.map((item) => (
+                                        <tr key={item.id} className="text-xs group hover:bg-slate-800/30">
+                                            <td className="px-4 py-2">
+                                                {item.status === 'QUEUED' && <span className="inline-block w-2 h-2 rounded-full bg-slate-600" title="Queued"></span>}
+                                                {item.status === 'PROCESSING' && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Processing"></div>}
+                                                {item.status === 'COMPLETED' && <CheckCircle size={14} className="text-emerald-500" />}
+                                                {item.status === 'ERROR' && <AlertCircle size={14} className="text-red-500" />}
+                                            </td>
+                                            <td className="px-4 py-2 text-slate-400">
+                                              {item.scanType || 'DOC'}
+                                            </td>
+                                            <td className="px-4 py-2 text-slate-300 font-mono">{item.file.name}</td>
+                                            <td className="px-4 py-2 text-slate-500">{(item.file.size / 1024).toFixed(1)} KB</td>
+                                            <td className="px-4 py-2">
+                                                {item.status === 'ERROR' ? (
+                                                    <span className="text-red-400">{item.errorMsg}</span>
+                                                ) : item.status === 'COMPLETED' ? (
+                                                    <span className="text-emerald-500/70">Ingested to DB</span>
+                                                ) : (
+                                                    <span className="text-slate-600">Waiting for worker...</span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-2 text-right">
+                                                {item.status === 'ERROR' && (
+                                                    <button onClick={() => retryBatchItem(item.id)} className="text-primary-500 hover:text-white mr-2" title="Retry">
+                                                        <RefreshCw size={14} />
+                                                    </button>
+                                                )}
+                                                <button onClick={() => removeBatchItem(item.id)} className="text-slate-600 hover:text-red-500" title="Remove">
+                                                    <X size={14} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
+                  </>
+                )}
              </div>
           )}
 
@@ -711,7 +747,7 @@ export default function App() {
              </div>
           )}
 
-          {/* Assets Exploratory View with BUNDLES & REDEMPTION */}
+          {/* Assets Exploratory View with BUNDLES */}
           {activeTab === 'assets' && (
              <div className="h-full overflow-y-auto">
                  <div className="flex justify-between items-center mb-6">
