@@ -32,8 +32,7 @@ import {
   ArrowLeft,
   ShoppingBag,
   Scan,
-  Plus,
-  UploadCloud
+  Plus
 } from 'lucide-react';
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle } from './types';
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
@@ -44,7 +43,7 @@ import BundleCard from './components/BundleCard';
 import ARScene from './components/ARScene';
 import SemanticCanvas from './components/SemanticCanvas';
 import CameraCapture from './components/CameraCapture';
-import FolderImporter from './components/FolderImporter';
+import BatchImporter from './components/BatchImporter';
 
 // --- Helper Functions ---
 async function calculateSHA256(file: File): Promise<string> {
@@ -118,7 +117,6 @@ export default function App() {
 
   // Batch Processing State
   const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
-  const batchInputRef = useRef<HTMLInputElement>(null);
 
   // Asset View State
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
@@ -302,40 +300,25 @@ export default function App() {
     ingestFile(file, "Mobile Camera");
   };
 
-  const handleFolderImport = async (files: File[]) => {
-      // For folders, we direct them to the batch queue instead of instant single processing
+  const handleSingleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) ingestFile(file, "Direct Upload");
+  };
+
+  // --- Unified Batch File Handler ---
+  const handleBatchFiles = (files: File[]) => {
+      if (!files || files.length === 0) return;
+
       const newQueueItems: BatchItem[] = files.map(file => ({
           id: Math.random().toString(36).substring(7),
           file,
           status: 'QUEUED',
           progress: 0
       }));
+
       setBatchQueue(prev => [...prev, ...newQueueItems]);
-      setActiveTab('batch');
-      
-      // Trigger the queue processor (it might already be running, but this kicks it if idle)
-      // Note: We need a slight delay or effect to ensure queue state update is picked up
+      // Trigger processing queue
       setTimeout(() => processNextBatchItem(), 100);
-  };
-
-  const handleSingleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) ingestFile(file, "Direct Upload");
-  };
-
-  const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = event.target.files;
-      if (!files || files.length === 0) return;
-
-      const newQueueItems: BatchItem[] = Array.from(files).map(file => ({
-          id: Math.random().toString(36).substring(7),
-          file,
-          status: 'QUEUED',
-          progress: 0
-      }));
-
-      setBatchQueue(prev => [...prev, ...newQueueItems]);
-      processNextBatchItem();
   };
 
   const processNextBatchItem = async () => {
@@ -591,23 +574,12 @@ export default function App() {
                        </div>
                     </div>
                     
+                    {/* Replaced Upload Area with BatchImporter */}
                     <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
-                        <UploadCloud className="text-slate-600" size={48} />
-                        <div className="flex gap-4">
-                            <label className="flex items-center gap-2 px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg cursor-pointer transition-all">
-                                <span>Select Files</span>
-                                <input 
-                                   type="file" 
-                                   multiple 
-                                   className="hidden" 
-                                   onChange={handleBatchUpload}
-                                   accept="image/*, application/pdf"
-                                />
-                            </label>
-                            
-                            <FolderImporter onImport={handleFolderImport} isProcessing={isProcessing} />
-                        </div>
-                        <span className="text-slate-500 text-sm">Drag & Drop supported</span>
+                        <BatchImporter 
+                            onFilesSelected={handleBatchFiles}
+                            isProcessing={isProcessing}
+                        />
                     </div>
                 </div>
 
