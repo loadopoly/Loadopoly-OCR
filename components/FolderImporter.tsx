@@ -11,7 +11,7 @@ export default function FolderImporter({ onImport, isProcessing }: FolderImporte
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
-      const fileList = Array.from(e.target.files);
+      const fileList: File[] = Array.from(e.target.files);
       // Filter out system files if needed, or just pass all
       const validFiles = fileList.filter(f => f.name !== '.DS_Store' && f.type); 
       onImport(validFiles);

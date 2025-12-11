@@ -3,6 +3,7 @@ import { GISMetadata, GraphData, TokenizationData, AssetStatus, ScanType, Taxono
 
 const GEMINI_MODEL = "gemini-2.5-flash";
 
+// Helper to convert File to Base64
 export const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -22,11 +23,14 @@ export const fileToGenerativePart = async (file: File): Promise<{ inlineData: { 
 };
 
 interface ProcessResponse {
+  // Original Props
   ocrText: string;
   gisMetadata: GISMetadata;
   graphData: GraphData;
   tokenization: TokenizationData;
   analysis: string;
+
+  // New Structured DB Props
   ocrDerivedTimestamp: string | null;
   nlpDerivedTimestamp: string | null;
   ocrDerivedGisZone: string | null;
@@ -41,9 +45,13 @@ interface ProcessResponse {
   confidenceScore: number;
   keywordsTags: string[];
   accessRestrictions: boolean;
+
+  // Scan Type Specific
   taxonomy?: TaxonomyData;
   itemAttributes?: ItemAttributes;
   sceneryAttributes?: SceneryAttributes;
+
+  // Accessibility
   alt_text_short?: string;
   alt_text_long?: string;
   reading_order?: ReadingOrderBlock[];
@@ -55,6 +63,8 @@ export const processImageWithGemini = async (
   location: { lat: number; lng: number } | null,
   scanType: ScanType = ScanType.DOCUMENT
 ): Promise<ProcessResponse> => {
+  
+  // Per guidelines: use process.env.API_KEY directly and assume it is valid.
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const imagePart = await fileToGenerativePart(file);
 
@@ -93,9 +103,11 @@ export const processImageWithGemini = async (
   const schema: Schema = {
     type: Type.OBJECT,
     properties: {
-      ocrText: { type: Type.STRING },
-      preprocessOcrTranscription: { type: Type.STRING },
-      analysis: { type: Type.STRING },
+      ocrText: { type: Type.STRING, description: "Raw full text transcription" },
+      preprocessOcrTranscription: { type: Type.STRING, description: "Cleaned text for NLP" },
+      analysis: { type: Type.STRING, description: "Brief contextual summary" },
+      
+      // Accessibility
       alt_text_short: { type: Type.STRING },
       alt_text_long: { type: Type.STRING },
       reading_order: { 
@@ -109,6 +121,8 @@ export const processImageWithGemini = async (
           } 
       },
       accessibility_score: { type: Type.NUMBER },
+
+      // GIS
       gisMetadata: {
         type: Type.OBJECT,
         properties: {
@@ -122,17 +136,25 @@ export const processImageWithGemini = async (
       },
       ocrDerivedGisZone: { type: Type.STRING, nullable: true },
       nlpDerivedGisZone: { type: Type.STRING, nullable: true },
-      ocrDerivedTimestamp: { type: Type.STRING, nullable: true },
-      nlpDerivedTimestamp: { type: Type.STRING, nullable: true },
+
+      // Timestamps
+      ocrDerivedTimestamp: { type: Type.STRING, nullable: true, description: "Specific date found in text" },
+      nlpDerivedTimestamp: { type: Type.STRING, nullable: true, description: "Inferred era/period" },
+
+      // Document Metadata
       documentTitle: { type: Type.STRING },
       documentDescription: { type: Type.STRING },
       creatorAgent: { type: Type.STRING, nullable: true },
       rightsStatement: { type: Type.STRING },
       languageCode: { type: Type.STRING },
+      
+      // Classification
       nlpNodeCategorization: { type: Type.STRING },
       keywordsTags: { type: Type.ARRAY, items: { type: Type.STRING } },
       accessRestrictions: { type: Type.BOOLEAN },
-      confidenceScore: { type: Type.NUMBER },
+      confidenceScore: { type: Type.NUMBER, description: "0.0 to 1.0 confidence in extraction" },
+
+      // Taxonomy (For Items)
       taxonomy: {
         type: Type.OBJECT,
         nullable: true,
@@ -148,6 +170,8 @@ export const processImageWithGemini = async (
           inaturalist_taxon_id: { type: Type.INTEGER, nullable: true }
         }
       },
+      
+      // Item Attributes
       itemAttributes: {
         type: Type.OBJECT,
         nullable: true,
@@ -170,6 +194,8 @@ export const processImageWithGemini = async (
           inscriptions_or_marks: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true }
         }
       },
+
+      // Scenery Attributes
       sceneryAttributes: {
         type: Type.OBJECT,
         nullable: true,
@@ -181,6 +207,8 @@ export const processImageWithGemini = async (
           common_name: { type: Type.STRING, nullable: true }
         }
       },
+
+      // Graph
       graphData: {
         type: Type.OBJECT,
         properties: {
@@ -212,6 +240,8 @@ export const processImageWithGemini = async (
         },
         required: ["nodes", "links"]
       },
+
+      // Tokenization
       tokenization: {
         type: Type.OBJECT,
         properties: {
@@ -232,27 +262,51 @@ export const processImageWithGemini = async (
         required: ["tokenCount", "topTokens"]
       }
     },
-    required: ["ocrText", "preprocessOcrTranscription", "gisMetadata", "graphData", "tokenization", "analysis", "documentTitle", "documentDescription", "rightsStatement", "languageCode", "keywordsTags"]
+    required: [
+      "ocrText", "preprocessOcrTranscription", "gisMetadata", "graphData", "tokenization", "analysis",
+      "documentTitle", "documentDescription", "rightsStatement", "languageCode", "keywordsTags"
+    ]
   };
 
   try {
     const response = await ai.models.generateContent({
       model: GEMINI_MODEL,
-      contents: { role: 'user', parts: [imagePart, { text: prompt }] },
-      config: { responseMimeType: "application/json", responseSchema: schema }
+      contents: {
+        role: 'user',
+        parts: [
+          imagePart,
+          { text: prompt }
+        ]
+      },
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: schema
+      }
     });
 
     const text = response.text;
     if (!text) throw new Error("No response from Gemini");
     
+    // Parse and Sanitize to ensure arrays exist
     const parsed = JSON.parse(text) as ProcessResponse;
 
     return {
       ...parsed,
       keywordsTags: parsed.keywordsTags || [],
-      gisMetadata: { ...parsed.gisMetadata, nearbyLandmarks: parsed.gisMetadata?.nearbyLandmarks || [] },
-      graphData: { nodes: parsed.graphData?.nodes || [], links: parsed.graphData?.links || [] },
-      tokenization: { ...parsed.tokenization, topTokens: parsed.tokenization?.topTokens || [], embeddingVectorPreview: parsed.tokenization?.embeddingVectorPreview || [] },
+      gisMetadata: {
+        ...parsed.gisMetadata,
+        nearbyLandmarks: parsed.gisMetadata?.nearbyLandmarks || []
+      },
+      graphData: {
+        nodes: parsed.graphData?.nodes || [],
+        links: parsed.graphData?.links || []
+      },
+      tokenization: {
+        ...parsed.tokenization,
+        topTokens: parsed.tokenization?.topTokens || [],
+        embeddingVectorPreview: parsed.tokenization?.embeddingVectorPreview || []
+      },
+      // Ensure specific objects are present if valid, or undefined
       taxonomy: parsed.taxonomy,
       itemAttributes: parsed.itemAttributes,
       sceneryAttributes: parsed.sceneryAttributes,
@@ -261,12 +315,14 @@ export const processImageWithGemini = async (
       reading_order: parsed.reading_order,
       accessibility_score: parsed.accessibility_score
     };
+
   } catch (error) {
     console.error("Gemini Processing Error:", error);
     throw error;
   }
 };
 
+// Mock function to "Mint" an NFT
 export const simulateNFTMinting = (assetId: string): any => {
     return {
         contractAddress: "0x71C...9A21",

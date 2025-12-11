@@ -17,7 +17,7 @@ class GeoGraphDB extends Dexie {
   constructor() {
     super('GeoGraphSync');
     
-    this.version(1).stores({
+    (this as any).version(1).stores({
       handles: 'id',
       files: 'name,lastModified'
     });
