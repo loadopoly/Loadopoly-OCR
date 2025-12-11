@@ -40,6 +40,7 @@ import GraphVisualizer from './components/GraphVisualizer';
 import ContributeButton from './components/ContributeButton';
 import BundleCard from './components/BundleCard';
 import ARScene from './components/ARScene';
+import SemanticCanvas from './components/SemanticCanvas';
 
 // --- Helper Functions ---
 async function calculateSHA256(file: File): Promise<string> {
@@ -445,6 +446,7 @@ export default function App() {
           <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => setActiveTab('ar')} />
           <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => setActiveTab('assets')} />
           <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => setActiveTab('graph')} />
+          <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => setActiveTab('semantic')} />
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
           <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => setActiveTab('market')} />
         </nav>
@@ -629,6 +631,16 @@ export default function App() {
                         </table>
                     </div>
                 </div>
+             </div>
+          )}
+
+          {/* Semantic View */}
+          {activeTab === 'semantic' && (
+             <div className="h-full p-4 md:p-8 flex flex-col">
+               <h2 className="text-2xl font-bold text-white mb-6">Semantic Knowledge Universe</h2>
+               <div className="flex-1 min-h-0 border border-slate-800 rounded-xl bg-black">
+                  <SemanticCanvas assets={assets} />
+               </div>
              </div>
           )}
 
