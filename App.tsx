@@ -31,7 +31,9 @@ import {
   FolderOpen,
   ArrowLeft,
   ShoppingBag,
-  Scan
+  Scan,
+  Plus,
+  UploadCloud
 } from 'lucide-react';
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle } from './types';
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
@@ -41,6 +43,8 @@ import ContributeButton from './components/ContributeButton';
 import BundleCard from './components/BundleCard';
 import ARScene from './components/ARScene';
 import SemanticCanvas from './components/SemanticCanvas';
+import CameraCapture from './components/CameraCapture';
+import FolderImporter from './components/FolderImporter';
 
 // --- Helper Functions ---
 async function calculateSHA256(file: File): Promise<string> {
@@ -267,15 +271,21 @@ export default function App() {
       };
   };
 
-  const handleSingleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
+  // --- Unified Ingestion Handler ---
+  // Works for Single Upload, Camera Capture, and Batch processing
+  const ingestFile = async (file: File, source: string = "Upload") => {
     setIsProcessing(true);
     try {
       const newAsset = await createInitialAsset(file);
+      // Update source if needed
+      if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = source;
+
       setAssets(prev => [newAsset, ...prev]);
-      setActiveTab('assets'); // Switch to Assets view
+      
+      // Auto-switch to assets tab if it's a single upload or camera capture
+      if (source !== "Batch Folder") {
+        setActiveTab('assets');
+      }
       
       const processedAsset = await processAssetPipeline(newAsset, file);
       setAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
@@ -286,6 +296,31 @@ export default function App() {
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleCameraCapture = (file: File) => {
+    ingestFile(file, "Mobile Camera");
+  };
+
+  const handleFolderImport = async (files: File[]) => {
+      // For folders, we direct them to the batch queue instead of instant single processing
+      const newQueueItems: BatchItem[] = files.map(file => ({
+          id: Math.random().toString(36).substring(7),
+          file,
+          status: 'QUEUED',
+          progress: 0
+      }));
+      setBatchQueue(prev => [...prev, ...newQueueItems]);
+      setActiveTab('batch');
+      
+      // Trigger the queue processor (it might already be running, but this kicks it if idle)
+      // Note: We need a slight delay or effect to ensure queue state update is picked up
+      setTimeout(() => processNextBatchItem(), 100);
+  };
+
+  const handleSingleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) ingestFile(file, "Direct Upload");
   };
 
   const handleBatchUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -340,22 +375,9 @@ export default function App() {
 
       try {
           const file = await bitmapToFile(bitmap, `AR_Scan_${now}.jpg`);
-          
-          // 1. Create asset immediately in list
-          const newAsset = await createInitialAsset(file);
-          newAsset.sqlRecord!.SOURCE_COLLECTION = "AR Live Scan";
-          newAsset.sqlRecord!.LOCAL_GIS_ZONE = "On-Site (AR)";
-          
-          setAssets(prev => [newAsset, ...prev]);
-
-          // 2. Process
-          const processedAsset = await processAssetPipeline(newAsset, file);
-          setAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+          ingestFile(file, "AR Live Scan");
           setArStatus('Match Found!');
-          
-          // Reset status after a delay
           setTimeout(() => setArStatus('Ready'), 2000);
-
       } catch (e) {
           console.error("AR Error", e);
           setArStatus('Error');
@@ -471,13 +493,18 @@ export default function App() {
         {/* Header */}
         <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-950/80 backdrop-blur z-10">
           <h2 className="text-lg font-semibold text-white capitalize">{activeTab === 'database' ? 'HISTORICAL DOCUMENTS DATABASE' : activeTab === 'batch' ? 'HIGH THROUGHPUT INGESTION' : activeTab}</h2>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
              {activeTab !== 'batch' && activeTab !== 'ar' && (
-                <label className={`flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
-                    {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Camera size={18} />}
-                    <span>{isProcessing ? 'Ingest & Process' : 'New Ingest'}</span>
-                    <input type="file" className="hidden" accept="image/*, application/pdf" onChange={handleSingleFileUpload} disabled={isProcessing} />
-                </label>
+                <>
+                  <CameraCapture onCapture={handleCameraCapture} />
+                  
+                  {/* Keep standard upload but hidden/alternative if needed */}
+                  <label className={`flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+                      {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Upload size={18} />}
+                      <span>Upload</span>
+                      <input type="file" className="hidden" accept="image/*, application/pdf" onChange={handleSingleFileUpload} disabled={isProcessing} />
+                  </label>
+                </>
              )}
           </div>
         </header>
@@ -496,8 +523,15 @@ export default function App() {
 
               {assets.length === 0 ? (
                 <div className="h-64 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 gap-4">
-                  <Upload size={48} className="opacity-50" />
-                  <p>Upload a document or photo to begin extraction</p>
+                  <div className="flex gap-4">
+                     <CameraCapture onCapture={handleCameraCapture} />
+                     <label className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg cursor-pointer transition-all border border-slate-700">
+                        <Upload size={20} />
+                        <span>Upload File</span>
+                        <input type="file" className="hidden" accept="image/*, application/pdf" onChange={handleSingleFileUpload} />
+                     </label>
+                  </div>
+                  <p className="mt-2">Use the Camera or Upload to begin extraction</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -557,20 +591,23 @@ export default function App() {
                        </div>
                     </div>
                     
-                    <div 
-                      onClick={() => batchInputRef.current?.click()}
-                      className="border-2 border-dashed border-slate-700 hover:border-primary-500 hover:bg-slate-800/50 transition-all rounded-lg h-32 flex flex-col items-center justify-center cursor-pointer group"
-                    >
-                        <Upload className="text-slate-500 group-hover:text-primary-400 mb-2" size={32} />
-                        <span className="text-slate-400 group-hover:text-slate-200 text-sm font-medium">Click to select files or drag entire folder here</span>
-                        <input 
-                           type="file" 
-                           multiple 
-                           className="hidden" 
-                           ref={batchInputRef} 
-                           onChange={handleBatchUpload}
-                           accept="image/*, application/pdf"
-                        />
+                    <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
+                        <UploadCloud className="text-slate-600" size={48} />
+                        <div className="flex gap-4">
+                            <label className="flex items-center gap-2 px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg cursor-pointer transition-all">
+                                <span>Select Files</span>
+                                <input 
+                                   type="file" 
+                                   multiple 
+                                   className="hidden" 
+                                   onChange={handleBatchUpload}
+                                   accept="image/*, application/pdf"
+                                />
+                            </label>
+                            
+                            <FolderImporter onImport={handleFolderImport} isProcessing={isProcessing} />
+                        </div>
+                        <span className="text-slate-500 text-sm">Drag & Drop supported</span>
                     </div>
                 </div>
 
