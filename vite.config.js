@@ -31,6 +31,6 @@ export default defineConfig({
     global: 'globalThis'
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'd3', '@google/genai', '@supabase/supabase-js', 'uuid']
+    include: ['react', 'react-dom', 'd3', '@google/genai', '@supabase/supabase-js', 'uuid', 'ethers']
   }
 })
