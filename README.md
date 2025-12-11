@@ -1,20 +1,32 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# GeoGraph Node  [![MIT License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE) [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 
-# Run and deploy your AI Studio app
+**Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
-This contains everything you need to run your app locally.
+- Code: MIT — fork, modify, sell, do whatever  
+- Individual photos & metadata: CC0 — public domain forever  
+- Curated releases, embeddings, bundles: © GeoGraph Foundation — commercial license required for LLM training
 
-View your app in AI Studio: https://ai.studio/apps/drive/1aUFZCC31Lz9g_OqImq9yFHYC0IOwrC-R
+→ You can use the app for free, contribute for free, and still sell the platinum dataset to frontier labs.
 
-## Run Locally
+## About
 
-**Prerequisites:**  Node.js
+An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP processing, and sharded NFT asset management for LLM training data.
 
+### Features
 
-1. Install dependencies:
-   `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
-   `npm run dev`
+1.  **Gemini 2.5 Flash Integration**: Advanced OCR, timestamps, GIS zone inference, and graph node extraction.
+2.  **Semantic Bundling**: Automatically groups assets by location, time, and topic into high-value training examples.
+3.  **Knowledge Graph**: Visualize connections between documents, concepts, and locations (Force Directed Graph).
+4.  **AR Scanner**: Real-time augmented reality scanning for historical markers.
+5.  **Marketplace**: Dynamic sharding and bundle pricing for dataset monetization.
+6.  **Quick Batch Processing**: High-throughput ingestion queue for processing 500+ documents/hour.
+
+## Getting Started
+
+1.  Clone the repository.
+2.  Install dependencies: `npm install`.
+3.  Set up environment variables (see `.env.example` or Vercel config):
+    *   `VITE_GEMINI_API_KEY`: Google Gemini API Key.
+    *   `VITE_SUPABASE_URL`: Supabase Project URL.
+    *   `VITE_SUPABASE_ANON_KEY`: Supabase Anon Key.
+4.  Run development server: `npm run dev`.
