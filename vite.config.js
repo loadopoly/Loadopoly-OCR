@@ -17,14 +17,10 @@ export default defineConfig({
     outDir: 'dist',
     rollupOptions: {
       input: 'index.html',
-      external: ['ethers'],
       output: {
         entryFileNames: 'assets/[name].[hash].js',
         chunkFileNames: 'assets/[name].[hash].js',
-        assetFileNames: 'assets/[name].[hash].[ext]',
-        globals: {
-          ethers: 'ethers'
-        }
+        assetFileNames: 'assets/[name].[hash].[ext]'
       }
     },
     assetsInlineLimit: 0,
@@ -35,6 +31,6 @@ export default defineConfig({
     global: 'globalThis'
   },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'd3', '@google/genai', '@supabase/supabase-js', 'uuid']
+    include: ['react', 'react-dom', 'd3', '@google/genai', '@supabase/supabase-js', 'uuid', 'ethers']
   }
 })
