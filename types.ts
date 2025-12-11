@@ -53,6 +53,13 @@ export interface NFTData {
   availableShards: number;
   pricePerShard: number;
   ownership: Array<{ holder: string; percentage: number }>;
+  // DCC1 Phygital Data
+  dcc1?: {
+    shardsCollected: number;
+    shardsRequired: number;
+    isRedeemable: boolean;
+    certificateTokenId?: string;
+  }
 }
 
 export interface PreservationEvent {
