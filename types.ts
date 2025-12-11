@@ -1,3 +1,5 @@
+import { Package, FileText, Mountain } from 'lucide-react';
+
 // Domain Models
 
 export interface LocationData {
@@ -12,6 +14,18 @@ export enum AssetStatus {
   MINTED = 'MINTED',
   FAILED = 'FAILED'
 }
+
+export enum ScanType {
+  ITEM = 'ITEM',
+  DOCUMENT = 'DOCUMENT',
+  SCENERY = 'SCENERY'
+}
+
+export const SCAN_TYPE_CONFIG = {
+  [ScanType.ITEM]:     { label: 'Scanned Items',     color: 'amber',   icon: Package },
+  [ScanType.DOCUMENT]: { label: 'Scanned Documents', color: 'blue',    icon: FileText },
+  [ScanType.SCENERY]:  { label: 'Scanned Scenery',   color: 'emerald', icon: Mountain },
+};
 
 export interface GISMetadata {
   zoneType: string; // e.g., "Urban High Density", "Rural Agricultural"
@@ -102,6 +116,7 @@ export interface HistoricalDocumentMetadata {
   PRESERVATION_EVENTS: PreservationEvent[];
   KEYWORDS_TAGS: string[];
   ACCESS_RESTRICTIONS: boolean;
+  scan_type: string;
 
   // Contribution Fields
   CONTRIBUTOR_ID: string | null;
@@ -146,4 +161,5 @@ export interface BatchItem {
   progress: number; // 0-100
   errorMsg?: string;
   assetId?: string; // Link to the created asset
+  scanType?: ScanType;
 }
