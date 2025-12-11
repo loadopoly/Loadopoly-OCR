@@ -16,13 +16,12 @@ class GeoGraphDB extends Dexie {
 
   constructor() {
     super('GeoGraphSync');
+    
+    this.version(1).stores({
+      handles: 'id',
+      files: 'name,lastModified'
+    });
   }
 }
 
 export const db = new GeoGraphDB();
-
-// Define schema outside constructor to avoid TypeScript context issues
-db.version(1).stores({
-  handles: 'id',
-  files: 'name,lastModified'
-});
