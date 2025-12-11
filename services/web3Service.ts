@@ -1,5 +1,5 @@
 
-import * as ethers from 'ethers';
+import { ethers } from 'ethers';
 
 // Configuration
 const DCC1_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d89A21"; // Mock address
