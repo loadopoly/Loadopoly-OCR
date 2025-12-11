@@ -14,6 +14,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
   useEffect(() => {
     return () => {
+      // Cleanup on unmount
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
@@ -60,9 +61,14 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
       const newMode = facingMode === 'environment' ? 'user' : 'environment';
       setFacingMode(newMode);
       announce(`Switched to ${newMode === 'user' ? 'front' : 'back'} camera`);
+      // Determine if we need to restart immediately
       if (isOpen) {
+          // Small timeout to allow state to update
           setTimeout(() => {
              if(videoRef.current) {
+                 // The useEffect dependency on facingMode isn't here, so we manually restart
+                 // But actually, it's cleaner to just restart the stream flow
+                 // Let's brute force restart:
                  if (stream) stream.getTracks().forEach(t => t.stop());
                  navigator.mediaDevices.getUserMedia({
                     video: { facingMode: newMode },
@@ -81,16 +87,20 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
   const takePhoto = () => {
     if (!videoRef.current) return;
+    
     const canvas = document.createElement('canvas');
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
+    
     const ctx = canvas.getContext('2d');
     if (ctx) {
         if (facingMode === 'user') {
+            // Mirror selfie
             ctx.translate(canvas.width, 0);
             ctx.scale(-1, 1);
         }
         ctx.drawImage(videoRef.current, 0, 0);
+        
         canvas.toBlob(blob => {
             if (blob) {
                 const file = new File([blob], `cam_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
@@ -104,7 +114,11 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
   if (!isOpen) {
     return (
-        <button onClick={startCamera} aria-label="Open camera to capture image" className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-all">
+        <button 
+            onClick={startCamera}
+            aria-label="Open camera to capture image"
+            className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-all"
+        >
             <Camera size={18} aria-hidden="true" />
             <span className="hidden md:inline">Instant Capture</span>
         </button>
@@ -113,6 +127,7 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
 
   return (
     <div className="fixed inset-0 z-50 bg-black flex flex-col" role="dialog" aria-modal="true" aria-label="Camera Interface">
+      {/* Header */}
       <div className="p-4 flex justify-between items-center bg-black/50 absolute top-0 left-0 right-0 z-10">
          <div className="text-white font-bold flex items-center gap-2">
              <Smartphone size={20} aria-hidden="true" /> Camera Mode
@@ -121,17 +136,32 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
              <X size={24} aria-hidden="true" />
          </button>
       </div>
+
+      {/* Video Preview */}
       <div className="flex-1 relative flex items-center justify-center bg-black">
-         <video ref={videoRef} autoPlay playsInline className={`max-h-full max-w-full object-contain ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`} />
+         <video 
+            ref={videoRef} 
+            autoPlay 
+            playsInline 
+            className={`max-h-full max-w-full object-contain ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
+         />
       </div>
+
+      {/* Controls */}
       <div className="h-32 bg-slate-900 flex items-center justify-around pb-6 pt-4">
           <button onClick={switchCamera} aria-label="Switch camera" className="p-4 rounded-full bg-slate-800 text-white hover:bg-slate-700">
              <RefreshCw size={24} aria-hidden="true" />
           </button>
-          <button onClick={takePhoto} aria-label="Take Photo" className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center bg-white/10 active:scale-95 transition-transform">
+          
+          <button 
+            onClick={takePhoto}
+            aria-label="Take Photo"
+            className="w-20 h-20 rounded-full border-4 border-white flex items-center justify-center bg-white/10 active:scale-95 transition-transform"
+          >
               <div className="w-16 h-16 bg-white rounded-full"></div>
           </button>
-          <div className="w-12"></div>
+          
+          <div className="w-12"></div> {/* Spacer for alignment */}
       </div>
     </div>
   );
