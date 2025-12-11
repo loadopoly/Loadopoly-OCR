@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { enableAutoSync, disableAutoSync, isSyncEnabled, setScannerUrl as setEngineScannerUrl } from '../lib/syncEngine';
-import { FolderSync, Radio, CheckCircle, AlertTriangle } from 'lucide-react';
+import { FolderSync, Radio, CheckCircle, User, LogIn } from 'lucide-react';
+import { getCurrentUser } from '../lib/auth';
+import AuthModal from './AuthModal';
+import ProfileSettings from './ProfileSettings';
 
 export default function SettingsPanel() {
   const [syncOn, setSyncOn] = useState(false);
   const [scannerUrl, setScannerUrl] = useState('');
   const [savedScannerUrl, setSavedScannerUrl] = useState('');
+  const [user, setUser] = useState<any>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
     isSyncEnabled().then(setSyncOn);
@@ -14,6 +19,10 @@ export default function SettingsPanel() {
         setScannerUrl(storedUrl);
         setSavedScannerUrl(storedUrl);
     }
+    
+    getCurrentUser().then(({ data }) => {
+        setUser(data.user);
+    });
   }, []);
 
   const handleToggleSync = async () => {
@@ -37,8 +46,33 @@ export default function SettingsPanel() {
       {/* Header */}
       <div>
           <h2 className="text-2xl font-bold text-white mb-2">Node Settings</h2>
-          <p className="text-slate-400">Configure local integration and automation hardware.</p>
+          <p className="text-slate-400">Configure local integration, automation hardware, and account.</p>
       </div>
+
+      {/* Authentication Section */}
+      {user ? (
+        <ProfileSettings />
+      ) : (
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+                <div className="p-3 rounded-lg bg-blue-900/30 text-blue-500">
+                    <User size={24} />
+                </div>
+                <div>
+                    <h3 className="text-lg font-bold text-white">GeoGraph Account</h3>
+                    <p className="text-sm text-slate-400">Sign in to sync datasets and access paid markers.</p>
+                </div>
+            </div>
+            <button 
+                onClick={() => setShowAuthModal(true)}
+                className="px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-bold text-sm flex items-center gap-2"
+            >
+                <LogIn size={18} /> Sign In
+            </button>
+        </div>
+      )}
+
+      {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); getCurrentUser().then(({ data }) => setUser(data.user)); }} />}
 
       {/* Auto Sync Section */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
@@ -86,10 +120,9 @@ export default function SettingsPanel() {
                 <Radio size={24} />
             </div>
             <div className="flex-1">
-                <h3 className="text-lg font-bold text-white mb-2">Archive Scanner Bridge</h3>
+                <h3 className="text-lg font-bold text-white mb-2">Archive Scanner Bridge (Network)</h3>
                 <p className="text-sm text-slate-400 mb-4">
-                    Poll a network-attached scanner or IoT drop folder for new digitization tasks.
-                    Supports standard JSON file listing APIs.
+                    Poll a network-attached scanner or IoT drop folder via JSON API.
                 </p>
                 
                 <div className="flex gap-2 mb-2">
@@ -114,22 +147,12 @@ export default function SettingsPanel() {
                         Connected to: <span className="font-mono text-slate-400">{savedScannerUrl}</span>
                     </div>
                 )}
-                
-                <div className="mt-4 p-3 bg-slate-950 rounded border border-slate-800 text-xs text-slate-500">
-                    <p className="font-bold mb-1 text-slate-400">Compatible Hardware:</p>
-                    <ul className="list-disc pl-4 space-y-1">
-                        <li>Fujitsu ScanSnap (via Connect)</li>
-                        <li>Epson WorkForce (Network Save)</li>
-                        <li>Canon imageFORMULA (Wireless)</li>
-                        <li>DIY Raspberry Pi Drop Server</li>
-                    </ul>
-                </div>
             </div>
         </div>
       </div>
 
       <div className="text-center text-xs text-slate-600 mt-8">
-        <p>GeoGraph Node v1.0.0 • Local-First Architecture</p>
+        <p>GeoGraph Node v1.1.0 • Local-First Architecture</p>
       </div>
     </div>
   );
