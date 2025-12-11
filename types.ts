@@ -35,6 +35,38 @@ export interface GISMetadata {
   coordinateSystem: string; // e.g., "WGS84"
 }
 
+export interface TaxonomyData {
+  kingdom?: string;
+  phylum?: string;
+  class?: string;
+  order?: string;
+  family?: string;
+  genus?: string;
+  species?: string;
+  common_name?: string;
+  inaturalist_taxon_id?: number;
+}
+
+export interface ItemAttributes {
+  common_name?: string;
+  confidence_score?: number;
+  material?: string[];
+  technique?: string[];
+  production_date?: string;
+  period_or_style?: string;
+  dimensions?: { height_cm?: number; width_cm?: number; depth_cm?: number };
+  condition?: string;
+  inscriptions_or_marks?: string[];
+}
+
+export interface SceneryAttributes {
+  architectural_style?: string[];
+  construction_date?: string;
+  architect_or_builder?: string;
+  site_type?: string;
+  common_name?: string;
+}
+
 export interface GraphNode {
   id: string;
   label: string;
@@ -117,6 +149,11 @@ export interface HistoricalDocumentMetadata {
   KEYWORDS_TAGS: string[];
   ACCESS_RESTRICTIONS: boolean;
   scan_type: string;
+  
+  // Rich Metadata based on Scan Type
+  TAXONOMY?: TaxonomyData;
+  ITEM_ATTRIBUTES?: ItemAttributes;
+  SCENERY_ATTRIBUTES?: SceneryAttributes;
 
   // Contribution Fields
   CONTRIBUTOR_ID: string | null;

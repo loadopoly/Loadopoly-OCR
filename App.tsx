@@ -254,7 +254,10 @@ export default function App() {
         } catch (e) { /* ignore */ }
       }
 
-      const analysis = await processImageWithGemini(file, location);
+      // Determine Scan Type to guide the AI extraction
+      const scanType = (asset.sqlRecord?.scan_type as ScanType) || ScanType.DOCUMENT;
+
+      const analysis = await processImageWithGemini(file, location, scanType);
       
       const updatedSqlRecord: HistoricalDocumentMetadata = {
             ...asset.sqlRecord!,
@@ -278,6 +281,12 @@ export default function App() {
             ENTITIES_EXTRACTED: analysis.graphData?.nodes ? analysis.graphData.nodes.map(n => n.label) : [],
             KEYWORDS_TAGS: analysis.keywordsTags || [],
             ACCESS_RESTRICTIONS: analysis.accessRestrictions,
+            
+            // Map the new rich metadata fields
+            TAXONOMY: analysis.taxonomy,
+            ITEM_ATTRIBUTES: analysis.itemAttributes,
+            SCENERY_ATTRIBUTES: analysis.sceneryAttributes,
+
             PRESERVATION_EVENTS: [
               ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
               { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }

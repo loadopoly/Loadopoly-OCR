@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { GISMetadata, GraphData, TokenizationData, AssetStatus } from "../types";
+import { GISMetadata, GraphData, TokenizationData, AssetStatus, ScanType, TaxonomyData, ItemAttributes, SceneryAttributes } from "../types";
 
 const GEMINI_MODEL = "gemini-2.5-flash";
 
@@ -45,11 +45,17 @@ interface ProcessResponse {
   confidenceScore: number;
   keywordsTags: string[];
   accessRestrictions: boolean;
+
+  // Scan Type Specific
+  taxonomy?: TaxonomyData;
+  itemAttributes?: ItemAttributes;
+  sceneryAttributes?: SceneryAttributes;
 }
 
 export const processImageWithGemini = async (
   file: File, 
-  location: { lat: number; lng: number } | null
+  location: { lat: number; lng: number } | null,
+  scanType: ScanType = ScanType.DOCUMENT
 ): Promise<ProcessResponse> => {
   
   // Per guidelines: use process.env.API_KEY directly and assume it is valid.
@@ -60,9 +66,26 @@ export const processImageWithGemini = async (
     ? `The image was captured at Latitude: ${location.lat}, Longitude: ${location.lng}.` 
     : "No geolocation data available for this image. Infer location context solely from visual cues.";
 
+  let specificInstructions = "";
+  if (scanType === ScanType.ITEM) {
+    specificInstructions = `
+      **Scan Type: ITEM / PHYSICAL OBJECT**
+      - Return a full iNaturalist-style taxonomy hierarchy (kingdom → species) with common_name.
+      - Include eBay/Smithsonian structured attributes: material, technique, maker, production_date, dimensions, condition, inscriptions.
+    `;
+  } else if (scanType === ScanType.SCENERY) {
+    specificInstructions = `
+      **Scan Type: SCENERY / ARCHITECTURE**
+      - Return architectural_style, construction_date, architect_or_builder, site_type, common_name.
+      - Infer the era and cultural context.
+    `;
+  }
+
   const prompt = `
     Analyze the provided image for a strict SQL-based historical archival system.
     ${locString}
+    
+    ${specificInstructions}
 
     Perform the following complex extraction tasks:
 
@@ -128,6 +151,60 @@ export const processImageWithGemini = async (
       keywordsTags: { type: Type.ARRAY, items: { type: Type.STRING } },
       accessRestrictions: { type: Type.BOOLEAN },
       confidenceScore: { type: Type.NUMBER, description: "0.0 to 1.0 confidence in extraction" },
+
+      // Taxonomy (For Items)
+      taxonomy: {
+        type: Type.OBJECT,
+        nullable: true,
+        properties: {
+          kingdom: { type: Type.STRING, nullable: true },
+          phylum: { type: Type.STRING, nullable: true },
+          class: { type: Type.STRING, nullable: true },
+          order: { type: Type.STRING, nullable: true },
+          family: { type: Type.STRING, nullable: true },
+          genus: { type: Type.STRING, nullable: true },
+          species: { type: Type.STRING, nullable: true },
+          common_name: { type: Type.STRING, nullable: true },
+          inaturalist_taxon_id: { type: Type.INTEGER, nullable: true }
+        }
+      },
+      
+      // Item Attributes
+      itemAttributes: {
+        type: Type.OBJECT,
+        nullable: true,
+        properties: {
+          common_name: { type: Type.STRING, nullable: true },
+          material: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
+          technique: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
+          production_date: { type: Type.STRING, nullable: true },
+          period_or_style: { type: Type.STRING, nullable: true },
+          dimensions: {
+            type: Type.OBJECT,
+            nullable: true,
+            properties: {
+              height_cm: { type: Type.NUMBER, nullable: true },
+              width_cm: { type: Type.NUMBER, nullable: true },
+              depth_cm: { type: Type.NUMBER, nullable: true }
+            }
+          },
+          condition: { type: Type.STRING, nullable: true },
+          inscriptions_or_marks: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true }
+        }
+      },
+
+      // Scenery Attributes
+      sceneryAttributes: {
+        type: Type.OBJECT,
+        nullable: true,
+        properties: {
+          architectural_style: { type: Type.ARRAY, items: { type: Type.STRING }, nullable: true },
+          construction_date: { type: Type.STRING, nullable: true },
+          architect_or_builder: { type: Type.STRING, nullable: true },
+          site_type: { type: Type.STRING, nullable: true },
+          common_name: { type: Type.STRING, nullable: true }
+        }
+      },
 
       // Graph
       graphData: {
@@ -226,7 +303,11 @@ export const processImageWithGemini = async (
         ...parsed.tokenization,
         topTokens: parsed.tokenization?.topTokens || [],
         embeddingVectorPreview: parsed.tokenization?.embeddingVectorPreview || []
-      }
+      },
+      // Ensure specific objects are present if valid, or undefined
+      taxonomy: parsed.taxonomy,
+      itemAttributes: parsed.itemAttributes,
+      sceneryAttributes: parsed.sceneryAttributes
     };
 
   } catch (error) {
