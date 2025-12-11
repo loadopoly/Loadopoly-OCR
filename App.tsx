@@ -34,7 +34,8 @@ import {
   Scan,
   Plus,
   Settings,
-  Gift
+  Gift,
+  Volume2
 } from 'lucide-react';
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG } from './types';
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
@@ -50,6 +51,7 @@ import CameraCapture from './components/CameraCapture';
 import BatchImporter from './components/BatchImporter';
 import SettingsPanel from './components/SettingsPanel';
 import SmartUploadSelector from './components/SmartUploadSelector';
+import { announce } from './lib/accessibility';
 
 // --- Helper Functions ---
 async function calculateSHA256(file: File): Promise<string> {
@@ -104,50 +106,38 @@ const StatCard = ({ label, value, icon: Icon, color }: any) => (
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [assets, setAssets] = useState<DigitalAsset[]>([]);
-  // Combined list of Single Assets AND Bundles for display
   const [displayItems, setDisplayItems] = useState<(DigitalAsset | ImageBundle)[]>([]);
   
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [geoPermission, setGeoPermission] = useState<boolean>(false);
   
-  // Database & Grouping State
   const [groupBy, setGroupBy] = useState<'SOURCE' | 'ZONE' | 'CATEGORY' | 'RIGHTS'>('SOURCE');
   const [dbViewMode, setDbViewMode] = useState<'GROUPS' | 'DRILLDOWN'>('GROUPS');
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 50;
 
-  // Graph View State
   const [graphViewMode, setGraphViewMode] = useState<'SINGLE' | 'GLOBAL'>('SINGLE');
 
-  // Batch Processing State
   const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
   const [selectedScanType, setSelectedScanType] = useState<ScanType | null>(null);
 
-  // Asset View State
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
-  // AR State
   const arScanThrottleRef = useRef<number>(0);
   const [arStatus, setArStatus] = useState<string>('Ready');
 
-  // Stats derivation
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
 
   useEffect(() => {
-    // Check Geo permissions on mount
     navigator.permissions.query({ name: 'geolocation' }).then((result) => {
       setGeoPermission(result.state === 'granted');
     });
 
-    // Initialize Auto Sync
     initSync();
 
-    // Listen for background file events
     const handleNewFile = (event: CustomEvent<File>) => {
-        // Automatically add to batch queue or direct ingest?
-        // Let's use direct ingest for immediate feedback, but keep it robust
         ingestFile(event.detail, "Auto-Sync");
     };
 
@@ -158,27 +148,18 @@ export default function App() {
         // @ts-ignore
         window.removeEventListener('geograph-new-file', handleNewFile);
     }
-  }, []); // Note: ingestFile dependency is omitted but safe here as ingestFile is defined below
+  }, []);
 
-  // --- Bundling Effect ---
-  // When assets change, re-run bundling logic
   useEffect(() => {
     if (assets.length > 0) {
-        // Only bundle assets that have been processed (MINTED)
         const mintedAssets = assets.filter(a => a.status === AssetStatus.MINTED);
         const processingAssets = assets.filter(a => a.status !== AssetStatus.MINTED);
-        
-        // Create bundles from minted assets
         const bundles = createBundles(mintedAssets);
-        
-        // Combine bundles with assets that are still processing
         setDisplayItems([...processingAssets, ...bundles]);
     } else {
         setDisplayItems([]);
     }
   }, [assets]);
-
-  // --- Processing Logic ---
 
   const createInitialAsset = async (file: File): Promise<DigitalAsset> => {
       const checksum = await calculateSHA256(file);
@@ -186,8 +167,6 @@ export default function App() {
       const fileSize = file.size;
       const fileType = file.type;
       const id = Math.random().toString(36).substring(7);
-
-      // Extract scan type if attached during batch upload
       const scanType = (file as any).scanType || ScanType.DOCUMENT;
 
       return {
@@ -233,7 +212,7 @@ export default function App() {
           }],
           KEYWORDS_TAGS: [],
           ACCESS_RESTRICTIONS: false,
-          scan_type: scanType, // From selector
+          scan_type: scanType,
           CONTRIBUTOR_ID: null,
           CONTRIBUTED_AT: null,
           DATA_LICENSE: 'GEOGRAPH_CORPUS_1.0',
@@ -244,7 +223,6 @@ export default function App() {
 
   const processAssetPipeline = async (asset: DigitalAsset, file: File, customLocation?: {lat: number, lng: number}) => {
       let location: {lat: number, lng: number} | null = customLocation || null;
-      
       if (!location && navigator.geolocation) {
         try {
           const position = await new Promise<GeolocationPosition>((resolve, reject) => {
@@ -254,9 +232,7 @@ export default function App() {
         } catch (e) { /* ignore */ }
       }
 
-      // Determine Scan Type to guide the AI extraction
       const scanType = (asset.sqlRecord?.scan_type as ScanType) || ScanType.DOCUMENT;
-
       const analysis = await processImageWithGemini(file, location, scanType);
       
       const updatedSqlRecord: HistoricalDocumentMetadata = {
@@ -281,12 +257,13 @@ export default function App() {
             ENTITIES_EXTRACTED: analysis.graphData?.nodes ? analysis.graphData.nodes.map(n => n.label) : [],
             KEYWORDS_TAGS: analysis.keywordsTags || [],
             ACCESS_RESTRICTIONS: analysis.accessRestrictions,
-            
-            // Map the new rich metadata fields
             TAXONOMY: analysis.taxonomy,
             ITEM_ATTRIBUTES: analysis.itemAttributes,
             SCENERY_ATTRIBUTES: analysis.sceneryAttributes,
-
+            alt_text_short: analysis.alt_text_short,
+            alt_text_long: analysis.alt_text_long,
+            reading_order: analysis.reading_order,
+            accessibility_score: analysis.accessibility_score,
             PRESERVATION_EVENTS: [
               ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
               { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }
@@ -294,13 +271,14 @@ export default function App() {
       };
 
       const baseNFT = simulateNFTMinting(asset.id);
-      // Simulate DCC1 Data for Phygital Redemption
       const dcc1Data = {
-          shardsCollected: Math.floor(Math.random() * 250), // Simulation: Random amount collected
+          shardsCollected: Math.floor(Math.random() * 250),
           shardsRequired: 218,
           isRedeemable: false
       };
       dcc1Data.isRedeemable = dcc1Data.shardsCollected >= dcc1Data.shardsRequired;
+
+      announce(`Processed ${analysis.documentTitle}. Category: ${analysis.nlpNodeCategorization}`);
 
       return {
             ...asset,
@@ -316,26 +294,15 @@ export default function App() {
       };
   };
 
-  // --- Unified Ingestion Handler ---
-  // Works for Single Upload, Camera Capture, and Batch processing
   const ingestFile = async (file: File, source: string = "Upload") => {
     setIsProcessing(true);
     try {
       const newAsset = await createInitialAsset(file);
-      // Update source if needed
       if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = source;
-
       setAssets(prev => [newAsset, ...prev]);
-      
-      // Auto-switch to assets tab if it's a single upload or camera capture
-      // But NOT for Auto-Sync (background)
-      if (source !== "Batch Folder" && source !== "Auto-Sync") {
-        setActiveTab('assets');
-      }
-      
+      if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
       const processedAsset = await processAssetPipeline(newAsset, file);
       setAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-
     } catch (err) {
       console.error(err);
       setAssets(prev => prev.map(a => a.status === AssetStatus.PROCESSING ? { ...a, status: AssetStatus.FAILED } : a));
@@ -344,19 +311,14 @@ export default function App() {
     }
   };
 
-  const handleCameraCapture = (file: File) => {
-    ingestFile(file, "Mobile Camera");
-  };
-
+  const handleCameraCapture = (file: File) => ingestFile(file, "Mobile Camera");
   const handleSingleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) ingestFile(file, "Direct Upload");
   };
 
-  // --- Unified Batch File Handler ---
   const handleBatchFiles = (files: File[]) => {
       if (!files || files.length === 0) return;
-
       const newQueueItems: BatchItem[] = files.map(file => ({
           id: Math.random().toString(36).substring(7),
           file,
@@ -364,28 +326,19 @@ export default function App() {
           progress: 0,
           scanType: (file as any).scanType || selectedScanType || ScanType.DOCUMENT
       }));
-
       setBatchQueue(prev => [...prev, ...newQueueItems]);
-      // Trigger processing queue
       setTimeout(() => processNextBatchItem(), 100);
   };
 
   const processNextBatchItem = async () => {
       setBatchQueue(currentQueue => {
           const nextItemIndex = currentQueue.findIndex(i => i.status === 'QUEUED');
-          if (nextItemIndex === -1) return currentQueue; // Done
-
+          if (nextItemIndex === -1) return currentQueue;
           const itemToProcess = currentQueue[nextItemIndex];
-          
           (async () => {
              try {
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'PROCESSING', progress: 10 } : i));
-                
-                // Ensure the file has the scan type attached for createInitialAsset
-                if (itemToProcess.scanType) {
-                    (itemToProcess.file as any).scanType = itemToProcess.scanType;
-                }
-
+                if (itemToProcess.scanType) (itemToProcess.file as any).scanType = itemToProcess.scanType;
                 const newAsset = await createInitialAsset(itemToProcess.file);
                 if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = "Batch Ingest"; 
                 setAssets(prev => [newAsset, ...prev]);
@@ -404,13 +357,10 @@ export default function App() {
   };
 
   const handleARFrame = async (bitmap: ImageBitmap) => {
-      // Throttle: process only every 5 seconds
       const now = Date.now();
       if (now - arScanThrottleRef.current < 5000) return;
-      
       arScanThrottleRef.current = now;
       setArStatus('Processing...');
-
       try {
           const file = await bitmapToFile(bitmap, `AR_Scan_${now}.jpg`);
           ingestFile(file, "AR Live Scan");
@@ -430,7 +380,6 @@ export default function App() {
       try {
           const txHash = await redeemPhygitalCertificate(asset.id);
           alert(`Redemption Success! Certificate Minted.\nTx: ${txHash}`);
-          // Update local state to reflect redemption
           setAssets(prev => prev.map(a => a.id === asset.id ? {
               ...a, 
               nft: { ...a.nft!, dcc1: { ...a.nft!.dcc1!, shardsCollected: 0, isRedeemable: false, certificateTokenId: 'PENDING' } }
@@ -440,16 +389,12 @@ export default function App() {
       }
   };
 
-
   const retryBatchItem = (itemId: string) => {
       setBatchQueue(prev => prev.map(i => i.id === itemId ? { ...i, status: 'QUEUED', progress: 0, errorMsg: undefined } : i));
       processNextBatchItem();
   };
 
-  const removeBatchItem = (itemId: string) => {
-      setBatchQueue(prev => prev.filter(i => i.id !== itemId));
-  };
-
+  const removeBatchItem = (itemId: string) => setBatchQueue(prev => prev.filter(i => i.id !== itemId));
 
   const downloadJSON = (asset: DigitalAsset) => {
     if (!asset.sqlRecord) return;
@@ -507,8 +452,6 @@ export default function App() {
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30">
-      
-      {/* Sidebar */}
       <div className="w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col">
         <div className="p-6">
           <div className="flex items-center gap-2 text-primary-500 mb-1">
@@ -517,7 +460,6 @@ export default function App() {
           </div>
           <p className="text-xs text-slate-500">OCR • GIS • Graph • NFT</p>
         </div>
-
         <nav className="flex-1 space-y-1">
           <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
           <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => setActiveTab('batch')} />
@@ -531,7 +473,6 @@ export default function App() {
              <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
           </div>
         </nav>
-
         <div className="p-4 border-t border-slate-800">
            <div className="bg-slate-800/50 rounded p-3 text-xs text-slate-400">
              <div className="flex items-center justify-between mb-2">
@@ -545,19 +486,13 @@ export default function App() {
            </div>
         </div>
       </div>
-
-      {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        
-        {/* Header */}
         <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-950/80 backdrop-blur z-10">
           <h2 className="text-lg font-semibold text-white capitalize">{activeTab === 'database' ? 'HISTORICAL DOCUMENTS DATABASE' : activeTab === 'batch' ? 'HIGH THROUGHPUT INGESTION' : activeTab}</h2>
           <div className="flex items-center gap-2">
              {activeTab !== 'batch' && activeTab !== 'ar' && (
                 <>
                   <CameraCapture onCapture={handleCameraCapture} />
-                  
-                  {/* Keep standard upload but hidden/alternative if needed */}
                   <label className={`flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                       {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Upload size={18} />}
                       <span>Upload</span>
@@ -567,10 +502,7 @@ export default function App() {
              )}
           </div>
         </header>
-
         <div className="flex-1 overflow-auto p-8 relative">
-          
-          {/* Dashboard View */}
           {activeTab === 'dashboard' && (
             <div className="space-y-8 max-w-6xl mx-auto">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -579,7 +511,6 @@ export default function App() {
                 <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" />
                 <StatCard label="Active Bundles" value={displayItems.filter(i => 'bundleId' in i).length} icon={Package} color="text-amber-500" />
               </div>
-
               {assets.length === 0 ? (
                 <div className="h-64 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 gap-4">
                   <div className="flex gap-4">
@@ -620,8 +551,6 @@ export default function App() {
               )}
             </div>
           )}
-
-          {/* AR View */}
           {activeTab === 'ar' && (
               <div className="h-full flex flex-col bg-black rounded-2xl overflow-hidden relative border border-slate-800">
                   <ARScene onFrame={handleARFrame} />
@@ -630,13 +559,7 @@ export default function App() {
                   </div>
               </div>
           )}
-
-          {/* Settings Tab */}
-          {activeTab === 'settings' && (
-              <SettingsPanel />
-          )}
-
-          {/* Quick Processing / Batch Tab */}
+          {activeTab === 'settings' && <SettingsPanel />}
           {activeTab === 'batch' && (
              <div className="max-w-6xl mx-auto h-full flex flex-col">
                 {!selectedScanType ? (
@@ -664,23 +587,16 @@ export default function App() {
                               <p className="text-xs text-slate-500">Processed</p>
                           </div>
                         </div>
-                        
-                        {/* Replaced Upload Area with BatchImporter */}
                         <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
                             <BatchImporter 
                                 onFilesSelected={(files) => {
-                                  // Auto-tag every file with the selected type for memory persistence
-                                  files.forEach(file => {
-                                    (file as any).scanType = selectedScanType;
-                                  });
+                                  files.forEach(file => { (file as any).scanType = selectedScanType; });
                                   handleBatchFiles(files);
                                 }}
                                 isProcessing={isProcessing}
                             />
                         </div>
                     </div>
-
-                    {/* Queue Table */}
                     <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
                         <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
                             <h4 className="text-xs font-bold text-slate-400 uppercase">Processing Queue</h4>
@@ -711,19 +627,11 @@ export default function App() {
                                                 {item.status === 'COMPLETED' && <CheckCircle size={14} className="text-emerald-500" />}
                                                 {item.status === 'ERROR' && <AlertCircle size={14} className="text-red-500" />}
                                             </td>
-                                            <td className="px-4 py-2 text-slate-400">
-                                              {item.scanType || 'DOC'}
-                                            </td>
+                                            <td className="px-4 py-2 text-slate-400">{item.scanType || 'DOC'}</td>
                                             <td className="px-4 py-2 text-slate-300 font-mono">{item.file.name}</td>
                                             <td className="px-4 py-2 text-slate-500">{(item.file.size / 1024).toFixed(1)} KB</td>
                                             <td className="px-4 py-2">
-                                                {item.status === 'ERROR' ? (
-                                                    <span className="text-red-400">{item.errorMsg}</span>
-                                                ) : item.status === 'COMPLETED' ? (
-                                                    <span className="text-emerald-500/70">Ingested to DB</span>
-                                                ) : (
-                                                    <span className="text-slate-600">Waiting for worker...</span>
-                                                )}
+                                                {item.status === 'ERROR' ? <span className="text-red-400">{item.errorMsg}</span> : item.status === 'COMPLETED' ? <span className="text-emerald-500/70">Ingested to DB</span> : <span className="text-slate-600">Waiting for worker...</span>}
                                             </td>
                                             <td className="px-4 py-2 text-right">
                                                 {item.status === 'ERROR' && (
@@ -745,8 +653,6 @@ export default function App() {
                 )}
              </div>
           )}
-
-          {/* Semantic View */}
           {activeTab === 'semantic' && (
              <div className="h-full p-4 md:p-8 flex flex-col">
                <h2 className="text-2xl font-bold text-white mb-6">Semantic Knowledge Universe</h2>
@@ -755,8 +661,6 @@ export default function App() {
                </div>
              </div>
           )}
-
-          {/* Assets Exploratory View with BUNDLES */}
           {activeTab === 'assets' && (
              <div className="h-full overflow-y-auto">
                  <div className="flex justify-between items-center mb-6">
@@ -765,27 +669,19 @@ export default function App() {
                          <span>Showing {displayItems.length} items</span>
                      </div>
                  </div>
-
-                 {/* Masonry Grid Simulation */}
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
                      {displayItems.map(item => {
                          if ('bundleId' in item) {
-                             // Render Bundle Card
                              return (
                                  <BundleCard key={item.bundleId} bundle={item as ImageBundle} onClick={() => console.log('View bundle details')} />
                              );
                          } else {
-                             // Render Single Asset Card
                              const asset = item as DigitalAsset;
                              return (
                                 <div key={asset.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:shadow-lg hover:shadow-primary-900/10 transition-all hover:-translate-y-1 group">
-                                    {/* Image Header */}
                                     <div className="relative h-48 bg-slate-950 group overflow-hidden">
                                         <img src={asset.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" />
-                                        <button 
-                                           onClick={() => setExpandedImage(asset.imageUrl)}
-                                           className="absolute top-2 right-2 p-1.5 bg-black/60 rounded text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black"
-                                        >
+                                        <button onClick={() => setExpandedImage(asset.imageUrl)} className="absolute top-2 right-2 p-1.5 bg-black/60 rounded text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black">
                                             <Maximize2 size={14} />
                                         </button>
                                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 pt-12">
@@ -796,13 +692,9 @@ export default function App() {
                                             </div>
                                         </div>
                                     </div>
-
-                                    {/* Card Body */}
                                     <div className="p-4">
                                         <h4 className="font-bold text-white text-sm mb-1 truncate" title={asset.sqlRecord?.DOCUMENT_TITLE}>{asset.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
                                         <p className="text-xs text-slate-500 mb-3">{asset.sqlRecord?.NLP_NODE_CATEGORIZATION}</p>
-
-                                        {/* Key Stats Row */}
                                         <div className="flex justify-between items-center py-3 border-t border-b border-slate-800 mb-3">
                                             <div className="text-center">
                                                 <p className="text-[10px] text-slate-500 uppercase">Nodes</p>
@@ -819,8 +711,6 @@ export default function App() {
                                                 <p className="text-sm font-mono text-emerald-400 max-w-[80px] truncate" title={asset.sqlRecord?.LOCAL_GIS_ZONE}>{asset.sqlRecord?.LOCAL_GIS_ZONE || 'N/A'}</p>
                                             </div>
                                         </div>
-
-                                        {/* DCC1 Redemption Widget */}
                                         {asset.nft?.dcc1 && (
                                             <div className="mb-3 bg-slate-950 p-2 rounded border border-slate-800">
                                                 <div className="flex justify-between text-[10px] text-slate-400 mb-1">
@@ -830,22 +720,36 @@ export default function App() {
                                                     </span>
                                                 </div>
                                                 <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                                    <div 
-                                                        className={`h-full ${asset.nft.dcc1.isRedeemable ? 'bg-emerald-500' : 'bg-purple-600'}`} 
-                                                        style={{ width: `${Math.min(100, (asset.nft.dcc1.shardsCollected / asset.nft.dcc1.shardsRequired) * 100)}%` }}
-                                                    ></div>
+                                                    <div className={`h-full ${asset.nft.dcc1.isRedeemable ? 'bg-emerald-500' : 'bg-purple-600'}`} style={{ width: `${Math.min(100, (asset.nft.dcc1.shardsCollected / asset.nft.dcc1.shardsRequired) * 100)}%` }}></div>
                                                 </div>
                                                 {asset.nft.dcc1.isRedeemable && (
-                                                    <button 
-                                                        onClick={() => handlePhygitalRedeem(asset)}
-                                                        className="w-full mt-2 py-1 bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-400 border border-emerald-800 rounded text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
-                                                    >
+                                                    <button onClick={() => handlePhygitalRedeem(asset)} className="w-full mt-2 py-1 bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-400 border border-emerald-800 rounded text-[10px] font-bold flex items-center justify-center gap-1 transition-colors">
                                                         <Gift size={12} /> Redeem Physical
                                                     </button>
                                                 )}
                                             </div>
                                         )}
-                                        
+                                        <div className="mb-3 p-3 bg-slate-950/50 rounded border border-slate-800">
+                                           <div className="flex justify-between items-center mb-2">
+                                              <h4 className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1">
+                                                 <Eye size={10} /> Screen Reader
+                                              </h4>
+                                              <button
+                                                 onClick={() => {
+                                                    const text = asset.sqlRecord?.alt_text_long || asset.sqlRecord?.DOCUMENT_DESCRIPTION || "";
+                                                    const utter = new SpeechSynthesisUtterance(text);
+                                                    speechSynthesis.speak(utter);
+                                                 }}
+                                                 className="text-[10px] flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded text-slate-300 transition-colors"
+                                                 aria-label="Play Audio Description"
+                                              >
+                                                 <Volume2 size={10} /> Play Audio
+                                              </button>
+                                           </div>
+                                           <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
+                                              {asset.sqlRecord?.alt_text_long || "No description generated."}
+                                           </p>
+                                        </div>
                                         <div className="flex gap-2 mt-auto">
                                             <button onClick={() => { setSelectedAssetId(asset.id); setActiveTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 transition-colors">
                                                 View Graph
@@ -860,7 +764,6 @@ export default function App() {
                              );
                          }
                      })}
-                     
                      {displayItems.length === 0 && (
                          <div className="col-span-full py-20 text-center">
                              <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-800">
@@ -873,11 +776,8 @@ export default function App() {
                  </div>
              </div>
           )}
-
-          {/* Structured Database View - HIERARCHICAL REFACTOR */}
           {activeTab === 'database' && (
              <div className="h-full flex flex-col gap-4">
-               {/* Controls */}
                <div className="flex flex-col md:flex-row justify-between items-end bg-slate-900 p-4 rounded-xl border border-slate-800 gap-4">
                    <div className="space-y-1">
                       <h3 className="text-white font-bold flex items-center gap-2">
@@ -892,7 +792,6 @@ export default function App() {
                           </p>
                       )}
                    </div>
-                   
                    <div className="flex flex-wrap gap-4">
                        <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 min-w-[240px]">
                            <Filter size={14} className="text-primary-500" />
@@ -916,8 +815,6 @@ export default function App() {
                        </div>
                    </div>
                </div>
-
-               {/* VIEW 1: DATASET GROUPS (FOLDERS) */}
                {dbViewMode === 'GROUPS' && (
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-auto pb-4">
                     {Object.entries(aggregatedGroups).map(([groupName, groupAssets]) => (
@@ -929,14 +826,12 @@ export default function App() {
                           <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
                               <FolderOpen size={64} />
                           </div>
-                          
                           <div className="relative z-10">
                               <div className="flex items-center gap-2 mb-2">
                                   <FolderOpen size={20} className="text-primary-500" />
                                   <span className="text-xs text-slate-500 font-mono uppercase">{groupBy} Group</span>
                               </div>
                               <h4 className="text-lg font-bold text-white mb-4 line-clamp-2">{groupName}</h4>
-                              
                               <div className="space-y-2 mb-4">
                                   <div className="flex justify-between text-xs">
                                      <span className="text-slate-400">Items</span>
@@ -959,19 +854,13 @@ export default function App() {
                     )}
                  </div>
                )}
-
-               {/* VIEW 2: DRILL DOWN LIST */}
                {dbViewMode === 'DRILLDOWN' && (
                <>
                  <div className="flex items-center gap-2 mb-2">
-                     <button 
-                        onClick={() => setDbViewMode('GROUPS')}
-                        className="flex items-center gap-1 text-xs text-primary-400 hover:text-white transition-colors"
-                     >
+                     <button onClick={() => setDbViewMode('GROUPS')} className="flex items-center gap-1 text-xs text-primary-400 hover:text-white transition-colors">
                         <ArrowLeft size={14} /> Back to Groups
                      </button>
                  </div>
-
                  <div className="flex-1 overflow-auto bg-slate-900 border border-slate-800 rounded-xl shadow-inner scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900 relative">
                     <table className="w-full text-left border-collapse">
                         <thead className="bg-slate-950 sticky top-0 z-10 shadow-sm">
@@ -1022,26 +911,16 @@ export default function App() {
                         </tbody>
                     </table>
                  </div>
-                 
-                 {/* Pagination Controls */}
                  <div className="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-800 text-xs text-slate-400">
                     <div>
                         Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, drillDownAssets.length)} of {drillDownAssets.length} entries
                     </div>
                     <div className="flex gap-2">
-                        <button 
-                           onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                           disabled={currentPage === 1}
-                           className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
+                        <button onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage === 1} className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">
                             <ChevronLeft size={16} />
                         </button>
                         <span className="flex items-center px-2 font-mono text-white">Page {currentPage} of {totalPages || 1}</span>
-                        <button 
-                           onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                           disabled={currentPage === totalPages || totalPages === 0}
-                           className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
+                        <button onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage === totalPages || totalPages === 0} className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed">
                             <ChevronRight size={16} />
                         </button>
                     </div>
@@ -1050,30 +929,15 @@ export default function App() {
                )}
              </div>
           )}
-
-          {/* Graph Tab */}
           {activeTab === 'graph' && (
             <div className="flex gap-6 h-full flex-col">
-               {/* Controls */}
                <div className="flex items-center justify-between">
                   <h3 className="text-lg font-bold text-white">Knowledge Graph</h3>
                   <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
-                      <button 
-                        onClick={() => setGraphViewMode('SINGLE')}
-                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'SINGLE' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                      >
-                        Single Asset Focus
-                      </button>
-                      <button 
-                        onClick={() => setGraphViewMode('GLOBAL')}
-                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'GLOBAL' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                      >
-                        Global Corpus
-                      </button>
+                      <button onClick={() => setGraphViewMode('SINGLE')} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'SINGLE' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}>Single Asset Focus</button>
+                      <button onClick={() => setGraphViewMode('GLOBAL')} className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'GLOBAL' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}>Global Corpus</button>
                   </div>
                </div>
-
-               {/* GLOBAL VIEW */}
                {graphViewMode === 'GLOBAL' && (
                   <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
                       <div className="flex justify-between items-center mb-2">
@@ -1085,20 +949,13 @@ export default function App() {
                       </div>
                   </div>
                )}
-
-               {/* SINGLE VIEW */}
                {graphViewMode === 'SINGLE' && (
                 <div className="flex gap-6 h-full">
-                    {/* List */}
                     <div className="w-72 flex-shrink-0 border-r border-slate-800 pr-6 overflow-y-auto">
                         <h3 className="text-xs font-bold text-slate-500 uppercase mb-4">Select Asset</h3>
                         <div className="space-y-2">
                         {assets.map(asset => (
-                            <button 
-                                key={asset.id}
-                                onClick={() => setSelectedAssetId(asset.id)}
-                                className={`w-full text-left p-3 rounded-lg border transition-all ${selectedAssetId === asset.id ? 'bg-primary-600/10 border-primary-500/50' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
-                            >
+                            <button key={asset.id} onClick={() => setSelectedAssetId(asset.id)} className={`w-full text-left p-3 rounded-lg border transition-all ${selectedAssetId === asset.id ? 'bg-primary-600/10 border-primary-500/50' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}>
                             <div className="flex items-center justify-between mb-2">
                                 <span className="text-xs font-mono text-slate-500">ID: {asset.id.substring(0,8)}</span>
                                 {asset.status === AssetStatus.MINTED && <CheckCircle size={12} className="text-emerald-500"/>}
@@ -1108,8 +965,6 @@ export default function App() {
                         ))}
                         </div>
                     </div>
-
-                    {/* Detail Panel */}
                     {selectedAsset ? (
                         <div className="flex-1 overflow-y-auto pr-2">
                             {selectedAsset.status === AssetStatus.MINTED && (
@@ -1125,11 +980,7 @@ export default function App() {
                                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Extracted Entities</h3>
                                         <div className="flex flex-wrap gap-2">
                                             {selectedAsset.graphData?.nodes?.map((node, i) => (
-                                                <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs ${
-                                                    node.type === 'PERSON' ? 'bg-blue-900/20 border-blue-800 text-blue-300' :
-                                                    node.type === 'LOCATION' ? 'bg-emerald-900/20 border-emerald-800 text-emerald-300' :
-                                                    'bg-slate-800 border-slate-700 text-slate-300'
-                                                }`}>
+                                                <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs ${node.type === 'PERSON' ? 'bg-blue-900/20 border-blue-800 text-blue-300' : node.type === 'LOCATION' ? 'bg-emerald-900/20 border-emerald-800 text-emerald-300' : 'bg-slate-800 border-slate-700 text-slate-300'}`}>
                                                     <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
                                                     <span className="font-bold">{node.label}</span>
                                                     <span className="opacity-50 ml-1 text-[10px] uppercase">{node.type}</span>
@@ -1149,8 +1000,6 @@ export default function App() {
                )}
             </div>
           )}
-
-          {/* Marketplace / NFT View - AGGREGATED BUNDLES */}
           {activeTab === 'market' && (
               <div className="max-w-6xl mx-auto">
                   <div className="flex justify-between items-end mb-8">
@@ -1163,14 +1012,11 @@ export default function App() {
                              </span>
                           </p>
                       </div>
-                      
                       <div className="bg-slate-900 px-4 py-2 rounded-lg border border-slate-800 text-right">
                           <p className="text-xs text-slate-500 uppercase">Current Grouping</p>
                           <p className="text-lg font-bold text-white">{groupBy}</p>
                       </div>
                   </div>
-
-                  {/* Bundle Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {Object.entries(aggregatedGroups).map(([groupName, groupAssets]) => {
                           const bundleSize = groupAssets.length;
@@ -1193,7 +1039,6 @@ export default function App() {
                                     </div>
                                     <h3 className="text-xl font-bold text-white relative z-10 truncate">{groupName}</h3>
                                 </div>
-                                
                                 <div className="p-6 flex-1 flex flex-col">
                                     <div className="grid grid-cols-2 gap-4 mb-6">
                                         <div>
@@ -1213,7 +1058,6 @@ export default function App() {
                                             <p className="text-lg font-mono text-amber-500">Ξ {bundlePriceEth}</p>
                                         </div>
                                     </div>
-
                                     <div className="mt-auto">
                                         <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mb-4">
                                             <div className="bg-gradient-to-r from-primary-500 to-purple-600 h-full w-3/4"></div>
@@ -1234,7 +1078,6 @@ export default function App() {
                             </div>
                           );
                       })}
-                      
                       {Object.keys(aggregatedGroups).length === 0 && (
                           <div className="col-span-3 py-12 text-center text-slate-500">
                               <AlertCircle className="mx-auto mb-2 opacity-50" size={32}/>
@@ -1244,10 +1087,7 @@ export default function App() {
                   </div>
               </div>
           )}
-
         </div>
-        
-        {/* Full Screen Image Modal */}
         {expandedImage && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm" onClick={() => setExpandedImage(null)}>
                 <button className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white">
@@ -1256,7 +1096,6 @@ export default function App() {
                 <img src={expandedImage} className="max-w-full max-h-full p-4 object-contain select-none" alt="Expanded Asset" />
             </div>
         )}
-
       </main>
     </div>
   );

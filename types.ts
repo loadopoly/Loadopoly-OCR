@@ -115,6 +115,11 @@ export interface PreservationEvent {
   outcome: "SUCCESS" | "FAILURE";
 }
 
+export interface ReadingOrderBlock {
+    text: string;
+    position: string;
+}
+
 // Strictly typed SQL-like Schema for Historical Documents
 export interface HistoricalDocumentMetadata {
   ASSET_ID: string;
@@ -154,6 +159,12 @@ export interface HistoricalDocumentMetadata {
   TAXONOMY?: TaxonomyData;
   ITEM_ATTRIBUTES?: ItemAttributes;
   SCENERY_ATTRIBUTES?: SceneryAttributes;
+
+  // Accessibility & Alt Text (WCAG AAA)
+  alt_text_short?: string;
+  alt_text_long?: string;
+  reading_order?: ReadingOrderBlock[];
+  accessibility_score?: number;
 
   // Contribution Fields
   CONTRIBUTOR_ID: string | null;
