@@ -33,12 +33,15 @@ import {
   ShoppingBag,
   Scan,
   Plus,
-  Settings
+  Settings,
+  Gift,
+  Volume2
 } from 'lucide-react';
-import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle } from './types';
+import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG } from './types';
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
 import { createBundles } from './services/bundleService';
 import { initSync } from './lib/syncEngine';
+import { redeemPhygitalCertificate } from './services/web3Service';
 import GraphVisualizer from './components/GraphVisualizer';
 import ContributeButton from './components/ContributeButton';
 import BundleCard from './components/BundleCard';
@@ -47,6 +50,8 @@ import SemanticCanvas from './components/SemanticCanvas';
 import CameraCapture from './components/CameraCapture';
 import BatchImporter from './components/BatchImporter';
 import SettingsPanel from './components/SettingsPanel';
+import SmartUploadSelector from './components/SmartUploadSelector';
+import { announce } from './lib/accessibility';
 
 // --- Helper Functions ---
 async function calculateSHA256(file: File): Promise<string> {
@@ -120,6 +125,7 @@ export default function App() {
 
   // Batch Processing State
   const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
+  const [selectedScanType, setSelectedScanType] = useState<ScanType | null>(null);
 
   // Asset View State
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
@@ -183,6 +189,9 @@ export default function App() {
       const fileType = file.type;
       const id = Math.random().toString(36).substring(7);
 
+      // Extract scan type if attached during batch upload
+      const scanType = (file as any).scanType || ScanType.DOCUMENT;
+
       return {
         id: id,
         imageUrl: URL.createObjectURL(file),
@@ -226,6 +235,7 @@ export default function App() {
           }],
           KEYWORDS_TAGS: [],
           ACCESS_RESTRICTIONS: false,
+          scan_type: scanType, // From selector
           CONTRIBUTOR_ID: null,
           CONTRIBUTED_AT: null,
           DATA_LICENSE: 'GEOGRAPH_CORPUS_1.0',
@@ -246,7 +256,10 @@ export default function App() {
         } catch (e) { /* ignore */ }
       }
 
-      const analysis = await processImageWithGemini(file, location);
+      // Determine Scan Type to guide the AI extraction
+      const scanType = (asset.sqlRecord?.scan_type as ScanType) || ScanType.DOCUMENT;
+
+      const analysis = await processImageWithGemini(file, location, scanType);
       
       const updatedSqlRecord: HistoricalDocumentMetadata = {
             ...asset.sqlRecord!,
@@ -270,11 +283,35 @@ export default function App() {
             ENTITIES_EXTRACTED: analysis.graphData?.nodes ? analysis.graphData.nodes.map(n => n.label) : [],
             KEYWORDS_TAGS: analysis.keywordsTags || [],
             ACCESS_RESTRICTIONS: analysis.accessRestrictions,
+            
+            // Map the new rich metadata fields
+            TAXONOMY: analysis.taxonomy,
+            ITEM_ATTRIBUTES: analysis.itemAttributes,
+            SCENERY_ATTRIBUTES: analysis.sceneryAttributes,
+
+            // Accessibility Mappings
+            alt_text_short: analysis.alt_text_short,
+            alt_text_long: analysis.alt_text_long,
+            reading_order: analysis.reading_order,
+            accessibility_score: analysis.accessibility_score,
+
             PRESERVATION_EVENTS: [
               ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
               { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }
             ]
       };
+
+      const baseNFT = simulateNFTMinting(asset.id);
+      // Simulate DCC1 Data for Phygital Redemption
+      const dcc1Data = {
+          shardsCollected: Math.floor(Math.random() * 250), // Simulation: Random amount collected
+          shardsRequired: 218,
+          isRedeemable: false
+      };
+      dcc1Data.isRedeemable = dcc1Data.shardsCollected >= dcc1Data.shardsRequired;
+
+      // Announce completion for accessibility
+      announce(`Processed ${analysis.documentTitle}. Category: ${analysis.nlpNodeCategorization}`);
 
       return {
             ...asset,
@@ -285,7 +322,7 @@ export default function App() {
             tokenization: analysis.tokenization,
             processingAnalysis: analysis.analysis,
             location: location ? { latitude: location.lat, longitude: location.lng, accuracy: 1 } : undefined,
-            nft: simulateNFTMinting(asset.id),
+            nft: { ...baseNFT, dcc1: dcc1Data },
             sqlRecord: updatedSqlRecord
       };
   };
@@ -335,7 +372,8 @@ export default function App() {
           id: Math.random().toString(36).substring(7),
           file,
           status: 'QUEUED',
-          progress: 0
+          progress: 0,
+          scanType: (file as any).scanType || selectedScanType || ScanType.DOCUMENT
       }));
 
       setBatchQueue(prev => [...prev, ...newQueueItems]);
@@ -353,6 +391,12 @@ export default function App() {
           (async () => {
              try {
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'PROCESSING', progress: 10 } : i));
+                
+                // Ensure the file has the scan type attached for createInitialAsset
+                if (itemToProcess.scanType) {
+                    (itemToProcess.file as any).scanType = itemToProcess.scanType;
+                }
+
                 const newAsset = await createInitialAsset(itemToProcess.file);
                 if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = "Batch Ingest"; 
                 setAssets(prev => [newAsset, ...prev]);
@@ -386,6 +430,24 @@ export default function App() {
       } catch (e) {
           console.error("AR Error", e);
           setArStatus('Error');
+      }
+  };
+
+  const handlePhygitalRedeem = async (asset: DigitalAsset) => {
+      if(!asset.nft?.dcc1?.isRedeemable) {
+          alert(`You need ${asset.nft?.dcc1?.shardsRequired} shards to redeem. You have ${asset.nft?.dcc1?.shardsCollected}.`);
+          return;
+      }
+      try {
+          const txHash = await redeemPhygitalCertificate(asset.id);
+          alert(`Redemption Success! Certificate Minted.\nTx: ${txHash}`);
+          // Update local state to reflect redemption
+          setAssets(prev => prev.map(a => a.id === asset.id ? {
+              ...a, 
+              nft: { ...a.nft!, dcc1: { ...a.nft!.dcc1!, shardsCollected: 0, isRedeemable: false, certificateTokenId: 'PENDING' } }
+          } : a));
+      } catch(e: any) {
+          alert("Redemption failed: " + e.message);
       }
   };
 
@@ -588,88 +650,110 @@ export default function App() {
           {/* Quick Processing / Batch Tab */}
           {activeTab === 'batch' && (
              <div className="max-w-6xl mx-auto h-full flex flex-col">
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
-                    <div className="flex justify-between items-start mb-4">
-                       <div>
-                          <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                             <Zap className="text-amber-500" /> Batch Processor
-                          </h3>
-                          <p className="text-slate-400 text-sm mt-1">
-                             Optimized for 500+ documents/hr. Automatic bundling by time & location.
-                          </p>
-                       </div>
-                       <div className="text-right">
-                          <p className="text-2xl font-mono text-white">{batchQueue.filter(i => i.status === 'COMPLETED').length} <span className="text-sm text-slate-500">/ {batchQueue.length}</span></p>
-                          <p className="text-xs text-slate-500">Processed</p>
-                       </div>
+                {!selectedScanType ? (
+                  <SmartUploadSelector onTypeSelected={setSelectedScanType} />
+                ) : (
+                  <>
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                              <button 
+                                onClick={() => setSelectedScanType(null)}
+                                className="mb-2 text-slate-400 hover:text-white flex items-center gap-2 text-sm"
+                              >
+                                ← Back to Selection
+                              </button>
+                              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                <Zap className="text-amber-500" /> Batch Processor: <span className="text-primary-400">{SCAN_TYPE_CONFIG[selectedScanType].label}</span>
+                              </h3>
+                              <p className="text-slate-400 text-sm mt-1">
+                                Optimized for 500+ documents/hr. Automatic bundling by time & location.
+                              </p>
+                          </div>
+                          <div className="text-right">
+                              <p className="text-2xl font-mono text-white">{batchQueue.filter(i => i.status === 'COMPLETED').length} <span className="text-sm text-slate-500">/ {batchQueue.length}</span></p>
+                              <p className="text-xs text-slate-500">Processed</p>
+                          </div>
+                        </div>
+                        
+                        {/* Replaced Upload Area with BatchImporter */}
+                        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
+                            <BatchImporter 
+                                onFilesSelected={(files) => {
+                                  // Auto-tag every file with the selected type for memory persistence
+                                  files.forEach(file => {
+                                    (file as any).scanType = selectedScanType;
+                                  });
+                                  handleBatchFiles(files);
+                                }}
+                                isProcessing={isProcessing}
+                            />
+                        </div>
                     </div>
-                    
-                    {/* Replaced Upload Area with BatchImporter */}
-                    <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
-                        <BatchImporter 
-                            onFilesSelected={handleBatchFiles}
-                            isProcessing={isProcessing}
-                        />
-                    </div>
-                </div>
 
-                {/* Queue Table */}
-                <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
-                    <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
-                        <h4 className="text-xs font-bold text-slate-400 uppercase">Processing Queue</h4>
-                        {batchQueue.length > 0 && (
-                            <button onClick={() => setBatchQueue([])} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
-                                <Trash2 size={12} /> Clear All
-                            </button>
-                        )}
-                    </div>
-                    <div className="flex-1 overflow-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead className="bg-slate-950 sticky top-0">
-                                <tr>
-                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Status</th>
-                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">File Name</th>
-                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Size</th>
-                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Message</th>
-                                    <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase text-right">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-800">
-                                {batchQueue.map((item) => (
-                                    <tr key={item.id} className="text-xs group hover:bg-slate-800/30">
-                                        <td className="px-4 py-2">
-                                            {item.status === 'QUEUED' && <span className="inline-block w-2 h-2 rounded-full bg-slate-600" title="Queued"></span>}
-                                            {item.status === 'PROCESSING' && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Processing"></div>}
-                                            {item.status === 'COMPLETED' && <CheckCircle size={14} className="text-emerald-500" />}
-                                            {item.status === 'ERROR' && <AlertCircle size={14} className="text-red-500" />}
-                                        </td>
-                                        <td className="px-4 py-2 text-slate-300 font-mono">{item.file.name}</td>
-                                        <td className="px-4 py-2 text-slate-500">{(item.file.size / 1024).toFixed(1)} KB</td>
-                                        <td className="px-4 py-2">
-                                            {item.status === 'ERROR' ? (
-                                                <span className="text-red-400">{item.errorMsg}</span>
-                                            ) : item.status === 'COMPLETED' ? (
-                                                <span className="text-emerald-500/70">Ingested to DB</span>
-                                            ) : (
-                                                <span className="text-slate-600">Waiting for worker...</span>
-                                            )}
-                                        </td>
-                                        <td className="px-4 py-2 text-right">
-                                            {item.status === 'ERROR' && (
-                                                <button onClick={() => retryBatchItem(item.id)} className="text-primary-500 hover:text-white mr-2" title="Retry">
-                                                    <RefreshCw size={14} />
-                                                </button>
-                                            )}
-                                            <button onClick={() => removeBatchItem(item.id)} className="text-slate-600 hover:text-red-500" title="Remove">
-                                                <X size={14} />
-                                            </button>
-                                        </td>
+                    {/* Queue Table */}
+                    <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+                        <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase">Processing Queue</h4>
+                            {batchQueue.length > 0 && (
+                                <button onClick={() => setBatchQueue([])} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
+                                    <Trash2 size={12} /> Clear All
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex-1 overflow-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-slate-950 sticky top-0">
+                                    <tr>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Status</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Type</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">File Name</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Size</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Message</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase text-right">Action</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800">
+                                    {batchQueue.map((item) => (
+                                        <tr key={item.id} className="text-xs group hover:bg-slate-800/30">
+                                            <td className="px-4 py-2">
+                                                {item.status === 'QUEUED' && <span className="inline-block w-2 h-2 rounded-full bg-slate-600" title="Queued"></span>}
+                                                {item.status === 'PROCESSING' && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Processing"></div>}
+                                                {item.status === 'COMPLETED' && <CheckCircle size={14} className="text-emerald-500" />}
+                                                {item.status === 'ERROR' && <AlertCircle size={14} className="text-red-500" />}
+                                            </td>
+                                            <td className="px-4 py-2 text-slate-400">
+                                              {item.scanType || 'DOC'}
+                                            </td>
+                                            <td className="px-4 py-2 text-slate-300 font-mono">{item.file.name}</td>
+                                            <td className="px-4 py-2 text-slate-500">{(item.file.size / 1024).toFixed(1)} KB</td>
+                                            <td className="px-4 py-2">
+                                                {item.status === 'ERROR' ? (
+                                                    <span className="text-red-400">{item.errorMsg}</span>
+                                                ) : item.status === 'COMPLETED' ? (
+                                                    <span className="text-emerald-500/70">Ingested to DB</span>
+                                                ) : (
+                                                    <span className="text-slate-600">Waiting for worker...</span>
+                                                )}
+                                            </td>
+                                            <td className="px-4 py-2 text-right">
+                                                {item.status === 'ERROR' && (
+                                                    <button onClick={() => retryBatchItem(item.id)} className="text-primary-500 hover:text-white mr-2" title="Retry">
+                                                        <RefreshCw size={14} />
+                                                    </button>
+                                                )}
+                                                <button onClick={() => removeBatchItem(item.id)} className="text-slate-600 hover:text-red-500" title="Remove">
+                                                    <X size={14} />
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
+                  </>
+                )}
              </div>
           )}
 
@@ -745,6 +829,55 @@ export default function App() {
                                                 <p className="text-[10px] text-slate-500 uppercase">Zone</p>
                                                 <p className="text-sm font-mono text-emerald-400 max-w-[80px] truncate" title={asset.sqlRecord?.LOCAL_GIS_ZONE}>{asset.sqlRecord?.LOCAL_GIS_ZONE || 'N/A'}</p>
                                             </div>
+                                        </div>
+
+                                        {/* DCC1 Redemption Widget */}
+                                        {asset.nft?.dcc1 && (
+                                            <div className="mb-3 bg-slate-950 p-2 rounded border border-slate-800">
+                                                <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                                                    <span>Phygital Progress</span>
+                                                    <span className={asset.nft.dcc1.isRedeemable ? "text-emerald-400 font-bold" : ""}>
+                                                        {asset.nft.dcc1.shardsCollected}/{asset.nft.dcc1.shardsRequired}
+                                                    </span>
+                                                </div>
+                                                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                                    <div 
+                                                        className={`h-full ${asset.nft.dcc1.isRedeemable ? 'bg-emerald-500' : 'bg-purple-600'}`} 
+                                                        style={{ width: `${Math.min(100, (asset.nft.dcc1.shardsCollected / asset.nft.dcc1.shardsRequired) * 100)}%` }}
+                                                    ></div>
+                                                </div>
+                                                {asset.nft.dcc1.isRedeemable && (
+                                                    <button 
+                                                        onClick={() => handlePhygitalRedeem(asset)}
+                                                        className="w-full mt-2 py-1 bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-400 border border-emerald-800 rounded text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
+                                                    >
+                                                        <Gift size={12} /> Redeem Physical
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
+                                        
+                                        {/* Accessibility Block */}
+                                        <div className="mb-3 p-3 bg-slate-950/50 rounded border border-slate-800">
+                                           <div className="flex justify-between items-center mb-2">
+                                              <h4 className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1">
+                                                 <Eye size={10} /> Screen Reader
+                                              </h4>
+                                              <button
+                                                 onClick={() => {
+                                                    const text = asset.sqlRecord?.alt_text_long || asset.sqlRecord?.DOCUMENT_DESCRIPTION || "";
+                                                    const utter = new SpeechSynthesisUtterance(text);
+                                                    speechSynthesis.speak(utter);
+                                                 }}
+                                                 className="text-[10px] flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded text-slate-300 transition-colors"
+                                                 aria-label="Play Audio Description"
+                                              >
+                                                 <Volume2 size={10} /> Play Audio
+                                              </button>
+                                           </div>
+                                           <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
+                                              {asset.sqlRecord?.alt_text_long || "No description generated."}
+                                           </p>
                                         </div>
                                         
                                         <div className="flex gap-2 mt-auto">
