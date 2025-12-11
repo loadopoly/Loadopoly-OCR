@@ -29,7 +29,10 @@ import {
   Maximize2,
   RefreshCw,
   Trash2,
-  X
+  X,
+  FolderOpen,
+  ArrowLeft,
+  ShoppingBag
 } from 'lucide-react';
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem } from './types';
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
@@ -81,11 +84,16 @@ export default function App() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [geoPermission, setGeoPermission] = useState<boolean>(false);
   
-  // Database State
+  // Database & Grouping State
   const [sourceCollectionFilter, setSourceCollectionFilter] = useState('ALL');
-  const [groupBy, setGroupBy] = useState<'NONE' | 'SOURCE' | 'ZONE' | 'CATEGORY'>('NONE');
+  const [groupBy, setGroupBy] = useState<'SOURCE' | 'ZONE' | 'CATEGORY' | 'RIGHTS'>('SOURCE');
+  const [dbViewMode, setDbViewMode] = useState<'GROUPS' | 'DRILLDOWN'>('GROUPS');
+  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 50;
+
+  // Graph View State
+  const [graphViewMode, setGraphViewMode] = useState<'SINGLE' | 'GLOBAL'>('SINGLE');
 
   // Batch Processing State
   const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
@@ -96,7 +104,7 @@ export default function App() {
 
   // Stats derivation
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
-  const totalValue = assets.reduce((acc, curr) => acc + (curr.nft ? curr.nft.availableShards * curr.nft.pricePerShard : 0), 0);
+  // Total value logic moved to dynamic calculation in Marketplace view
 
   useEffect(() => {
     // Check Geo permissions on mount
@@ -332,24 +340,16 @@ export default function App() {
 
   const selectedAsset = assets.find(a => a.id === selectedAssetId);
 
-  // --- Filtering & Aggregation Logic ---
-
-  const filteredAssets = sourceCollectionFilter === 'ALL' 
-    ? assets 
-    : assets.filter(a => a.sqlRecord?.SOURCE_COLLECTION === sourceCollectionFilter);
-
-  // Pagination for List View
-  const totalPages = Math.ceil(filteredAssets.length / ITEMS_PER_PAGE);
-  const paginatedAssets = filteredAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  // Aggregation for Grouped View
+  // --- Aggregation Logic (Shared) ---
+  
   const getAggregatedGroups = () => {
     const groups: Record<string, DigitalAsset[]> = {};
-    filteredAssets.forEach(asset => {
+    assets.forEach(asset => {
         let key = 'Unknown';
         if (groupBy === 'SOURCE') key = asset.sqlRecord?.SOURCE_COLLECTION || 'Unknown';
         if (groupBy === 'ZONE') key = asset.sqlRecord?.LOCAL_GIS_ZONE || 'Unknown';
         if (groupBy === 'CATEGORY') key = asset.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized';
+        if (groupBy === 'RIGHTS') key = asset.sqlRecord?.RIGHTS_STATEMENT || 'Unknown';
         
         if (!groups[key]) groups[key] = [];
         groups[key].push(asset);
@@ -358,6 +358,54 @@ export default function App() {
   };
 
   const aggregatedGroups = getAggregatedGroups();
+  
+  // Drill down filter
+  const drillDownAssets = selectedGroupKey ? (aggregatedGroups[selectedGroupKey] || []) : [];
+  
+  // Pagination for Drill Down
+  const totalPages = Math.ceil(drillDownAssets.length / ITEMS_PER_PAGE);
+  const paginatedAssets = drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+
+  // --- Graph Global Logic ---
+  const getGlobalGraphData = () => {
+      // 1. Create Nodes for each Cluster (based on Category)
+      const categories = Array.from(new Set(assets.map(a => a.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized')));
+      const clusterNodes = categories.map((cat, idx) => ({
+          id: `CLUSTER_${idx}`,
+          label: cat,
+          type: 'CLUSTER' as any, // Augmented type
+          relevance: 1.0
+      }));
+
+      // 2. Create Nodes for Documents
+      const docNodes = assets.map(a => ({
+          id: a.id,
+          label: a.sqlRecord?.DOCUMENT_TITLE || 'Untitled',
+          type: 'DOCUMENT' as any, // Augmented type
+          relevance: 0.8
+      }));
+
+      // 3. Create Links
+      const links: any[] = [];
+      
+      // Link Document to Cluster
+      assets.forEach(a => {
+         const catIndex = categories.indexOf(a.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized');
+         if (catIndex >= 0) {
+             links.push({
+                 source: a.id,
+                 target: `CLUSTER_${catIndex}`,
+                 relationship: "BELONGS_TO"
+             });
+         }
+      });
+
+      return {
+          nodes: [...clusterNodes, ...docNodes],
+          links
+      };
+  };
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30">
@@ -378,7 +426,7 @@ export default function App() {
           <SidebarItem icon={ImageIcon} label="Assets & OCR" active={activeTab === 'assets'} onClick={() => setActiveTab('assets')} />
           <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => setActiveTab('graph')} />
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
-          <SidebarItem icon={Coins} label="Data Marketplace" active={activeTab === 'market'} onClick={() => setActiveTab('market')} />
+          <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => setActiveTab('market')} />
         </nav>
 
         <div className="p-4 border-t border-slate-800">
@@ -421,7 +469,7 @@ export default function App() {
                 <StatCard label="Total Assets" value={assets.length} icon={FileText} color="text-blue-500" />
                 <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} icon={Network} color="text-purple-500" />
                 <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" />
-                <StatCard label="Market Cap (ETH)" value={`Ξ ${totalValue.toFixed(2)}`} icon={Coins} color="text-amber-500" />
+                <StatCard label="Active Bundles" value={Object.keys(aggregatedGroups).length} icon={Package} color="text-amber-500" />
               </div>
 
               {assets.length === 0 ? (
@@ -564,7 +612,7 @@ export default function App() {
              </div>
           )}
 
-          {/* Assets Exploratory View (Redesigned) */}
+          {/* Assets Exploratory View */}
           {activeTab === 'assets' && (
              <div className="h-full overflow-y-auto">
                  <div className="flex justify-between items-center mb-6">
@@ -658,7 +706,7 @@ export default function App() {
              </div>
           )}
 
-          {/* Structured Database View - UPDATED FOR SCALING */}
+          {/* Structured Database View - HIERARCHICAL REFACTOR */}
           {activeTab === 'database' && (
              <div className="h-full flex flex-col gap-4">
                {/* Controls */}
@@ -667,41 +715,39 @@ export default function App() {
                       <h3 className="text-white font-bold flex items-center gap-2">
                           <Database size={18} className="text-primary-500" /> Repository Master List
                       </h3>
-                      <p className="text-xs text-slate-400">Aggregated view for {assets.length} items. Manage thousands of lines via groups.</p>
+                      {dbViewMode === 'GROUPS' ? (
+                          <p className="text-xs text-slate-400">Select a feature to group the repository by.</p>
+                      ) : (
+                          <p className="text-xs text-slate-400 flex items-center gap-2">
+                             <span className="text-slate-500">Group:</span> {selectedGroupKey} 
+                             <span className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300">{drillDownAssets.length} items</span>
+                          </p>
+                      )}
                    </div>
                    
                    <div className="flex flex-wrap gap-4">
-                       {/* Aggregation Toggles */}
-                       <div className="flex bg-slate-950 rounded border border-slate-700 p-1">
-                          <button 
-                             onClick={() => setGroupBy('NONE')}
-                             className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-2 ${groupBy === 'NONE' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`}
-                          >
-                             <List size={14} /> Datum List
-                          </button>
-                          <button 
-                             onClick={() => setGroupBy('CATEGORY')}
-                             className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-2 ${groupBy !== 'NONE' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-white'}`}
-                          >
-                             <Grid size={14} /> Dataset Aggregation
-                          </button>
+                       {/* Grouping Feature Selector - Always visible */}
+                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 min-w-[240px]">
+                           <Filter size={14} className="text-primary-500" />
+                           <div className="flex-1 flex flex-col">
+                              <span className="text-[9px] text-slate-500 uppercase font-bold">Grouping Feature</span>
+                              <select 
+                                className="bg-transparent border-none text-xs text-slate-200 focus:outline-none cursor-pointer font-bold"
+                                value={groupBy}
+                                onChange={(e) => {
+                                    setGroupBy(e.target.value as any);
+                                    setDbViewMode('GROUPS'); // Reset to top level on change
+                                    setSelectedGroupKey(null);
+                                }}
+                              >
+                                  <option value="SOURCE">Source Collection</option>
+                                  <option value="ZONE">GIS Zone</option>
+                                  <option value="CATEGORY">NLP Category</option>
+                                  <option value="RIGHTS">Rights Statement</option>
+                              </select>
+                           </div>
                        </div>
-
-                       {groupBy !== 'NONE' && (
-                         <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700">
-                             <Package size={14} className="text-slate-400" />
-                             <select 
-                               className="bg-transparent border-none text-xs text-slate-300 focus:outline-none cursor-pointer"
-                               value={groupBy}
-                               onChange={(e) => setGroupBy(e.target.value as any)}
-                             >
-                                 <option value="SOURCE">Group by Source Collection</option>
-                                 <option value="ZONE">Group by GIS Zone</option>
-                                 <option value="CATEGORY">Group by NLP Category</option>
-                             </select>
-                         </div>
-                       )}
-
+                       
                        <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 w-48">
                           <Search size={14} className="text-slate-400" />
                           <input type="text" placeholder="Search Filter..." className="bg-transparent border-none text-xs text-slate-300 focus:outline-none w-full" />
@@ -709,56 +755,65 @@ export default function App() {
                    </div>
                </div>
 
-               {/* VIEW: AGGREGATED CARDS */}
-               {groupBy !== 'NONE' && (
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto pb-4">
+               {/* VIEW 1: DATASET GROUPS (FOLDERS) */}
+               {dbViewMode === 'GROUPS' && (
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-auto pb-4">
                     {Object.entries(aggregatedGroups).map(([groupName, groupAssets]) => (
-                       <div key={groupName} className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-primary-500/40 transition-colors">
-                          <div className="flex justify-between items-start mb-4">
-                             <div>
-                                <h4 className="text-lg font-bold text-white mb-1">{groupName}</h4>
-                                <p className="text-xs text-slate-500 font-mono uppercase">Dataset Group</p>
-                             </div>
-                             <div className="bg-primary-500/10 text-primary-400 px-3 py-1 rounded-full text-xs font-bold border border-primary-500/20">
-                                {groupAssets.length} Items
-                             </div>
+                       <button 
+                           key={groupName} 
+                           onClick={() => { setSelectedGroupKey(groupName); setDbViewMode('DRILLDOWN'); setCurrentPage(1); }}
+                           className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-primary-500/50 hover:bg-slate-800/50 transition-all text-left group relative overflow-hidden"
+                       >
+                          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                              <FolderOpen size={64} />
                           </div>
                           
-                          <div className="space-y-3 mb-6">
-                             <div className="flex justify-between text-xs border-b border-slate-800 pb-2">
-                                <span className="text-slate-400">Avg Confidence</span>
-                                <span className="text-slate-200">
-                                  {(groupAssets.reduce((acc, curr) => acc + (curr.sqlRecord?.CONFIDENCE_SCORE || 0), 0) / groupAssets.length * 100).toFixed(1)}%
-                                </span>
-                             </div>
-                             <div className="flex justify-between text-xs border-b border-slate-800 pb-2">
-                                <span className="text-slate-400">Total Nodes</span>
-                                <span className="text-slate-200">
-                                  {groupAssets.reduce((acc, curr) => acc + (curr.sqlRecord?.NODE_COUNT || 0), 0).toLocaleString()}
-                                </span>
-                             </div>
-                             <div className="flex justify-between text-xs border-b border-slate-800 pb-2">
-                                <span className="text-slate-400">Total Size</span>
-                                <span className="text-slate-200">
-                                  {(groupAssets.reduce((acc, curr) => acc + (curr.sqlRecord?.FILE_SIZE_BYTES || 0), 0) / 1024 / 1024).toFixed(2)} MB
-                                </span>
-                             </div>
+                          <div className="relative z-10">
+                              <div className="flex items-center gap-2 mb-2">
+                                  <FolderOpen size={20} className="text-primary-500" />
+                                  <span className="text-xs text-slate-500 font-mono uppercase">{groupBy} Group</span>
+                              </div>
+                              <h4 className="text-lg font-bold text-white mb-4 line-clamp-2">{groupName}</h4>
+                              
+                              <div className="space-y-2 mb-4">
+                                  <div className="flex justify-between text-xs">
+                                     <span className="text-slate-400">Items</span>
+                                     <span className="text-white font-mono">{groupAssets.length}</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs">
+                                     <span className="text-slate-400">Est. Tokens</span>
+                                     <span className="text-emerald-400 font-mono">
+                                        {groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0).toLocaleString()}
+                                     </span>
+                                  </div>
+                              </div>
+                              
+                              <div className="w-full py-2 bg-slate-950 rounded text-xs text-center text-slate-400 group-hover:text-white transition-colors border border-slate-800 group-hover:border-slate-700">
+                                  Drill Down to Datum
+                              </div>
                           </div>
-
-                          <button 
-                             onClick={() => downloadBulkJSON(groupAssets, groupName)}
-                             className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm rounded border border-slate-700 flex items-center justify-center gap-2 transition-colors"
-                          >
-                             <Download size={16} /> Export Dataset JSON
-                          </button>
-                       </div>
+                       </button>
                     ))}
+                    {Object.keys(aggregatedGroups).length === 0 && (
+                        <div className="col-span-full py-20 text-center text-slate-500">
+                            No data available. Ingest assets to create groups.
+                        </div>
+                    )}
                  </div>
                )}
 
-               {/* VIEW: PAGINATED LIST */}
-               {groupBy === 'NONE' && (
+               {/* VIEW 2: DRILL DOWN LIST */}
+               {dbViewMode === 'DRILLDOWN' && (
                <>
+                 <div className="flex items-center gap-2 mb-2">
+                     <button 
+                        onClick={() => setDbViewMode('GROUPS')}
+                        className="flex items-center gap-1 text-xs text-primary-400 hover:text-white transition-colors"
+                     >
+                        <ArrowLeft size={14} /> Back to Groups
+                     </button>
+                 </div>
+
                  <div className="flex-1 overflow-auto bg-slate-900 border border-slate-800 rounded-xl shadow-inner scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900 relative">
                     <table className="w-full text-left border-collapse">
                         <thead className="bg-slate-950 sticky top-0 z-10 shadow-sm">
@@ -806,13 +861,6 @@ export default function App() {
                                    </tr>
                                )
                            })}
-                           {paginatedAssets.length === 0 && (
-                              <tr>
-                                  <td colSpan={17} className="px-6 py-12 text-center text-slate-600 italic">
-                                      No records match the current filter.
-                                  </td>
-                              </tr>
-                           )}
                         </tbody>
                     </table>
                  </div>
@@ -820,7 +868,7 @@ export default function App() {
                  {/* Pagination Controls */}
                  <div className="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-800 text-xs text-slate-400">
                     <div>
-                        Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredAssets.length)} of {filteredAssets.length} entries
+                        Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, drillDownAssets.length)} of {drillDownAssets.length} entries
                     </div>
                     <div className="flex gap-2">
                         <button 
@@ -845,138 +893,196 @@ export default function App() {
              </div>
           )}
 
-          {/* Graph Tab (Separated from Assets) */}
+          {/* Graph Tab */}
           {activeTab === 'graph' && (
-            <div className="flex gap-6 h-full">
-               {/* List */}
-               <div className="w-72 flex-shrink-0 border-r border-slate-800 pr-6 overflow-y-auto">
-                 <h3 className="text-xs font-bold text-slate-500 uppercase mb-4">Knowledge Graph Nodes</h3>
-                 <div className="space-y-2">
-                   {assets.map(asset => (
-                     <button 
-                        key={asset.id}
-                        onClick={() => setSelectedAssetId(asset.id)}
-                        className={`w-full text-left p-3 rounded-lg border transition-all ${selectedAssetId === asset.id ? 'bg-primary-600/10 border-primary-500/50' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
-                     >
-                       <div className="flex items-center justify-between mb-2">
-                         <span className="text-xs font-mono text-slate-500">ID: {asset.id.substring(0,8)}</span>
-                         {asset.status === AssetStatus.MINTED && <CheckCircle size={12} className="text-emerald-500"/>}
-                         {asset.status === AssetStatus.PROCESSING && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse"/>}
-                       </div>
-                       <p className="text-xs text-slate-400 truncate font-bold">{asset.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</p>
-                       <p className="text-[10px] text-slate-500 mt-1">{asset.graphData?.nodes?.length || 0} Nodes Linked</p>
-                     </button>
-                   ))}
-                 </div>
+            <div className="flex gap-6 h-full flex-col">
+               {/* Controls */}
+               <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-white">Knowledge Graph</h3>
+                  <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
+                      <button 
+                        onClick={() => setGraphViewMode('SINGLE')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'SINGLE' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Single Asset Focus
+                      </button>
+                      <button 
+                        onClick={() => setGraphViewMode('GLOBAL')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'GLOBAL' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Global Corpus
+                      </button>
+                  </div>
                </div>
 
-               {/* Detail Panel */}
-               {selectedAsset ? (
-                 <div className="flex-1 overflow-y-auto pr-2">
-                    <div className="flex items-start justify-between mb-6">
-                        <div>
-                            <h2 className="text-2xl font-bold text-white mb-1">{selectedAsset.sqlRecord?.DOCUMENT_TITLE || 'Loading...'}</h2>
-                            <p className="text-slate-400 text-sm flex items-center gap-2">
-                                <Network size={14} /> Knowledge Graph Visualization
-                            </p>
+               {/* GLOBAL VIEW */}
+               {graphViewMode === 'GLOBAL' && (
+                  <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
+                      <div className="flex justify-between items-center mb-2">
+                         <h4 className="text-sm font-bold text-slate-400">Semantic Bundling (All Assets)</h4>
+                         <p className="text-xs text-slate-500">Clusters based on NLP Categories</p>
+                      </div>
+                      <div className="flex-1 relative">
+                          <GraphVisualizer data={getGlobalGraphData()} width={1000} height={600} />
+                      </div>
+                  </div>
+               )}
+
+               {/* SINGLE VIEW */}
+               {graphViewMode === 'SINGLE' && (
+                <div className="flex gap-6 h-full">
+                    {/* List */}
+                    <div className="w-72 flex-shrink-0 border-r border-slate-800 pr-6 overflow-y-auto">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase mb-4">Select Asset</h3>
+                        <div className="space-y-2">
+                        {assets.map(asset => (
+                            <button 
+                                key={asset.id}
+                                onClick={() => setSelectedAssetId(asset.id)}
+                                className={`w-full text-left p-3 rounded-lg border transition-all ${selectedAssetId === asset.id ? 'bg-primary-600/10 border-primary-500/50' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
+                            >
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-mono text-slate-500">ID: {asset.id.substring(0,8)}</span>
+                                {asset.status === AssetStatus.MINTED && <CheckCircle size={12} className="text-emerald-500"/>}
+                            </div>
+                            <p className="text-xs text-slate-400 truncate font-bold">{asset.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</p>
+                            </button>
+                        ))}
                         </div>
                     </div>
 
-                    {selectedAsset.status === AssetStatus.MINTED && (
-                        <div className="space-y-8 animate-in fade-in duration-500">
-                            
-                            {/* Graph Viz */}
-                            <div className="bg-slate-900 p-1 rounded-xl border border-slate-800">
-                                <div className="p-4 border-b border-slate-800 mb-2 flex justify-between items-center">
-                                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Semantic Knowledge Graph</h3>
-                                    <span className="text-xs text-slate-500">{selectedAsset.graphData?.nodes?.length || 0} Nodes • {selectedAsset.graphData?.links?.length || 0} Links</span>
-                                </div>
-                                {selectedAsset.graphData && <GraphVisualizer data={selectedAsset.graphData} width={800} height={500} />}
-                            </div>
-
-                            {/* Node List */}
-                            <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-                                <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Extracted Entities</h3>
-                                <div className="flex flex-wrap gap-2">
-                                    {selectedAsset.graphData?.nodes?.map((node, i) => (
-                                        <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs ${
-                                            node.type === 'PERSON' ? 'bg-blue-900/20 border-blue-800 text-blue-300' :
-                                            node.type === 'LOCATION' ? 'bg-emerald-900/20 border-emerald-800 text-emerald-300' :
-                                            node.type === 'ORGANIZATION' ? 'bg-amber-900/20 border-amber-800 text-amber-300' :
-                                            'bg-slate-800 border-slate-700 text-slate-300'
-                                        }`}>
-                                            <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
-                                            <span className="font-bold">{node.label}</span>
-                                            <span className="opacity-50 ml-1 text-[10px] uppercase">{node.type}</span>
+                    {/* Detail Panel */}
+                    {selectedAsset ? (
+                        <div className="flex-1 overflow-y-auto pr-2">
+                            {selectedAsset.status === AssetStatus.MINTED && (
+                                <div className="space-y-8 animate-in fade-in duration-500">
+                                    <div className="bg-slate-900 p-1 rounded-xl border border-slate-800">
+                                        <div className="p-4 border-b border-slate-800 mb-2 flex justify-between items-center">
+                                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Semantic Knowledge Graph</h3>
+                                            <span className="text-xs text-slate-500">{selectedAsset.graphData?.nodes?.length || 0} Nodes</span>
                                         </div>
-                                    ))}
+                                        {selectedAsset.graphData && <GraphVisualizer data={selectedAsset.graphData} width={800} height={500} />}
+                                    </div>
+                                    {/* Extracted Entities List */}
+                                    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+                                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Extracted Entities</h3>
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedAsset.graphData?.nodes?.map((node, i) => (
+                                                <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs ${
+                                                    node.type === 'PERSON' ? 'bg-blue-900/20 border-blue-800 text-blue-300' :
+                                                    node.type === 'LOCATION' ? 'bg-emerald-900/20 border-emerald-800 text-emerald-300' :
+                                                    'bg-slate-800 border-slate-700 text-slate-300'
+                                                }`}>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
+                                                    <span className="font-bold">{node.label}</span>
+                                                    <span className="opacity-50 ml-1 text-[10px] uppercase">{node.type}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="flex-1 flex items-center justify-center text-slate-600">
+                            <p>Select an asset to view its specific graph</p>
                         </div>
                     )}
-                 </div>
-               ) : (
-                 <div className="flex-1 flex items-center justify-center text-slate-600">
-                    <p>Select an asset to view knowledge graph</p>
-                 </div>
+                </div>
                )}
             </div>
           )}
 
-          {/* Marketplace / NFT View */}
+          {/* Marketplace / NFT View - AGGREGATED BUNDLES */}
           {activeTab === 'market' && (
-              <div className="max-w-5xl mx-auto">
-                  <div className="mb-8">
-                      <h2 className="text-3xl font-bold text-white mb-2">Sharded Data Marketplace</h2>
-                      <p className="text-slate-400">Lease or purchase fractional ownership of processed datasets for LLM training.</p>
+              <div className="max-w-6xl mx-auto">
+                  <div className="flex justify-between items-end mb-8">
+                      <div>
+                          <h2 className="text-3xl font-bold text-white mb-2">Sharded Data Bundles</h2>
+                          <p className="text-slate-400 max-w-2xl">
+                             Purchase fractional ownership of entire curated datasets. 
+                             <span className="text-primary-400 block mt-1">
+                               Dynamic Sharding: Total shard supply increases automatically as more data is added to the background database.
+                             </span>
+                          </p>
+                      </div>
+                      
+                      <div className="bg-slate-900 px-4 py-2 rounded-lg border border-slate-800 text-right">
+                          <p className="text-xs text-slate-500 uppercase">Current Grouping</p>
+                          <p className="text-lg font-bold text-white">{groupBy}</p>
+                      </div>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {assets.filter(a => a.nft).map(asset => (
-                          <div key={asset.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-primary-500/50 transition-all">
-                              <div className="h-40 relative">
-                                  <img src={asset.imageUrl} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" alt="nft" />
-                                  <div className="absolute top-2 right-2 bg-black/60 backdrop-blur px-2 py-1 rounded text-xs font-mono text-white border border-white/10">
-                                      {asset.nft?.tokenId}
-                                  </div>
-                              </div>
-                              <div className="p-5">
-                                  <div className="flex justify-between items-start mb-4">
-                                      <div>
-                                          <h4 className="text-white font-bold max-w-[150px] truncate">{asset.sqlRecord?.DOCUMENT_TITLE || 'Unnamed Asset'}</h4>
-                                          <p className="text-xs text-slate-500">{asset.sqlRecord?.NLP_NODE_CATEGORIZATION}</p>
-                                      </div>
-                                      <div className="text-right">
-                                          <p className="text-amber-500 font-bold">Ξ {asset.nft?.pricePerShard}</p>
-                                          <p className="text-[10px] text-slate-500">per shard</p>
-                                      </div>
-                                  </div>
+                  {/* Bundle Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {Object.entries(aggregatedGroups).map(([groupName, groupAssets]) => {
+                          // Dynamic Calculation based on Group Size
+                          const bundleSize = groupAssets.length;
+                          const totalShards = bundleSize * 1000; // 1000 shards per document added
+                          const bundlePriceEth = (bundleSize * 0.05).toFixed(3); // 0.05 ETH per document value
+                          const totalTokens = groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
+                          
+                          return (
+                            <div key={groupName} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-primary-500/50 transition-all flex flex-col">
+                                <div className="h-32 bg-gradient-to-br from-slate-800 to-slate-950 relative p-6 flex flex-col justify-between">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                                        <Package size={80} />
+                                    </div>
+                                    <div className="relative z-10">
+                                        <div className="flex justify-between items-start">
+                                            <span className="px-2 py-1 bg-black/40 rounded text-[10px] font-mono text-slate-300 border border-white/10 uppercase tracking-wide">
+                                                {groupBy} Bundle
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-white relative z-10 truncate">{groupName}</h3>
+                                </div>
+                                
+                                <div className="p-6 flex-1 flex flex-col">
+                                    <div className="grid grid-cols-2 gap-4 mb-6">
+                                        <div>
+                                            <p className="text-[10px] text-slate-500 uppercase">Documents</p>
+                                            <p className="text-lg font-mono text-white">{bundleSize}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-500 uppercase">Total Tokens</p>
+                                            <p className="text-lg font-mono text-emerald-400">{totalTokens.toLocaleString()}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-500 uppercase">Dynamic Shards</p>
+                                            <p className="text-lg font-mono text-purple-400">{totalShards.toLocaleString()}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-500 uppercase">Bundle Price</p>
+                                            <p className="text-lg font-mono text-amber-500">Ξ {bundlePriceEth}</p>
+                                        </div>
+                                    </div>
 
-                                  <div className="space-y-2 mb-4">
-                                      <div className="flex justify-between text-xs text-slate-400">
-                                          <span>Availability</span>
-                                          <span>{asset.nft?.availableShards} / {asset.nft?.totalShards}</span>
-                                      </div>
-                                      <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                          <div className="h-full bg-gradient-to-r from-primary-500 to-purple-500 w-1/3"></div>
-                                      </div>
-                                  </div>
-
-                                  <div className="flex gap-2">
-                                      <button className="flex-1 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded transition-colors">
-                                          Mint Shard
-                                      </button>
-                                      <button className="px-3 py-2 border border-slate-700 hover:bg-slate-800 text-slate-300 rounded transition-colors">
-                                          <Share2 size={16} />
-                                      </button>
-                                  </div>
-                              </div>
-                          </div>
-                      ))}
-                      {assets.length === 0 && (
+                                    <div className="mt-auto">
+                                        <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mb-4">
+                                            <div className="bg-gradient-to-r from-primary-500 to-purple-600 h-full w-3/4"></div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+                                                <Coins size={16} /> Buy Shards
+                                            </button>
+                                            <button className="px-3 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                                                <Share2 size={18} />
+                                            </button>
+                                        </div>
+                                        <p className="text-[10px] text-center text-slate-500 mt-2">
+                                            Contract updates automatically on ingest
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                          );
+                      })}
+                      
+                      {Object.keys(aggregatedGroups).length === 0 && (
                           <div className="col-span-3 py-12 text-center text-slate-500">
                               <AlertCircle className="mx-auto mb-2 opacity-50" size={32}/>
-                              No tokenized assets found. Upload and process a document first.
+                              No bundles available. Go to Quick Processing to ingest data.
                           </div>
                       )}
                   </div>
