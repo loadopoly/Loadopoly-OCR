@@ -3,6 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light">
+    <meta name="theme-color" content="#020617">
     <title>GeoGraph OCR Node</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -22,6 +24,21 @@
               accent: {
                 500: '#10b981', // Emerald for GIS
                 600: '#059669',
+              },
+              amber: {
+                400: '#fbbf24',
+                500: '#f59e0b',
+                900: '#78350f',
+              },
+              emerald: {
+                400: '#34d399',
+                500: '#10b981',
+                900: '#064e3b',
+              },
+              blue: {
+                400: '#60a5fa',
+                500: '#3b82f6',
+                900: '#1e3a8a',
               }
             },
             fontFamily: {
@@ -58,9 +75,9 @@
     "react": "https://esm.sh/react@^19.2.1",
     "react-dom/": "https://esm.sh/react-dom@^19.2.1/",
     "react/": "https://esm.sh/react@^19.2.1/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.559.0",
     "@google/genai": "https://esm.sh/@google/genai@^1.32.0",
     "d3": "https://esm.sh/d3@^7.9.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.559.0",
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.87.1",
     "uuid": "https://esm.sh/uuid@^13.0.0",
     "vite": "https://esm.sh/vite@^7.2.7",
@@ -74,6 +91,9 @@
 </head>
   <body>
     <div id="root"></div>
+    <!-- ARIA live regions for accessibility announcements -->
+    <div aria-live="polite" id="status-region" class="sr-only"></div>
+    <div aria-live="assertive" id="alert-region" class="sr-only"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>

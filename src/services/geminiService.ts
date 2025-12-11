@@ -66,51 +66,28 @@ export const processImageWithGemini = async (
     ? `The image was captured at Latitude: ${location.lat}, Longitude: ${location.lng}.` 
     : "No geolocation data available for this image. Infer location context solely from visual cues.";
 
-  let specificInstructions = "";
-  if (scanType === ScanType.ITEM) {
-    specificInstructions = `
-      **Scan Type: ITEM / PHYSICAL OBJECT**
-      - Return a full iNaturalist-style taxonomy hierarchy (kingdom → species) with common_name.
-      - Include eBay/Smithsonian structured attributes: material, technique, maker, production_date, dimensions, condition, inscriptions.
-    `;
-  } else if (scanType === ScanType.SCENERY) {
-    specificInstructions = `
-      **Scan Type: SCENERY / ARCHITECTURE**
-      - Return architectural_style, construction_date, architect_or_builder, site_type, common_name.
-      - Infer the era and cultural context.
-    `;
-  }
-
   const prompt = `
-    Analyze the provided image for a strict SQL-based historical archival system.
+    You are an expert museum curator and field biologist.
+    The user is scanning a real-world thing of type: ${scanType}.
     ${locString}
-    
-    ${specificInstructions}
 
-    Perform the following complex extraction tasks:
+    Return strict JSON matching the schema with:
+    - "scan_type": "${scanType}"
+    - Full iNaturalist taxonomy if living or once-living (Kingdom -> Species).
+    - eBay/Smithsonian attributes if artifact (Material, Technique, Maker).
+    - Architectural details if building/landscape (Style, Era, Architect).
+    - Always include confidence_score (0.00–1.00).
 
-    1. **OCR & Cleaning**: 
-       - Transcribe all visible text (RAW_OCR). 
-       - Create a "Preprocessed" version (PREPROCESS_OCR) by correcting scanning errors and bias.
-    
-    2. **Deep Metadata Extraction**:
-       - **Timestamps**: Find specific dates in text (OCR_DERIVED) and infer general time periods (NLP_DERIVED, e.g., "Late 19th Century" based on style/content).
-       - **GIS Zones**: 
-          - LOCAL_GIS_ZONE: What is the visual environment? (Urban, Rural, etc.)
-          - OCR_DERIVED_GIS_ZONE: Are there specific city/state names in the text?
-          - NLP_DERIVED_GIS_ZONE: Based on context (e.g., mention of "Confederacy" implies US South), what is the region?
-       - **Provenance**: Identify the Creator Agent (Author/Org) and Rights Statement (Public Domain, Copyright).
-    
-    3. **Graph & NLP**: 
-       - Identify Nodes (People, Places, Orgs).
-       - Categorize the overall topic (NLP_NODE_CATEGORIZATION).
-       - Generate a Title (Dublin Core) and Description (PREMIS).
+    Use real scientific names and museum terminology.
 
-    4. **Safety & Tokenization**:
-       - Flag access restrictions (Sensitive topics).
-       - Provide token count and embedding preview.
-
-    Return the result as a strict JSON object matching the schema.
+    Perform the following tasks:
+    1. **OCR & Cleaning**: Transcribe all text (RAW_OCR) and correct errors (PREPROCESS_OCR).
+    2. **Deep Metadata**:
+       - Timestamps: Specific dates (OCR) and inferred eras (NLP).
+       - GIS Zones: Visual environment and inferred region.
+       - Provenance: Creator and Rights.
+    3. **Graph & NLP**: Identify Nodes, Categorize topic, Title (Dublin Core), Description (PREMIS).
+    4. **Safety**: Flag access restrictions.
   `;
 
   const schema: Schema = {
