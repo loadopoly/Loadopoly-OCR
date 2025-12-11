@@ -22,8 +22,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Package,
-  Grid,
-  List,
   Zap,
   Image as ImageIcon,
   Maximize2,
@@ -32,12 +30,16 @@ import {
   X,
   FolderOpen,
   ArrowLeft,
-  ShoppingBag
+  ShoppingBag,
+  Scan
 } from 'lucide-react';
-import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem } from './types';
+import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle } from './types';
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
+import { createBundles } from './services/bundleService';
 import GraphVisualizer from './components/GraphVisualizer';
 import ContributeButton from './components/ContributeButton';
+import BundleCard from './components/BundleCard';
+import ARScene from './components/ARScene';
 
 // --- Helper Functions ---
 async function calculateSHA256(file: File): Promise<string> {
@@ -46,6 +48,18 @@ async function calculateSHA256(file: File): Promise<string> {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
+const bitmapToFile = async (bitmap: ImageBitmap, fileName: string): Promise<File> => {
+    const canvas = document.createElement('canvas');
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    const ctx = canvas.getContext('2d');
+    if(ctx) ctx.drawImage(bitmap, 0, 0);
+    
+    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+    if (!blob) throw new Error("Failed to convert bitmap to blob");
+    return new File([blob], fileName, { type: 'image/jpeg' });
+};
 
 // --- Sub-components ---
 
@@ -80,12 +94,14 @@ const StatCard = ({ label, value, icon: Icon, color }: any) => (
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [assets, setAssets] = useState<DigitalAsset[]>([]);
+  // Combined list of Single Assets AND Bundles for display
+  const [displayItems, setDisplayItems] = useState<(DigitalAsset | ImageBundle)[]>([]);
+  
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [geoPermission, setGeoPermission] = useState<boolean>(false);
   
   // Database & Grouping State
-  const [sourceCollectionFilter, setSourceCollectionFilter] = useState('ALL');
   const [groupBy, setGroupBy] = useState<'SOURCE' | 'ZONE' | 'CATEGORY' | 'RIGHTS'>('SOURCE');
   const [dbViewMode, setDbViewMode] = useState<'GROUPS' | 'DRILLDOWN'>('GROUPS');
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
@@ -102,9 +118,12 @@ export default function App() {
   // Asset View State
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
+  // AR State
+  const arScanThrottleRef = useRef<number>(0);
+  const [arStatus, setArStatus] = useState<string>('Ready');
+
   // Stats derivation
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
-  // Total value logic moved to dynamic calculation in Marketplace view
 
   useEffect(() => {
     // Check Geo permissions on mount
@@ -112,6 +131,24 @@ export default function App() {
       setGeoPermission(result.state === 'granted');
     });
   }, []);
+
+  // --- Bundling Effect ---
+  // When assets change, re-run bundling logic
+  useEffect(() => {
+    if (assets.length > 0) {
+        // Only bundle assets that have been processed (MINTED)
+        const mintedAssets = assets.filter(a => a.status === AssetStatus.MINTED);
+        const processingAssets = assets.filter(a => a.status !== AssetStatus.MINTED);
+        
+        // Create bundles from minted assets
+        const bundles = createBundles(mintedAssets);
+        
+        // Combine bundles with assets that are still processing
+        setDisplayItems([...processingAssets, ...bundles]);
+    } else {
+        setDisplayItems([]);
+    }
+  }, [assets]);
 
   // --- Processing Logic ---
 
@@ -165,7 +202,6 @@ export default function App() {
           }],
           KEYWORDS_TAGS: [],
           ACCESS_RESTRICTIONS: false,
-          // Contribution Init
           CONTRIBUTOR_ID: null,
           CONTRIBUTED_AT: null,
           DATA_LICENSE: 'GEOGRAPH_CORPUS_1.0',
@@ -174,9 +210,10 @@ export default function App() {
       };
   };
 
-  const processAssetPipeline = async (asset: DigitalAsset, file: File) => {
-      let location: {lat: number, lng: number} | null = null;
-      if (navigator.geolocation) {
+  const processAssetPipeline = async (asset: DigitalAsset, file: File, customLocation?: {lat: number, lng: number}) => {
+      let location: {lat: number, lng: number} | null = customLocation || null;
+      
+      if (!location && navigator.geolocation) {
         try {
           const position = await new Promise<GeolocationPosition>((resolve, reject) => {
              navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 });
@@ -262,8 +299,6 @@ export default function App() {
       }));
 
       setBatchQueue(prev => [...prev, ...newQueueItems]);
-      
-      // Start processing queue (simple recursive processor)
       processNextBatchItem();
   };
 
@@ -274,41 +309,62 @@ export default function App() {
 
           const itemToProcess = currentQueue[nextItemIndex];
           
-          // Trigger async process without blocking UI updates completely
           (async () => {
              try {
-                // Update to Processing
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'PROCESSING', progress: 10 } : i));
-
-                // 1. Init Asset
                 const newAsset = await createInitialAsset(itemToProcess.file);
-                if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = "Batch 001"; // Grouping
-                
+                if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = "Batch Ingest"; 
                 setAssets(prev => [newAsset, ...prev]);
-                
-                // 2. Process Pipeline
                 const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
-                
-                // 3. Update Asset and Queue
                 setAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
-
              } catch (e) {
                  console.error("Batch Error", e);
                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: "Processing Failed" } : i));
              } finally {
-                 // Next!
                  processNextBatchItem();
              }
           })();
-
           return currentQueue;
       });
   };
 
+  const handleARFrame = async (bitmap: ImageBitmap) => {
+      // Throttle: process only every 5 seconds
+      const now = Date.now();
+      if (now - arScanThrottleRef.current < 5000) return;
+      
+      arScanThrottleRef.current = now;
+      setArStatus('Processing...');
+
+      try {
+          const file = await bitmapToFile(bitmap, `AR_Scan_${now}.jpg`);
+          
+          // 1. Create asset immediately in list
+          const newAsset = await createInitialAsset(file);
+          newAsset.sqlRecord!.SOURCE_COLLECTION = "AR Live Scan";
+          newAsset.sqlRecord!.LOCAL_GIS_ZONE = "On-Site (AR)";
+          
+          setAssets(prev => [newAsset, ...prev]);
+
+          // 2. Process
+          const processedAsset = await processAssetPipeline(newAsset, file);
+          setAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+          setArStatus('Match Found!');
+          
+          // Reset status after a delay
+          setTimeout(() => setArStatus('Ready'), 2000);
+
+      } catch (e) {
+          console.error("AR Error", e);
+          setArStatus('Error');
+      }
+  };
+
+
   const retryBatchItem = (itemId: string) => {
       setBatchQueue(prev => prev.map(i => i.id === itemId ? { ...i, status: 'QUEUED', progress: 0, errorMsg: undefined } : i));
-      processNextBatchItem(); // Kickstart if stopped
+      processNextBatchItem();
   };
 
   const removeBatchItem = (itemId: string) => {
@@ -327,21 +383,7 @@ export default function App() {
     downloadAnchorNode.remove();
   };
 
-  const downloadBulkJSON = (data: DigitalAsset[], groupName: string) => {
-    const records = data.map(a => a.sqlRecord).filter(r => r !== undefined);
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(records, null, 2));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href",     dataStr);
-    downloadAnchorNode.setAttribute("download", `GEOGRAPH_DATASET_${groupName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.json`);
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-  };
-
   const selectedAsset = assets.find(a => a.id === selectedAssetId);
-
-  // --- Aggregation Logic (Shared) ---
-  
   const getAggregatedGroups = () => {
     const groups: Record<string, DigitalAsset[]> = {};
     assets.forEach(asset => {
@@ -350,61 +392,38 @@ export default function App() {
         if (groupBy === 'ZONE') key = asset.sqlRecord?.LOCAL_GIS_ZONE || 'Unknown';
         if (groupBy === 'CATEGORY') key = asset.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized';
         if (groupBy === 'RIGHTS') key = asset.sqlRecord?.RIGHTS_STATEMENT || 'Unknown';
-        
         if (!groups[key]) groups[key] = [];
         groups[key].push(asset);
     });
     return groups;
   };
-
   const aggregatedGroups = getAggregatedGroups();
-  
-  // Drill down filter
   const drillDownAssets = selectedGroupKey ? (aggregatedGroups[selectedGroupKey] || []) : [];
-  
-  // Pagination for Drill Down
   const totalPages = Math.ceil(drillDownAssets.length / ITEMS_PER_PAGE);
   const paginatedAssets = drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-
-  // --- Graph Global Logic ---
   const getGlobalGraphData = () => {
-      // 1. Create Nodes for each Cluster (based on Category)
       const categories = Array.from(new Set(assets.map(a => a.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized')));
       const clusterNodes = categories.map((cat, idx) => ({
           id: `CLUSTER_${idx}`,
           label: cat,
-          type: 'CLUSTER' as any, // Augmented type
+          type: 'CLUSTER' as any,
           relevance: 1.0
       }));
-
-      // 2. Create Nodes for Documents
       const docNodes = assets.map(a => ({
           id: a.id,
           label: a.sqlRecord?.DOCUMENT_TITLE || 'Untitled',
-          type: 'DOCUMENT' as any, // Augmented type
+          type: 'DOCUMENT' as any,
           relevance: 0.8
       }));
-
-      // 3. Create Links
       const links: any[] = [];
-      
-      // Link Document to Cluster
       assets.forEach(a => {
          const catIndex = categories.indexOf(a.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized');
          if (catIndex >= 0) {
-             links.push({
-                 source: a.id,
-                 target: `CLUSTER_${catIndex}`,
-                 relationship: "BELONGS_TO"
-             });
+             links.push({ source: a.id, target: `CLUSTER_${catIndex}`, relationship: "BELONGS_TO" });
          }
       });
-
-      return {
-          nodes: [...clusterNodes, ...docNodes],
-          links
-      };
+      return { nodes: [...clusterNodes, ...docNodes], links };
   };
 
   return (
@@ -423,7 +442,8 @@ export default function App() {
         <nav className="flex-1 space-y-1">
           <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
           <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => setActiveTab('batch')} />
-          <SidebarItem icon={ImageIcon} label="Assets & OCR" active={activeTab === 'assets'} onClick={() => setActiveTab('assets')} />
+          <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => setActiveTab('ar')} />
+          <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => setActiveTab('assets')} />
           <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => setActiveTab('graph')} />
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
           <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => setActiveTab('market')} />
@@ -450,7 +470,7 @@ export default function App() {
         <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-950/80 backdrop-blur z-10">
           <h2 className="text-lg font-semibold text-white capitalize">{activeTab === 'database' ? 'HISTORICAL DOCUMENTS DATABASE' : activeTab === 'batch' ? 'HIGH THROUGHPUT INGESTION' : activeTab}</h2>
           <div className="flex items-center gap-4">
-             {activeTab !== 'batch' && (
+             {activeTab !== 'batch' && activeTab !== 'ar' && (
                 <label className={`flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                     {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Camera size={18} />}
                     <span>{isProcessing ? 'Ingest & Process' : 'New Ingest'}</span>
@@ -469,7 +489,7 @@ export default function App() {
                 <StatCard label="Total Assets" value={assets.length} icon={FileText} color="text-blue-500" />
                 <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} icon={Network} color="text-purple-500" />
                 <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" />
-                <StatCard label="Active Bundles" value={Object.keys(aggregatedGroups).length} icon={Package} color="text-amber-500" />
+                <StatCard label="Active Bundles" value={displayItems.filter(i => 'bundleId' in i).length} icon={Package} color="text-amber-500" />
               </div>
 
               {assets.length === 0 ? (
@@ -490,17 +510,12 @@ export default function App() {
                       <Map size={18} className="text-emerald-500"/> GIS Context
                     </h3>
                     <div className="space-y-4">
-                        {assets.map(asset => (
+                        {assets.slice(0, 3).map(asset => (
                             <div key={asset.id} className="flex items-start gap-4 p-3 rounded bg-slate-950/50 border border-slate-800">
                                 <img src={asset.imageUrl} className="w-16 h-16 object-cover rounded" alt="thumb" />
                                 <div>
                                     <h4 className="text-sm font-bold text-slate-200">{asset.gisMetadata?.zoneType || 'Processing...'}</h4>
                                     <p className="text-xs text-slate-400 mt-1 line-clamp-2">{asset.processingAnalysis}</p>
-                                    <div className="mt-2 flex gap-2">
-                                        <span className="text-[10px] bg-emerald-500/10 text-emerald-500 px-2 py-0.5 rounded border border-emerald-500/20">
-                                            {asset.gisMetadata?.coordinateSystem || 'NO GPS'}
-                                        </span>
-                                    </div>
                                 </div>
                             </div>
                         ))}
@@ -509,6 +524,16 @@ export default function App() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* AR View */}
+          {activeTab === 'ar' && (
+              <div className="h-full flex flex-col bg-black rounded-2xl overflow-hidden relative border border-slate-800">
+                  <ARScene onFrame={handleARFrame} />
+                  <div className="absolute top-4 right-4 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-full border border-slate-700 text-white font-mono text-sm">
+                      Status: <span className={arStatus === 'Match Found!' ? 'text-emerald-400' : 'text-slate-300'}>{arStatus}</span>
+                  </div>
+              </div>
           )}
 
           {/* Quick Processing / Batch Tab */}
@@ -521,7 +546,7 @@ export default function App() {
                              <Zap className="text-amber-500" /> Batch Processor
                           </h3>
                           <p className="text-slate-400 text-sm mt-1">
-                             Optimized for 500+ documents/hr. Drag and drop folders or multiple files.
+                             Optimized for 500+ documents/hr. Automatic bundling by time & location.
                           </p>
                        </div>
                        <div className="text-right">
@@ -600,11 +625,6 @@ export default function App() {
                                         </td>
                                     </tr>
                                 ))}
-                                {batchQueue.length === 0 && (
-                                    <tr>
-                                        <td colSpan={5} className="py-12 text-center text-slate-600 italic">Queue is empty. Add files above.</td>
-                                    </tr>
-                                )}
                             </tbody>
                         </table>
                     </div>
@@ -612,88 +632,86 @@ export default function App() {
              </div>
           )}
 
-          {/* Assets Exploratory View */}
+          {/* Assets Exploratory View with BUNDLES */}
           {activeTab === 'assets' && (
              <div className="h-full overflow-y-auto">
                  <div className="flex justify-between items-center mb-6">
-                     <h3 className="text-lg font-bold text-white">Exploratory Analysis</h3>
+                     <h3 className="text-lg font-bold text-white">Exploratory Analysis & Bundles</h3>
                      <div className="flex gap-2 text-xs text-slate-400 bg-slate-900 px-3 py-1 rounded border border-slate-800">
-                         <span>Showing {assets.length} assets</span>
+                         <span>Showing {displayItems.length} items</span>
                      </div>
                  </div>
 
                  {/* Masonry Grid Simulation */}
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
-                     {assets.map(asset => (
-                         <div key={asset.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:shadow-lg hover:shadow-primary-900/10 transition-all hover:-translate-y-1 group">
-                             {/* Image Header */}
-                             <div className="relative h-48 bg-slate-950 group overflow-hidden">
-                                 <img src={asset.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" />
-                                 <button 
-                                    onClick={() => setExpandedImage(asset.imageUrl)}
-                                    className="absolute top-2 right-2 p-1.5 bg-black/60 rounded text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black"
-                                 >
-                                     <Maximize2 size={14} />
-                                 </button>
-                                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 pt-12">
-                                     <div className="flex justify-between items-end">
-                                         <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${asset.sqlRecord?.CONFIDENCE_SCORE && asset.sqlRecord.CONFIDENCE_SCORE > 0.8 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'}`}>
-                                             Conf: {(asset.sqlRecord?.CONFIDENCE_SCORE || 0) * 100}%
-                                         </span>
-                                         {asset.sqlRecord?.ACCESS_RESTRICTIONS && <ShieldCheck size={16} className="text-red-500" />}
-                                     </div>
-                                 </div>
-                             </div>
+                     {displayItems.map(item => {
+                         if ('bundleId' in item) {
+                             // Render Bundle Card
+                             return (
+                                 <BundleCard key={item.bundleId} bundle={item as ImageBundle} onClick={() => console.log('View bundle details')} />
+                             );
+                         } else {
+                             // Render Single Asset Card
+                             const asset = item as DigitalAsset;
+                             return (
+                                <div key={asset.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:shadow-lg hover:shadow-primary-900/10 transition-all hover:-translate-y-1 group">
+                                    {/* Image Header */}
+                                    <div className="relative h-48 bg-slate-950 group overflow-hidden">
+                                        <img src={asset.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" />
+                                        <button 
+                                           onClick={() => setExpandedImage(asset.imageUrl)}
+                                           className="absolute top-2 right-2 p-1.5 bg-black/60 rounded text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black"
+                                        >
+                                            <Maximize2 size={14} />
+                                        </button>
+                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 pt-12">
+                                            <div className="flex justify-between items-end">
+                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${asset.sqlRecord?.CONFIDENCE_SCORE && asset.sqlRecord.CONFIDENCE_SCORE > 0.8 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'}`}>
+                                                    Conf: {(asset.sqlRecord?.CONFIDENCE_SCORE || 0) * 100}%
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
 
-                             {/* Card Body */}
-                             <div className="p-4">
-                                 <h4 className="font-bold text-white text-sm mb-1 truncate" title={asset.sqlRecord?.DOCUMENT_TITLE}>{asset.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
-                                 <p className="text-xs text-slate-500 mb-3">{asset.sqlRecord?.NLP_NODE_CATEGORIZATION}</p>
+                                    {/* Card Body */}
+                                    <div className="p-4">
+                                        <h4 className="font-bold text-white text-sm mb-1 truncate" title={asset.sqlRecord?.DOCUMENT_TITLE}>{asset.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
+                                        <p className="text-xs text-slate-500 mb-3">{asset.sqlRecord?.NLP_NODE_CATEGORIZATION}</p>
 
-                                 {/* Key Stats Row */}
-                                 <div className="flex justify-between items-center py-3 border-t border-b border-slate-800 mb-3">
-                                     <div className="text-center">
-                                         <p className="text-[10px] text-slate-500 uppercase">Nodes</p>
-                                         <p className="text-sm font-mono text-primary-400">{asset.sqlRecord?.NODE_COUNT || 0}</p>
-                                     </div>
-                                     <div className="h-6 w-px bg-slate-800"></div>
-                                     <div className="text-center">
-                                         <p className="text-[10px] text-slate-500 uppercase">Year</p>
-                                         <p className="text-sm font-mono text-indigo-400">{asset.sqlRecord?.NLP_DERIVED_TIMESTAMP?.substring(0, 4) || 'N/A'}</p>
-                                     </div>
-                                     <div className="h-6 w-px bg-slate-800"></div>
-                                     <div className="text-center">
-                                         <p className="text-[10px] text-slate-500 uppercase">Zone</p>
-                                         <p className="text-sm font-mono text-emerald-400 max-w-[80px] truncate" title={asset.sqlRecord?.LOCAL_GIS_ZONE}>{asset.sqlRecord?.LOCAL_GIS_ZONE || 'N/A'}</p>
-                                     </div>
-                                 </div>
-                                 
-                                 {/* Entities Preview */}
-                                 <div className="flex flex-wrap gap-1 mb-4 h-12 overflow-hidden content-start">
-                                     {asset.sqlRecord?.ENTITIES_EXTRACTED?.slice(0, 4).map((e, i) => (
-                                         <span key={i} className="text-[10px] px-1.5 py-0.5 bg-slate-800 text-slate-400 rounded border border-slate-700">{e}</span>
-                                     ))}
-                                     {(asset.sqlRecord?.ENTITIES_EXTRACTED?.length || 0) > 4 && (
-                                         <span className="text-[10px] px-1.5 py-0.5 text-slate-600">+{(asset.sqlRecord?.ENTITIES_EXTRACTED?.length || 0) - 4}</span>
-                                     )}
-                                 </div>
-
-                                 <div className="flex gap-2 mt-auto">
-                                     <button onClick={() => { setSelectedAssetId(asset.id); setActiveTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 transition-colors">
-                                         View Graph
-                                     </button>
-                                     <button onClick={() => downloadJSON(asset)} className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded border border-slate-700 transition-colors">
-                                         <Download size={14} />
-                                     </button>
-                                     {/* Contribute Button Integration */}
-                                     <ContributeButton asset={asset} />
-                                 </div>
-                             </div>
-                         </div>
-                     ))}
+                                        {/* Key Stats Row */}
+                                        <div className="flex justify-between items-center py-3 border-t border-b border-slate-800 mb-3">
+                                            <div className="text-center">
+                                                <p className="text-[10px] text-slate-500 uppercase">Nodes</p>
+                                                <p className="text-sm font-mono text-primary-400">{asset.sqlRecord?.NODE_COUNT || 0}</p>
+                                            </div>
+                                            <div className="h-6 w-px bg-slate-800"></div>
+                                            <div className="text-center">
+                                                <p className="text-[10px] text-slate-500 uppercase">Year</p>
+                                                <p className="text-sm font-mono text-indigo-400">{asset.sqlRecord?.NLP_DERIVED_TIMESTAMP?.substring(0, 4) || 'N/A'}</p>
+                                            </div>
+                                            <div className="h-6 w-px bg-slate-800"></div>
+                                            <div className="text-center">
+                                                <p className="text-[10px] text-slate-500 uppercase">Zone</p>
+                                                <p className="text-sm font-mono text-emerald-400 max-w-[80px] truncate" title={asset.sqlRecord?.LOCAL_GIS_ZONE}>{asset.sqlRecord?.LOCAL_GIS_ZONE || 'N/A'}</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="flex gap-2 mt-auto">
+                                            <button onClick={() => { setSelectedAssetId(asset.id); setActiveTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 transition-colors">
+                                                View Graph
+                                            </button>
+                                            <button onClick={() => downloadJSON(asset)} className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded border border-slate-700 transition-colors">
+                                                <Download size={14} />
+                                            </button>
+                                            <ContributeButton asset={asset} />
+                                        </div>
+                                    </div>
+                                </div>
+                             );
+                         }
+                     })}
                      
-                     {/* Placeholder if empty */}
-                     {assets.length === 0 && (
+                     {displayItems.length === 0 && (
                          <div className="col-span-full py-20 text-center">
                              <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-800">
                                  <ImageIcon className="text-slate-600" size={32} />
@@ -726,7 +744,6 @@ export default function App() {
                    </div>
                    
                    <div className="flex flex-wrap gap-4">
-                       {/* Grouping Feature Selector - Always visible */}
                        <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 min-w-[240px]">
                            <Filter size={14} className="text-primary-500" />
                            <div className="flex-1 flex flex-col">
@@ -736,7 +753,7 @@ export default function App() {
                                 value={groupBy}
                                 onChange={(e) => {
                                     setGroupBy(e.target.value as any);
-                                    setDbViewMode('GROUPS'); // Reset to top level on change
+                                    setDbViewMode('GROUPS');
                                     setSelectedGroupKey(null);
                                 }}
                               >
@@ -746,11 +763,6 @@ export default function App() {
                                   <option value="RIGHTS">Rights Statement</option>
                               </select>
                            </div>
-                       </div>
-                       
-                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 w-48">
-                          <Search size={14} className="text-slate-400" />
-                          <input type="text" placeholder="Search Filter..." className="bg-transparent border-none text-xs text-slate-300 focus:outline-none w-full" />
                        </div>
                    </div>
                </div>
@@ -786,10 +798,6 @@ export default function App() {
                                         {groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0).toLocaleString()}
                                      </span>
                                   </div>
-                              </div>
-                              
-                              <div className="w-full py-2 bg-slate-950 rounded text-xs text-center text-slate-400 group-hover:text-white transition-colors border border-slate-800 group-hover:border-slate-700">
-                                  Drill Down to Datum
                               </div>
                           </div>
                        </button>
@@ -963,7 +971,6 @@ export default function App() {
                                         </div>
                                         {selectedAsset.graphData && <GraphVisualizer data={selectedAsset.graphData} width={800} height={500} />}
                                     </div>
-                                    {/* Extracted Entities List */}
                                     <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
                                         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Extracted Entities</h3>
                                         <div className="flex flex-wrap gap-2">
@@ -1016,10 +1023,9 @@ export default function App() {
                   {/* Bundle Grid */}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                       {Object.entries(aggregatedGroups).map(([groupName, groupAssets]) => {
-                          // Dynamic Calculation based on Group Size
                           const bundleSize = groupAssets.length;
-                          const totalShards = bundleSize * 1000; // 1000 shards per document added
-                          const bundlePriceEth = (bundleSize * 0.05).toFixed(3); // 0.05 ETH per document value
+                          const totalShards = bundleSize * 1000;
+                          const bundlePriceEth = (bundleSize * 0.05).toFixed(3);
                           const totalTokens = groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
                           
                           return (
