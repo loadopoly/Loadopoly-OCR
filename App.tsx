@@ -32,11 +32,15 @@ import {
   ArrowLeft,
   ShoppingBag,
   Scan,
-  Plus
+  Plus,
+  Settings,
+  Gift
 } from 'lucide-react';
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle } from './types';
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
 import { createBundles } from './services/bundleService';
+import { initSync } from './lib/syncEngine';
+import { redeemPhygitalCertificate } from './services/web3Service';
 import GraphVisualizer from './components/GraphVisualizer';
 import ContributeButton from './components/ContributeButton';
 import BundleCard from './components/BundleCard';
@@ -44,6 +48,7 @@ import ARScene from './components/ARScene';
 import SemanticCanvas from './components/SemanticCanvas';
 import CameraCapture from './components/CameraCapture';
 import BatchImporter from './components/BatchImporter';
+import SettingsPanel from './components/SettingsPanel';
 
 // --- Helper Functions ---
 async function calculateSHA256(file: File): Promise<string> {
@@ -133,7 +138,25 @@ export default function App() {
     navigator.permissions.query({ name: 'geolocation' }).then((result) => {
       setGeoPermission(result.state === 'granted');
     });
-  }, []);
+
+    // Initialize Auto Sync
+    initSync();
+
+    // Listen for background file events
+    const handleNewFile = (event: CustomEvent<File>) => {
+        // Automatically add to batch queue or direct ingest?
+        // Let's use direct ingest for immediate feedback, but keep it robust
+        ingestFile(event.detail, "Auto-Sync");
+    };
+
+    // @ts-ignore
+    window.addEventListener('geograph-new-file', handleNewFile);
+
+    return () => {
+        // @ts-ignore
+        window.removeEventListener('geograph-new-file', handleNewFile);
+    }
+  }, []); // Note: ingestFile dependency is omitted but safe here as ingestFile is defined below
 
   // --- Bundling Effect ---
   // When assets change, re-run bundling logic
@@ -255,6 +278,15 @@ export default function App() {
             ]
       };
 
+      const baseNFT = simulateNFTMinting(asset.id);
+      // Simulate DCC1 Data for Phygital Redemption
+      const dcc1Data = {
+          shardsCollected: Math.floor(Math.random() * 250), // Simulation: Random amount collected
+          shardsRequired: 218,
+          isRedeemable: false
+      };
+      dcc1Data.isRedeemable = dcc1Data.shardsCollected >= dcc1Data.shardsRequired;
+
       return {
             ...asset,
             status: AssetStatus.MINTED,
@@ -264,7 +296,7 @@ export default function App() {
             tokenization: analysis.tokenization,
             processingAnalysis: analysis.analysis,
             location: location ? { latitude: location.lat, longitude: location.lng, accuracy: 1 } : undefined,
-            nft: simulateNFTMinting(asset.id),
+            nft: { ...baseNFT, dcc1: dcc1Data },
             sqlRecord: updatedSqlRecord
       };
   };
@@ -281,7 +313,7 @@ export default function App() {
       setAssets(prev => [newAsset, ...prev]);
       
       // Auto-switch to assets tab if it's a single upload or camera capture
-      if (source !== "Batch Folder") {
+      if (source !== "Batch Folder" && source !== "Auto-Sync") {
         setActiveTab('assets');
       }
       
@@ -364,6 +396,24 @@ export default function App() {
       } catch (e) {
           console.error("AR Error", e);
           setArStatus('Error');
+      }
+  };
+
+  const handlePhygitalRedeem = async (asset: DigitalAsset) => {
+      if(!asset.nft?.dcc1?.isRedeemable) {
+          alert(`You need ${asset.nft?.dcc1?.shardsRequired} shards to redeem. You have ${asset.nft?.dcc1?.shardsCollected}.`);
+          return;
+      }
+      try {
+          const txHash = await redeemPhygitalCertificate(asset.id);
+          alert(`Redemption Success! Certificate Minted.\nTx: ${txHash}`);
+          // Update local state to reflect redemption
+          setAssets(prev => prev.map(a => a.id === asset.id ? {
+              ...a, 
+              nft: { ...a.nft!, dcc1: { ...a.nft!.dcc1!, shardsCollected: 0, isRedeemable: false, certificateTokenId: 'PENDING' } }
+          } : a));
+      } catch(e: any) {
+          alert("Redemption failed: " + e.message);
       }
   };
 
@@ -454,6 +504,9 @@ export default function App() {
           <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => setActiveTab('semantic')} />
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
           <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => setActiveTab('market')} />
+          <div className="pt-4 mt-4 border-t border-slate-800">
+             <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
+          </div>
         </nav>
 
         <div className="p-4 border-t border-slate-800">
@@ -555,6 +608,11 @@ export default function App() {
               </div>
           )}
 
+          {/* Settings Tab */}
+          {activeTab === 'settings' && (
+              <SettingsPanel />
+          )}
+
           {/* Quick Processing / Batch Tab */}
           {activeTab === 'batch' && (
              <div className="max-w-6xl mx-auto h-full flex flex-col">
@@ -653,7 +711,7 @@ export default function App() {
              </div>
           )}
 
-          {/* Assets Exploratory View with BUNDLES */}
+          {/* Assets Exploratory View with BUNDLES & REDEMPTION */}
           {activeTab === 'assets' && (
              <div className="h-full overflow-y-auto">
                  <div className="flex justify-between items-center mb-6">
@@ -716,6 +774,32 @@ export default function App() {
                                                 <p className="text-sm font-mono text-emerald-400 max-w-[80px] truncate" title={asset.sqlRecord?.LOCAL_GIS_ZONE}>{asset.sqlRecord?.LOCAL_GIS_ZONE || 'N/A'}</p>
                                             </div>
                                         </div>
+
+                                        {/* DCC1 Redemption Widget */}
+                                        {asset.nft?.dcc1 && (
+                                            <div className="mb-3 bg-slate-950 p-2 rounded border border-slate-800">
+                                                <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                                                    <span>Phygital Progress</span>
+                                                    <span className={asset.nft.dcc1.isRedeemable ? "text-emerald-400 font-bold" : ""}>
+                                                        {asset.nft.dcc1.shardsCollected}/{asset.nft.dcc1.shardsRequired}
+                                                    </span>
+                                                </div>
+                                                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                                    <div 
+                                                        className={`h-full ${asset.nft.dcc1.isRedeemable ? 'bg-emerald-500' : 'bg-purple-600'}`} 
+                                                        style={{ width: `${Math.min(100, (asset.nft.dcc1.shardsCollected / asset.nft.dcc1.shardsRequired) * 100)}%` }}
+                                                    ></div>
+                                                </div>
+                                                {asset.nft.dcc1.isRedeemable && (
+                                                    <button 
+                                                        onClick={() => handlePhygitalRedeem(asset)}
+                                                        className="w-full mt-2 py-1 bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-400 border border-emerald-800 rounded text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
+                                                    >
+                                                        <Gift size={12} /> Redeem Physical
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                         
                                         <div className="flex gap-2 mt-auto">
                                             <button onClick={() => { setSelectedAssetId(asset.id); setActiveTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 transition-colors">
