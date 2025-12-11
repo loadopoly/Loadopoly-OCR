@@ -24,7 +24,7 @@ export interface GISMetadata {
 export interface GraphNode {
   id: string;
   label: string;
-  type: 'PERSON' | 'LOCATION' | 'ORGANIZATION' | 'DATE' | 'CONCEPT';
+  type: 'PERSON' | 'LOCATION' | 'ORGANIZATION' | 'DATE' | 'CONCEPT' | 'CLUSTER' | 'DOCUMENT';
   relevance: number; // 0-1
 }
 
@@ -118,6 +118,18 @@ export interface DigitalAsset {
   
   // The structured DB record
   sqlRecord?: HistoricalDocumentMetadata;
+}
+
+export interface ImageBundle {
+  bundleId: string;
+  title: string;
+  primaryImageUrl: string;
+  imageUrls: string[];
+  timeRange: { earliest: string | null; latest: string | null };
+  combinedTokens: number;
+  combinedGraph?: GraphData;
+  combinedRecord?: HistoricalDocumentMetadata;
+  status: AssetStatus;
 }
 
 export interface BatchItem {
