@@ -1,5 +1,5 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { GISMetadata, GraphData, TokenizationData, AssetStatus, ScanType, TaxonomyData, ItemAttributes, SceneryAttributes } from "../types";
+import { GISMetadata, GraphData, TokenizationData, AssetStatus, ScanType, TaxonomyData, ItemAttributes, SceneryAttributes, ReadingOrderBlock } from "../types";
 
 const GEMINI_MODEL = "gemini-2.5-flash";
 
@@ -50,6 +50,12 @@ interface ProcessResponse {
   taxonomy?: TaxonomyData;
   itemAttributes?: ItemAttributes;
   sceneryAttributes?: SceneryAttributes;
+
+  // Accessibility
+  alt_text_short?: string;
+  alt_text_long?: string;
+  reading_order?: ReadingOrderBlock[];
+  accessibility_score?: number;
 }
 
 export const processImageWithGemini = async (
@@ -67,7 +73,7 @@ export const processImageWithGemini = async (
     : "No geolocation data available for this image. Infer location context solely from visual cues.";
 
   const prompt = `
-    You are an expert museum curator and field biologist.
+    You are an expert museum curator, field biologist, and professional museum access specialist writing for blind and low-vision visitors.
     The user is scanning a real-world thing of type: ${scanType}.
     ${locString}
 
@@ -78,7 +84,11 @@ export const processImageWithGemini = async (
     - Architectural details if building/landscape (Style, Era, Architect).
     - Always include confidence_score (0.00–1.00).
 
-    Use real scientific names and museum terminology.
+    **Accessibility Requirements (Crucial):**
+    1. "alt_text_short": One clear sentence under 125 characters. Start with the most important object.
+    2. "alt_text_long": 3–7 sentences. Describe subject position, colors, textures, materials, emotional tone, and text content (read exactly).
+    3. "reading_order": Array of text blocks in logical reading order.
+    4. "accessibility_score": 0.00-1.00 based on clarity.
 
     Perform the following tasks:
     1. **OCR & Cleaning**: Transcribe all text (RAW_OCR) and correct errors (PREPROCESS_OCR).
@@ -97,6 +107,21 @@ export const processImageWithGemini = async (
       preprocessOcrTranscription: { type: Type.STRING, description: "Cleaned text for NLP" },
       analysis: { type: Type.STRING, description: "Brief contextual summary" },
       
+      // Accessibility
+      alt_text_short: { type: Type.STRING },
+      alt_text_long: { type: Type.STRING },
+      reading_order: { 
+          type: Type.ARRAY, 
+          items: { 
+              type: Type.OBJECT,
+              properties: {
+                  text: { type: Type.STRING },
+                  position: { type: Type.STRING }
+              }
+          } 
+      },
+      accessibility_score: { type: Type.NUMBER },
+
       // GIS
       gisMetadata: {
         type: Type.OBJECT,
@@ -284,7 +309,11 @@ export const processImageWithGemini = async (
       // Ensure specific objects are present if valid, or undefined
       taxonomy: parsed.taxonomy,
       itemAttributes: parsed.itemAttributes,
-      sceneryAttributes: parsed.sceneryAttributes
+      sceneryAttributes: parsed.sceneryAttributes,
+      alt_text_short: parsed.alt_text_short,
+      alt_text_long: parsed.alt_text_long,
+      reading_order: parsed.reading_order,
+      accessibility_score: parsed.accessibility_score
     };
 
   } catch (error) {
