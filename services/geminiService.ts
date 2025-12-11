@@ -52,12 +52,8 @@ export const processImageWithGemini = async (
   location: { lat: number; lng: number } | null
 ): Promise<ProcessResponse> => {
   
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  if (!apiKey) {
-    throw new Error("Gemini API Key is missing. Check VITE_GEMINI_API_KEY in Vercel env vars.");
-  }
-
-  const ai = new GoogleGenAI({ apiKey });
+  // Per guidelines: use process.env.API_KEY directly and assume it is valid.
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const imagePart = await fileToGenerativePart(file);
 
   const locString = location 
