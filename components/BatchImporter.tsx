@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Camera, FolderOpen, Upload, X } from 'lucide-react';
+import { announce } from '../lib/accessibility';
 
 interface BatchImporterProps {
   onFilesSelected: (files: File[]) => void;
@@ -16,6 +17,7 @@ export default function BatchImporter({ onFilesSelected, isProcessing }: BatchIm
   // 1. Live Camera Capture
   const startCamera = async () => {
     try {
+      announce('Opening camera.');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
       });
@@ -43,6 +45,7 @@ export default function BatchImporter({ onFilesSelected, isProcessing }: BatchIm
     canvas.toBlob(blob => {
       if (blob) {
         const file = new File([blob], `capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        announce('Photo captured.');
         onFilesSelected([file]);
         stopCamera();
       }
@@ -56,6 +59,7 @@ export default function BatchImporter({ onFilesSelected, isProcessing }: BatchIm
     }
     if (videoRef.current) videoRef.current.srcObject = null;
     setIsCameraOpen(false);
+    announce('Camera closed.');
   };
 
   // 2. Handle file/folder selection
@@ -65,7 +69,10 @@ export default function BatchImporter({ onFilesSelected, isProcessing }: BatchIm
       file.type.startsWith('image/') || file.name.match(/\.(jpe?g|png|webp|heic)$/i)
     );
     if (imageFiles.length > 0) {
+      announce(`${imageFiles.length} files selected for processing.`);
       onFilesSelected(imageFiles);
+    } else {
+        announce('No valid image files selected.');
     }
     
     // Reset inputs
@@ -79,17 +86,18 @@ export default function BatchImporter({ onFilesSelected, isProcessing }: BatchIm
       <button
         onClick={startCamera}
         disabled={isProcessing}
+        aria-label="Take Photo with Camera"
         className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl font-medium shadow-lg disabled:opacity-50 transition-all active:scale-[0.98]"
       >
-        <Camera size={24} />
+        <Camera size={24} aria-hidden="true" />
         Take Photo with Camera
       </button>
 
       {/* Camera Preview Modal */}
       {isCameraOpen && (
-        <div className="fixed inset-0 z-50 bg-black flex flex-col animate-in fade-in duration-200">
-          <button onClick={stopCamera} className="absolute top-4 right-4 z-10 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md">
-            <X size={24} />
+        <div className="fixed inset-0 z-50 bg-black flex flex-col animate-in fade-in duration-200" role="dialog" aria-modal="true" aria-label="Camera">
+          <button onClick={stopCamera} aria-label="Close Camera" className="absolute top-4 right-4 z-10 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full backdrop-blur-md">
+            <X size={24} aria-hidden="true" />
           </button>
           <div className="flex-1 flex items-center justify-center overflow-hidden">
              <video ref={videoRef} autoPlay playsInline className="w-full h-full object-contain" />
@@ -97,6 +105,7 @@ export default function BatchImporter({ onFilesSelected, isProcessing }: BatchIm
           <div className="p-8 flex justify-center bg-black/50 backdrop-blur-sm absolute bottom-0 left-0 right-0">
              <button
                 onClick={capturePhoto}
+                aria-label="Capture Photo"
                 className="w-20 h-20 bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.5)] border-4 border-slate-200 active:scale-90 transition-transform"
                 title="Capture"
              />
@@ -106,8 +115,14 @@ export default function BatchImporter({ onFilesSelected, isProcessing }: BatchIm
 
       <div className="grid grid-cols-2 gap-4">
         {/* Single/Multiple Files */}
-        <label className="flex flex-col items-center justify-center gap-3 px-6 py-8 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl border-2 border-dashed border-slate-600 cursor-pointer transition-all group">
-          <Upload size={32} className="text-primary-400 group-hover:text-primary-300 group-hover:scale-110 transition-all" />
+        <label 
+            className="flex flex-col items-center justify-center gap-3 px-6 py-8 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl border-2 border-dashed border-slate-600 cursor-pointer transition-all group"
+            role="button"
+            aria-label="Pick files from device"
+            tabIndex={0}
+            onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
+        >
+          <Upload size={32} className="text-primary-400 group-hover:text-primary-300 group-hover:scale-110 transition-all" aria-hidden="true" />
           <span className="text-sm font-medium text-slate-300">Pick Files</span>
           <input
             ref={fileInputRef}
@@ -116,22 +131,28 @@ export default function BatchImporter({ onFilesSelected, isProcessing }: BatchIm
             accept="image/*,.heic,.heif,application/pdf"
             onChange={(e) => handleFiles(e.target.files)}
             className="hidden"
+            tabIndex={-1}
           />
         </label>
 
         {/* ENTIRE FOLDER IMPORT */}
-        <label className="flex flex-col items-center justify-center gap-3 px-6 py-8 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl border-2 border-dashed border-emerald-600/50 hover:border-emerald-500 cursor-pointer transition-all group">
-          <FolderOpen size={32} className="text-emerald-400 group-hover:text-emerald-300 group-hover:scale-110 transition-all" />
+        <label 
+            className="flex flex-col items-center justify-center gap-3 px-6 py-8 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl border-2 border-dashed border-emerald-600/50 hover:border-emerald-500 cursor-pointer transition-all group"
+            role="button"
+            aria-label="Import entire folder recursively"
+            tabIndex={0}
+            onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') folderInputRef.current?.click(); }}
+        >
+          <FolderOpen size={32} className="text-emerald-400 group-hover:text-emerald-300 group-hover:scale-110 transition-all" aria-hidden="true" />
           <span className="text-sm font-medium text-center text-slate-300">Import Folder<br /><span className="text-xs text-slate-500">(Recursive)</span></span>
           <input
             ref={folderInputRef}
             type="file"
-            // @ts-ignore - webkitdirectory is standard in modern browsers
-            webkitdirectory=""
-            directory=""
+            {...({ webkitdirectory: "", directory: "" } as any)}
             multiple
             onChange={(e) => handleFiles(e.target.files)}
             className="hidden"
+            tabIndex={-1}
           />
         </label>
       </div>
