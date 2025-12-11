@@ -34,6 +34,7 @@ import {
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem } from './types';
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
 import GraphVisualizer from './components/GraphVisualizer';
+import ContributeButton from './components/ContributeButton';
 
 // --- Helper Functions ---
 async function calculateSHA256(file: File): Promise<string> {
@@ -155,7 +156,12 @@ export default function App() {
              outcome: "SUCCESS"
           }],
           KEYWORDS_TAGS: [],
-          ACCESS_RESTRICTIONS: false
+          ACCESS_RESTRICTIONS: false,
+          // Contribution Init
+          CONTRIBUTOR_ID: null,
+          CONTRIBUTED_AT: null,
+          DATA_LICENSE: 'GEOGRAPH_CORPUS_1.0',
+          CONTRIBUTOR_NFT_MINTED: false
         }
       };
   };
@@ -631,6 +637,8 @@ export default function App() {
                                      <button onClick={() => downloadJSON(asset)} className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded border border-slate-700 transition-colors">
                                          <Download size={14} />
                                      </button>
+                                     {/* Contribute Button Integration */}
+                                     <ContributeButton asset={asset} />
                                  </div>
                              </div>
                          </div>

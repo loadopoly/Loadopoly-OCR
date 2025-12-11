@@ -95,6 +95,12 @@ export interface HistoricalDocumentMetadata {
   PRESERVATION_EVENTS: PreservationEvent[];
   KEYWORDS_TAGS: string[];
   ACCESS_RESTRICTIONS: boolean;
+
+  // Contribution Fields
+  CONTRIBUTOR_ID: string | null;
+  CONTRIBUTED_AT: string | null;
+  DATA_LICENSE: 'CC0' | 'GEOGRAPH_CORPUS_1.0' | 'CUSTOM';
+  CONTRIBUTOR_NFT_MINTED: boolean;
 }
 
 export interface DigitalAsset {
