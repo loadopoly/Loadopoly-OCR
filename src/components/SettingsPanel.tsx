@@ -1,0 +1,136 @@
+import React, { useState, useEffect } from 'react';
+import { enableAutoSync, disableAutoSync, isSyncEnabled, setScannerUrl as setEngineScannerUrl } from '../lib/syncEngine';
+import { FolderSync, Radio, CheckCircle, AlertTriangle } from 'lucide-react';
+
+export default function SettingsPanel() {
+  const [syncOn, setSyncOn] = useState(false);
+  const [scannerUrl, setScannerUrl] = useState('');
+  const [savedScannerUrl, setSavedScannerUrl] = useState('');
+
+  useEffect(() => {
+    isSyncEnabled().then(setSyncOn);
+    const storedUrl = localStorage.getItem('geograph-scanner-url');
+    if (storedUrl) {
+        setScannerUrl(storedUrl);
+        setSavedScannerUrl(storedUrl);
+    }
+  }, []);
+
+  const handleToggleSync = async () => {
+      if (syncOn) {
+          await disableAutoSync();
+          setSyncOn(false);
+      } else {
+          const success = await enableAutoSync();
+          if (success) setSyncOn(true);
+      }
+  };
+
+  const handleSaveScanner = () => {
+      setEngineScannerUrl(scannerUrl);
+      setSavedScannerUrl(scannerUrl);
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-8 p-6">
+      
+      {/* Header */}
+      <div>
+          <h2 className="text-2xl font-bold text-white mb-2">Node Settings</h2>
+          <p className="text-slate-400">Configure local integration and automation hardware.</p>
+      </div>
+
+      {/* Auto Sync Section */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <div className="flex items-start gap-4">
+            <div className={`p-3 rounded-lg ${syncOn ? 'bg-emerald-900/30 text-emerald-500' : 'bg-slate-800 text-slate-500'}`}>
+                <FolderSync size={24} />
+            </div>
+            <div className="flex-1">
+                <h3 className="text-lg font-bold text-white mb-2">Local Folder Watcher</h3>
+                <p className="text-sm text-slate-400 mb-4">
+                    Automatically ingest any image file dropped into a specific local folder (Downloads, Dropbox, etc.). 
+                    Ideal for tethered cameras or existing workflows.
+                </p>
+                
+                <button
+                    onClick={handleToggleSync}
+                    className={`px-6 py-3 rounded-lg font-bold text-sm transition-all flex items-center gap-2 ${
+                        syncOn 
+                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white' 
+                        : 'bg-slate-700 hover:bg-slate-600 text-white'
+                    }`}
+                >
+                    {syncOn ? (
+                        <>
+                           <CheckCircle size={16} /> Auto-Sync Active
+                        </>
+                    ) : (
+                        'Enable Auto-Sync'
+                    )}
+                </button>
+                
+                {syncOn && (
+                    <div className="mt-3 text-xs text-emerald-400/80 bg-emerald-950/20 p-2 rounded border border-emerald-900/50 inline-block">
+                        ● Watching for new files...
+                    </div>
+                )}
+            </div>
+        </div>
+      </div>
+
+      {/* Direct Scanner Connect */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <div className="flex items-start gap-4">
+            <div className="p-3 rounded-lg bg-purple-900/30 text-purple-500">
+                <Radio size={24} />
+            </div>
+            <div className="flex-1">
+                <h3 className="text-lg font-bold text-white mb-2">Archive Scanner Bridge</h3>
+                <p className="text-sm text-slate-400 mb-4">
+                    Poll a network-attached scanner or IoT drop folder for new digitization tasks.
+                    Supports standard JSON file listing APIs.
+                </p>
+                
+                <div className="flex gap-2 mb-2">
+                    <input
+                        type="text"
+                        placeholder="http://192.168.1.50:8080/scan-drop"
+                        value={scannerUrl}
+                        onChange={(e) => setScannerUrl(e.target.value)}
+                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white text-sm focus:border-purple-500 outline-none"
+                    />
+                    <button
+                        onClick={handleSaveScanner}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium text-sm"
+                    >
+                        Connect
+                    </button>
+                </div>
+                
+                {savedScannerUrl && (
+                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
+                        <CheckCircle size={12} className="text-purple-500" />
+                        Connected to: <span className="font-mono text-slate-400">{savedScannerUrl}</span>
+                    </div>
+                )}
+                
+                <div className="mt-4 p-3 bg-slate-950 rounded border border-slate-800 text-xs text-slate-500">
+                    <p className="font-bold mb-1 text-slate-400">Compatible Hardware:</p>
+                    <ul className="list-disc pl-4 space-y-1">
+                        <li>Fujitsu ScanSnap (via Connect)</li>
+                        <li>Epson WorkForce (Network Save)</li>
+                        <li>Canon imageFORMULA (Wireless)</li>
+                        <li>DIY Raspberry Pi Drop Server</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+      </div>
+
+      <div className="text-center text-xs text-slate-600 mt-8">
+        <p>GeoGraph Node v1.0.0 • Local-First Architecture</p>
+      </div>
+    </div>
+  );
+}
