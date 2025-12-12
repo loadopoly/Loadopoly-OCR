@@ -11,26 +11,42 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'),
+      'crypto': 'crypto-browserify',
+      'stream': 'stream-browserify',
+      'assert': 'assert',
+      'http': 'stream-http',
+      'https': 'https-browserify',
+      'os': 'os-browserify/browser',
+      'url': 'url',
+      'util': 'util',
+      'buffer': 'buffer',
+      'process': 'process/browser',
     },
+  },
+  define: {
+    'process.env': {},
+    global: 'globalThis',
   },
   build: {
     outDir: 'dist',
     rollupOptions: {
       input: 'index.html',
+      external: ['ethers'],
       output: {
         entryFileNames: 'assets/[name].[hash].js',
         chunkFileNames: 'assets/[name].[hash].js',
-        assetFileNames: 'assets/[name].[hash].[ext]'
+        assetFileNames: 'assets/[name].[hash].[ext]',
+        globals: {
+          ethers: 'ethers'
+        }
       }
     },
     assetsInlineLimit: 0,
     cssCodeSplit: false
   },
   base: '/',
-  define: {
-    global: 'globalThis'
-  },
   optimizeDeps: {
-    include: ['react', 'react-dom', 'd3', '@google/genai', '@supabase/supabase-js', 'uuid', 'ethers']
+    include: ['react', 'react-dom', 'd3', '@google/genai', '@supabase/supabase-js', 'uuid'],
+    exclude: ['ethers']
   }
 })
