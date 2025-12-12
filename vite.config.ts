@@ -34,6 +34,17 @@ export default defineConfig(({ mode }) => {
         output: {
           globals: { ethers: 'ethers' },
         },
+        onwarn(warning, warn) {
+          // Suppress "Module level directive" warnings
+          if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
+            return;
+          }
+          // Suppress warnings about unresolved external imports for ethers
+          if (warning.message.includes('ethers')) {
+            return;
+          }
+          warn(warning);
+        },
       },
       commonjsOptions: {
         transformMixedEsModules: true,
