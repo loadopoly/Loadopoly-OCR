@@ -3,6 +3,29 @@ import { GISMetadata, GraphData, TokenizationData, AssetStatus, ScanType, Taxono
 
 const GEMINI_MODEL = "gemini-2.5-flash";
 
+// Helper to safely access API Key in both Node and Browser (Vite) environments
+const getApiKey = (): string => {
+  try {
+    // Check process.env (Node/Next.js/Webpack)
+    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+      return process.env.API_KEY;
+    }
+  } catch (e) { /* ignore reference errors */ }
+
+  try {
+    // Check import.meta.env (Vite)
+    // @ts-ignore
+    if (typeof import.meta !== 'undefined' && import.meta.env) {
+      // @ts-ignore
+      if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
+      // @ts-ignore
+      if (import.meta.env.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
+    }
+  } catch (e) { /* ignore */ }
+
+  return '';
+};
+
 // Helper to convert File to Base64
 export const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {
@@ -58,14 +81,32 @@ interface ProcessResponse {
   accessibility_score?: number;
 }
 
+// Lazy initialization to avoid top-level crashes
+let aiInstance: GoogleGenAI | null = null;
+const getAiClient = () => {
+  if (!aiInstance) {
+    const key = getApiKey();
+    if (!key) {
+        console.warn("Gemini API Key is missing. Calls will fail.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey: key });
+  }
+  return aiInstance;
+};
+
 export const processImageWithGemini = async (
   file: File, 
   location: { lat: number; lng: number } | null,
   scanType: ScanType = ScanType.DOCUMENT
 ): Promise<ProcessResponse> => {
   
-  // Per guidelines: use process.env.API_KEY directly and assume it is valid.
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = getApiKey();
+  if (!apiKey) {
+      console.warn("Missing Gemini API Key. Ensure API_KEY or VITE_GEMINI_API_KEY is set.");
+      // We throw here so the UI can catch it and show an error instead of crashing silently
+      throw new Error("Missing Gemini API Key. Please configure your environment variables.");
+  }
+
   const imagePart = await fileToGenerativePart(file);
 
   const locString = location 
@@ -269,7 +310,7 @@ export const processImageWithGemini = async (
   };
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAiClient().models.generateContent({
       model: GEMINI_MODEL,
       contents: {
         role: 'user',
