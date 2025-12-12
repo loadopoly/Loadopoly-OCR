@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { enableAutoSync, disableAutoSync, isSyncEnabled, setScannerUrl as setEngineScannerUrl } from '../lib/syncEngine';
+import { enableAutoSync, disableAutoSync, isSyncEnabled, setScannerUrl as setEngineScannerUrl } from '@/lib/syncEngine';
 import { FolderSync, Radio, CheckCircle, User, LogIn } from 'lucide-react';
 import { getCurrentUser } from '../lib/auth';
 import AuthModal from './AuthModal';
