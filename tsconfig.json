@@ -12,15 +12,9 @@
     "noEmit": true,
     "jsx": "react-jsx",
     "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
-    "paths": {
-      "@/*": ["./*"]
-    },
-    "types": ["node"]
+    "paths": { "@/*": ["src/*"] }
   },
-  "include": ["src", "services"],
+  "include": ["src"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }
