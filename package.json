@@ -7,10 +7,6 @@
     "build": "vite build",
     "preview": "vite preview"
   },
-  "devDependencies": {
-    "vite": "^5.4.8",
-    "@vitejs/plugin-react": "^4.2.1"
-  },
   "dependencies": {
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -21,7 +17,11 @@
     "uuid": "^10.0.0",
     "react-force-graph-2d": "^1.25.0",
     "dexie": "^4.0.1",
-    "ethers": "^6.13.4",
+    "ethers": "^6.13.4"
+  },
+  "devDependencies": {
+    "vite": "^5.4.8",
+    "@vitejs/plugin-react": "^4.2.1",
     "crypto-browserify": "^3.12.0",
     "stream-browserify": "^3.0.0",
     "assert": "^2.1.0",
