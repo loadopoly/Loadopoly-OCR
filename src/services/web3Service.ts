@@ -1,5 +1,6 @@
-// Mock implementation to bypass ethers build issues
-// import { ethers } from 'ethers';
+
+// Mock implementation to bypass ethers build issues in Vite
+// We use direct window.ethereum calls where possible or mock the data
 
 declare global {
   interface Window {
@@ -29,7 +30,7 @@ export const connectWallet = async () => {
 };
 
 export const triggerMintShards = async (assetId: string, userId: string, walletAddress: string) => {
-    // Hit the API endpoint
+    // Hit the API endpoint which handles the private key and ethers logic server-side
     try {
         const response = await fetch('/api/mint-shards', {
             method: 'POST',
@@ -44,12 +45,12 @@ export const triggerMintShards = async (assetId: string, userId: string, walletA
 };
 
 export const checkShardBalance = async (walletAddress: string, assetId: string) => {
-    // Mock balance
+    // Mock balance for demo UI
     return Math.floor(Math.random() * 250); 
 };
 
 export const redeemPhygitalCertificate = async (assetId: string) => {
-    // Simulate complex contract interaction without ethers dependency
+    // Simulate complex contract interaction without direct ethers dependency
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Return a mock transaction hash
