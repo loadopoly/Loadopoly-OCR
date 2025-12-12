@@ -1,5 +1,5 @@
 
-import * as ethers from 'ethers';
+import { BrowserProvider, Contract, id, toBigInt } from 'ethers';
 
 // Configuration
 const DCC1_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d89A21"; // Mock address
@@ -18,7 +18,7 @@ const getProvider = () => {
     // @ts-ignore
     if (typeof window !== 'undefined' && window.ethereum) {
         // @ts-ignore
-        return new ethers.BrowserProvider(window.ethereum);
+        return new BrowserProvider(window.ethereum);
     }
     return null;
 };
@@ -37,7 +37,7 @@ export const checkShardBalance = async (walletAddress: string, assetId: string) 
     if (!provider) return 0; 
 
     try {
-        const dcc1 = new ethers.Contract(DCC1_ADDRESS, DCC1_ABI, provider);
+        const dcc1 = new Contract(DCC1_ADDRESS, DCC1_ABI, provider);
         // In real deploy, query `shards()` from DCC1 to get address
         return Math.floor(Math.random() * 250); // Mock
     } catch (e) {
@@ -55,10 +55,10 @@ export const redeemPhygitalCertificate = async (assetId: string) => {
     await provider.send("eth_requestAccounts", []);
 
     const signer = await provider.getSigner();
-    const dcc1 = new ethers.Contract(DCC1_ADDRESS, DCC1_ABI, signer);
+    const dcc1 = new Contract(DCC1_ADDRESS, DCC1_ABI, signer);
     
     // Asset ID string to BigInt hash
-    const numericAssetId = ethers.toBigInt(ethers.id(assetId));
+    const numericAssetId = toBigInt(id(assetId));
 
     // Simulate transaction for demo since we can't really call a non-existent contract on localhost
     // const tx = await dcc1.redeemForNFT(numericAssetId);
