@@ -41,6 +41,7 @@ import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, Ba
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
 import { createBundles } from './services/bundleService';
 import { initSync } from './lib/syncEngine';
+import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
 import { redeemPhygitalCertificate } from './services/web3Service';
 import GraphVisualizer from './components/GraphVisualizer';
 import ContributeButton from './components/ContributeButton';
@@ -150,10 +151,13 @@ export default function App() {
     // Initialize Auto Sync
     initSync();
 
+    // Load persisted assets
+    loadAssets().then(loadedAssets => {
+        setAssets(loadedAssets);
+    });
+
     // Listen for background file events
     const handleNewFile = (event: CustomEvent<File>) => {
-        // Automatically add to batch queue or direct ingest?
-        // Let's use direct ingest for immediate feedback, but keep it robust
         ingestFile(event.detail, "Auto-Sync");
     };
 
@@ -164,7 +168,7 @@ export default function App() {
         // @ts-ignore
         window.removeEventListener('geograph-new-file', handleNewFile);
     }
-  }, []); // Note: ingestFile dependency is omitted but safe here as ingestFile is defined below
+  }, []);
 
   // --- Bundling Effect ---
   // When assets change, re-run bundling logic
@@ -199,6 +203,7 @@ export default function App() {
       return {
         id: id,
         imageUrl: URL.createObjectURL(file),
+        imageBlob: file, // Store for persistence
         timestamp: ingestDate,
         ocrText: "",
         status: AssetStatus.PROCESSING,
@@ -340,20 +345,26 @@ export default function App() {
       // Update source if needed
       if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = source;
 
+      // Optimistically update UI
       setAssets(prev => [newAsset, ...prev]);
+      // Persist pending asset
+      await saveAsset(newAsset);
       
-      // Auto-switch to assets tab if it's a single upload or camera capture
-      // But NOT for Auto-Sync (background)
       if (source !== "Batch Folder" && source !== "Auto-Sync") {
         setActiveTab('assets');
       }
       
       const processedAsset = await processAssetPipeline(newAsset, file);
+      
+      // Update UI
       setAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+      // Persist processed asset
+      await saveAsset(processedAsset);
 
     } catch (err) {
       console.error(err);
       setAssets(prev => prev.map(a => a.status === AssetStatus.PROCESSING ? { ...a, status: AssetStatus.FAILED } : a));
+      // Optionally update failed status in DB if you want to track failures
     } finally {
       setIsProcessing(false);
     }
@@ -404,8 +415,12 @@ export default function App() {
                 const newAsset = await createInitialAsset(itemToProcess.file);
                 if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = "Batch Ingest"; 
                 setAssets(prev => [newAsset, ...prev]);
+                await saveAsset(newAsset);
+
                 const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
                 setAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+                await saveAsset(processedAsset);
+
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
              } catch (e) {
                  console.error("Batch Error", e);
@@ -445,16 +460,25 @@ export default function App() {
       try {
           const txHash = await redeemPhygitalCertificate(asset.id);
           alert(`Redemption Success! Certificate Minted.\nTx: ${txHash}`);
-          // Update local state to reflect redemption
-          setAssets(prev => prev.map(a => a.id === asset.id ? {
-              ...a, 
-              nft: { ...a.nft!, dcc1: { ...a.nft!.dcc1!, shardsCollected: 0, isRedeemable: false, certificateTokenId: 'PENDING' } }
-          } : a));
+          
+          const updatedNFT = { ...asset.nft!, dcc1: { ...asset.nft!.dcc1!, shardsCollected: 0, isRedeemable: false, certificateTokenId: 'PENDING' } };
+          const updatedAsset = { ...asset, nft: updatedNFT };
+          
+          // Update local state and DB
+          setAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
+          await saveAsset(updatedAsset);
+
       } catch(e: any) {
           alert("Redemption failed: " + e.message);
       }
   };
 
+  const deleteSingleAsset = async (id: string) => {
+      if (!window.confirm("Are you sure you want to delete this asset from the repository?")) return;
+      await deleteAsset(id);
+      setAssets(prev => prev.filter(a => a.id !== id));
+      if (selectedAssetId === id) setSelectedAssetId(null);
+  };
 
   const retryBatchItem = (itemId: string) => {
       setBatchQueue(prev => prev.map(i => i.id === itemId ? { ...i, status: 'QUEUED', progress: 0, errorMsg: undefined } : i));
@@ -803,6 +827,13 @@ export default function App() {
                                         >
                                             <Maximize2 size={14} />
                                         </button>
+                                        <button
+                                           onClick={() => deleteSingleAsset(asset.id)}
+                                           className="absolute top-2 left-2 p-1.5 bg-red-900/60 rounded text-red-200 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-900"
+                                           title="Delete from Repository"
+                                        >
+                                            <Trash2 size={14} />
+                                        </button>
                                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 pt-12">
                                             <div className="flex justify-between items-end">
                                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${asset.sqlRecord?.CONFIDENCE_SCORE && asset.sqlRecord.CONFIDENCE_SCORE > 0.8 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'}`}>
@@ -1049,9 +1080,12 @@ export default function App() {
                                        <td className="px-4 py-3 border-r border-slate-800 text-center">
                                            {rec.ACCESS_RESTRICTIONS ? <EyeOff size={12} className="text-red-500 mx-auto"/> : <Eye size={12} className="text-green-500 mx-auto"/>}
                                        </td>
-                                       <td className="px-4 py-3 text-center">
-                                          <button onClick={() => downloadJSON(asset)} className="text-primary-500 hover:text-white">
+                                       <td className="px-4 py-3 text-center flex gap-2 justify-center">
+                                          <button onClick={() => downloadJSON(asset)} className="text-primary-500 hover:text-white" title="Export JSON">
                                               <Download size={14} />
+                                          </button>
+                                          <button onClick={() => deleteSingleAsset(asset.id)} className="text-slate-600 hover:text-red-500" title="Delete">
+                                              <Trash2 size={14} />
                                           </button>
                                        </td>
                                    </tr>
