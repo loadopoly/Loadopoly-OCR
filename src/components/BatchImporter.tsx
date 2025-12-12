@@ -148,8 +148,9 @@ export default function BatchImporter({ onFilesSelected, isProcessing }: BatchIm
           <input
             ref={folderInputRef}
             type="file"
-            // @ts-ignore - webkitdirectory is standard in modern browsers
+            // @ts-ignore
             webkitdirectory=""
+            // @ts-ignore
             directory=""
             multiple
             onChange={(e) => handleFiles(e.target.files)}
