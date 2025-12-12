@@ -5,7 +5,7 @@ import { getCurrentUser } from '../lib/auth';
 import AuthModal from './AuthModal';
 import ProfileSettings from './ProfileSettings';
 
-export default function SettingsPanel() {
+export default function SettingsPanel({ onOpenPrivacy }: { onOpenPrivacy: () => void }) {
   const [syncOn, setSyncOn] = useState(false);
   const [scannerUrl, setScannerUrl] = useState('');
   const [savedScannerUrl, setSavedScannerUrl] = useState('');
@@ -151,8 +151,14 @@ export default function SettingsPanel() {
         </div>
       </div>
 
-      <div className="text-center text-xs text-slate-600 mt-8">
+      <div className="text-center text-xs text-slate-600 mt-8 pb-4 flex flex-col gap-2 items-center">
         <p>GeoGraph Node v1.1.0 • Local-First Architecture</p>
+        <button 
+          onClick={onOpenPrivacy}
+          className="text-slate-500 hover:text-slate-300 underline transition-colors"
+        >
+          Privacy Policy
+        </button>
       </div>
     </div>
   );
