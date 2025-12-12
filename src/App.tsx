@@ -51,6 +51,7 @@ import CameraCapture from './components/CameraCapture';
 import BatchImporter from './components/BatchImporter';
 import SettingsPanel from './components/SettingsPanel';
 import SmartUploadSelector from './components/SmartUploadSelector';
+import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import { announce } from './lib/accessibility';
 
 // --- Helper Functions ---
@@ -133,6 +134,9 @@ export default function App() {
   // AR State
   const arScanThrottleRef = useRef<number>(0);
   const [arStatus, setArStatus] = useState<string>('Ready');
+
+  // Privacy Policy
+  const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
 
   // Stats derivation
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
@@ -644,7 +648,7 @@ export default function App() {
 
           {/* Settings Tab */}
           {activeTab === 'settings' && (
-              <SettingsPanel />
+              <SettingsPanel onOpenPrivacy={() => setShowPrivacyPolicy(true)} />
           )}
 
           {/* Quick Processing / Batch Tab */}
@@ -1290,6 +1294,9 @@ export default function App() {
                 <img src={expandedImage} className="max-w-full max-h-full p-4 object-contain select-none" alt="Expanded Asset" />
             </div>
         )}
+
+        {/* Privacy Policy Modal */}
+        {showPrivacyPolicy && <PrivacyPolicyModal onClose={() => setShowPrivacyPolicy(false)} />}
 
       </main>
     </div>
