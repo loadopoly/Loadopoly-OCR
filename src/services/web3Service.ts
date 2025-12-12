@@ -44,15 +44,10 @@ export const connectWallet = async () => {
 export const triggerMintShards = async (assetId: string, userId: string, walletAddress: string) => {
     // Hit the API endpoint which handles the private key and ethers logic server-side
     try {
-        // Backend now expects { assetId, userAddress }
-        // We map walletAddress to userAddress
         const response = await fetch('/api/mint-shards', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                assetId, 
-                userAddress: walletAddress 
-            })
+            body: JSON.stringify({ assetId, userId, walletAddress })
         });
         return await response.json();
     } catch (e) {
