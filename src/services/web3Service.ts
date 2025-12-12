@@ -10,30 +10,29 @@ declare global {
 // Access via global or dynamic import
 let ethers: any = null;
 
-// Helper to ensure ethers is loaded
-const ensureEthers = async () => {
-    if (ethers) return ethers;
-
-    if (typeof window !== 'undefined' && window.ethers) {
-        ethers = window.ethers;
-        return ethers;
-    }
-
-    // Fallback: try dynamic import if supported (for dev envs where CDN might fail)
-    try {
+const ensureEthers = async (): Promise<any> => {
+  if (!ethers && typeof window !== 'undefined') {
+    ethers = window.ethers;
+    if (!ethers) {
+      try {
+        // Dynamic fallback via import map (no static import)
         // @ts-ignore
         const mod = await import('ethers');
-        ethers = mod;
-        return ethers;
-    } catch (e) {
-        /* ignore build time error */
+        ethers = mod.default || mod;
+        (window as any).ethers = ethers;
+      } catch (e) {
+        console.warn("Dynamic import of ethers failed", e);
+      }
     }
-
-    if (!ethers) {
-        throw new Error('Ethers library not loaded. Ensure CDN is in index.html.');
-    }
-    return ethers;
-}
+  }
+  if (!ethers) {
+     // In a real scenario, we might want to fail gracefully, but for now throw to prompt check
+     if (typeof window !== 'undefined') {
+         throw new Error('Ethers not loaded - check CDN or connection');
+     }
+  }
+  return ethers;
+};
 
 // Configuration
 const DCC1_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d89A21"; // Mock address
@@ -47,13 +46,14 @@ const DCC1_ABI = [
   "event NFTClaimed(address to, uint256 tokenId, uint256 assetId)"
 ];
 
-export const getProvider = async () => {
+// Functions with loose types (no ethers types)
+export const getProvider = async (): Promise<any> => {
   const e = await ensureEthers();
   if (!window.ethereum) throw new Error('No Ethereum wallet detected');
   return new e.BrowserProvider(window.ethereum);
 };
 
-export const connectWallet = async () => {
+export const connectWallet = async (): Promise<any> => {
   const provider = await getProvider();
   await provider.send('eth_requestAccounts', []);
   return await provider.getSigner();
@@ -99,4 +99,6 @@ export const redeemPhygitalCertificate = async (assetId: string) => {
     return "0x" + Array.from({length: 64}, () => Math.floor(Math.random()*16).toString(16)).join('');
 };
 
+// Export loose ethers for direct access if needed
+export { ethers as ethersLib };
 export default ethers;
