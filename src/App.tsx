@@ -908,6 +908,377 @@ export default function App() {
              </div>
           )}
 
+          {/* Structured Database View - HIERARCHICAL REFACTOR */}
+          {activeTab === 'database' && (
+             <div className="h-full flex flex-col gap-4">
+               {/* Controls */}
+               <div className="flex flex-col md:flex-row justify-between items-end bg-slate-900 p-4 rounded-xl border border-slate-800 gap-4">
+                   <div className="space-y-1">
+                      <h3 className="text-white font-bold flex items-center gap-2">
+                          <Database size={18} className="text-primary-500" /> Repository Master List
+                      </h3>
+                      {dbViewMode === 'GROUPS' ? (
+                          <p className="text-xs text-slate-400">Select a feature to group the repository by.</p>
+                      ) : (
+                          <p className="text-xs text-slate-400 flex items-center gap-2">
+                             <span className="text-slate-500">Group:</span> {selectedGroupKey} 
+                             <span className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300">{drillDownAssets.length} items</span>
+                          </p>
+                      )}
+                   </div>
+                   
+                   <div className="flex flex-wrap gap-4">
+                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 min-w-[240px]">
+                           <Filter size={14} className="text-primary-500" />
+                           <div className="flex-1 flex flex-col">
+                              <span className="text-[9px] text-slate-500 uppercase font-bold">Grouping Feature</span>
+                              <select 
+                                className="bg-transparent border-none text-xs text-slate-200 focus:outline-none cursor-pointer font-bold"
+                                value={groupBy}
+                                onChange={(e) => {
+                                    setGroupBy(e.target.value as any);
+                                    setDbViewMode('GROUPS');
+                                    setSelectedGroupKey(null);
+                                }}
+                              >
+                                  <option value="SOURCE">Source Collection</option>
+                                  <option value="ZONE">GIS Zone</option>
+                                  <option value="CATEGORY">NLP Category</option>
+                                  <option value="RIGHTS">Rights Statement</option>
+                              </select>
+                           </div>
+                       </div>
+                   </div>
+               </div>
+
+               {/* VIEW 1: DATASET GROUPS (FOLDERS) */}
+               {dbViewMode === 'GROUPS' && (
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-auto pb-4">
+                    {Object.entries(aggregatedGroups).map(([groupName, groupAssets]) => (
+                       <button 
+                           key={groupName} 
+                           onClick={() => { setSelectedGroupKey(groupName); setDbViewMode('DRILLDOWN'); setCurrentPage(1); }}
+                           className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-primary-500/50 hover:bg-slate-800/50 transition-all text-left group relative overflow-hidden"
+                       >
+                          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                              <FolderOpen size={64} />
+                          </div>
+                          
+                          <div className="relative z-10">
+                              <div className="flex items-center gap-2 mb-2">
+                                  <FolderOpen size={20} className="text-primary-500" />
+                                  <span className="text-xs text-slate-500 font-mono uppercase">{groupBy} Group</span>
+                              </div>
+                              <h4 className="text-lg font-bold text-white mb-4 line-clamp-2">{groupName}</h4>
+                              
+                              <div className="space-y-2 mb-4">
+                                  <div className="flex justify-between text-xs">
+                                     <span className="text-slate-400">Items</span>
+                                     <span className="text-white font-mono">{groupAssets.length}</span>
+                                  </div>
+                                  <div className="flex justify-between text-xs">
+                                     <span className="text-slate-400">Est. Tokens</span>
+                                     <span className="text-emerald-400 font-mono">
+                                        {groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0).toLocaleString()}
+                                     </span>
+                                  </div>
+                              </div>
+                          </div>
+                       </button>
+                    ))}
+                    {Object.keys(aggregatedGroups).length === 0 && (
+                        <div className="col-span-full py-20 text-center text-slate-500">
+                            No data available. Ingest assets to create groups.
+                        </div>
+                    )}
+                 </div>
+               )}
+
+               {/* VIEW 2: DRILL DOWN LIST */}
+               {dbViewMode === 'DRILLDOWN' && (
+               <>
+                 <div className="flex items-center gap-2 mb-2">
+                     <button 
+                        onClick={() => setDbViewMode('GROUPS')}
+                        className="flex items-center gap-1 text-xs text-primary-400 hover:text-white transition-colors"
+                     >
+                        <ArrowLeft size={14} /> Back to Groups
+                     </button>
+                 </div>
+
+                 <div className="flex-1 overflow-auto bg-slate-900 border border-slate-800 rounded-xl shadow-inner scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900 relative">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-950 sticky top-0 z-10 shadow-sm">
+                          <tr>
+                            {['ASSET_ID', 'DOC_TITLE', 'LOCAL_TIMESTAMP', 'OCR_TIMESTAMP', 'NLP_TIMESTAMP', 'LOCAL_GIS', 'OCR_GIS', 'NLP_GIS', 'NODES', 'CATEGORY', 'RIGHTS', 'FORMAT', 'SIZE (B)', 'FIXITY (SHA256)', 'CONFIDENCE', 'ACCESS', 'ACTION'].map(h => (
+                                <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">
+                                    {h}
+                                </th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-800">
+                           {paginatedAssets.map(asset => {
+                               const rec = asset.sqlRecord;
+                               if (!rec) return null;
+                               return (
+                                   <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
+                                       <td className="px-4 py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{rec.ASSET_ID.substring(0,8)}...</td>
+                                       <td className="px-4 py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate" title={rec.DOCUMENT_TITLE}>{rec.DOCUMENT_TITLE}</td>
+                                       <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{new Date(rec.LOCAL_TIMESTAMP).toLocaleDateString()}</td>
+                                       <td className="px-4 py-3 text-primary-400 border-r border-slate-800 whitespace-nowrap">{rec.OCR_DERIVED_TIMESTAMP || '-'}</td>
+                                       <td className="px-4 py-3 text-indigo-400 border-r border-slate-800 whitespace-nowrap">{rec.NLP_DERIVED_TIMESTAMP || '-'}</td>
+                                       <td className="px-4 py-3 text-emerald-400 border-r border-slate-800 whitespace-nowrap">{rec.LOCAL_GIS_ZONE}</td>
+                                       <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{rec.OCR_DERIVED_GIS_ZONE || '-'}</td>
+                                       <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{rec.NLP_DERIVED_GIS_ZONE || '-'}</td>
+                                       <td className="px-4 py-3 text-center border-r border-slate-800">{rec.NODE_COUNT}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap max-w-[150px] truncate">{rec.NLP_NODE_CATEGORIZATION}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap">{rec.RIGHTS_STATEMENT}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800">{rec.FILE_FORMAT}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 text-right">{rec.FILE_SIZE_BYTES.toLocaleString()}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap text-[9px] text-slate-600" title={rec.FIXITY_CHECKSUM}>{rec.FIXITY_CHECKSUM.substring(0,8)}...</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 text-center">
+                                           <span className={`px-1.5 py-0.5 rounded ${rec.CONFIDENCE_SCORE > 0.8 ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>
+                                               {(rec.CONFIDENCE_SCORE * 100).toFixed(0)}%
+                                           </span>
+                                       </td>
+                                       <td className="px-4 py-3 border-r border-slate-800 text-center">
+                                           {rec.ACCESS_RESTRICTIONS ? <EyeOff size={12} className="text-red-500 mx-auto"/> : <Eye size={12} className="text-green-500 mx-auto"/>}
+                                       </td>
+                                       <td className="px-4 py-3 text-center">
+                                          <button onClick={() => downloadJSON(asset)} className="text-primary-500 hover:text-white">
+                                              <Download size={14} />
+                                          </button>
+                                       </td>
+                                   </tr>
+                               )
+                           })}
+                        </tbody>
+                    </table>
+                 </div>
+                 
+                 {/* Pagination Controls */}
+                 <div className="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-800 text-xs text-slate-400">
+                    <div>
+                        Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, drillDownAssets.length)} of {drillDownAssets.length} entries
+                    </div>
+                    <div className="flex gap-2">
+                        <button 
+                           onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                           disabled={currentPage === 1}
+                           className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ChevronLeft size={16} />
+                        </button>
+                        <span className="flex items-center px-2 font-mono text-white">Page {currentPage} of {totalPages || 1}</span>
+                        <button 
+                           onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                           disabled={currentPage === totalPages || totalPages === 0}
+                           className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
+                 </div>
+               </>
+               )}
+             </div>
+          )}
+
+          {/* Graph Tab */}
+          {activeTab === 'graph' && (
+            <div className="flex gap-6 h-full flex-col">
+               {/* Controls */}
+               <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-white">Knowledge Graph</h3>
+                  <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
+                      <button 
+                        onClick={() => setGraphViewMode('SINGLE')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'SINGLE' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Single Asset Focus
+                      </button>
+                      <button 
+                        onClick={() => setGraphViewMode('GLOBAL')}
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'GLOBAL' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Global Corpus
+                      </button>
+                  </div>
+               </div>
+
+               {/* GLOBAL VIEW */}
+               {graphViewMode === 'GLOBAL' && (
+                  <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
+                      <div className="flex justify-between items-center mb-2">
+                         <h4 className="text-sm font-bold text-slate-400">Semantic Bundling (All Assets)</h4>
+                         <p className="text-xs text-slate-500">Clusters based on NLP Categories</p>
+                      </div>
+                      <div className="flex-1 relative">
+                          <GraphVisualizer data={getGlobalGraphData()} width={1000} height={600} />
+                      </div>
+                  </div>
+               )}
+
+               {/* SINGLE VIEW */}
+               {graphViewMode === 'SINGLE' && (
+                <div className="flex gap-6 h-full">
+                    {/* List */}
+                    <div className="w-72 flex-shrink-0 border-r border-slate-800 pr-6 overflow-y-auto">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase mb-4">Select Asset</h3>
+                        <div className="space-y-2">
+                        {assets.map(asset => (
+                            <button 
+                                key={asset.id}
+                                onClick={() => setSelectedAssetId(asset.id)}
+                                className={`w-full text-left p-3 rounded-lg border transition-all ${selectedAssetId === asset.id ? 'bg-primary-600/10 border-primary-500/50' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
+                            >
+                            <div className="flex items-center justify-between mb-2">
+                                <span className="text-xs font-mono text-slate-500">ID: {asset.id.substring(0,8)}</span>
+                                {asset.status === AssetStatus.MINTED && <CheckCircle size={12} className="text-emerald-500"/>}
+                            </div>
+                            <p className="text-xs text-slate-400 truncate font-bold">{asset.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</p>
+                            </button>
+                        ))}
+                        </div>
+                    </div>
+
+                    {/* Detail Panel */}
+                    {selectedAsset ? (
+                        <div className="flex-1 overflow-y-auto pr-2">
+                            {selectedAsset.status === AssetStatus.MINTED && (
+                                <div className="space-y-8 animate-in fade-in duration-500">
+                                    <div className="bg-slate-900 p-1 rounded-xl border border-slate-800">
+                                        <div className="p-4 border-b border-slate-800 mb-2 flex justify-between items-center">
+                                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Semantic Knowledge Graph</h3>
+                                            <span className="text-xs text-slate-500">{selectedAsset.graphData?.nodes?.length || 0} Nodes</span>
+                                        </div>
+                                        {selectedAsset.graphData && <GraphVisualizer data={selectedAsset.graphData} width={800} height={500} />}
+                                    </div>
+                                    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
+                                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Extracted Entities</h3>
+                                        <div className="flex flex-wrap gap-2">
+                                            {selectedAsset.graphData?.nodes?.map((node, i) => (
+                                                <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs ${
+                                                    node.type === 'PERSON' ? 'bg-blue-900/20 border-blue-800 text-blue-300' :
+                                                    node.type === 'LOCATION' ? 'bg-emerald-900/20 border-emerald-800 text-emerald-300' :
+                                                    'bg-slate-800 border-slate-700 text-slate-300'
+                                                }`}>
+                                                    <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
+                                                    <span className="font-bold">{node.label}</span>
+                                                    <span className="opacity-50 ml-1 text-[10px] uppercase">{node.type}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="flex-1 flex items-center justify-center text-slate-600">
+                            <p>Select an asset to view its specific graph</p>
+                        </div>
+                    )}
+                </div>
+               )}
+            </div>
+          )}
+
+          {/* Marketplace / NFT View - AGGREGATED BUNDLES */}
+          {activeTab === 'market' && (
+              <div className="max-w-6xl mx-auto">
+                  <div className="flex justify-between items-end mb-8">
+                      <div>
+                          <h2 className="text-3xl font-bold text-white mb-2">Sharded Data Bundles</h2>
+                          <p className="text-slate-400 max-w-2xl">
+                             Purchase fractional ownership of entire curated datasets. 
+                             <span className="text-primary-400 block mt-1">
+                               Dynamic Sharding: Total shard supply increases automatically as more data is added to the background database.
+                             </span>
+                          </p>
+                      </div>
+                      
+                      <div className="bg-slate-900 px-4 py-2 rounded-lg border border-slate-800 text-right">
+                          <p className="text-xs text-slate-500 uppercase">Current Grouping</p>
+                          <p className="text-lg font-bold text-white">{groupBy}</p>
+                      </div>
+                  </div>
+
+                  {/* Bundle Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {Object.entries(aggregatedGroups).map(([groupName, groupAssets]) => {
+                          const bundleSize = groupAssets.length;
+                          const totalShards = bundleSize * 1000;
+                          const bundlePriceEth = (bundleSize * 0.05).toFixed(3);
+                          const totalTokens = groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
+                          
+                          return (
+                            <div key={groupName} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-primary-500/50 transition-all flex flex-col">
+                                <div className="h-32 bg-gradient-to-br from-slate-800 to-slate-950 relative p-6 flex flex-col justify-between">
+                                    <div className="absolute top-0 right-0 p-4 opacity-10">
+                                        <Package size={80} />
+                                    </div>
+                                    <div className="relative z-10">
+                                        <div className="flex justify-between items-start">
+                                            <span className="px-2 py-1 bg-black/40 rounded text-[10px] font-mono text-slate-300 border border-white/10 uppercase tracking-wide">
+                                                {groupBy} Bundle
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-white relative z-10 truncate">{groupName}</h3>
+                                </div>
+                                
+                                <div className="p-6 flex-1 flex flex-col">
+                                    <div className="grid grid-cols-2 gap-4 mb-6">
+                                        <div>
+                                            <p className="text-[10px] text-slate-500 uppercase">Documents</p>
+                                            <p className="text-lg font-mono text-white">{bundleSize}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-500 uppercase">Total Tokens</p>
+                                            <p className="text-lg font-mono text-emerald-400">{totalTokens.toLocaleString()}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-500 uppercase">Dynamic Shards</p>
+                                            <p className="text-lg font-mono text-purple-400">{totalShards.toLocaleString()}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-[10px] text-slate-500 uppercase">Bundle Price</p>
+                                            <p className="text-lg font-mono text-amber-500">Ξ {bundlePriceEth}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-auto">
+                                        <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mb-4">
+                                            <div className="bg-gradient-to-r from-primary-500 to-purple-600 h-full w-3/4"></div>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <button className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
+                                                <Coins size={16} /> Buy Shards
+                                            </button>
+                                            <button className="px-3 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                                                <Share2 size={18} />
+                                            </button>
+                                        </div>
+                                        <p className="text-[10px] text-center text-slate-500 mt-2">
+                                            Contract updates automatically on ingest
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                          );
+                      })}
+                      
+                      {Object.keys(aggregatedGroups).length === 0 && (
+                          <div className="col-span-3 py-12 text-center text-slate-500">
+                              <AlertCircle className="mx-auto mb-2 opacity-50" size={32}/>
+                              No bundles available. Go to Quick Processing to ingest data.
+                          </div>
+                      )}
+                  </div>
+              </div>
+          )}
+
         </div>
         
         {/* Full Screen Image Modal */}

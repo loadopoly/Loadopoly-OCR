@@ -1,5 +1,5 @@
 // Mock implementation to bypass ethers build issues in Vite
-// We use direct window.ethereum calls for connection, and mocks for contract interaction.
+// We use direct window.ethereum calls where possible or mock the data
 
 declare global {
   interface Window {
@@ -29,23 +29,17 @@ export const connectWallet = async () => {
 };
 
 export const triggerMintShards = async (assetId: string, userId: string, walletAddress: string) => {
-    // In a real app, this would call the API which holds the minter key
+    // Hit the API endpoint which handles the private key and ethers logic server-side
     try {
         const response = await fetch('/api/mint-shards', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ assetId, userId, walletAddress })
         });
-        
-        // Return mock success if API isn't actually running
-        if (response.status === 404) {
-             return { success: true, txHash: "0xMockHash..." + Math.random().toString(16) };
-        }
-        
         return await response.json();
     } catch (e) {
-        console.warn("Mint API unreachable, returning mock success");
-        return { success: true, txHash: "0xMockHash..." + Math.random().toString(16) };
+        console.error("Mint API error:", e);
+        return { success: false, error: "API unreachable" };
     }
 };
 
@@ -55,7 +49,7 @@ export const checkShardBalance = async (walletAddress: string, assetId: string) 
 };
 
 export const redeemPhygitalCertificate = async (assetId: string) => {
-    // Simulate contract interaction delay
+    // Simulate complex contract interaction without direct ethers dependency
     await new Promise(resolve => setTimeout(resolve, 2000));
     
     // Return a mock transaction hash
