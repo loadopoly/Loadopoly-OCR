@@ -30,8 +30,25 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       rollupOptions: {
+        external: ['ethers'],
         input: 'index.html',
+        output: {
+          globals: {
+            ethers: 'ethers'
+          }
+        },
         onwarn(warning, warn) {
+          // Suppress "Module level directive" warnings
+          if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
+            return;
+          }
+          // Suppress warnings about unresolved external imports for ethers
+          if (warning.code === 'UNRESOLVED_IMPORT' && ((warning as any).source === 'ethers' || (warning as any).source?.startsWith('ethers/'))) {
+            return;
+          }
+          if (warning.message.includes('ethers')) {
+            return;
+          }
           warn(warning);
         },
       },
@@ -40,7 +57,8 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      include: ['react', 'react-dom', 'd3', '@google/genai', '@supabase/supabase-js', 'uuid', 'ethers'],
+      include: ['react', 'react-dom', 'd3', '@google/genai', '@supabase/supabase-js', 'uuid'],
+      exclude: ['ethers']
     },
     server: {
       port: 3000,
