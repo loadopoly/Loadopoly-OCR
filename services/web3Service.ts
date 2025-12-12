@@ -1,14 +1,6 @@
 
 // We use the UMD build of Ethers via CDN to avoid build-time resolution issues on Vercel
-// import { BrowserProvider, Contract, id, toBigInt } from 'ethers'; 
-
-// Helper to get global ethers
-const getEthers = () => {
-    // @ts-ignore
-    const e = window.ethers;
-    if (!e) throw new Error("Ethers.js not loaded. Please refresh.");
-    return e;
-};
+// No direct import to ensure Rollup doesn't try to bundle it
 
 // Configuration
 const DCC1_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d89A21"; // Mock address
@@ -22,13 +14,21 @@ const DCC1_ABI = [
   "event NFTClaimed(address to, uint256 tokenId, uint256 assetId)"
 ];
 
+// Helper to get global ethers
+const getEthers = () => {
+    // @ts-ignore
+    const e = window.ethers;
+    if (!e) throw new Error("Ethers.js not loaded. Please refresh.");
+    return e;
+};
+
 // Helper to check for wallet
 const getProvider = () => {
     // @ts-ignore
     if (typeof window !== 'undefined' && window.ethereum) {
-        const { BrowserProvider } = getEthers();
+        const ethers = getEthers();
         // @ts-ignore
-        return new BrowserProvider(window.ethereum);
+        return new ethers.BrowserProvider(window.ethereum);
     }
     return null;
 };
@@ -47,8 +47,8 @@ export const checkShardBalance = async (walletAddress: string, assetId: string) 
     if (!provider) return 0; 
 
     try {
-        const { Contract } = getEthers();
-        const dcc1 = new Contract(DCC1_ADDRESS, DCC1_ABI, provider);
+        const ethers = getEthers();
+        const dcc1 = new ethers.Contract(DCC1_ADDRESS, DCC1_ABI, provider);
         // In real deploy, query `shards()` from DCC1 to get address
         return Math.floor(Math.random() * 250); // Mock
     } catch (e) {
@@ -66,11 +66,11 @@ export const redeemPhygitalCertificate = async (assetId: string) => {
     await provider.send("eth_requestAccounts", []);
 
     const signer = await provider.getSigner();
-    const { Contract, id, toBigInt } = getEthers();
-    const dcc1 = new Contract(DCC1_ADDRESS, DCC1_ABI, signer);
+    const ethers = getEthers();
+    const dcc1 = new ethers.Contract(DCC1_ADDRESS, DCC1_ABI, signer);
     
     // Asset ID string to BigInt hash
-    const numericAssetId = toBigInt(id(assetId));
+    const numericAssetId = ethers.toBigInt(ethers.id(assetId));
 
     // Simulate transaction for demo since we can't really call a non-existent contract on localhost
     // const tx = await dcc1.redeemForNFT(numericAssetId);
