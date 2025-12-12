@@ -29,9 +29,6 @@ const ensureEthers = () => {
     return ethers;
 }
 
-// Re-export types (safe for build)
-export type { BrowserProvider, JsonRpcSigner, Wallet } from 'ethers';
-
 // Configuration
 const DCC1_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d89A21"; // Mock address
 const DCC1_ABI = [
