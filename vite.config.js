@@ -6,8 +6,20 @@ import { fileURLToPath } from 'url'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Custom plugin to force externalization of specific modules
+const externalizePlugin = () => ({
+  name: 'force-external',
+  enforce: 'pre',
+  resolveId(id) {
+    if (id === 'ethers') {
+      return { id: 'ethers', external: true }
+    }
+    return null;
+  }
+})
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [externalizePlugin(), react()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './'),
