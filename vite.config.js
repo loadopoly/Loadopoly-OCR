@@ -1,1 +1,0 @@
-// Deprecated. Use vite.config.ts
