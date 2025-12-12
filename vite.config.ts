@@ -39,10 +39,11 @@ export default defineConfig(({ mode }) => {
           if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
             return;
           }
-          // Suppress warnings about unresolved external imports for ethers
-          // Cast to any to access source property which might not exist on the type definition
-          if (warning.code === 'UNRESOLVED_IMPORT' && (warning as any).source?.includes('ethers')) {
-            return;
+          // Suppress ALL unresolved import warnings for ethers (static, type, or subpath)
+          // Using (warning as any) to avoid potential type issues with source property if types are strict
+          const source = (warning as any).source;
+          if (warning.code === 'UNRESOLVED_IMPORT' && (source === 'ethers' || source?.startsWith('ethers/'))) {
+            return;  // Ignore completely
           }
           if (warning.message.includes('ethers')) {
             return;
