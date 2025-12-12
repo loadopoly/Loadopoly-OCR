@@ -30,24 +30,8 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       rollupOptions: {
-        external: ['ethers'],
-        output: {
-          globals: { ethers: 'ethers' },
-        },
+        input: 'index.html',
         onwarn(warning, warn) {
-          // Suppress "Module level directive" warnings
-          if (warning.code === 'MODULE_LEVEL_DIRECTIVE') {
-            return;
-          }
-          // Suppress ALL unresolved import warnings for ethers (static, type, or subpath)
-          // Using (warning as any) to avoid potential type issues with source property if types are strict
-          const source = (warning as any).source;
-          if (warning.code === 'UNRESOLVED_IMPORT' && (source === 'ethers' || source?.startsWith('ethers/'))) {
-            return;  // Ignore completely
-          }
-          if (warning.message.includes('ethers')) {
-            return;
-          }
           warn(warning);
         },
       },
@@ -56,8 +40,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      include: ['react', 'react-dom', 'd3', '@google/genai', '@supabase/supabase-js', 'uuid'],
-      exclude: ['ethers'],
+      include: ['react', 'react-dom', 'd3', '@google/genai', '@supabase/supabase-js', 'uuid', 'ethers'],
     },
     server: {
       port: 3000,
