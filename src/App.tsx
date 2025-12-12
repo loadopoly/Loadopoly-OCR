@@ -40,7 +40,7 @@ import {
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG } from './types';
 import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
 import { createBundles } from './services/bundleService';
-import { initSync } from '@/lib/syncEngine';
+import { initSync } from './lib/syncEngine';
 import { redeemPhygitalCertificate } from './services/web3Service';
 import GraphVisualizer from './components/GraphVisualizer';
 import ContributeButton from './components/ContributeButton';
