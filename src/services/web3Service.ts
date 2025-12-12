@@ -1,5 +1,4 @@
 
-
 // Type declaration for global (from UMD CDN)
 declare global {
   interface Window {
