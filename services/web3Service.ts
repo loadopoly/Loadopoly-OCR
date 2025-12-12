@@ -1,5 +1,14 @@
 
-import { BrowserProvider, Contract, id, toBigInt } from 'ethers';
+// We use the UMD build of Ethers via CDN to avoid build-time resolution issues on Vercel
+// import { BrowserProvider, Contract, id, toBigInt } from 'ethers'; 
+
+// Helper to get global ethers
+const getEthers = () => {
+    // @ts-ignore
+    const e = window.ethers;
+    if (!e) throw new Error("Ethers.js not loaded. Please refresh.");
+    return e;
+};
 
 // Configuration
 const DCC1_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d89A21"; // Mock address
@@ -17,6 +26,7 @@ const DCC1_ABI = [
 const getProvider = () => {
     // @ts-ignore
     if (typeof window !== 'undefined' && window.ethereum) {
+        const { BrowserProvider } = getEthers();
         // @ts-ignore
         return new BrowserProvider(window.ethereum);
     }
@@ -37,6 +47,7 @@ export const checkShardBalance = async (walletAddress: string, assetId: string) 
     if (!provider) return 0; 
 
     try {
+        const { Contract } = getEthers();
         const dcc1 = new Contract(DCC1_ADDRESS, DCC1_ABI, provider);
         // In real deploy, query `shards()` from DCC1 to get address
         return Math.floor(Math.random() * 250); // Mock
@@ -55,6 +66,7 @@ export const redeemPhygitalCertificate = async (assetId: string) => {
     await provider.send("eth_requestAccounts", []);
 
     const signer = await provider.getSigner();
+    const { Contract, id, toBigInt } = getEthers();
     const dcc1 = new Contract(DCC1_ADDRESS, DCC1_ABI, signer);
     
     // Asset ID string to BigInt hash
