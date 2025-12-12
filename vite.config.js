@@ -1,1 +1,1 @@
-// This file is deprecated. Please use vite.config.ts
+// Deprecated. Use vite.config.ts
