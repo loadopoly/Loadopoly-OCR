@@ -7,22 +7,28 @@ declare global {
   }
 }
 
-// Access via global or dynamic import (fallback via import map)
-let ethers: typeof import('ethers') | null = null;
-
-if (typeof window !== 'undefined') {
-  // @ts-ignore
-  ethers = window.ethers;
-} else {
-  // SSR/Build fallback: prevent static import error
-  ethers = null; 
-}
+// Access via global or dynamic import
+let ethers: any = null;
 
 // Helper to ensure ethers is loaded
-const ensureEthers = () => {
-    if (!ethers && typeof window !== 'undefined') {
+const ensureEthers = async () => {
+    if (ethers) return ethers;
+
+    if (typeof window !== 'undefined' && window.ethers) {
         ethers = window.ethers;
+        return ethers;
     }
+
+    // Fallback: try dynamic import if supported (for dev envs where CDN might fail)
+    try {
+        // @ts-ignore
+        const mod = await import('ethers');
+        ethers = mod;
+        return ethers;
+    } catch (e) {
+        /* ignore build time error */
+    }
+
     if (!ethers) {
         throw new Error('Ethers library not loaded. Ensure CDN is in index.html.');
     }
@@ -41,14 +47,14 @@ const DCC1_ABI = [
   "event NFTClaimed(address to, uint256 tokenId, uint256 assetId)"
 ];
 
-export const getProvider = () => {
-  const e = ensureEthers();
+export const getProvider = async () => {
+  const e = await ensureEthers();
   if (!window.ethereum) throw new Error('No Ethereum wallet detected');
   return new e.BrowserProvider(window.ethereum);
 };
 
 export const connectWallet = async () => {
-  const provider = getProvider();
+  const provider = await getProvider();
   await provider.send('eth_requestAccounts', []);
   return await provider.getSigner();
 };
@@ -64,7 +70,7 @@ export const triggerMintShards = async (assetId: string, userId: string, walletA
 
 export const checkShardBalance = async (walletAddress: string, assetId: string) => {
     try {
-        const e = ensureEthers();
+        const e = await ensureEthers();
         if (!window.ethereum) return 0;
         
         const provider = new e.BrowserProvider(window.ethereum);
@@ -78,8 +84,8 @@ export const checkShardBalance = async (walletAddress: string, assetId: string) 
 };
 
 export const redeemPhygitalCertificate = async (assetId: string) => {
-    const e = ensureEthers();
-    const provider = getProvider();
+    const e = await ensureEthers();
+    const provider = await getProvider();
     
     await provider.send("eth_requestAccounts", []);
     const signer = await provider.getSigner();

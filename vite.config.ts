@@ -40,6 +40,7 @@ export default defineConfig(({ mode }) => {
             return;
           }
           // Suppress warnings about unresolved external imports for ethers
+          // Cast to any to access source property which might not exist on the type definition
           if (warning.code === 'UNRESOLVED_IMPORT' && (warning as any).source?.includes('ethers')) {
             return;
           }
