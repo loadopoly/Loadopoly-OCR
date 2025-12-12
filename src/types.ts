@@ -176,6 +176,7 @@ export interface HistoricalDocumentMetadata {
 export interface DigitalAsset {
   id: string;
   imageUrl: string;
+  imageBlob?: Blob; // For IndexedDB persistence
   timestamp: string;
   ocrText: string;
   location?: LocationData;

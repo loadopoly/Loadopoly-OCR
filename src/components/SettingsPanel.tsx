@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { enableAutoSync, disableAutoSync, isSyncEnabled, setScannerUrl as setEngineScannerUrl } from '../lib/syncEngine';
-import { FolderSync, Radio, CheckCircle, User, LogIn } from 'lucide-react';
+import { clearAllAssets } from '../lib/indexeddb';
+import { FolderSync, Radio, CheckCircle, User, LogIn, Trash2, AlertTriangle } from 'lucide-react';
 import { getCurrentUser } from '../lib/auth';
 import AuthModal from './AuthModal';
 import ProfileSettings from './ProfileSettings';
@@ -38,6 +39,13 @@ export default function SettingsPanel({ onOpenPrivacy }: { onOpenPrivacy: () => 
   const handleSaveScanner = () => {
       setEngineScannerUrl(scannerUrl);
       setSavedScannerUrl(scannerUrl);
+  };
+
+  const handleClearData = async () => {
+      if (window.confirm("WARNING: This will delete ALL locally stored assets and graph data. This action cannot be undone. Are you sure?")) {
+          await clearAllAssets();
+          window.location.reload();
+      }
   };
 
   return (
@@ -147,6 +155,27 @@ export default function SettingsPanel({ onOpenPrivacy }: { onOpenPrivacy: () => 
                         Connected to: <span className="font-mono text-slate-400">{savedScannerUrl}</span>
                     </div>
                 )}
+            </div>
+        </div>
+      </div>
+
+      {/* Danger Zone */}
+      <div className="bg-slate-900 border border-red-900/30 rounded-xl p-6">
+        <div className="flex items-start gap-4">
+            <div className="p-3 rounded-lg bg-red-900/20 text-red-500">
+                <AlertTriangle size={24} />
+            </div>
+            <div className="flex-1">
+                <h3 className="text-lg font-bold text-white mb-2">Repository Maintenance</h3>
+                <p className="text-sm text-slate-400 mb-4">
+                    Reset local storage and clear all indexed assets.
+                </p>
+                <button
+                    onClick={handleClearData}
+                    className="px-4 py-2 bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-900/50 rounded-lg font-medium text-sm flex items-center gap-2 transition-colors"
+                >
+                    <Trash2 size={16} /> Clear Local Repository
+                </button>
             </div>
         </div>
       </div>
