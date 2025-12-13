@@ -5,13 +5,18 @@ export const createBundles = (assets: DigitalAsset[]): (DigitalAsset | ImageBund
   const singles: DigitalAsset[] = [];
 
   assets.forEach(asset => {
-    const key = generateBundleKey(asset, assets);
-    // Only bundle if we have a valid key and decent confidence
-    if (key && asset.sqlRecord?.CONFIDENCE_SCORE && asset.sqlRecord.CONFIDENCE_SCORE > 0.6) {
-      if (!bundles[key]) bundles[key] = [];
-      bundles[key].push(asset);
-    } else {
-      singles.push(asset);
+    try {
+        const key = generateBundleKey(asset, assets);
+        // Only bundle if we have a valid key and decent confidence
+        if (key && asset.sqlRecord?.CONFIDENCE_SCORE && asset.sqlRecord.CONFIDENCE_SCORE > 0.6) {
+            if (!bundles[key]) bundles[key] = [];
+            bundles[key].push(asset);
+        } else {
+            singles.push(asset);
+        }
+    } catch (e) {
+        console.warn("Failed to generate bundle key for asset", asset.id, e);
+        singles.push(asset);
     }
   });
 
@@ -19,11 +24,17 @@ export const createBundles = (assets: DigitalAsset[]): (DigitalAsset | ImageBund
   const bundledItems: (DigitalAsset | ImageBundle)[] = [];
   
   Object.values(bundles).forEach(group => {
-    if (group.length > 1) {
-      bundledItems.push(createBundleFromGroup(group));
-    } else {
-      // If a group only has 1 item, treat it as a single asset
-      bundledItems.push(...group);
+    try {
+        if (group.length > 1) {
+            bundledItems.push(createBundleFromGroup(group));
+        } else {
+            // If a group only has 1 item, treat it as a single asset
+            bundledItems.push(...group);
+        }
+    } catch (e) {
+        console.error("Failed to create bundle from group:", group, e);
+        // Fallback: treat all items in failed bundle as singles
+        bundledItems.push(...group);
     }
   });
 
@@ -66,6 +77,8 @@ const generateBundleKey = (asset: DigitalAsset, allAssets: DigitalAsset[]): stri
 };
 
 const createBundleFromGroup = (group: DigitalAsset[]): ImageBundle => {
+  if (!group || group.length === 0) throw new Error("Empty group passed to bundle creator");
+
   const sorted = group.sort((a, b) => 
     (extractYear(a.sqlRecord?.NLP_DERIVED_TIMESTAMP) || 0) - 
     (extractYear(b.sqlRecord?.NLP_DERIVED_TIMESTAMP) || 0)
@@ -103,7 +116,10 @@ const createBundleFromGroup = (group: DigitalAsset[]): ImageBundle => {
   });
 
   // Create a combined record representing the whole bundle
-  const combinedRecord = mergeRecords(group.map(a => a.sqlRecord!).filter(r => !!r));
+  const validRecords = group.map(a => a.sqlRecord!).filter(r => !!r);
+  if (validRecords.length === 0) throw new Error("No valid SQL records in group");
+  
+  const combinedRecord = mergeRecords(validRecords);
 
   return {
     bundleId: `BUNDLE_${sorted[0].id}`,

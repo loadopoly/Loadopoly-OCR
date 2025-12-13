@@ -1,17 +1,31 @@
 import React, { useEffect, useState } from 'react';
 import { getCurrentUser, signOut } from '../lib/auth';
+import { loadAssets } from '../lib/indexeddb';
 import BluetoothScannerConnect from './BluetoothScannerConnect';
-import { User, LogOut, Settings, Shield } from 'lucide-react';
+import { User, LogOut, Settings, Shield, Coins, Layers } from 'lucide-react';
+import { AssetStatus } from '../types';
 
 export default function ProfileSettings() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({ shards: 0, contributions: 0 });
 
   useEffect(() => {
-    getCurrentUser().then(({ data }) => {
+    const init = async () => {
+        // Load User
+        const { data } = await getCurrentUser();
         setUser(data.user);
+
+        // Calculate Stats from Local DB
+        const assets = await loadAssets();
+        const totalShards = assets.reduce((sum, asset) => sum + (asset.nft?.dcc1?.shardsCollected || 0), 0);
+        // We count "contributions" as assets that have either been minted or successfully processed and saved
+        const totalContribs = assets.filter(a => a.status === AssetStatus.MINTED).length;
+
+        setStats({ shards: totalShards, contributions: totalContribs });
         setLoading(false);
-    });
+    };
+    init();
   }, []);
 
   const handleSignOut = async () => {
@@ -20,7 +34,7 @@ export default function ProfileSettings() {
       window.location.reload(); // Simple reload to reset state
   };
 
-  if (loading) return <div className="text-center py-8 text-slate-500">Loading profile...</div>;
+  if (loading) return <div className="text-center py-8 text-slate-500 animate-pulse">Loading profile data...</div>;
 
   if (!user) return <div className="text-center py-8 text-slate-400">Not logged in</div>;
 
@@ -46,13 +60,21 @@ export default function ProfileSettings() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-             <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800">
-                 <h4 className="text-sm font-bold text-slate-300 mb-1">Contributions</h4>
-                 <p className="text-2xl font-mono text-white">0</p>
+             <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800 flex items-center justify-between">
+                 <div>
+                    <h4 className="text-sm font-bold text-slate-400 mb-1 flex items-center gap-1">
+                        <Layers size={14} /> Contributions
+                    </h4>
+                    <p className="text-2xl font-mono text-white">{stats.contributions}</p>
+                 </div>
              </div>
-             <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800">
-                 <h4 className="text-sm font-bold text-slate-300 mb-1">Total Shards</h4>
-                 <p className="text-2xl font-mono text-purple-400">0</p>
+             <div className="bg-slate-950/50 p-4 rounded-lg border border-slate-800 flex items-center justify-between">
+                 <div>
+                    <h4 className="text-sm font-bold text-slate-400 mb-1 flex items-center gap-1">
+                        <Coins size={14} /> Total Shards
+                    </h4>
+                    <p className="text-2xl font-mono text-purple-400">{stats.shards.toLocaleString()}</p>
+                 </div>
              </div>
         </div>
       </div>

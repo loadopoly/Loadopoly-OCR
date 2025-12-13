@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.3.0] - 2025-01-03
+
+### Added
+- **AR Scanner Enhancements:** Improved AR tab with simulated overlays, scanning animations, and better camera integration.
+- **Shard Analytics:** User Profile settings now display total collected shards and contribution count derived from local asset data.
+- **Robust Error Handling:** Added detailed error tracking for failed ingestions; improved batch processing resilience.
+- **File Bundling Improvements:** Enhanced stability of the bundling service with better empty-group handling and try-catch blocks.
+
+## [1.2.0] - 2025-01-02
+
+### Added
+- **Smart Marketplace Deduplication:** Implemented logic to compare bundle contents against the user's local repository.
+- **Smart Filter Purchase:** Users can now purchase only the "delta" (unique items) of a bundle, filtering out assets they already own to save costs and avoid redundancy.
+- **Dynamic Database Grouping:** The Structured Database view now allows dynamic grouping by Source Collection, GIS Zone, NLP Category, and Rights Statement.
+
+### Changed
+- **Stat Card Interaction:** Dashboard stat cards are now clickable and navigate to the relevant filtered views.
+- **Marketplace UI:** Updated bundle cards to reflect ownership status and real-time token/shard calculations.
+
 ## [1.1.0] - 2025-01-01
 
 ### Added

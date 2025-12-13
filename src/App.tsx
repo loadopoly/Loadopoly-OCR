@@ -53,6 +53,7 @@ import BatchImporter from './components/BatchImporter';
 import SettingsPanel from './components/SettingsPanel';
 import SmartUploadSelector from './components/SmartUploadSelector';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
+import PurchaseModal from './components/PurchaseModal'; // Import new modal
 import { announce } from './lib/accessibility';
 
 // --- Helper Functions ---
@@ -91,8 +92,11 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
   </button>
 );
 
-const StatCard = ({ label, value, icon: Icon, color }: any) => (
-  <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
+const StatCard = ({ label, value, icon: Icon, color, onClick }: any) => (
+  <div 
+    onClick={onClick}
+    className={`bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between ${onClick ? 'cursor-pointer hover:bg-slate-800/50 hover:border-slate-700 transition-all active:scale-[0.98]' : ''}`}
+  >
     <div>
       <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">{label}</p>
       <p className="text-2xl font-bold text-white">{value}</p>
@@ -138,6 +142,10 @@ export default function App() {
   // Privacy Policy
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
 
+  // Purchasing / Marketplace State
+  const [ownedAssetIds, setOwnedAssetIds] = useState<Set<string>>(new Set());
+  const [purchaseModalData, setPurchaseModalData] = useState<{title: string, assets: DigitalAsset[]} | null>(null);
+
   // Stats derivation
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
 
@@ -154,6 +162,12 @@ export default function App() {
     loadAssets().then(loadedAssets => {
         setAssets(loadedAssets);
     });
+
+    // Load purchased assets from LocalStorage (Simulating a user wallet/portfolio database)
+    const storedPurchases = localStorage.getItem('geograph-owned-assets');
+    if (storedPurchases) {
+        setOwnedAssetIds(new Set(JSON.parse(storedPurchases)));
+    }
 
     // Listen for background file events
     const handleNewFile = (event: CustomEvent<File>) => {
@@ -194,6 +208,29 @@ export default function App() {
   const handleAssetUpdate = async (updatedAsset: DigitalAsset) => {
       setAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
       await saveAsset(updatedAsset);
+  };
+
+  // --- Purchase Logic ---
+  const handlePurchase = (purchasedItems: DigitalAsset[]) => {
+      // Add new IDs to owned set
+      const newSet = new Set(ownedAssetIds);
+      let newCount = 0;
+      purchasedItems.forEach(item => {
+          if(!newSet.has(item.id)) {
+              newSet.add(item.id);
+              newCount++;
+          }
+      });
+      
+      setOwnedAssetIds(newSet);
+      // Persist to "database" (LocalStorage for this node)
+      localStorage.setItem('geograph-owned-assets', JSON.stringify(Array.from(newSet)));
+      
+      setPurchaseModalData(null);
+      
+      const msg = `Successfully purchased ${purchasedItems.length} assets. ${newCount} new items added to your node database.`;
+      alert(msg);
+      announce(msg);
   };
 
   // --- Tab Switching Logic (AR Session Handling) ---
@@ -360,13 +397,14 @@ export default function App() {
   // Works for Single Upload, Camera Capture, and Batch processing
   const ingestFile = async (file: File, source: string = "Upload") => {
     setIsProcessing(true);
+    let newAsset: DigitalAsset | null = null;
     try {
-      const newAsset = await createInitialAsset(file);
+      newAsset = await createInitialAsset(file);
       // Update source if needed
       if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = source;
 
       // Optimistically update UI
-      setAssets(prev => [newAsset, ...prev]);
+      setAssets(prev => [newAsset!, ...prev]);
       // Persist pending asset
       await saveAsset(newAsset);
       
@@ -377,14 +415,22 @@ export default function App() {
       const processedAsset = await processAssetPipeline(newAsset, file);
       
       // Update UI
-      setAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+      setAssets(prev => prev.map(a => a.id === newAsset!.id ? processedAsset : a));
       // Persist processed asset
       await saveAsset(processedAsset);
 
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      setAssets(prev => prev.map(a => a.status === AssetStatus.PROCESSING ? { ...a, status: AssetStatus.FAILED } : a));
-      // Optionally update failed status in DB if you want to track failures
+      if (newAsset) {
+          const failedAsset: DigitalAsset = { 
+              ...newAsset, 
+              status: AssetStatus.FAILED, 
+              errorMessage: err.message || "Unknown error during processing" 
+          };
+          setAssets(prev => prev.map(a => a.id === newAsset!.id ? failedAsset : a));
+          // Persist the failure state so we know it failed later
+          await saveAsset(failedAsset);
+      }
     } finally {
       setIsProcessing(false);
     }
@@ -446,9 +492,9 @@ export default function App() {
                 await saveAsset(processedAsset);
 
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
-             } catch (e) {
+             } catch (e: any) {
                  console.error("Batch Error", e);
-                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: "Processing Failed" } : i));
+                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Processing Failed" } : i));
              } finally {
                  processNextBatchItem();
              }
@@ -626,10 +672,34 @@ export default function App() {
           {activeTab === 'dashboard' && (
             <div className="space-y-8 max-w-6xl mx-auto">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <StatCard label="Total Assets" value={assets.length} icon={FileText} color="text-blue-500" />
-                <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} icon={Network} color="text-purple-500" />
-                <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" />
-                <StatCard label="Active Bundles" value={displayItems.filter(i => 'bundleId' in i).length} icon={Package} color="text-amber-500" />
+                <StatCard 
+                    label="Total Assets" 
+                    value={assets.length} 
+                    icon={FileText} 
+                    color="text-blue-500" 
+                    onClick={() => setActiveTab('assets')}
+                />
+                <StatCard 
+                    label="Knowledge Nodes" 
+                    value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} 
+                    icon={Network} 
+                    color="text-purple-500" 
+                    onClick={() => setActiveTab('graph')}
+                />
+                <StatCard 
+                    label="Training Tokens" 
+                    value={totalTokens.toLocaleString()} 
+                    icon={Cpu} 
+                    color="text-emerald-500" 
+                    onClick={() => setActiveTab('database')}
+                />
+                <StatCard 
+                    label="Active Bundles" 
+                    value={displayItems.filter(i => 'bundleId' in i).length} 
+                    icon={Package} 
+                    color="text-amber-500" 
+                    onClick={() => setActiveTab('market')}
+                />
               </div>
 
               {assets.length === 0 ? (
@@ -663,6 +733,11 @@ export default function App() {
                                 <div>
                                     <h4 className="text-sm font-bold text-slate-200">{asset.gisMetadata?.zoneType || 'Processing...'}</h4>
                                     <p className="text-xs text-slate-400 mt-1 line-clamp-2">{asset.processingAnalysis}</p>
+                                    {asset.status === AssetStatus.FAILED && (
+                                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                            <AlertCircle size={10} /> {asset.errorMessage || 'Failed'}
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         ))}
@@ -1260,6 +1335,10 @@ export default function App() {
                           const bundlePriceEth = (bundleSize * 0.05).toFixed(3);
                           const totalTokens = groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
                           
+                          // Check ownership status for UI indication
+                          const ownedCount = groupAssets.filter(a => ownedAssetIds.has(a.id)).length;
+                          const isFullyOwned = ownedCount === bundleSize && bundleSize > 0;
+                          
                           return (
                             <div key={groupName} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-primary-500/50 transition-all flex flex-col">
                                 <div className="h-32 bg-gradient-to-br from-slate-800 to-slate-950 relative p-6 flex flex-col justify-between">
@@ -1271,6 +1350,11 @@ export default function App() {
                                             <span className="px-2 py-1 bg-black/40 rounded text-[10px] font-mono text-slate-300 border border-white/10 uppercase tracking-wide">
                                                 {groupBy} Bundle
                                             </span>
+                                            {isFullyOwned && (
+                                                <span className="flex items-center gap-1 px-2 py-1 bg-emerald-900/80 text-emerald-400 text-[10px] font-bold rounded border border-emerald-500/50">
+                                                    <CheckCircle size={12} /> Owned
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                     <h3 className="text-xl font-bold text-white relative z-10 truncate">{groupName}</h3>
@@ -1301,8 +1385,11 @@ export default function App() {
                                             <div className="bg-gradient-to-r from-primary-500 to-purple-600 h-full w-3/4"></div>
                                         </div>
                                         <div className="flex gap-2">
-                                            <button className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2">
-                                                <Coins size={16} /> Buy Shards
+                                            <button 
+                                                onClick={() => setPurchaseModalData({ title: groupName, assets: groupAssets })}
+                                                className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                                            >
+                                                <Coins size={16} /> {isFullyOwned ? 'Re-Purchase' : 'Buy Shards'}
                                             </button>
                                             <button className="px-3 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
                                                 <Share2 size={18} />
@@ -1341,6 +1428,17 @@ export default function App() {
 
         {/* Privacy Policy Modal */}
         {showPrivacyPolicy && <PrivacyPolicyModal onClose={() => setShowPrivacyPolicy(false)} />}
+
+        {/* Purchase Confirmation Modal */}
+        {purchaseModalData && (
+            <PurchaseModal 
+                bundleTitle={purchaseModalData.title}
+                assets={purchaseModalData.assets}
+                ownedAssetIds={ownedAssetIds}
+                onClose={() => setPurchaseModalData(null)}
+                onConfirm={handlePurchase}
+            />
+        )}
 
       </main>
     </div>
