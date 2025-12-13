@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.1.0-blueviolet.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.3.0-blueviolet.svg)](CHANGELOG.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -44,36 +44,38 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
 
 ### 🔍 Intelligent Scanning
 - **Gemini 2.5 Flash Integration:** Advanced OCR with timestamp, GIS zone inference, and entity extraction
-- **Multi-Mode Capture:** Documents, physical items, and scenery with optimized AI prompts
+- **Multi-Mode Capture:** Optimized extraction pipelines for **Documents**, **Physical Artifacts**, and **Scenery**.
 - **Accessibility First:** Auto-generated alt-text, reading order, and screen reader support
+- **AR Scanner (v1.3):** Real-time camera overlay simulating detection of nearby knowledge nodes and artifacts.
 
 ### 🗺️ GIS & Location
 - **Automatic Geotagging:** Capture GPS coordinates with every scan
 - **Zone Inference:** AI-powered environment classification (urban, rural, historical district, etc.)
 - **Landmark Detection:** Identify and link nearby points of interest
 
-### 🕸️ Knowledge Graphs
+### 🕸️ Knowledge Graphs & Database
+- **Dynamic Grouping:** Restructure your entire repository on the fly by **Source Collection**, **GIS Zone**, **NLP Category**, or **Rights Statement**.
 - **Entity Extraction:** People, places, organizations, dates, and concepts
 - **Relationship Mapping:** Automatically detect connections between entities
-- **Visual Explorer:** Interactive force-directed graph visualization
 - **Semantic Canvas:** 3D universe view of your entire corpus
 
-### 📦 Smart Bundling
-- **Automatic Grouping:** Cluster related images by time, location, and content
-- **Training-Ready:** Export bundles as JSONL for ML pipelines
-- **Token Counting:** Track training value of your datasets
+### 📦 Smart Bundling & Marketplace (v1.2)
+- **Automatic Clustering:** Related images are bundled by time, location, and content.
+- **Smart Deduplication:** When purchasing datasets, the node analyzes your existing holdings.
+- **Differential Pricing:** If you own part of a bundle, you are offered a "Smart Filter" price to purchase only the data you lack.
+- **Training-Ready:** Export filtered bundles as JSONL for ML pipelines.
+- **Robust Ingestion:** Improved error handling for batch processing and file ingestion.
 
-### ⛓️ Blockchain & Web3 (v1.1.0)
+### ⛓️ Blockchain & Web3
 - **Flexible Integration:** Toggle between "Web3 Enabled" (Strict Minting) and "Web3 Disabled" (Frictionless) modes.
-- **Multi-Wallet Support:** Connect via MetaMask, Coinbase Wallet, Rabby, or any EIP-1193 compatible provider.
 - **Client-Side Minting:** Direct interaction with Polygon contracts for immediate, verifiable provenance.
 - **Phygital Redemption:** Collect shards to unlock physical certificates.
+- **Shard Analytics (v1.3):** View your total collected shards and contributions directly in the User Profile.
 
 ### 🚀 High Throughput
-- **Batch Processing:** Ingest 500+ documents per hour
-- **Folder Import:** Recursive directory scanning
-- **Background Sync:** Auto-ingest from watched folders
-- **AR Scanner:** Real-time capture from camera feed
+- **Batch Processing:** Ingest 500+ documents per hour via Camera or Folder Import.
+- **Recursive Import:** Drag and drop entire folder structures for auto-ingestion.
+- **Background Sync:** Auto-ingest from watched folders.
 
 ---
 
@@ -157,7 +159,7 @@ To use the blockchain features:
 │                          ▼                                  │
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │                   IndexedDB                          │   │
-│  │  • Assets  • Graphs  • Metadata  • Sync Handles     │   │
+│  │  • Assets  • Graphs  • Metadata  • Purchasing DB    │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                          │                                  │
 │         ┌────────────────┼────────────────┐                │

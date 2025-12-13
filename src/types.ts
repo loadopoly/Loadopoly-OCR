@@ -186,6 +186,7 @@ export interface DigitalAsset {
   nft?: NFTData;
   status: AssetStatus;
   processingAnalysis?: string; // Raw LLM thoughts
+  errorMessage?: string; // Captured error during processing
   
   // The structured DB record
   sqlRecord?: HistoricalDocumentMetadata;
