@@ -133,8 +133,7 @@ export default function App() {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
 
   // AR State
-  const arScanThrottleRef = useRef<number>(0);
-  const [arStatus, setArStatus] = useState<string>('Ready');
+  const [arSessionQueue, setArSessionQueue] = useState<File[]>([]);
 
   // Privacy Policy
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
@@ -187,6 +186,25 @@ export default function App() {
         setDisplayItems([]);
     }
   }, [assets]);
+
+  // --- Tab Switching Logic (AR Session Handling) ---
+  const switchTab = async (newTab: string) => {
+      // If we are leaving the AR tab and have items in the session queue
+      if (activeTab === 'ar' && newTab !== 'ar' && arSessionQueue.length > 0) {
+          if (window.confirm(`Process ${arSessionQueue.length} items from your AR Session?`)) {
+              // Trigger batch ingest for the AR queue
+              handleBatchFiles(arSessionQueue);
+              announce(`${arSessionQueue.length} AR items sent to processing queue.`);
+              // Clear queue
+              setArSessionQueue([]);
+          } else {
+              // If user cancels, we just clear the queue or stay? 
+              // Let's assume we clear if they don't want to process.
+              setArSessionQueue([]);
+          }
+      }
+      setActiveTab(newTab);
+  };
 
   // --- Processing Logic ---
 
@@ -392,6 +410,10 @@ export default function App() {
       }));
 
       setBatchQueue(prev => [...prev, ...newQueueItems]);
+      
+      // If we came from AR, we want to jump to the Batch tab to show progress
+      setActiveTab('batch');
+      
       // Trigger processing queue
       setTimeout(() => processNextBatchItem(), 100);
   };
@@ -433,23 +455,12 @@ export default function App() {
       });
   };
 
-  const handleARFrame = async (bitmap: ImageBitmap) => {
-      // Throttle: process only every 5 seconds
-      const now = Date.now();
-      if (now - arScanThrottleRef.current < 5000) return;
-      
-      arScanThrottleRef.current = now;
-      setArStatus('Processing...');
-
-      try {
-          const file = await bitmapToFile(bitmap, `AR_Scan_${now}.jpg`);
-          ingestFile(file, "AR Live Scan");
-          setArStatus('Match Found!');
-          setTimeout(() => setArStatus('Ready'), 2000);
-      } catch (e) {
-          console.error("AR Error", e);
-          setArStatus('Error');
-      }
+  const handleARManualCapture = (file: File) => {
+    // Add file to temporary session queue
+    // Tag it so it knows it came from AR
+    (file as any).scanType = ScanType.ITEM; // Default AR to Item or contextual
+    setArSessionQueue(prev => [...prev, file]);
+    announce(`Captured image. Session total: ${arSessionQueue.length + 1}`);
   };
 
   const handlePhygitalRedeem = async (asset: DigitalAsset) => {
@@ -558,16 +569,16 @@ export default function App() {
         </div>
 
         <nav className="flex-1 space-y-1">
-          <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} />
-          <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => setActiveTab('batch')} />
-          <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => setActiveTab('ar')} />
-          <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => setActiveTab('assets')} />
-          <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => setActiveTab('graph')} />
-          <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => setActiveTab('semantic')} />
-          <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => setActiveTab('database')} />
-          <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => setActiveTab('market')} />
+          <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => switchTab('dashboard')} />
+          <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => switchTab('batch')} />
+          <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => switchTab('ar')} />
+          <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => switchTab('assets')} />
+          <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => switchTab('graph')} />
+          <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => switchTab('semantic')} />
+          <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => switchTab('database')} />
+          <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => switchTab('market')} />
           <div className="pt-4 mt-4 border-t border-slate-800">
-             <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => setActiveTab('settings')} />
+             <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => switchTab('settings')} />
           </div>
         </nav>
 
@@ -663,10 +674,7 @@ export default function App() {
           {/* AR View */}
           {activeTab === 'ar' && (
               <div className="h-full flex flex-col bg-black rounded-2xl overflow-hidden relative border border-slate-800">
-                  <ARScene onFrame={handleARFrame} />
-                  <div className="absolute top-4 right-4 bg-slate-900/80 backdrop-blur px-4 py-2 rounded-full border border-slate-700 text-white font-mono text-sm">
-                      Status: <span className={arStatus === 'Match Found!' ? 'text-emerald-400' : 'text-slate-300'}>{arStatus}</span>
-                  </div>
+                  <ARScene onCapture={handleARManualCapture} sessionCount={arSessionQueue.length} />
               </div>
           )}
 
