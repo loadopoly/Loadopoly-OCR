@@ -3,6 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
+[![Version](https://img.shields.io/badge/Version-1.1.0-blueviolet.svg)](CHANGELOG.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -62,10 +63,11 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
 - **Training-Ready:** Export bundles as JSONL for ML pipelines
 - **Token Counting:** Track training value of your datasets
 
-### ⛓️ Blockchain & NFTs
-- **Data Provenance:** Immutable record of contributions on Polygon
-- **Fractional Ownership:** Dynamic sharding based on corpus size
-- **Phygital Redemption:** Collect shards to unlock physical certificates
+### ⛓️ Blockchain & Web3 (v1.1.0)
+- **Flexible Integration:** Toggle between "Web3 Enabled" (Strict Minting) and "Web3 Disabled" (Frictionless) modes.
+- **Multi-Wallet Support:** Connect via MetaMask, Coinbase Wallet, Rabby, or any EIP-1193 compatible provider.
+- **Client-Side Minting:** Direct interaction with Polygon contracts for immediate, verifiable provenance.
+- **Phygital Redemption:** Collect shards to unlock physical certificates.
 
 ### 🚀 High Throughput
 - **Batch Processing:** Ingest 500+ documents per hour
@@ -88,7 +90,7 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
 - Node.js 18+ 
 - npm or yarn
 - Google Gemini API key
-- Supabase account (optional, for cloud sync)
+- Web3 Wallet (optional, e.g., MetaMask) for NFT features
 
 ### Installation
 
@@ -113,11 +115,6 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
    # Optional - for cloud sync and auth
    VITE_SUPABASE_URL=your_supabase_project_url
    VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-   
-   # Optional - for NFT features
-   PRIVATE_KEY=your_wallet_private_key
-   RPC_URL=https://polygon-rpc.com
-   DCC1_ADDRESS=0x...
    ```
 
 4. **Start development server**
@@ -130,22 +127,13 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
    http://localhost:3000
    ```
 
-### Building for Production
+### Web3 Configuration
 
-```bash
-npm run build
-npm run preview
-```
-
-### Deployment
-
-The app is configured for Vercel deployment:
-
-```bash
-vercel --prod
-```
-
-Or connect your GitHub repository to Vercel for automatic deployments.
+To use the blockchain features:
+1. Go to **Settings** in the app sidebar.
+2. Toggle **Web3 Integration** to "Enabled".
+3. When you click "Earn Shard" on an asset, you will be prompted to connect your wallet.
+4. The app supports **Polygon Mainnet**. It will attempt to switch your network automatically.
 
 ---
 
@@ -175,8 +163,8 @@ Or connect your GitHub repository to Vercel for automatic deployments.
 │         ┌────────────────┼────────────────┐                │
 │         ▼                ▼                ▼                │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
-│  │  Supabase   │  │  Polygon    │  │   Export    │        │
-│  │  (Optional) │  │  (Optional) │  │   JSONL     │        │
+│  │  Supabase   │  │   Polygon   │  │   Export    │        │
+│  │  (Optional) │  │   (Wallet)  │  │   JSONL     │        │
 │  └─────────────┘  └─────────────┘  └─────────────┘        │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -190,7 +178,7 @@ Or connect your GitHub repository to Vercel for automatic deployments.
 | AI/ML | Google Gemini 2.5 Flash |
 | Visualization | D3.js, react-force-graph-2d |
 | Storage | IndexedDB (Dexie), Supabase |
-| Blockchain | ethers.js, Polygon |
+| Blockchain | ethers.js v6, Polygon |
 | Auth | Supabase Auth |
 
 ---

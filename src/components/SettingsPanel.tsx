@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { enableAutoSync, disableAutoSync, isSyncEnabled, setScannerUrl as setEngineScannerUrl } from '../lib/syncEngine';
 import { clearAllAssets } from '../lib/indexeddb';
-import { FolderSync, Radio, CheckCircle, User, LogIn, Trash2, AlertTriangle } from 'lucide-react';
+import { FolderSync, Radio, CheckCircle, User, LogIn, Trash2, AlertTriangle, Wallet, Globe } from 'lucide-react';
 import { getCurrentUser } from '../lib/auth';
 import AuthModal from './AuthModal';
 import ProfileSettings from './ProfileSettings';
@@ -12,6 +12,7 @@ export default function SettingsPanel({ onOpenPrivacy }: { onOpenPrivacy: () => 
   const [savedScannerUrl, setSavedScannerUrl] = useState('');
   const [user, setUser] = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [web3Enabled, setWeb3Enabled] = useState(false);
 
   useEffect(() => {
     isSyncEnabled().then(setSyncOn);
@@ -21,6 +22,9 @@ export default function SettingsPanel({ onOpenPrivacy }: { onOpenPrivacy: () => 
         setSavedScannerUrl(storedUrl);
     }
     
+    // Check Web3 setting (default to false if not set to reduce friction, or true if previously configured)
+    setWeb3Enabled(localStorage.getItem('geograph-web3-enabled') === 'true');
+
     getCurrentUser().then(({ data }) => {
         setUser(data.user);
     });
@@ -34,6 +38,12 @@ export default function SettingsPanel({ onOpenPrivacy }: { onOpenPrivacy: () => 
           const success = await enableAutoSync();
           if (success) setSyncOn(true);
       }
+  };
+
+  const handleToggleWeb3 = () => {
+      const newState = !web3Enabled;
+      setWeb3Enabled(newState);
+      localStorage.setItem('geograph-web3-enabled', String(newState));
   };
 
   const handleSaveScanner = () => {
@@ -81,6 +91,33 @@ export default function SettingsPanel({ onOpenPrivacy }: { onOpenPrivacy: () => 
       )}
 
       {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); getCurrentUser().then(({ data }) => setUser(data.user)); }} />}
+
+      {/* Web3 / Blockchain Settings */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <div className="flex items-start gap-4">
+            <div className={`p-3 rounded-lg ${web3Enabled ? 'bg-indigo-900/30 text-indigo-500' : 'bg-slate-800 text-slate-500'}`}>
+                <Wallet size={24} />
+            </div>
+            <div className="flex-1">
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-bold text-white">Web3 Integration</h3>
+                    <button 
+                        onClick={handleToggleWeb3}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${web3Enabled ? 'bg-indigo-600' : 'bg-slate-700'}`}
+                    >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${web3Enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                </div>
+                <p className="text-sm text-slate-400 mb-2">
+                    Enable strict blockchain verification for rewards. 
+                </p>
+                <ul className="text-xs text-slate-500 space-y-1 list-disc pl-4 mb-4">
+                    <li><strong>Enabled:</strong> Requires MetaMask signature to earn shards. Mints real NFTs on Polygon.</li>
+                    <li><strong>Disabled:</strong> Earn virtual shards instantly. No wallet required. Full app functionality maintained.</li>
+                </ul>
+            </div>
+        </div>
+      </div>
 
       {/* Auto Sync Section */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
