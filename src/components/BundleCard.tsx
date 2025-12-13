@@ -6,9 +6,10 @@ import ContributeButton from './ContributeButton';
 interface BundleCardProps {
   bundle: ImageBundle;
   onClick?: () => void;
+  onAssetUpdated?: (asset: DigitalAsset) => void;
 }
 
-const BundleCard: React.FC<BundleCardProps> = ({ bundle, onClick }) => {
+const BundleCard: React.FC<BundleCardProps> = ({ bundle, onClick, onAssetUpdated }) => {
   // We adapt the bundle to look like a DigitalAsset for the contribute button
   const adaptedAsset: DigitalAsset = {
       id: bundle.bundleId,
@@ -46,7 +47,7 @@ const BundleCard: React.FC<BundleCardProps> = ({ bundle, onClick }) => {
       <div className="flex justify-between items-center mt-4">
         <span className="text-emerald-400 font-mono text-sm">{bundle.combinedTokens.toLocaleString()} tokens</span>
         <div onClick={(e) => e.stopPropagation()}>
-            <ContributeButton asset={adaptedAsset} />
+            <ContributeButton asset={adaptedAsset} onAssetUpdated={onAssetUpdated} />
         </div>
       </div>
     </div>

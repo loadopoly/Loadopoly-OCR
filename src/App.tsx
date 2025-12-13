@@ -38,7 +38,7 @@ import {
   Volume2
 } from 'lucide-react';
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG } from './types';
-import { processImageWithGemini, simulateNFTMinting } from './services/geminiService';
+import { processImageWithGemini } from './services/geminiService';
 import { createBundles } from './services/bundleService';
 import { initSync } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
@@ -173,12 +173,15 @@ export default function App() {
   // When assets change, re-run bundling logic
   useEffect(() => {
     if (assets.length > 0) {
-        // Only bundle assets that have been processed (MINTED)
-        const mintedAssets = assets.filter(a => a.status === AssetStatus.MINTED);
-        const processingAssets = assets.filter(a => a.status !== AssetStatus.MINTED);
+        // Only bundle assets that have been processed (MINTED or READY)
+        // Using "status" MINTED here loosely to mean processed by AI, 
+        // though strictly it means NFT minted. 
+        // Let's filter by if they have sqlRecord
+        const processedAssets = assets.filter(a => !!a.sqlRecord);
+        const processingAssets = assets.filter(a => !a.sqlRecord);
         
-        // Create bundles from minted assets
-        const bundles = createBundles(mintedAssets);
+        // Create bundles
+        const bundles = createBundles(processedAssets);
         
         // Combine bundles with assets that are still processing
         setDisplayItems([...processingAssets, ...bundles]);
@@ -186,6 +189,12 @@ export default function App() {
         setDisplayItems([]);
     }
   }, [assets]);
+
+  // Handle Asset Update (e.g. from Contribute Button)
+  const handleAssetUpdate = async (updatedAsset: DigitalAsset) => {
+      setAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+      await saveAsset(updatedAsset);
+  };
 
   // --- Tab Switching Logic (AR Session Handling) ---
   const switchTab = async (newTab: string) => {
@@ -305,7 +314,7 @@ export default function App() {
             RIGHTS_STATEMENT: analysis.rightsStatement,
             LANGUAGE_CODE: analysis.languageCode,
             LAST_MODIFIED: new Date().toISOString(),
-            PROCESSING_STATUS: AssetStatus.MINTED,
+            PROCESSING_STATUS: AssetStatus.MINTED, // Ready for minting/contribution
             CONFIDENCE_SCORE: analysis.confidenceScore,
             ENTITIES_EXTRACTED: analysis.graphData?.nodes ? analysis.graphData.nodes.map(n => n.label) : [],
             KEYWORDS_TAGS: analysis.keywordsTags || [],
@@ -328,28 +337,21 @@ export default function App() {
             ]
       };
 
-      const baseNFT = simulateNFTMinting(asset.id);
-      // Simulate DCC1 Data for Phygital Redemption
-      const dcc1Data = {
-          shardsCollected: Math.floor(Math.random() * 250), // Simulation: Random amount collected
-          shardsRequired: 218,
-          isRedeemable: false
-      };
-      dcc1Data.isRedeemable = dcc1Data.shardsCollected >= dcc1Data.shardsRequired;
-
       // Announce completion for accessibility
       announce(`Processed ${analysis.documentTitle}. Category: ${analysis.nlpNodeCategorization}`);
 
+      // NOTE: Removed simulation logic. Asset does NOT have NFT data yet.
+      // NFT data is added only after user clicks "Earn Shard" and mints.
+
       return {
             ...asset,
-            status: AssetStatus.MINTED,
+            status: AssetStatus.MINTED, // Using MINTED as 'Processed' here for UI compat
             ocrText: analysis.ocrText,
             gisMetadata: analysis.gisMetadata,
             graphData: analysis.graphData,
             tokenization: analysis.tokenization,
             processingAnalysis: analysis.analysis,
             location: location ? { latitude: location.lat, longitude: location.lng, accuracy: 1 } : undefined,
-            nft: { ...baseNFT, dcc1: dcc1Data },
             sqlRecord: updatedSqlRecord
       };
   };
@@ -819,7 +821,7 @@ export default function App() {
                          if ('bundleId' in item) {
                              // Render Bundle Card
                              return (
-                                 <BundleCard key={item.bundleId} bundle={item as ImageBundle} onClick={() => console.log('View bundle details')} />
+                                 <BundleCard key={item.bundleId} bundle={item as ImageBundle} onClick={() => console.log('View bundle details')} onAssetUpdated={handleAssetUpdate} />
                              );
                          } else {
                              // Render Single Asset Card
@@ -930,7 +932,7 @@ export default function App() {
                                             <button onClick={() => downloadJSON(asset)} className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded border border-slate-700 transition-colors">
                                                 <Download size={14} />
                                             </button>
-                                            <ContributeButton asset={asset} />
+                                            <ContributeButton asset={asset} onAssetUpdated={handleAssetUpdate} />
                                         </div>
                                     </div>
                                 </div>

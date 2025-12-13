@@ -362,15 +362,3 @@ export const processImageWithGemini = async (
     throw error;
   }
 };
-
-// Mock function to "Mint" an NFT
-export const simulateNFTMinting = (assetId: string): any => {
-    return {
-        contractAddress: "0x71C...9A21",
-        tokenId: `SHARD-${Math.floor(Math.random() * 10000)}`,
-        totalShards: 1000,
-        availableShards: 1000,
-        pricePerShard: 0.05,
-        ownership: [{ holder: "Deployer (You)", percentage: 100 }]
-    };
-};
