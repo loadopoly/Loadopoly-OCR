@@ -114,31 +114,36 @@ export const processImageWithGemini = async (
     : "No geolocation data available for this image. Infer location context solely from visual cues.";
 
   const prompt = `
-    You are an expert museum curator, field biologist, and professional museum access specialist writing for blind and low-vision visitors.
-    The user is scanning a real-world thing of type: ${scanType}.
+    You are an expert data extraction specialist and knowledge graph engineer.
+    The user is scanning a visual input of type: ${scanType}.
     ${locString}
+
+    **CRITICAL INSTRUCTION FOR GRAPH DATA:**
+    If the image contains names, a list, a table, a roster, or a catalog of items (e.g., Pokemon names, people, chemicals, inventory items, scientific concepts), you MUST extract **EVERY SINGLE DISTINCT ENTITY** as a separate Node in 'graphData'. 
+    - Do not summarize lists. 
+    - Create a Node for each name found (e.g. "Pikachu", "Charizard", "John Smith"). 
+    - Classify them as 'PERSON', 'CONCEPT', 'ORGANIZATION', or 'LOCATION'.
+    - Use 'CONCEPT' for fictional characters, species, or objects.
+    - Ensure the 'label' of the node is the exact name extracted.
 
     Return strict JSON matching the schema with:
     - "scan_type": "${scanType}"
-    - Full iNaturalist taxonomy if living or once-living (Kingdom -> Species).
-    - eBay/Smithsonian attributes if artifact (Material, Technique, Maker).
-    - Architectural details if building/landscape (Style, Era, Architect).
-    - Always include confidence_score (0.00–1.00).
+    - Full iNaturalist taxonomy if living or once-living.
+    - Attributes if artifact.
+    - Architectural details if building.
+    - "confidence_score" (0.00–1.00).
 
-    **Accessibility Requirements (Crucial):**
-    1. "alt_text_short": One clear sentence under 125 characters. Start with the most important object.
-    2. "alt_text_long": 3–7 sentences. Describe subject position, colors, textures, materials, emotional tone, and text content (read exactly).
-    3. "reading_order": Array of text blocks in logical reading order.
-    4. "accessibility_score": 0.00-1.00 based on clarity.
+    **Accessibility Requirements:**
+    1. "alt_text_short": <125 chars.
+    2. "alt_text_long": 3–7 sentences description.
+    3. "reading_order": Logical text blocks.
+    4. "accessibility_score": 0.00-1.00.
 
     Perform the following tasks:
-    1. **OCR & Cleaning**: Transcribe all text (RAW_OCR) and correct errors (PREPROCESS_OCR).
-    2. **Deep Metadata**:
-       - Timestamps: Specific dates (OCR) and inferred eras (NLP).
-       - GIS Zones: Visual environment and inferred region.
-       - Provenance: Creator and Rights.
-    3. **Graph & NLP**: Identify Nodes, Categorize topic, Title (Dublin Core), Description (PREMIS).
-    4. **Safety**: Flag access restrictions.
+    1. **OCR**: Transcribe text (RAW_OCR).
+    2. **Metadata**: Timestamps, GIS Zones, Provenance.
+    3. **Graph**: Identify ALL Nodes (names/entities), Categorize topic, Title, Description.
+    4. **Safety**: Flag restrictions.
   `;
 
   const schema: Schema = {

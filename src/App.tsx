@@ -580,27 +580,52 @@ export default function App() {
   const paginatedAssets = drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   const getGlobalGraphData = () => {
-      const categories = Array.from(new Set(assets.map(a => a.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized')));
-      const clusterNodes = categories.map((cat, idx) => ({
-          id: `CLUSTER_${idx}`,
-          label: cat,
-          type: 'CLUSTER' as any,
-          relevance: 1.0
-      }));
+      // 1. Document Nodes
       const docNodes = assets.map(a => ({
           id: a.id,
           label: a.sqlRecord?.DOCUMENT_TITLE || 'Untitled',
           type: 'DOCUMENT' as any,
-          relevance: 0.8
+          relevance: 1.0,
+          color: '#ffffff' // White for docs
       }));
+
+      const entityNodesMap = new Map<string, any>();
       const links: any[] = [];
-      assets.forEach(a => {
-         const catIndex = categories.indexOf(a.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized');
-         if (catIndex >= 0) {
-             links.push({ source: a.id, target: `CLUSTER_${catIndex}`, relationship: "BELONGS_TO" });
+
+      assets.forEach(asset => {
+         // Link to Category Cluster (existing logic, simplified)
+         const cat = asset.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized';
+         const catId = `CAT_${cat.replace(/\s+/g, '_')}`;
+         if (!entityNodesMap.has(catId)) {
+             entityNodesMap.set(catId, { id: catId, label: cat, type: 'CLUSTER', relevance: 0.8 });
+         }
+         links.push({ source: asset.id, target: catId, relationship: "CATEGORIZED_AS" });
+
+         // Link to Extracted Entities (New Logic)
+         if (asset.graphData?.nodes) {
+             asset.graphData.nodes.forEach(node => {
+                 // De-duplicate entities by label (simple normalization)
+                 const entityId = `ENT_${node.label.replace(/\s+/g, '_').toUpperCase()}`;
+                 
+                 if (!entityNodesMap.has(entityId)) {
+                     entityNodesMap.set(entityId, { 
+                         id: entityId, 
+                         label: node.label, 
+                         type: node.type, 
+                         relevance: node.relevance 
+                     });
+                 }
+
+                 // Create link
+                 links.push({ source: asset.id, target: entityId, relationship: "CONTAINS" });
+             });
          }
       });
-      return { nodes: [...clusterNodes, ...docNodes], links };
+
+      return { 
+          nodes: [...docNodes, ...Array.from(entityNodesMap.values())], 
+          links 
+      };
   };
 
   return (
@@ -1130,7 +1155,7 @@ export default function App() {
                     <table className="w-full text-left border-collapse">
                         <thead className="bg-slate-950 sticky top-0 z-10 shadow-sm">
                           <tr>
-                            {['ASSET_ID', 'DOC_TITLE', 'LOCAL_TIMESTAMP', 'OCR_TIMESTAMP', 'NLP_TIMESTAMP', 'LOCAL_GIS', 'OCR_GIS', 'NLP_GIS', 'NODES', 'CATEGORY', 'RIGHTS', 'FORMAT', 'SIZE (B)', 'FIXITY (SHA256)', 'CONFIDENCE', 'ACCESS', 'ACTION'].map(h => (
+                            {['ASSET_ID', 'DOC_TITLE', 'ENTITIES', 'LOCAL_TIMESTAMP', 'OCR_TIMESTAMP', 'NLP_TIMESTAMP', 'LOCAL_GIS', 'OCR_GIS', 'NLP_GIS', 'NODES', 'CATEGORY', 'RIGHTS', 'FORMAT', 'SIZE (B)', 'FIXITY (SHA256)', 'CONFIDENCE', 'ACCESS', 'ACTION'].map(h => (
                                 <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">
                                     {h}
                                 </th>
@@ -1145,6 +1170,9 @@ export default function App() {
                                    <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
                                        <td className="px-4 py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{rec.ASSET_ID.substring(0,8)}...</td>
                                        <td className="px-4 py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate" title={rec.DOCUMENT_TITLE}>{rec.DOCUMENT_TITLE}</td>
+                                       <td className="px-4 py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate" title={rec.ENTITIES_EXTRACTED.join(', ')}>
+                                          {rec.ENTITIES_EXTRACTED.slice(0, 3).join(', ')}{rec.ENTITIES_EXTRACTED.length > 3 ? '...' : ''}
+                                       </td>
                                        <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{new Date(rec.LOCAL_TIMESTAMP).toLocaleDateString()}</td>
                                        <td className="px-4 py-3 text-primary-400 border-r border-slate-800 whitespace-nowrap">{rec.OCR_DERIVED_TIMESTAMP || '-'}</td>
                                        <td className="px-4 py-3 text-indigo-400 border-r border-slate-800 whitespace-nowrap">{rec.NLP_DERIVED_TIMESTAMP || '-'}</td>
@@ -1235,7 +1263,7 @@ export default function App() {
                   <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
                       <div className="flex justify-between items-center mb-2">
                          <h4 className="text-sm font-bold text-slate-400">Semantic Bundling (All Assets)</h4>
-                         <p className="text-xs text-slate-500">Clusters based on NLP Categories</p>
+                         <p className="text-xs text-slate-500">Clusters based on NLP Categories & Extracted Entities</p>
                       </div>
                       <div className="flex-1 relative">
                           <GraphVisualizer data={getGlobalGraphData()} width={1000} height={600} />
