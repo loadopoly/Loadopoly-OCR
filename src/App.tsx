@@ -544,6 +544,11 @@ export default function App() {
       processNextBatchItem();
   };
 
+  const retryAllErrors = () => {
+    setBatchQueue(prev => prev.map(i => i.status === 'ERROR' ? { ...i, status: 'QUEUED', progress: 0, errorMsg: undefined } : i));
+    setTimeout(() => processNextBatchItem(), 100);
+  };
+
   const removeBatchItem = (itemId: string) => {
       setBatchQueue(prev => prev.filter(i => i.id !== itemId));
   };
@@ -601,7 +606,7 @@ export default function App() {
          }
          links.push({ source: asset.id, target: catId, relationship: "CATEGORIZED_AS" });
 
-         // Link to Extracted Entities (New Logic)
+         // Link to Extracted Entities (New Logic - Ensure individual list items are nodes)
          if (asset.graphData?.nodes) {
              asset.graphData.nodes.forEach(node => {
                  // De-duplicate entities by label (simple normalization)
@@ -833,11 +838,18 @@ export default function App() {
                     <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
                         <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
                             <h4 className="text-xs font-bold text-slate-400 uppercase">Processing Queue</h4>
-                            {batchQueue.length > 0 && (
-                                <button onClick={() => setBatchQueue([])} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1">
-                                    <Trash2 size={12} /> Clear All
+                            <div className="flex gap-2">
+                              {batchQueue.some(i => i.status === 'ERROR') && (
+                                <button onClick={retryAllErrors} className="text-xs text-primary-500 hover:text-primary-400 flex items-center gap-1 bg-primary-900/20 px-2 py-1 rounded border border-primary-900/50">
+                                    <RefreshCw size={12} /> Retry Errors
                                 </button>
-                            )}
+                              )}
+                              {batchQueue.length > 0 && (
+                                  <button onClick={() => setBatchQueue([])} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1 px-2 py-1">
+                                      <Trash2 size={12} /> Clear All
+                                  </button>
+                              )}
+                            </div>
                         </div>
                         <div className="flex-1 overflow-auto">
                             <table className="w-full text-left border-collapse">

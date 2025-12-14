@@ -118,13 +118,15 @@ export const processImageWithGemini = async (
     The user is scanning a visual input of type: ${scanType}.
     ${locString}
 
-    **CRITICAL INSTRUCTION FOR GRAPH DATA:**
-    If the image contains names, a list, a table, a roster, or a catalog of items (e.g., Pokemon names, people, chemicals, inventory items, scientific concepts), you MUST extract **EVERY SINGLE DISTINCT ENTITY** as a separate Node in 'graphData'. 
-    - Do not summarize lists. 
-    - Create a Node for each name found (e.g. "Pikachu", "Charizard", "John Smith"). 
-    - Classify them as 'PERSON', 'CONCEPT', 'ORGANIZATION', or 'LOCATION'.
-    - Use 'CONCEPT' for fictional characters, species, or objects.
-    - Ensure the 'label' of the node is the exact name extracted.
+    **CRITICAL GRAPH EXTRACTION RULES:**
+    1. **List/Table Extraction**: If the image contains a list, table, roster, or catalog of items (e.g., Pokemon names, chemical elements, inventory parts, attendee list), you MUST extract **EVERY SINGLE ITEM** as a separate Node in the 'graphData.nodes' array.
+    2. **No Summaries**: Do not just say "List of Pokemon". Create a specific node for "Pikachu", "Charizard", etc.
+    3. **Node Types**: 
+       - Use 'CONCEPT' for fictional characters, scientific terms, or objects.
+       - Use 'PERSON' for human names.
+       - Use 'ORGANIZATION' for companies or groups.
+       - Use 'LOCATION' for places.
+    4. **Relationships**: Link these item nodes to the main document node or a central concept node (e.g., "Pikachu" -> "TYPE_OF" -> "Pokemon").
 
     Return strict JSON matching the schema with:
     - "scan_type": "${scanType}"
