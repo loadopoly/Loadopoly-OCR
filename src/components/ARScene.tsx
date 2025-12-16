@@ -1,12 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Zap, ScanLine, MapPin } from 'lucide-react';
+import { Camera, Zap, ScanLine, MapPin, ArrowRight, Layers } from 'lucide-react';
 
 interface ARSceneProps {
   onCapture: (file: File) => void;
+  onFinishSession?: () => void;
   sessionCount: number;
 }
 
-export default function ARScene({ onCapture, sessionCount }: ARSceneProps) {
+export default function ARScene({ onCapture, onFinishSession, sessionCount }: ARSceneProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [flash, setFlash] = useState(false);
   const [scanning, setScanning] = useState(true);
@@ -106,12 +107,22 @@ export default function ARScene({ onCapture, sessionCount }: ARSceneProps) {
          </p>
       </div>
 
-      {/* Session Counter Badge */}
-      <div className="absolute top-6 right-6 pointer-events-none z-10">
-          <div className="bg-primary-600/90 text-white px-4 py-2 rounded-full font-mono text-sm border border-primary-400/50 shadow-lg flex items-center gap-2">
+      {/* Session Counter & Process Button */}
+      <div className="absolute top-6 right-6 z-20 flex flex-col gap-3 items-end">
+          <div className="bg-primary-600/90 text-white px-4 py-2 rounded-full font-mono text-sm border border-primary-400/50 shadow-lg flex items-center gap-2 pointer-events-none">
               <Zap size={14} className="text-yellow-300" />
               <span>Collected: {sessionCount}</span>
           </div>
+          
+          {sessionCount > 0 && onFinishSession && (
+              <button 
+                onClick={onFinishSession}
+                className="bg-white/90 hover:bg-white text-primary-700 px-4 py-2 rounded-full font-bold text-sm shadow-xl flex items-center gap-2 animate-in slide-in-from-right-10 transition-transform active:scale-95"
+              >
+                 <span>Process Session</span>
+                 <ArrowRight size={16} />
+              </button>
+          )}
       </div>
 
       {/* Shutter Controls */}

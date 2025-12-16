@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Camera, 
   Map, 
@@ -238,18 +238,19 @@ export default function App() {
       // If we are leaving the AR tab and have items in the session queue
       if (activeTab === 'ar' && newTab !== 'ar' && arSessionQueue.length > 0) {
           if (window.confirm(`Process ${arSessionQueue.length} items from your AR Session?`)) {
-              // Trigger batch ingest for the AR queue
-              handleBatchFiles(arSessionQueue);
-              announce(`${arSessionQueue.length} AR items sent to processing queue.`);
-              // Clear queue
-              setArSessionQueue([]);
+              processArSession();
           } else {
-              // If user cancels, we just clear the queue or stay? 
-              // Let's assume we clear if they don't want to process.
               setArSessionQueue([]);
           }
       }
       setActiveTab(newTab);
+  };
+
+  const processArSession = () => {
+      if (arSessionQueue.length === 0) return;
+      handleBatchFiles(arSessionQueue);
+      announce(`${arSessionQueue.length} AR items sent to processing queue.`);
+      setArSessionQueue([]);
   };
 
   // --- Processing Logic ---
@@ -584,7 +585,8 @@ export default function App() {
   const totalPages = Math.ceil(drillDownAssets.length / ITEMS_PER_PAGE);
   const paginatedAssets = drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  const getGlobalGraphData = () => {
+  // MEMOIZED: Prevent infinite re-renders/blanks in D3
+  const globalGraphData = useMemo(() => {
       // 1. Document Nodes
       const docNodes = assets.map(a => ({
           id: a.id,
@@ -606,7 +608,7 @@ export default function App() {
          }
          links.push({ source: asset.id, target: catId, relationship: "CATEGORIZED_AS" });
 
-         // Link to Extracted Entities (New Logic - Ensure individual list items are nodes)
+         // Link to Extracted Entities
          if (asset.graphData?.nodes) {
              asset.graphData.nodes.forEach(node => {
                  // De-duplicate entities by label (simple normalization)
@@ -631,7 +633,7 @@ export default function App() {
           nodes: [...docNodes, ...Array.from(entityNodesMap.values())], 
           links 
       };
-  };
+  }, [assets]); // Only recompute when assets array changes
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30">
@@ -781,7 +783,7 @@ export default function App() {
           {/* AR View */}
           {activeTab === 'ar' && (
               <div className="h-full flex flex-col bg-black rounded-2xl overflow-hidden relative border border-slate-800">
-                  <ARScene onCapture={handleARManualCapture} sessionCount={arSessionQueue.length} />
+                  <ARScene onCapture={handleARManualCapture} onFinishSession={processArSession} sessionCount={arSessionQueue.length} />
               </div>
           )}
 
@@ -1278,7 +1280,7 @@ export default function App() {
                          <p className="text-xs text-slate-500">Clusters based on NLP Categories & Extracted Entities</p>
                       </div>
                       <div className="flex-1 relative">
-                          <GraphVisualizer data={getGlobalGraphData()} width={1000} height={600} />
+                          <GraphVisualizer data={globalGraphData} width={1000} height={600} />
                       </div>
                   </div>
                )}
