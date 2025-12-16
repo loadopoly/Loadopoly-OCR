@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.0] - 2025-01-05
+
+### Added
+- **Admin Broadcast Console:** Enabled administrators (and Master View users) to broadcast data to the network as "Public Airdrops".
+- **Community Airdrops:** The Marketplace now features a dedicated section for "Community Airdrops (Free)", allowing all nodes to sync broadcasted data without cost.
+- **CC0 Licensing Pipeline:** Ingestion pipeline updated to support explicit `CC0` (Public Domain) licensing triggers during broadcast events.
+- **Smart Claim Logic:** The Purchase Modal now detects free items, bypassing cost calculations and enabling a "Smart Sync" flow for public data.
+
 ## [1.4.0] - 2025-01-04
 
 ### Added

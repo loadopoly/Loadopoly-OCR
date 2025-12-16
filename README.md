@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.4.0-blueviolet.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.5.0-blueviolet.svg)](CHANGELOG.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -61,7 +61,7 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
 - **Global Corpus View (v1.4):** Access the master database of all contributed assets from across the network directly within the node.
 
 ### 📦 Smart Bundling & Marketplace (v1.2)
-- **Automatic Clustering:** Related images are bundled by time, location, and content.
+- **Community Airdrops (v1.5):** Admins can broadcast specific datasets as free, public-domain drops for all nodes to claim and sync.
 - **Smart Deduplication:** When purchasing datasets, the node analyzes your existing holdings.
 - **Differential Pricing:** If you own part of a bundle, you are offered a "Smart Filter" price to purchase only the data you lack.
 - **Training-Ready:** Export filtered bundles as JSONL for ML pipelines.
@@ -197,6 +197,7 @@ GeoGraph Node uses a **multi-license model** designed to maximize both openness 
 |-----------|---------|---------|
 | **Source Code** | [MIT](LICENSE) | Fork, modify, sell — do whatever |
 | **Individual Contributions** | [CC0](DATA-LICENSE.md) | Public domain forever |
+| **Community Airdrops** | [CC0](DATA-LICENSE.md) | Free public domain datasets broadcast by admins |
 | **Curated Datasets** | [Commercial](COMMERCIAL-LICENSE.md) | License required for LLM training |
 
 ### Summary

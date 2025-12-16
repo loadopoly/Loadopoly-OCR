@@ -75,7 +75,8 @@ export const fetchGlobalCorpus = async (): Promise<DigitalAsset[]> => {
 
 export const contributeAssetToGlobalCorpus = async (
   asset: DigitalAsset,
-  contributorId?: string
+  contributorId?: string,
+  licenseType: 'GEOGRAPH_CORPUS_1.0' | 'CC0' = 'GEOGRAPH_CORPUS_1.0'
 ) => {
   // If no ID provided, treat as anonymous contribution
   const finalContributorId = contributorId || `anon_${uuidv4()}`;
@@ -120,7 +121,7 @@ export const contributeAssetToGlobalCorpus = async (
         ...asset.sqlRecord,
         CONTRIBUTOR_ID: finalContributorId,
         CONTRIBUTED_AT: new Date().toISOString(),
-        DATA_LICENSE: 'GEOGRAPH_CORPUS_1.0',
+        DATA_LICENSE: licenseType, // Apply the selected license (CC0 for admin broadcast)
         CONTRIBUTOR_NFT_MINTED: false,
         original_image_url: publicUrlData.publicUrl,
         // We don't store the raw blob in the DB row, just the URL
