@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.3.0-blueviolet.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.4.0-blueviolet.svg)](CHANGELOG.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -58,6 +58,7 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
 - **Entity Extraction:** People, places, organizations, dates, and concepts
 - **Relationship Mapping:** Automatically detect connections between entities
 - **Semantic Canvas:** 3D universe view of your entire corpus
+- **Global Corpus View (v1.4):** Access the master database of all contributed assets from across the network directly within the node.
 
 ### 📦 Smart Bundling & Marketplace (v1.2)
 - **Automatic Clustering:** Related images are bundled by time, location, and content.
@@ -72,10 +73,11 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
 - **Phygital Redemption:** Collect shards to unlock physical certificates.
 - **Shard Analytics (v1.3):** View your total collected shards and contributions directly in the User Profile.
 
-### 🚀 High Throughput
+### 🚀 High Throughput & Sync
+- **Universal Ingestion (v1.4):** Hybrid architecture automatically syncs local processing to the global cloud corpus.
+- **Anonymous Contribution:** Contribute data without an account using session-based UUIDs.
 - **Batch Processing:** Ingest 500+ documents per hour via Camera or Folder Import.
 - **Recursive Import:** Drag and drop entire folder structures for auto-ingestion.
-- **Background Sync:** Auto-ingest from watched folders.
 
 ---
 
@@ -141,7 +143,9 @@ To use the blockchain features:
 
 ## Architecture
 
-### Local-First Design
+### Hybrid Local/Cloud Design (v1.4)
+
+GeoGraph Node now operates on a hybrid model to ensure data persistence while maintaining local-first speed.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -160,13 +164,13 @@ To use the blockchain features:
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │                   IndexedDB                          │   │
 │  │  • Assets  • Graphs  • Metadata  • Purchasing DB    │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                          │                                  │
-│         ┌────────────────┼────────────────┐                │
+│  └──────────────────┬──────────────────────────────────┘   │
+│                     │ (Auto Sync)                          │
+│         ┌───────────▼────┼────────────────┐                │
 │         ▼                ▼                ▼                │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐        │
 │  │  Supabase   │  │   Polygon   │  │   Export    │        │
-│  │  (Optional) │  │   (Wallet)  │  │   JSONL     │        │
+│  │ (Global DB) │  │   (Wallet)  │  │   JSONL     │        │
 │  └─────────────┘  └─────────────┘  └─────────────┘        │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -210,10 +214,10 @@ Contact licensing@geograph.foundation for commercial licensing.
 
 We take privacy seriously. Key points:
 
-- **Local-first:** Processing happens on your device by default
-- **Opt-in sharing:** Data only leaves your device when you explicitly contribute
-- **Transparent AI:** We disclose all third-party AI services used
-- **Your data, your control:** Export or delete your data anytime
+- **Local-first Processing:** AI extraction happens via API but data structure is built locally.
+- **Global Contribution:** In v1.4+, processed assets are automatically contributed to the global corpus to ensure data persistence during the beta testing phase.
+- **Transparent AI:** We disclose all third-party AI services used.
+- **Your data, your control:** Export or delete your data anytime.
 
 Read our full [Privacy Policy](PRIVACY-POLICY.md).
 
@@ -233,7 +237,7 @@ We welcome contributions! Here's how to help:
 
 ### Data Contributions
 
-Use the app to scan documents and click "Earn Shard" to contribute to the GeoGraph Corpus. All contributions are CC0 (public domain).
+Use the app to scan documents. All scans are automatically contributed to the GeoGraph Corpus under CC0 (public domain) to help build the dataset.
 
 ### Bug Reports
 

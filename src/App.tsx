@@ -46,7 +46,7 @@ import { initSync } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
 import { redeemPhygitalCertificate } from './services/web3Service';
 import { getCurrentUser } from './lib/auth';
-import { fetchGlobalCorpus } from './services/supabaseService';
+import { fetchGlobalCorpus, contributeAssetToGlobalCorpus } from './services/supabaseService';
 import GraphVisualizer from './components/GraphVisualizer';
 import ContributeButton from './components/ContributeButton';
 import BundleCard from './components/BundleCard';
@@ -175,8 +175,6 @@ export default function App() {
     getCurrentUser().then(({ data }) => {
         if(data.user) {
             setUser(data.user);
-            // Simple Admin Check: For demo, anyone logged in is an "Admin" capable of seeing the Master View.
-            // In production, check data.user.email?.endsWith('@geograph.foundation') or metadata.
             setIsAdmin(true); 
         }
     });
@@ -459,10 +457,17 @@ export default function App() {
       
       const processedAsset = await processAssetPipeline(newAsset, file);
       
-      // Update UI
+      // Update UI (Local)
       setLocalAssets(prev => prev.map(a => a.id === newAsset!.id ? processedAsset : a));
-      // Persist processed asset
+      // Persist processed asset (Local)
       await saveAsset(processedAsset);
+
+      // AUTOMATIC GLOBAL CONTRIBUTION (Background)
+      // This ensures all data goes to Supabase, even if not logged in.
+      // If user is null, service will generate anonymous UUID.
+      contributeAssetToGlobalCorpus(processedAsset, user?.id).catch(err => {
+          console.error("Background contribution failed:", err);
+      });
 
     } catch (err: any) {
       console.error(err);
@@ -535,6 +540,9 @@ export default function App() {
                 const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
                 setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
                 await saveAsset(processedAsset);
+
+                // Auto-contribute batch items too
+                await contributeAssetToGlobalCorpus(processedAsset, user?.id);
 
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
              } catch (e: any) {
@@ -705,40 +713,38 @@ export default function App() {
           </div>
         </nav>
 
-        {/* Admin Mode Toggle (Bottom Sidebar) */}
-        {isAdmin && (
-            <div className="p-4 border-t border-slate-800">
-                <div className={`p-3 rounded-xl border transition-all ${isGlobalView ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-900 border-slate-800'}`}>
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold uppercase text-slate-400">View Mode</span>
-                        <div className="flex items-center gap-1">
-                            {isGlobalView && <Globe size={12} className="text-indigo-400" />}
-                            {isGlobalView ? <span className="text-[10px] text-indigo-400 font-bold">GLOBAL</span> : <span className="text-[10px] text-slate-500">LOCAL</span>}
-                        </div>
+        {/* Global/Local View Toggle (Visible to ALL users for testing) */}
+        <div className="p-4 border-t border-slate-800">
+            <div className={`p-3 rounded-xl border transition-all ${isGlobalView ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-900 border-slate-800'}`}>
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold uppercase text-slate-400">View Mode</span>
+                    <div className="flex items-center gap-1">
+                        {isGlobalView && <Globe size={12} className="text-indigo-400" />}
+                        {isGlobalView ? <span className="text-[10px] text-indigo-400 font-bold">GLOBAL</span> : <span className="text-[10px] text-slate-500">LOCAL</span>}
                     </div>
-                    
-                    <button 
-                        onClick={() => setIsGlobalView(!isGlobalView)}
-                        className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${
-                            isGlobalView 
-                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50' 
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
-                        }`}
-                    >
-                        {isGlobalView ? (
-                            <>Switch to Local <Lock size={12}/></>
-                        ) : (
-                            <>Switch to Master <Globe size={12}/></>
-                        )}
-                    </button>
-                    {isGlobalView && (
-                        <p className="text-[10px] text-indigo-300 mt-2 text-center">
-                            Viewing Entire Corpus
-                        </p>
-                    )}
                 </div>
+                
+                <button 
+                    onClick={() => setIsGlobalView(!isGlobalView)}
+                    className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${
+                        isGlobalView 
+                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50' 
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+                    }`}
+                >
+                    {isGlobalView ? (
+                        <>Switch to Local <Lock size={12}/></>
+                    ) : (
+                        <>Switch to Master <Globe size={12}/></>
+                    )}
+                </button>
+                {isGlobalView && (
+                    <p className="text-[10px] text-indigo-300 mt-2 text-center">
+                        Viewing Entire Corpus
+                    </p>
+                )}
             </div>
-        )}
+        </div>
 
         <div className="p-4 border-t border-slate-800">
            <div className="bg-slate-800/50 rounded p-3 text-xs text-slate-400">
