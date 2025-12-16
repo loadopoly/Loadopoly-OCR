@@ -37,7 +37,8 @@ import {
   Gift,
   Volume2,
   Globe,
-  Lock
+  Lock,
+  Radio
 } from 'lucide-react';
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG, GraphData, GraphNode } from './types';
 import { processImageWithGemini } from './services/geminiService';
@@ -148,6 +149,7 @@ export default function App() {
   // Batch Processing State
   const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
   const [selectedScanType, setSelectedScanType] = useState<ScanType | null>(null);
+  const [isPublicBroadcast, setIsPublicBroadcast] = useState(false); // Admin toggle for free airdrops
 
   // Asset View State
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
@@ -270,7 +272,7 @@ export default function App() {
       
       setPurchaseModalData(null);
       
-      const msg = `Successfully purchased ${purchasedItems.length} assets. ${newCount} new items added to your node database.`;
+      const msg = `Successfully added ${purchasedItems.length} assets to your node. ${newCount} new items detected.`;
       alert(msg);
       announce(msg);
   };
@@ -354,7 +356,8 @@ export default function App() {
           scan_type: scanType, // From selector
           CONTRIBUTOR_ID: null,
           CONTRIBUTED_AT: null,
-          DATA_LICENSE: 'GEOGRAPH_CORPUS_1.0',
+          // Apply Public Domain License if Broadcast Mode is active
+          DATA_LICENSE: isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0', 
           CONTRIBUTOR_NFT_MINTED: false
         }
       };
@@ -465,7 +468,9 @@ export default function App() {
       // AUTOMATIC GLOBAL CONTRIBUTION (Background)
       // This ensures all data goes to Supabase, even if not logged in.
       // If user is null, service will generate anonymous UUID.
-      contributeAssetToGlobalCorpus(processedAsset, user?.id).catch(err => {
+      // PASS LICENSE TYPE: If Broadcast toggle is on, pass 'CC0'
+      const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+      contributeAssetToGlobalCorpus(processedAsset, user?.id, license).catch(err => {
           console.error("Background contribution failed:", err);
       });
 
@@ -542,7 +547,9 @@ export default function App() {
                 await saveAsset(processedAsset);
 
                 // Auto-contribute batch items too
-                await contributeAssetToGlobalCorpus(processedAsset, user?.id);
+                // PASS LICENSE TYPE: If Broadcast toggle is on, pass 'CC0'
+                const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+                await contributeAssetToGlobalCorpus(processedAsset, user?.id, license);
 
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
              } catch (e: any) {
@@ -897,10 +904,71 @@ export default function App() {
              <div className="max-w-6xl mx-auto h-full flex flex-col">
                 {isGlobalView ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
-                        <Lock size={48} className="mb-4 opacity-50" />
-                        <h3 className="text-xl font-bold text-white mb-2">Ingestion Locked</h3>
-                        <p>Switch to Local Mode to ingest new assets.</p>
-                        <button onClick={() => setIsGlobalView(false)} className="mt-4 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Return to Local</button>
+                        {/* 
+                           ADMIN OVERRIDE: 
+                           Normally we lock ingestion in Global View to prevent accidental user pollution.
+                           However, we want Admins to be able to "Broadcast" data here.
+                        */}
+                        {isAdmin || isGlobalView ? ( // Check if User is Admin (simulated by isGlobalView for this demo)
+                            <div className="w-full max-w-4xl p-6">
+                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
+                                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                        <Radio className="text-red-500 animate-pulse" /> Admin Broadcast Console
+                                    </h3>
+                                    
+                                    <div className="flex items-center gap-4 bg-red-950/20 border border-red-900/50 p-4 rounded-lg mb-6">
+                                        <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${isPublicBroadcast ? 'bg-emerald-600' : 'bg-slate-700'}`} onClick={() => setIsPublicBroadcast(!isPublicBroadcast)}>
+                                            <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform ${isPublicBroadcast ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                        </div>
+                                        <div>
+                                            <h4 className="text-sm font-bold text-white">Broadcast as Public Airdrop</h4>
+                                            <p className="text-xs text-slate-400">
+                                                If enabled, ingested assets will be licensed as <strong>CC0 (Public Domain)</strong> and marked as free for all users to sync.
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {!selectedScanType ? (
+                                        <SmartUploadSelector onTypeSelected={setSelectedScanType} />
+                                    ) : (
+                                        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
+                                            <h4 className="text-white font-bold mb-2">Broadcasting Type: {SCAN_TYPE_CONFIG[selectedScanType].label}</h4>
+                                            <BatchImporter 
+                                                onFilesSelected={(files) => {
+                                                    files.forEach(file => { (file as any).scanType = selectedScanType; });
+                                                    handleBatchFiles(files);
+                                                }}
+                                                isProcessing={isProcessing}
+                                            />
+                                            <button onClick={() => setSelectedScanType(null)} className="text-xs text-slate-500 underline mt-2">Change Type</button>
+                                        </div>
+                                    )}
+
+                                    {/* Admin Queue View */}
+                                    {batchQueue.length > 0 && (
+                                        <div className="mt-6">
+                                            <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Broadcast Queue</h4>
+                                            <div className="bg-slate-950 rounded border border-slate-800 p-2 text-xs font-mono text-slate-300">
+                                                {batchQueue.map(i => (
+                                                    <div key={i.id} className="flex justify-between py-1 border-b border-slate-900 last:border-0">
+                                                        <span>{i.file.name}</span>
+                                                        <span className={i.status === 'COMPLETED' ? 'text-emerald-500' : 'text-amber-500'}>{i.status}</span>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ) : (
+                            // Standard User Lockout for Global View
+                            <div className="text-center">
+                                <Lock size={48} className="mb-4 opacity-50 mx-auto" />
+                                <h3 className="text-xl font-bold text-white mb-2">Ingestion Locked</h3>
+                                <p>Switch to Local Mode to ingest new assets.</p>
+                                <button onClick={() => setIsGlobalView(false)} className="mt-4 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Return to Local</button>
+                            </div>
+                        )}
                     </div>
                 ) : !selectedScanType ? (
                   <SmartUploadSelector onTypeSelected={setSelectedScanType} />
@@ -1480,90 +1548,164 @@ export default function App() {
                       </div>
                   </div>
 
-                  {/* Bundle Grid */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {Object.entries(aggregatedGroups).map(([groupName, groupAssets]) => {
-                          const bundleSize = groupAssets.length;
-                          const totalShards = bundleSize * 1000;
-                          const bundlePriceEth = (bundleSize * 0.05).toFixed(3);
-                          const totalTokens = groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
-                          
-                          // Check ownership status for UI indication
-                          const ownedCount = groupAssets.filter(a => ownedAssetIds.has(a.id)).length;
-                          const isFullyOwned = ownedCount === bundleSize && bundleSize > 0;
-                          
-                          return (
-                            <div key={groupName} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-primary-500/50 transition-all flex flex-col">
-                                <div className="h-32 bg-gradient-to-br from-slate-800 to-slate-950 relative p-6 flex flex-col justify-between">
-                                    <div className="absolute top-0 right-0 p-4 opacity-10">
-                                        <Package size={80} />
-                                    </div>
-                                    <div className="relative z-10">
-                                        <div className="flex justify-between items-start">
-                                            <span className="px-2 py-1 bg-black/40 rounded text-[10px] font-mono text-slate-300 border border-white/10 uppercase tracking-wide">
-                                                {groupBy} Bundle
-                                            </span>
-                                            {isFullyOwned && (
-                                                <span className="flex items-center gap-1 px-2 py-1 bg-emerald-900/80 text-emerald-400 text-[10px] font-bold rounded border border-emerald-500/50">
-                                                    <CheckCircle size={12} /> Owned
-                                                </span>
-                                            )}
+                  {/* FREE / COMMUNITY DROPS SECTION */}
+                  {Object.entries(aggregatedGroups).filter(([_, group]) => group.some(a => a.sqlRecord?.DATA_LICENSE === 'CC0')).length > 0 && (
+                     <div className="mb-12">
+                         <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                             <Gift className="text-emerald-500" /> Community Airdrops (Free)
+                         </h3>
+                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {Object.entries(aggregatedGroups)
+                              .filter(([_, group]) => group.some(a => a.sqlRecord?.DATA_LICENSE === 'CC0'))
+                              .map(([groupName, groupAssets]) => {
+                                  const bundleSize = groupAssets.length;
+                                  const totalTokens = groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
+                                  const ownedCount = groupAssets.filter(a => ownedAssetIds.has(a.id)).length;
+                                  const isFullyOwned = ownedCount === bundleSize && bundleSize > 0;
+                                  
+                                  return (
+                                    <div key={groupName} className="bg-slate-900 border border-emerald-900/50 rounded-xl overflow-hidden group hover:border-emerald-500/50 transition-all flex flex-col relative">
+                                        <div className="absolute top-0 right-0 p-2 z-20">
+                                            <span className="px-2 py-0.5 bg-emerald-500 text-black text-[10px] font-bold rounded shadow-lg">FREE CLAIM</span>
                                         </div>
-                                    </div>
-                                    <h3 className="text-xl font-bold text-white relative z-10 truncate">{groupName}</h3>
-                                </div>
-                                
-                                <div className="p-6 flex-1 flex flex-col">
-                                    <div className="grid grid-cols-2 gap-4 mb-6">
-                                        <div>
-                                            <p className="text-[10px] text-slate-500 uppercase">Documents</p>
-                                            <p className="text-lg font-mono text-white">{bundleSize}</p>
+                                        <div className="h-32 bg-gradient-to-br from-emerald-900/40 to-slate-950 relative p-6 flex flex-col justify-between">
+                                            <div className="absolute top-0 right-0 p-4 opacity-10">
+                                                <Globe size={80} />
+                                            </div>
+                                            <div className="relative z-10">
+                                                <div className="flex justify-between items-start">
+                                                    <span className="px-2 py-1 bg-black/40 rounded text-[10px] font-mono text-emerald-300 border border-emerald-500/20 uppercase tracking-wide">
+                                                        Public Domain
+                                                    </span>
+                                                    {isFullyOwned && (
+                                                        <span className="flex items-center gap-1 px-2 py-1 bg-emerald-900/80 text-emerald-400 text-[10px] font-bold rounded border border-emerald-500/50">
+                                                            <CheckCircle size={12} /> Synced
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <h3 className="text-xl font-bold text-white relative z-10 truncate">{groupName}</h3>
                                         </div>
-                                        <div>
-                                            <p className="text-[10px] text-slate-500 uppercase">Total Tokens</p>
-                                            <p className="text-lg font-mono text-emerald-400">{totalTokens.toLocaleString()}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-slate-500 uppercase">Dynamic Shards</p>
-                                            <p className="text-lg font-mono text-purple-400">{totalShards.toLocaleString()}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] text-slate-500 uppercase">Bundle Price</p>
-                                            <p className="text-lg font-mono text-amber-500">Ξ {bundlePriceEth}</p>
-                                        </div>
-                                    </div>
+                                        
+                                        <div className="p-6 flex-1 flex flex-col">
+                                            <div className="grid grid-cols-2 gap-4 mb-6">
+                                                <div>
+                                                    <p className="text-[10px] text-slate-500 uppercase">Documents</p>
+                                                    <p className="text-lg font-mono text-white">{bundleSize}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-[10px] text-slate-500 uppercase">Tokens</p>
+                                                    <p className="text-lg font-mono text-emerald-400">{totalTokens.toLocaleString()}</p>
+                                                </div>
+                                            </div>
 
-                                    <div className="mt-auto">
-                                        <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mb-4">
-                                            <div className="bg-gradient-to-r from-primary-500 to-purple-600 h-full w-3/4"></div>
+                                            <div className="mt-auto">
+                                                <button 
+                                                    onClick={() => setPurchaseModalData({ title: groupName, assets: groupAssets })}
+                                                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20"
+                                                >
+                                                    <Download size={16} /> {isFullyOwned ? 'Re-Sync' : 'Claim Free Bundle'}
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="flex gap-2">
-                                            <button 
-                                                onClick={() => setPurchaseModalData({ title: groupName, assets: groupAssets })}
-                                                className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                                            >
-                                                <Coins size={16} /> {isFullyOwned ? 'Re-Purchase' : 'Buy Shards'}
-                                            </button>
-                                            <button className="px-3 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
-                                                <Share2 size={18} />
-                                            </button>
+                                    </div>
+                                  );
+                            })}
+                         </div>
+                     </div>
+                  )}
+
+                  {/* PREMIUM BUNDLES SECTION */}
+                  <div>
+                      <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                          <Coins className="text-amber-500" /> Premium Datasets
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {Object.entries(aggregatedGroups)
+                             .filter(([_, group]) => !group.some(a => a.sqlRecord?.DATA_LICENSE === 'CC0'))
+                             .map(([groupName, groupAssets]) => {
+                              const bundleSize = groupAssets.length;
+                              const totalShards = bundleSize * 1000;
+                              const bundlePriceEth = (bundleSize * 0.05).toFixed(3);
+                              const totalTokens = groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
+                              
+                              // Check ownership status for UI indication
+                              const ownedCount = groupAssets.filter(a => ownedAssetIds.has(a.id)).length;
+                              const isFullyOwned = ownedCount === bundleSize && bundleSize > 0;
+                              
+                              return (
+                                <div key={groupName} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-primary-500/50 transition-all flex flex-col">
+                                    <div className="h-32 bg-gradient-to-br from-slate-800 to-slate-950 relative p-6 flex flex-col justify-between">
+                                        <div className="absolute top-0 right-0 p-4 opacity-10">
+                                            <Package size={80} />
                                         </div>
-                                        <p className="text-[10px] text-center text-slate-500 mt-2">
-                                            Contract updates automatically on ingest
-                                        </p>
+                                        <div className="relative z-10">
+                                            <div className="flex justify-between items-start">
+                                                <span className="px-2 py-1 bg-black/40 rounded text-[10px] font-mono text-slate-300 border border-white/10 uppercase tracking-wide">
+                                                    {groupBy} Bundle
+                                                </span>
+                                                {isFullyOwned && (
+                                                    <span className="flex items-center gap-1 px-2 py-1 bg-emerald-900/80 text-emerald-400 text-[10px] font-bold rounded border border-emerald-500/50">
+                                                        <CheckCircle size={12} /> Owned
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </div>
+                                        <h3 className="text-xl font-bold text-white relative z-10 truncate">{groupName}</h3>
+                                    </div>
+                                    
+                                    <div className="p-6 flex-1 flex flex-col">
+                                        <div className="grid grid-cols-2 gap-4 mb-6">
+                                            <div>
+                                                <p className="text-[10px] text-slate-500 uppercase">Documents</p>
+                                                <p className="text-lg font-mono text-white">{bundleSize}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-slate-500 uppercase">Total Tokens</p>
+                                                <p className="text-lg font-mono text-emerald-400">{totalTokens.toLocaleString()}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-slate-500 uppercase">Dynamic Shards</p>
+                                                <p className="text-lg font-mono text-purple-400">{totalShards.toLocaleString()}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[10px] text-slate-500 uppercase">Bundle Price</p>
+                                                <p className="text-lg font-mono text-amber-500">Ξ {bundlePriceEth}</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-auto">
+                                            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mb-4">
+                                                <div className="bg-gradient-to-r from-primary-500 to-purple-600 h-full w-3/4"></div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button 
+                                                    onClick={() => setPurchaseModalData({ title: groupName, assets: groupAssets })}
+                                                    className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+                                                >
+                                                    <Coins size={16} /> {isFullyOwned ? 'Re-Purchase' : 'Buy Shards'}
+                                                </button>
+                                                <button className="px-3 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
+                                                    <Share2 size={18} />
+                                                </button>
+                                            </div>
+                                            <p className="text-[10px] text-center text-slate-500 mt-2">
+                                                Contract updates automatically on ingest
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                          );
-                      })}
-                      
-                      {Object.keys(aggregatedGroups).length === 0 && (
-                          <div className="col-span-3 py-12 text-center text-slate-500">
-                              <AlertCircle className="mx-auto mb-2 opacity-50" size={32}/>
-                              No bundles available. Go to Quick Processing to ingest data.
-                          </div>
-                      )}
+                              );
+                          })}
+                      </div>
                   </div>
+                  
+                  {Object.keys(aggregatedGroups).length === 0 && (
+                      <div className="col-span-3 py-12 text-center text-slate-500">
+                          <AlertCircle className="mx-auto mb-2 opacity-50" size={32}/>
+                          No bundles available. Go to Quick Processing to ingest data.
+                      </div>
+                  )}
               </div>
           )}
 

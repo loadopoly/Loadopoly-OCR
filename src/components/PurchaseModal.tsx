@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { DigitalAsset } from '../types';
-import { X, AlertTriangle, Layers, CheckCircle, Database, Coins, Filter } from 'lucide-react';
+import { X, AlertTriangle, Layers, CheckCircle, Database, Coins, Filter, DownloadCloud } from 'lucide-react';
 
 interface PurchaseModalProps {
   bundleTitle: string;
@@ -21,13 +21,17 @@ export default function PurchaseModal({ bundleTitle, assets, ownedAssetIds, onCl
     const overlapCount = existing.length;
     const newCount = newItems.length;
     
-    // Pricing Model: 0.05 ETH per item
-    const PRICE_PER_ITEM = 0.05;
+    // Check if this is a FREE bundle (CC0 license)
+    // We assume if the first item is CC0, the whole bundle is likely free/broadcast
+    const isFree = assets.some(a => a.sqlRecord?.DATA_LICENSE === 'CC0');
+
+    // Pricing Model: 0.05 ETH per item if paid, 0 if free
+    const PRICE_PER_ITEM = isFree ? 0 : 0.05;
     const fullPrice = totalCount * PRICE_PER_ITEM;
     const deltaPrice = newCount * PRICE_PER_ITEM;
     const savings = fullPrice - deltaPrice;
 
-    return { totalCount, overlapCount, newCount, fullPrice, deltaPrice, savings, existing, newItems };
+    return { totalCount, overlapCount, newCount, fullPrice, deltaPrice, savings, existing, newItems, isFree };
   }, [assets, ownedAssetIds]);
 
   return (
@@ -37,7 +41,12 @@ export default function PurchaseModal({ bundleTitle, assets, ownedAssetIds, onCl
         {/* Header */}
         <div className="p-6 border-b border-slate-800 flex justify-between items-start bg-slate-950/50">
           <div>
-            <h2 className="text-xl font-bold text-white mb-1">Purchase Bundle</h2>
+            <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-xl font-bold text-white">
+                    {analysis.isFree ? "Sync Community Airdrop" : "Purchase Bundle"}
+                </h2>
+                {analysis.isFree && <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold border border-emerald-500/30">FREE</span>}
+            </div>
             <p className="text-slate-400 text-sm">{bundleTitle}</p>
           </div>
           <button onClick={onClose} className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-full transition-colors">
@@ -55,7 +64,7 @@ export default function PurchaseModal({ bundleTitle, assets, ownedAssetIds, onCl
                    <h3 className="text-amber-400 font-bold text-sm">Duplicate Data Detected</h3>
                    <p className="text-amber-200/70 text-xs mt-1">
                       You already own <strong className="text-white">{analysis.overlapCount}</strong> assets contained in this bundle. 
-                      Purchasing the full package will result in redundant data in your local node.
+                      {analysis.isFree ? " We will only sync the new items." : " Purchasing the full package will result in redundant data in your local node."}
                    </p>
                 </div>
              </div>
@@ -101,14 +110,14 @@ export default function PurchaseModal({ bundleTitle, assets, ownedAssetIds, onCl
              >
                 <div className="flex items-center gap-2 mb-2">
                     <Layers size={18} className="text-slate-400 group-hover:text-white" />
-                    <span className="font-bold text-slate-200 group-hover:text-white">Purchase Full Set</span>
+                    <span className="font-bold text-slate-200 group-hover:text-white">{analysis.isFree ? "Force Sync All" : "Purchase Full Set"}</span>
                 </div>
                 <p className="text-xs text-slate-500 mb-4 h-8">
                     Best for archival completeness. You will receive shards for duplicates.
                 </p>
                 <div className="mt-auto flex items-center gap-2 text-white font-mono bg-black/30 px-3 py-1 rounded">
-                    <Coins size={14} className="text-amber-500" />
-                    Ξ {analysis.fullPrice.toFixed(3)}
+                    <Coins size={14} className={analysis.isFree ? "text-emerald-500" : "text-amber-500"} />
+                    {analysis.isFree ? "FREE" : `Ξ ${analysis.fullPrice.toFixed(3)}`}
                 </div>
              </button>
 
@@ -122,7 +131,7 @@ export default function PurchaseModal({ bundleTitle, assets, ownedAssetIds, onCl
                     : 'border-primary-500/50 hover:border-primary-500 bg-primary-900/10 hover:bg-primary-900/20'
                 }`}
              >
-                {analysis.overlapCount > 0 && analysis.newCount > 0 && (
+                {analysis.overlapCount > 0 && analysis.newCount > 0 && !analysis.isFree && (
                     <span className="absolute -top-3 right-4 px-2 py-0.5 bg-emerald-500 text-black text-[10px] font-bold rounded-full">
                         SAVE Ξ {analysis.savings.toFixed(3)}
                     </span>
@@ -130,17 +139,17 @@ export default function PurchaseModal({ bundleTitle, assets, ownedAssetIds, onCl
                 <div className="flex items-center gap-2 mb-2">
                     <Filter size={18} className={`${analysis.newCount > 0 ? 'text-primary-400' : 'text-slate-600'}`} />
                     <span className={`font-bold ${analysis.newCount > 0 ? 'text-primary-100' : 'text-slate-500'}`}>
-                        Smart Filter Purchase
+                        {analysis.isFree ? "Smart Sync (Delta)" : "Smart Filter Purchase"}
                     </span>
                 </div>
                 <p className={`text-xs mb-4 h-8 ${analysis.newCount > 0 ? 'text-primary-200/70' : 'text-slate-600'}`}>
                     {analysis.newCount === 0 
                         ? "You own everything in this bundle." 
-                        : "Pay only for new data. Duplicates are automatically filtered out."}
+                        : "Only grab what you are missing. Duplicates are filtered out."}
                 </p>
                 <div className={`mt-auto flex items-center gap-2 font-mono px-3 py-1 rounded ${analysis.newCount > 0 ? 'bg-primary-950/50 text-emerald-400' : 'bg-slate-950 text-slate-600'}`}>
-                    <Coins size={14} />
-                    Ξ {analysis.deltaPrice.toFixed(3)}
+                    {analysis.isFree ? <DownloadCloud size={14} /> : <Coins size={14} />}
+                    {analysis.isFree ? "FREE" : `Ξ ${analysis.deltaPrice.toFixed(3)}`}
                 </div>
              </button>
           </div>
