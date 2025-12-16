@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.4.0] - 2025-01-04
+
+### Added
+- **Universal Data Ingestion:** Implemented automatic background syncing to the Supabase global corpus for all processed assets. This ensures data persistence across sessions for all users.
+- **Anonymous Contributions:** Users without accounts now contribute data via a generated UUID session ID, allowing for frictionless guest usage while maintaining database integrity.
+- **Global Master View:** The "Switch to Master View" toggle is now available to all users (previously Admin only), enabling everyone to visualize and explore the entire global corpus during the testing phase.
+
+### Changed
+- **Production Deployment Fixes:** 
+    - Removed conflicting `<importmap>` from `index.html` to resolve React version conflicts (black screen issues) on Vercel/Production.
+    - Added `vercel.json` rewrite rules to support Single Page Application (SPA) routing.
+    - Updated `vite.config.ts` to polyfill `process.env` for compatibility with third-party libraries.
+
 ## [1.3.0] - 2025-01-03
 
 ### Added
