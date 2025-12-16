@@ -20,8 +20,10 @@ export default defineConfig({
     },
   },
   define: {
-    // Removed 'process.env': {} to prevent breaking the process polyfill
+    // Defines global variables for library compatibility
     global: 'globalThis',
+    // Ensures process.env exists for libraries accessing it directly
+    'process.env': {},
   },
   server: {
     port: 3000,

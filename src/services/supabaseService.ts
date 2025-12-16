@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { DigitalAsset } from '../types';
+import { DigitalAsset, AssetStatus } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
 // Helper to safely access env vars in different environments (Vite vs standard)
@@ -23,6 +23,55 @@ const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 export const supabase = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
+
+export const fetchGlobalCorpus = async (): Promise<DigitalAsset[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('historical_documents_global')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(2000); // Safety limit for frontend performance
+
+  if (error) {
+    console.error("Error fetching global corpus:", error);
+    return [];
+  }
+
+  // Map SQL rows back to DigitalAsset shape for UI consumption
+  return data.map((row: any) => ({
+    id: row.ASSET_ID,
+    // Use the public URL stored in Supabase, or a placeholder if missing
+    imageUrl: row.original_image_url || '', 
+    timestamp: row.LOCAL_TIMESTAMP,
+    ocrText: row.RAW_OCR_TRANSCRIPTION,
+    status: AssetStatus.MINTED, // Global assets are by definition processed
+    sqlRecord: {
+      ...row,
+      // Ensure arrays are parsed if they came back as strings (though Supabase client usually handles JSON types)
+      ENTITIES_EXTRACTED: typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : row.ENTITIES_EXTRACTED,
+      KEYWORDS_TAGS: typeof row.KEYWORDS_TAGS === 'string' ? JSON.parse(row.KEYWORDS_TAGS) : row.KEYWORDS_TAGS,
+      nearbyLandmarks: typeof row.gisMetadata?.nearbyLandmarks === 'string' ? JSON.parse(row.gisMetadata.nearbyLandmarks) : row.gisMetadata?.nearbyLandmarks
+    },
+    // We reconstruct minimal graph data from the flattened SQL record for visualization
+    graphData: {
+      nodes: [
+        { id: row.ASSET_ID, label: row.DOCUMENT_TITLE, type: 'DOCUMENT', relevance: 1 },
+        ...(Array.isArray(row.ENTITIES_EXTRACTED) ? row.ENTITIES_EXTRACTED.map((e: string) => ({
+          id: `ENT_${e.replace(/\s/g,'')}`,
+          label: e,
+          type: 'CONCEPT',
+          relevance: 0.8
+        })) : [])
+      ],
+      links: Array.isArray(row.ENTITIES_EXTRACTED) ? row.ENTITIES_EXTRACTED.map((e: string) => ({
+        source: row.ASSET_ID,
+        target: `ENT_${e.replace(/\s/g,'')}`,
+        relationship: 'CONTAINS'
+      })) : []
+    }
+  }));
+};
 
 export const contributeAssetToGlobalCorpus = async (
   asset: DigitalAsset,

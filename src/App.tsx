@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Camera, 
-  Map, 
+  Map as MapIcon, 
   Network, 
   Upload, 
   FileText, 
@@ -35,14 +35,18 @@ import {
   Plus,
   Settings,
   Gift,
-  Volume2
+  Volume2,
+  Globe,
+  Lock
 } from 'lucide-react';
-import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG } from './types';
+import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG, GraphData, GraphNode } from './types';
 import { processImageWithGemini } from './services/geminiService';
 import { createBundles } from './services/bundleService';
 import { initSync } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
 import { redeemPhygitalCertificate } from './services/web3Service';
+import { getCurrentUser } from './lib/auth';
+import { fetchGlobalCorpus } from './services/supabaseService';
 import GraphVisualizer from './components/GraphVisualizer';
 import ContributeButton from './components/ContributeButton';
 import BundleCard from './components/BundleCard';
@@ -111,7 +115,19 @@ const StatCard = ({ label, value, icon: Icon, color, onClick }: any) => (
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [assets, setAssets] = useState<DigitalAsset[]>([]);
+  
+  // Data Sources
+  const [localAssets, setLocalAssets] = useState<DigitalAsset[]>([]);
+  const [globalAssets, setGlobalAssets] = useState<DigitalAsset[]>([]);
+  
+  // Auth & View Mode
+  const [user, setUser] = useState<any>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isGlobalView, setIsGlobalView] = useState(false);
+
+  // Derived active asset list based on view mode
+  const assets = isGlobalView ? globalAssets : localAssets;
+
   // Combined list of Single Assets AND Bundles for display
   const [displayItems, setDisplayItems] = useState<(DigitalAsset | ImageBundle)[]>([]);
   
@@ -155,12 +171,22 @@ export default function App() {
       setGeoPermission(result.state === 'granted');
     });
 
+    // Check Auth
+    getCurrentUser().then(({ data }) => {
+        if(data.user) {
+            setUser(data.user);
+            // Simple Admin Check: For demo, anyone logged in is an "Admin" capable of seeing the Master View.
+            // In production, check data.user.email?.endsWith('@geograph.foundation') or metadata.
+            setIsAdmin(true); 
+        }
+    });
+
     // Initialize Auto Sync
     initSync();
 
-    // Load persisted assets
+    // Load persisted local assets
     loadAssets().then(loadedAssets => {
-        setAssets(loadedAssets);
+        setLocalAssets(loadedAssets);
     });
 
     // Load purchased assets from LocalStorage (Simulating a user wallet/portfolio database)
@@ -182,6 +208,20 @@ export default function App() {
         window.removeEventListener('geograph-new-file', handleNewFile);
     }
   }, []);
+
+  // Fetch Global Assets when Admin Mode is toggled
+  useEffect(() => {
+      if (isGlobalView && globalAssets.length === 0) {
+          setIsProcessing(true);
+          fetchGlobalCorpus()
+            .then(data => {
+                setGlobalAssets(data);
+                announce(`Loaded ${data.length} global assets`);
+            })
+            .catch(err => console.error("Global fetch failed", err))
+            .finally(() => setIsProcessing(false));
+      }
+  }, [isGlobalView]);
 
   // --- Bundling Effect ---
   // When assets change, re-run bundling logic
@@ -206,8 +246,12 @@ export default function App() {
 
   // Handle Asset Update (e.g. from Contribute Button)
   const handleAssetUpdate = async (updatedAsset: DigitalAsset) => {
-      setAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
-      await saveAsset(updatedAsset);
+      // We only update local assets directly. Global assets are read-only in this view usually, 
+      // or updated via a separate admin process.
+      if (!isGlobalView) {
+          setLocalAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+          await saveAsset(updatedAsset);
+      }
   };
 
   // --- Purchase Logic ---
@@ -405,7 +449,7 @@ export default function App() {
       if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = source;
 
       // Optimistically update UI
-      setAssets(prev => [newAsset!, ...prev]);
+      setLocalAssets(prev => [newAsset!, ...prev]);
       // Persist pending asset
       await saveAsset(newAsset);
       
@@ -416,7 +460,7 @@ export default function App() {
       const processedAsset = await processAssetPipeline(newAsset, file);
       
       // Update UI
-      setAssets(prev => prev.map(a => a.id === newAsset!.id ? processedAsset : a));
+      setLocalAssets(prev => prev.map(a => a.id === newAsset!.id ? processedAsset : a));
       // Persist processed asset
       await saveAsset(processedAsset);
 
@@ -428,7 +472,7 @@ export default function App() {
               status: AssetStatus.FAILED, 
               errorMessage: err.message || "Unknown error during processing" 
           };
-          setAssets(prev => prev.map(a => a.id === newAsset!.id ? failedAsset : a));
+          setLocalAssets(prev => prev.map(a => a.id === newAsset!.id ? failedAsset : a));
           // Persist the failure state so we know it failed later
           await saveAsset(failedAsset);
       }
@@ -485,11 +529,11 @@ export default function App() {
 
                 const newAsset = await createInitialAsset(itemToProcess.file);
                 if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = "Batch Ingest"; 
-                setAssets(prev => [newAsset, ...prev]);
+                setLocalAssets(prev => [newAsset, ...prev]);
                 await saveAsset(newAsset);
 
                 const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
-                setAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+                setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
                 await saveAsset(processedAsset);
 
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
@@ -525,7 +569,7 @@ export default function App() {
           const updatedAsset = { ...asset, nft: updatedNFT };
           
           // Update local state and DB
-          setAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
+          setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
           await saveAsset(updatedAsset);
 
       } catch(e: any) {
@@ -536,7 +580,7 @@ export default function App() {
   const deleteSingleAsset = async (id: string) => {
       if (!window.confirm("Are you sure you want to delete this asset from the repository?")) return;
       await deleteAsset(id);
-      setAssets(prev => prev.filter(a => a.id !== id));
+      setLocalAssets(prev => prev.filter(a => a.id !== id));
       if (selectedAssetId === id) setSelectedAssetId(null);
   };
 
@@ -586,17 +630,16 @@ export default function App() {
   const paginatedAssets = drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
   // MEMOIZED: Prevent infinite re-renders/blanks in D3
-  const globalGraphData = useMemo(() => {
+  const globalGraphData = useMemo<GraphData>(() => {
       // 1. Document Nodes
       const docNodes = assets.map(a => ({
           id: a.id,
           label: a.sqlRecord?.DOCUMENT_TITLE || 'Untitled',
-          type: 'DOCUMENT' as any,
+          type: 'DOCUMENT' as const,
           relevance: 1.0,
-          color: '#ffffff' // White for docs
       }));
 
-      const entityNodesMap = new Map<string, any>();
+      const entityNodesMap = new Map<string, GraphNode>();
       const links: any[] = [];
 
       assets.forEach(asset => {
@@ -662,6 +705,41 @@ export default function App() {
           </div>
         </nav>
 
+        {/* Admin Mode Toggle (Bottom Sidebar) */}
+        {isAdmin && (
+            <div className="p-4 border-t border-slate-800">
+                <div className={`p-3 rounded-xl border transition-all ${isGlobalView ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-900 border-slate-800'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold uppercase text-slate-400">View Mode</span>
+                        <div className="flex items-center gap-1">
+                            {isGlobalView && <Globe size={12} className="text-indigo-400" />}
+                            {isGlobalView ? <span className="text-[10px] text-indigo-400 font-bold">GLOBAL</span> : <span className="text-[10px] text-slate-500">LOCAL</span>}
+                        </div>
+                    </div>
+                    
+                    <button 
+                        onClick={() => setIsGlobalView(!isGlobalView)}
+                        className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${
+                            isGlobalView 
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50' 
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+                        }`}
+                    >
+                        {isGlobalView ? (
+                            <>Switch to Local <Lock size={12}/></>
+                        ) : (
+                            <>Switch to Master <Globe size={12}/></>
+                        )}
+                    </button>
+                    {isGlobalView && (
+                        <p className="text-[10px] text-indigo-300 mt-2 text-center">
+                            Viewing Entire Corpus
+                        </p>
+                    )}
+                </div>
+            </div>
+        )}
+
         <div className="p-4 border-t border-slate-800">
            <div className="bg-slate-800/50 rounded p-3 text-xs text-slate-400">
              <div className="flex items-center justify-between mb-2">
@@ -681,9 +759,16 @@ export default function App() {
         
         {/* Header */}
         <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-950/80 backdrop-blur z-10">
-          <h2 className="text-lg font-semibold text-white capitalize">{activeTab === 'database' ? 'HISTORICAL DOCUMENTS DATABASE' : activeTab === 'batch' ? 'HIGH THROUGHPUT INGESTION' : activeTab}</h2>
+            <div className="flex items-center gap-4">
+                <h2 className="text-lg font-semibold text-white capitalize">{activeTab === 'database' ? 'HISTORICAL DOCUMENTS DATABASE' : activeTab === 'batch' ? 'HIGH THROUGHPUT INGESTION' : activeTab}</h2>
+                {isGlobalView && (
+                    <span className="px-2 py-0.5 bg-indigo-500 text-white text-[10px] font-bold rounded shadow-lg shadow-indigo-500/20">
+                        MASTER VIEW
+                    </span>
+                )}
+            </div>
           <div className="flex items-center gap-2">
-             {activeTab !== 'batch' && activeTab !== 'ar' && (
+             {activeTab !== 'batch' && activeTab !== 'ar' && !isGlobalView && (
                 <>
                   <CameraCapture onCapture={handleCameraCapture} />
                   
@@ -736,15 +821,24 @@ export default function App() {
 
               {assets.length === 0 ? (
                 <div className="h-64 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 gap-4">
-                  <div className="flex gap-4">
-                     <CameraCapture onCapture={handleCameraCapture} />
-                     <label className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg cursor-pointer transition-all border border-slate-700">
-                        <Upload size={20} />
-                        <span>Upload File</span>
-                        <input type="file" className="hidden" accept="image/*, application/pdf" onChange={handleSingleFileUpload} />
-                     </label>
-                  </div>
-                  <p className="mt-2">Use the Camera or Upload to begin extraction</p>
+                  {isGlobalView ? (
+                      <div className="text-center">
+                          <Globe size={48} className="mx-auto mb-4 text-slate-600" />
+                          <p>Global Corpus is empty or failed to load.</p>
+                      </div>
+                  ) : (
+                    <>
+                        <div className="flex gap-4">
+                            <CameraCapture onCapture={handleCameraCapture} />
+                            <label className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg cursor-pointer transition-all border border-slate-700">
+                                <Upload size={20} />
+                                <span>Upload File</span>
+                                <input type="file" className="hidden" accept="image/*, application/pdf" onChange={handleSingleFileUpload} />
+                            </label>
+                        </div>
+                        <p className="mt-2">Use the Camera or Upload to begin extraction</p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -756,7 +850,7 @@ export default function App() {
                   </div>
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
                     <h3 className="text-white font-medium mb-4 flex items-center gap-2">
-                      <Map size={18} className="text-emerald-500"/> GIS Context
+                      <MapIcon size={18} className="text-emerald-500"/> GIS Context
                     </h3>
                     <div className="space-y-4">
                         {assets.slice(0, 3).map(asset => (
@@ -795,7 +889,14 @@ export default function App() {
           {/* Quick Processing / Batch Tab */}
           {activeTab === 'batch' && (
              <div className="max-w-6xl mx-auto h-full flex flex-col">
-                {!selectedScanType ? (
+                {isGlobalView ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
+                        <Lock size={48} className="mb-4 opacity-50" />
+                        <h3 className="text-xl font-bold text-white mb-2">Ingestion Locked</h3>
+                        <p>Switch to Local Mode to ingest new assets.</p>
+                        <button onClick={() => setIsGlobalView(false)} className="mt-4 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Return to Local</button>
+                    </div>
+                ) : !selectedScanType ? (
                   <SmartUploadSelector onTypeSelected={setSelectedScanType} />
                 ) : (
                   <>
@@ -951,13 +1052,15 @@ export default function App() {
                                         >
                                             <Maximize2 size={14} />
                                         </button>
-                                        <button
-                                           onClick={() => deleteSingleAsset(asset.id)}
-                                           className="absolute top-2 left-2 p-1.5 bg-red-900/60 rounded text-red-200 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-900"
-                                           title="Delete from Repository"
-                                        >
-                                            <Trash2 size={14} />
-                                        </button>
+                                        {!isGlobalView && (
+                                            <button
+                                            onClick={() => deleteSingleAsset(asset.id)}
+                                            className="absolute top-2 left-2 p-1.5 bg-red-900/60 rounded text-red-200 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-900"
+                                            title="Delete from Repository"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        )}
                                         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 pt-12">
                                             <div className="flex justify-between items-end">
                                                 <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${asset.sqlRecord?.CONFIDENCE_SCORE && asset.sqlRecord.CONFIDENCE_SCORE > 0.8 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'}`}>
@@ -1211,9 +1314,11 @@ export default function App() {
                                           <button onClick={() => downloadJSON(asset)} className="text-primary-500 hover:text-white" title="Export JSON">
                                               <Download size={14} />
                                           </button>
-                                          <button onClick={() => deleteSingleAsset(asset.id)} className="text-slate-600 hover:text-red-500" title="Delete">
-                                              <Trash2 size={14} />
-                                          </button>
+                                          {!isGlobalView && (
+                                            <button onClick={() => deleteSingleAsset(asset.id)} className="text-slate-600 hover:text-red-500" title="Delete">
+                                                <Trash2 size={14} />
+                                            </button>
+                                          )}
                                        </td>
                                    </tr>
                                )
