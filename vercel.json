@@ -1,59 +1,7 @@
 {
-  "headers": [
-    {
-      "source": "/icon-192.png",
-      "headers": [
-        { "key": "Content-Type", "value": "image/png" },
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/icon-512.png",
-      "headers": [
-        { "key": "Content-Type", "value": "image/png" },
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/icon.svg",
-      "headers": [
-        { "key": "Content-Type", "value": "image/svg+xml" },
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/screenshot-desktop.png",
-      "headers": [
-        { "key": "Content-Type", "value": "image/png" },
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/screenshot-mobile.png",
-      "headers": [
-        { "key": "Content-Type", "value": "image/png" },
-        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
-      ]
-    },
-    {
-      "source": "/manifest.json",
-      "headers": [
-        { "key": "Content-Type", "value": "application/manifest+json" },
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
-      ]
-    },
-    {
-      "source": "/sw.js",
-      "headers": [
-        { "key": "Content-Type", "value": "application/javascript" },
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
-        { "key": "Service-Worker-Allowed", "value": "/" }
-      ]
-    }
-  ],
   "rewrites": [
     {
-      "source": "/((?!icon-192\\.png$|icon-512\\.png$|icon\\.svg$|screenshot-desktop\\.png$|screenshot-mobile\\.png$|manifest\\.json$|sw\\.js$|assets/).*)",
+      "source": "/(.*)",
       "destination": "/index.html"
     }
   ]

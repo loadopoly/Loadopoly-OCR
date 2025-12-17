@@ -6,12 +6,29 @@
   "lang": "en",
   "dir": "ltr",
   "scope": "/",
-  "start_url": "/",
+  "start_url": "/?utm_source=pwa",
   "display": "standalone",
+  "display_override": [
+    "window-controls-overlay",
+    "tabbed",
+    "standalone"
+  ],
   "background_color": "#020617",
   "theme_color": "#020617",
   "orientation": "any",
-  "categories": ["education", "productivity", "utilities"],
+  "categories": [
+    "education",
+    "productivity",
+    "utilities"
+  ],
+  "iarc_rating_id": "8427f27a-80b5-466d-8378-a23d64614741",
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "scope_extensions": [
+    {
+      "origin": "https://geograph.foundation"
+    }
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -52,16 +69,77 @@
     {
       "name": "Quick Process",
       "short_name": "Process",
-      "description": "Start a new batch scan",
+      "description": "Start a new high-throughput batch scan",
       "url": "/?tab=batch",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "AR Scanner",
       "short_name": "AR",
-      "description": "Open the AR field scanner",
+      "description": "Open the immersive AR field scanner",
       "url": "/?tab=ar",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
-  ]
+  ],
+  "file_handlers": [
+    {
+      "action": "/?action=open-file",
+      "accept": {
+        "image/*": [
+          ".jpg",
+          ".jpeg",
+          ".png",
+          ".webp",
+          ".heic"
+        ],
+        "application/pdf": [
+          ".pdf"
+        ]
+      }
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+geograph",
+      "url": "/?uri=%s"
+    }
+  ],
+  "share_target": {
+    "action": "/?action=share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "name",
+      "text": "description",
+      "files": [
+        {
+          "name": "media",
+          "accept": [
+            "image/*",
+            "application/pdf"
+          ]
+        }
+      ]
+    }
+  ],
+  "note_taking": {
+    "new_note_url": "/?tab=batch&mode=new"
+  },
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "widgets": []
 }
