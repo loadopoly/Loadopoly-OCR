@@ -1,16 +1,37 @@
 {
   "headers": [
     {
-      "source": "/(.*).png",
+      "source": "/icon-192.png",
       "headers": [
         { "key": "Content-Type", "value": "image/png" },
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
     {
-      "source": "/(.*).svg",
+      "source": "/icon-512.png",
+      "headers": [
+        { "key": "Content-Type", "value": "image/png" },
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/icon.svg",
       "headers": [
         { "key": "Content-Type", "value": "image/svg+xml" },
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/screenshot-desktop.png",
+      "headers": [
+        { "key": "Content-Type", "value": "image/png" },
+        { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
+      ]
+    },
+    {
+      "source": "/screenshot-mobile.png",
+      "headers": [
+        { "key": "Content-Type", "value": "image/png" },
         { "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }
       ]
     },
@@ -25,13 +46,14 @@
       "source": "/sw.js",
       "headers": [
         { "key": "Content-Type", "value": "application/javascript" },
-        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" }
+        { "key": "Cache-Control", "value": "public, max-age=0, must-revalidate" },
+        { "key": "Service-Worker-Allowed", "value": "/" }
       ]
     }
   ],
   "rewrites": [
     {
-      "source": "/((?!.*\\.(png|jpg|jpeg|gif|svg|ico|webp|json|js|css|woff|woff2|ttf|eot|map|txt|xml)).*)",
+      "source": "/((?!icon-192\\.png$|icon-512\\.png$|icon\\.svg$|screenshot-desktop\\.png$|screenshot-mobile\\.png$|manifest\\.json$|sw\\.js$|assets/).*)",
       "destination": "/index.html"
     }
   ]
