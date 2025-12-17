@@ -3,86 +3,63 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.8.0-blueviolet.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.6.0-blueviolet.svg)](CHANGELOG.md)
 
-**Open-source infrastructure for the preservation of human knowledge.**
+**Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
-GeoGraph Node is an advanced **OCR-to-Graph** platform that transforms physical artifacts, documents, and scenery into high-fidelity, structured training data for LLMs. Utilizing **Gemini 2.5 Flash**, it automates the extraction of relational entities, GIS context, and WCAG-compliant accessibility metadata, bridging the gap between physical archives and the semantic web.
-
----
-
-## 🚀 What's New in v1.8.0
-- **Refined Branding:** New "Set-in-Stone" visual identity featuring high-contrast slate aesthetics and a stylized tombstone emblem.
-- **Advanced PWA Engine:** Fully compliant web app with Shortcuts (Quick Scan, AR Scanner), Share Target (process images directly from other apps), and File Handlers.
-- **Master Dataframes:** Robust "Cluster View" for global repository exploration. Group knowledge by Source, GIS Zone, or NLP Category.
-- **Immersive AR Scanner:** Real-time field capture with simulated node detection and batch session processing.
-- **Relational Knowledge Rebuild:** Intelligent backend that reconstructs complex D3 knowledge graphs from flattened SQL relational data.
+An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP processing, and sharded NFT asset management for LLM training data.
 
 ---
 
-## 🖼️ Feature Showcase
-
-### 📊 Intelligent Dashboard
-- **Token Analytics:** Track tokenization throughput and vocabulary growth.
-- **GIS Context:** Real-time environmental analysis (Urban vs. Rural) inferred from visual cues.
-- **Activity Graph:** Live preview of the most recently extracted knowledge connections.
-
-### 🧪 Extraction Pipeline (Powered by Gemini 2.5 Flash)
-- **Multimodal OCR:** Preserves logical structure, table formatting, and handwritten nuances.
-- **Entity Linking:** Automatic identification of People, Locations, and Organizations.
-- **Accessibility:** Generates WCAG AAA alt-text and logical reading order blocks.
-- **Taxonomy:** Automated Kingdom/Phylum/Species classification for biological items.
-
-### 🕸️ Knowledge Graph & Semantic Canvas
-- **D3.js Visualization:** Interactive, zoomable graph with force-directed simulation.
-- **Semantic Clustering:** Multi-dimensional views of the corpus based on temporal and category-based relationship.
+## 🚀 What's New in v1.6.0
+- **Gemini 2.5 Flash:** Upgraded the extraction engine to the latest high-performance model for blazing fast entity detection and relational mapping.
+- **Enhanced Graph Interaction:** Full D3.js zoom and pan support in all graph visualizations.
+- **Relational Cloud Integrity:** Robust reconstruction of knowledge graphs from Supabase JSONB dataframes, ensuring global views are as rich as local ones.
+- **Cluster View Database:** New hierarchical "Cluster View" for exploring the repository through semantic groupings (Era, Category, GIS Zone).
+- **Direct Cloud Sync:** One-click "Refresh Cloud" functionality to sync the latest global repository dataframes.
 
 ---
 
-## 🛠️ Technical Stack
-- **Frontend:** React 19, Tailwind CSS (High-Contrast Slate Palette).
-- **AI Engine:** Google Gemini 2.5 Flash (OCR, NLP, Vision).
-- **Backend:** Supabase (PostgreSQL, Storage, Auth).
-- **Local Storage:** Dexie.js (IndexedDB) for a local-first, offline-ready experience.
-- **Graph:** D3.js & React Force Graph for relational mapping.
-- **Web3:** Ethers.js for DCC1 sharding and on-chain provenance (Polygon Network).
+## 🖼️ Visual Tour
+
+### Dashboard & Intelligence
+![Dashboard Overview](screenshots/dashboard.png)
+*The central command center showing global stats, recent graph activity, and real-time GIS environment context.*
+
+### High-Throughput Ingestion
+![Batch Processing](screenshots/quick-processing.png)
+*Optimized pipeline for processing hundreds of documents per hour with automatic error handling and progress tracking.*
+
+### Knowledge Graphs & Semantic Universe
+<div align="center">
+  <img src="screenshots/knowledge-graph.png" width="48%" alt="Knowledge Graph" />
+  <img src="screenshots/semantic-view.png" width="48%" alt="Semantic Universe" />
+</div>
+*Left: Relational mapping of entities extracted by Gemini 2.5 Flash. Right: The Semantic Universe view clustering documents by era and LLM-derived category.*
+
+### Structured Dataframes & Clusters
+![Structured Database](screenshots/structured-db.png)
+![Database Clusters](screenshots/db-clusters.png)
+*Navigate your corpus using high-density tabular views or explore semantic clusters grouped by source and era.*
 
 ---
 
-## 🚀 Installation
+## About
 
-### 1. Clone & Setup
-```bash
-git clone https://github.com/geograph-foundation/geograph-node.git
-cd geograph-node
-npm install
-```
+GeoGraph Node transforms physical documents, artifacts, and locations into structured, AI-ready training data. Using Google's Gemini 2.5 Flash for intelligent extraction, the platform creates rich knowledge graphs, preserves GIS context, and enables fractional data ownership through blockchain technology.
 
-### 2. Configure Environment
-Create a `.env` file or set the following environment variable:
-- `API_KEY`: Your Google Gemini API Key.
+### Use Cases
 
-### 3. Database Setup
-Follow the instructions in `DATABASE_SETUP.md` to configure your Supabase instance.
-
-### 4. Run Development
-```bash
-npm run dev
-```
+- **Archives & Museums:** Digitize collections with high-fidelity metadata extraction.
+- **Historical Research:** Build complex, connected knowledge graphs from scanned documents.
+- **AI/ML Training:** Generate high-quality, ethically sourced, and licensed training datasets.
+- **Field Documentation:** Capture and catalog items with real-time location and environmental context.
 
 ---
 
-## ⚖️ Licensing & Contribution
-
-- **Source Code:** [MIT License](LICENSE) - Free and open for all.
-- **Data Contributions:** [CC0 1.0 Universal](DATA-LICENSE.md) - Individual raw contributions are dedicated to the public domain.
-- **Curated Corpus:** [Commercial License](COMMERCIAL-LICENSE.md) - Enriched, cleaned, and bundled datasets require licensing for commercial use.
-
----
-
-## 🤝 Community
-- **GitHub Issues:** Bug reports and feature requests.
+## Support
+- **Issues:** GitHub Issue Tracker
 - **Email:** support@geograph.foundation
-- **Discord:** [Join the GeoGraph Community](https://discord.gg/geograph)
+- **Discord:** [Join GeoGraph Community](https://discord.gg/geograph)
 
-<p align="center"><sub>Preserving the past, training the future. Built by the GeoGraph Foundation.</sub></p>
+<p align="center"><sub>Built for the global open data movement.</sub></p>
