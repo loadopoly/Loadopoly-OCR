@@ -2,8 +2,7 @@ import './polyfills';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
-// Dynamic import ensures that 'polyfills' (above) has finished executing 
-// and attaching to window/global before 'App' and its dependencies (ethers, etc) are evaluated.
+// App is now at the root level, satisfying the flat project structure.
 import('./App')
   .then(({ default: App }) => {
     const rootElement = document.getElementById('root');
@@ -20,7 +19,6 @@ import('./App')
   })
   .catch((err) => {
     console.error("Failed to load application:", err);
-    // Render error to screen so it's not just blank
     const rootElement = document.getElementById('root');
     if (rootElement) {
       rootElement.innerHTML = `
