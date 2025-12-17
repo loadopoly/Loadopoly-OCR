@@ -1,12 +1,15 @@
-const CACHE_NAME = 'geograph-v1';
+const CACHE_NAME = 'geograph-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon.svg'
+  '/icon.svg',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/screenshot-desktop.png',
+  '/screenshot-mobile.png'
 ];
 
-// Install Event - Cache Core Assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -16,7 +19,6 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Activate Event - Clean Old Caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -32,29 +34,29 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch Event - Network First, Fallback to Cache
 self.addEventListener('fetch', (event) => {
-  // Skip cross-origin requests
   if (!event.request.url.startsWith(self.location.origin)) return;
-
-  // Handle API requests separately (don't cache POSTs, etc)
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // If good response, clone and cache it
-        if (response && response.status === 200 && response.type === 'basic') {
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) return cachedResponse;
+      
+      return fetch(event.request).then((response) => {
+        if (!response || response.status !== 200 || response.type !== 'basic') {
+          return response;
         }
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then((cache) => {
+          cache.put(event.request, responseToCache);
+        });
         return response;
-      })
-      .catch(() => {
-        // Network failed, try cache
-        return caches.match(event.request);
-      })
+      }).catch(() => {
+        // Fallback for document navigation if offline
+        if (event.request.mode === 'navigate') {
+          return caches.match('/index.html');
+        }
+      });
+    })
   );
 });

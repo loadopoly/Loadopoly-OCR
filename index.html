@@ -1,8 +1,8 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" dir="ltr">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light">
     <meta name="theme-color" content="#020617">
     
@@ -11,12 +11,13 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="GeoGraph">
-    <link rel="apple-touch-icon" href="/icon.svg">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
+    <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
     <link rel="icon" type="image/svg+xml" href="/icon.svg">
 
     <title>GeoGraph OCR Node</title>
     <script>
-      // Immediate polyfill for global to prevent library crashes before bundle loads
       if (typeof global === 'undefined') {
         window.global = window;
       }
@@ -35,29 +36,7 @@
               primary: {
                 500: '#3b82f6',
                 600: '#2563eb',
-              },
-              accent: {
-                500: '#10b981',
-                600: '#059669',
-              },
-              amber: {
-                400: '#fbbf24',
-                500: '#f59e0b',
-                900: '#78350f',
-              },
-              emerald: {
-                400: '#34d399',
-                500: '#10b981',
-                900: '#064e3b',
-              },
-              blue: {
-                400: '#60a5fa',
-                500: '#3b82f6',
-                900: '#1e3a8a',
               }
-            },
-            fontFamily: {
-              mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'Monaco', 'Consolas', 'Liberation Mono', 'Courier New', 'monospace'],
             }
           }
         }
@@ -67,9 +46,8 @@
       body {
         background-color: #020617;
         color: #f8fafc;
-        overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile PWA */
+        overscroll-behavior-y: none;
       }
-      /* Custom Scrollbar */
       ::-webkit-scrollbar {
         width: 8px;
         height: 8px;
@@ -80,9 +58,6 @@
       ::-webkit-scrollbar-thumb {
         background: #334155; 
         border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #475569; 
       }
     </style>
 <script type="importmap">
@@ -111,7 +86,6 @@
 </head>
   <body>
     <div id="root"></div>
-    <!-- ARIA live regions for accessibility announcements -->
     <div aria-live="polite" id="status-region" class="sr-only"></div>
     <div aria-live="assertive" id="alert-region" class="sr-only"></div>
     <script type="module" src="/src/index.tsx"></script>
@@ -119,12 +93,8 @@
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker.register('/sw.js')
-            .then(registration => {
-              console.log('SW registered: ', registration);
-            })
-            .catch(registrationError => {
-              console.log('SW registration failed: ', registrationError);
-            });
+            .then(reg => console.log('SW registered'))
+            .catch(err => console.log('SW failed', err));
         });
       }
     </script>

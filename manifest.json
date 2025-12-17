@@ -1,20 +1,68 @@
 {
-  "id": "geograph-node-v1",
+  "id": "geograph-node-pwa",
   "name": "GeoGraph Node",
   "short_name": "GeoGraph",
   "description": "OCR-to-Graph platform for historical data and AI training.",
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/",
   "start_url": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#020617",
   "theme_color": "#020617",
   "orientation": "portrait-primary",
   "categories": ["education", "productivity", "utilities"],
   "icons": [
     {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
       "src": "/icon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "GeoGraph Dashboard"
+    },
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "750x1334",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "AR Scanner View"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Quick Process",
+      "short_name": "Process",
+      "description": "Quickly scan and ingest documents",
+      "url": "/?tab=batch",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "AR Scanner",
+      "short_name": "AR",
+      "description": "Open the AR augmented reality scanner",
+      "url": "/?tab=ar",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
