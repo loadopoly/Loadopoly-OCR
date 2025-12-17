@@ -42,10 +42,6 @@ An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP process
 ![Database Clusters](screenshots/db-clusters.png)
 *Navigate your corpus using high-density tabular views or explore semantic clusters grouped by source and era.*
 
-### Global Marketplace
-![Marketplace](screenshots/marketplace.png)
-*Fractional ownership of curated datasets through dynamic sharding and community airdrops.*
-
 ---
 
 ## About
@@ -58,72 +54,6 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
 - **Historical Research:** Build complex, connected knowledge graphs from scanned documents.
 - **AI/ML Training:** Generate high-quality, ethically sourced, and licensed training datasets.
 - **Field Documentation:** Capture and catalog items with real-time location and environmental context.
-
----
-
-## Features
-
-### 🔍 Intelligent Scanning
-- **Gemini 2.5 Flash Integration:** State-of-the-art OCR with temporal extraction, GIS zone inference, and complex entity relationship detection.
-- **Multi-Mode Capture:** Optimized extraction pipelines for **Documents**, **Physical Artifacts**, and **Scenery**.
-- **Accessibility First:** Auto-generated alt-text (WCAG compliant), logical reading order, and screen reader audio playback.
-- **AR Scanner:** Real-time camera overlay simulating detection of nearby knowledge nodes and physical artifacts.
-
-### 📱 Progressive Web App (PWA)
-- **Installable:** Add to home screen on iOS, Android, and Desktop for a native experience.
-- **Offline-First:** Interface caches locally; utilizes IndexedDB for high-speed local processing before cloud syncing.
-- **Immersive:** Standalone mode removes browser chrome for focused data capture.
-
-### 🗺️ GIS & Location
-- **Automatic Geotagging:** Captures high-accuracy GPS coordinates with every scan.
-- **Zone Inference:** AI-powered environment classification (e.g., "Urban High Density", "Rural Agricultural").
-- **Landmark Detection:** Automatically identifies and links nearby POIs to the knowledge graph.
-
----
-
-## Getting Started
-
-### Prerequisites
-- Node.js 18+ 
-- npm or yarn
-- Google Gemini API key (set as `API_KEY` in environment)
-- Web3 Wallet (optional) for NFT shard features
-
-### Installation
-1. **Clone & Install**
-   ```bash
-   git clone https://github.com/geograph-foundation/geograph-node.git
-   cd geograph-node
-   npm install
-   ```
-2. **Environment Variables**
-   Create a `.env` file:
-   ```env
-   API_KEY=your_gemini_api_key
-   VITE_SUPABASE_URL=your_supabase_url
-   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
-   ```
-3. **Run Dev**
-   ```bash
-   npm run dev
-   ```
-
----
-
-## Architecture
-
-GeoGraph Node utilizes a **Hybrid Local-Cloud Architecture**.
-
-1. **Local Node:** Captures data via Camera/AR, processes through Gemini, and stores in **IndexedDB**.
-2. **Global Repository:** Automatically syncs processed records and images to **Supabase** (SQL + Storage).
-3. **Blockchain Layer:** Direct interaction with **Polygon** for minting shards and verifying data provenance.
-
----
-
-## Licensing
-- **Source Code:** [MIT](LICENSE)
-- **Raw Contributions:** [CC0 1.0 Universal](DATA-LICENSE.md) (Public Domain)
-- **Curated Bundles:** [Commercial Dataset License](COMMERCIAL-LICENSE.md)
 
 ---
 
