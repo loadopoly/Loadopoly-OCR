@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Brand Background -->
+  <rect width="512" height="512" fill="#1b222c"/>
+  
+  <!-- Stylized Tombstone Body -->
+  <path d="M100 400 L100 180 C100 80, 140 60, 256 60 C372 60, 412 80, 412 180 L412 400 Z" fill="#627186"/>
+  
+  <!-- Foundation Base -->
+  <rect x="50" y="400" width="412" height="60" fill="#445163"/>
+  
+  <!-- Relational Knowledge Bars -->
+  <!-- Entity Layer (Top) -->
+  <rect x="215" y="222" width="82" height="14" rx="7" fill="#3b82f6"/>
+  <!-- Extraction Layer (Middle) -->
+  <rect x="215" y="246" width="82" height="14" rx="7" fill="#3b82f6"/>
+  <!-- Context Layer (Bottom) -->
+  <rect x="215" y="270" width="82" height="14" rx="7" fill="#3b82f6"/>
+  
+  <!-- Node Intersections (Colored Dots) -->
+  <!-- Semantic Pivot (Purple Node) -->
+  <circle cx="312" cy="229" r="10" fill="#a855f7"/>
+  <!-- GIS Pivot (Green Node) -->
+  <circle cx="200" cy="253" r="10" fill="#10b981"/>
+</svg>
