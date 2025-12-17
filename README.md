@@ -3,63 +3,94 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.6.0-blueviolet.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.7.0-blueviolet.svg)](CHANGELOG.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
-An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP processing, and sharded NFT asset management for LLM training data.
+GeoGraph Node is a state-of-the-art OCR-to-Graph platform designed for historical document preservation and the generation of high-quality LLM training data. By integrating Google's **Gemini 2.5 Flash**, GIS metadata, and blockchain-based provenance, we transform physical archives into structured, relational knowledge universes.
 
 ---
 
-## 🚀 What's New in v1.6.0
-- **Gemini 2.5 Flash:** Upgraded the extraction engine to the latest high-performance model for blazing fast entity detection and relational mapping.
-- **Enhanced Graph Interaction:** Full D3.js zoom and pan support in all graph visualizations.
-- **Relational Cloud Integrity:** Robust reconstruction of knowledge graphs from Supabase JSONB dataframes, ensuring global views are as rich as local ones.
-- **Cluster View Database:** New hierarchical "Cluster View" for exploring the repository through semantic groupings (Era, Category, GIS Zone).
-- **Direct Cloud Sync:** One-click "Refresh Cloud" functionality to sync the latest global repository dataframes.
+## 🚀 What's New in v1.7.0
+- **Advanced PWA Integration:** Fully compliant PWA with shortcuts, share targets (share images directly to GeoGraph), and protocol handlers (`web+geograph://`).
+- **Tombstone Branding:** Updated brand identity featuring a stylized stone icon, reflecting our mission of preserving "set-in-stone" history.
+- **Gemini 2.5 Flash Engine:** Blazing fast complex text reasoning, automated alt-text generation (WCAG AAA), and entity extraction.
+- **D3.js Graph Visualizer:** Fully interactive knowledge graphs with smooth panning, multi-level zooming, and dynamic force-simulation.
+- **Cluster View Database:** Explore the global corpus through semantic clusters: group by Source, GIS Zone, Category, or Rights.
 
 ---
 
 ## 🖼️ Visual Tour
 
-### Dashboard & Intelligence
-![Dashboard Overview](screenshots/dashboard.png)
-*The central command center showing global stats, recent graph activity, and real-time GIS environment context.*
+### Intelligent Dashboard
+![Dashboard Overview](screenshot-desktop.png)
+*Real-time stats on training tokens, knowledge nodes, and GIS environment context.*
 
-### High-Throughput Ingestion
-![Batch Processing](screenshots/quick-processing.png)
-*Optimized pipeline for processing hundreds of documents per hour with automatic error handling and progress tracking.*
+### High-Throughput Batch Processing
+*Optimized for professional archiving, handle hundreds of documents with recursive folder imports and automated scan-type categorization (Items, Documents, Scenery).*
 
 ### Knowledge Graphs & Semantic Universe
 <div align="center">
-  <img src="screenshots/knowledge-graph.png" width="48%" alt="Knowledge Graph" />
-  <img src="screenshots/semantic-view.png" width="48%" alt="Semantic Universe" />
+  <img src="screenshot-mobile.png" width="48%" alt="Mobile AR Scanner" />
+  <img src="screenshot-desktop.png" width="48%" alt="Graph Visualization" />
 </div>
-*Left: Relational mapping of entities extracted by Gemini 2.5 Flash. Right: The Semantic Universe view clustering documents by era and LLM-derived category.*
-
-### Structured Dataframes & Clusters
-![Structured Database](screenshots/structured-db.png)
-![Database Clusters](screenshots/db-clusters.png)
-*Navigate your corpus using high-density tabular views or explore semantic clusters grouped by source and era.*
+*From AR-assisted field capture to multi-dimensional relational mapping.*
 
 ---
 
-## About
+## 🛠️ Core Features
 
-GeoGraph Node transforms physical documents, artifacts, and locations into structured, AI-ready training data. Using Google's Gemini 2.5 Flash for intelligent extraction, the platform creates rich knowledge graphs, preserves GIS context, and enables fractional data ownership through blockchain technology.
+### 🔍 AI-Powered Extraction
+- **Multimodal OCR:** Preserves logical reading order and document structure.
+- **GIS Metadata:** Automatic geotagging with inferred environment zones (e.g., "Urban High Density").
+- **Taxonomy Detection:** Automated kingdom/phylum/species classification for physical items.
+- **Accessibility First:** Generates short and long alt-text, reading order blocks, and accessibility scores.
 
-### Use Cases
+### 🕸️ Knowledge Graph Architecture
+- **Relational Mapping:** Connects people, locations, and organizations across disjointed documents.
+- **Semantic Clustering:** Automatically bundles related scans into intelligent "Archives" based on GPS proximity and temporal alignment.
 
-- **Archives & Museums:** Digitize collections with high-fidelity metadata extraction.
-- **Historical Research:** Build complex, connected knowledge graphs from scanned documents.
-- **AI/ML Training:** Generate high-quality, ethically sourced, and licensed training datasets.
-- **Field Documentation:** Capture and catalog items with real-time location and environmental context.
+### ⛓️ Web3 & Data Provenance
+- **DCC1 Sharding:** Fractionalize contribution rewards using sharded NFTs on Polygon.
+- **Fixity & Integrity:** Every asset is SHA-256 checksummed and timestamped on-chain for immutable provenance.
+- **License Fluidity:** Support for CC0 (Public Domain) contributions and commercial dataset licensing.
 
 ---
 
-## Support
-- **Issues:** GitHub Issue Tracker
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js 18+ 
+- Google Gemini API key (set as `API_KEY` in environment)
+- A modern browser (Chrome/Edge/Safari) for PWA and AR features
+
+### Installation
+1. **Clone & Install**
+   ```bash
+   git clone https://github.com/geograph-foundation/geograph-node.git
+   cd geograph-node
+   npm install
+   ```
+2. **Environment Configuration**
+   The application looks for `process.env.API_KEY` for Gemini processing.
+3. **Run Dev Environment**
+   ```bash
+   npm run dev
+   ```
+
+---
+
+## 📜 Licensing
+
+- **Source Code:** [MIT](LICENSE) - Open for community contribution.
+- **Individual Contributions:** [CC0 1.0 Universal](DATA-LICENSE.md) - All raw user contributions are dedicated to the public domain.
+- **Curated Bundles:** [Commercial License](COMMERCIAL-LICENSE.md) - Value-added datasets, embeddings, and quarterly releases are proprietary to the GeoGraph Foundation.
+
+---
+
+## 🤝 Support & Community
+- **Issues:** Submit via GitHub Issue Tracker
 - **Email:** support@geograph.foundation
-- **Discord:** [Join GeoGraph Community](https://discord.gg/geograph)
+- **Discord:** [Join the GeoGraph Community](https://discord.gg/geograph)
 
-<p align="center"><sub>Built for the global open data movement.</sub></p>
+<p align="center"><sub>Built by the GeoGraph Foundation for the global open data movement.</sub></p>
