@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [1.6.0] - 2025-01-07
 
 ### Added
-- **Engine Upgrade:** Migrated to `gemini-3-pro-preview` for enhanced complex text reasoning and better entity extraction in messy scans.
+- **Engine Upgrade:** Migrated to `gemini-2.5-flash` for blazing fast complex text reasoning and better entity extraction in messy scans.
 - **Graph Visualizer Panning/Zooming:** Integrated `d3.zoom` into the `GraphVisualizer` component, enabling users to explore dense knowledge graphs via mouse/touch.
 - **Structured DB Clusters:** Added a hierarchical "Cluster View" to the database tab, allowing grouping by Source, GIS Zone, Category, or Rights.
 - **Cloud Refresh Logic:** Explicit "Refresh Cloud" button in Master View to force-pull latest dataframes from Supabase.
