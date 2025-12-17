@@ -24,7 +24,6 @@ const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ data, width = 600, he
       .range(['#3b82f6', '#10b981', '#f59e0b', '#ec4899', '#6366f1']);
 
     // Deep copy to prevent mutation issues with React state in StrictMode
-    // Safe fallback to empty array if undefined
     const nodes = (data.nodes || []).map(d => ({ ...d }));
     const links = (data.links || []).map(d => ({ ...d }));
 
@@ -49,9 +48,19 @@ const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ data, width = 600, he
       .data(nodes)
       .join("circle")
       .attr("r", (d: any) => 10 + (d.relevance || 0.5) * 10)
-      .attr("fill", (d: any) => colorScale(d.type))
-      .attr("stroke", "#fff")
-      .attr("stroke-width", 1.5)
+      .attr("fill", (d: any) => {
+          // Special coloring for Public Domain Documents
+          if (d.type === 'DOCUMENT') {
+              return d.license === 'CC0' ? '#10b981' : '#64748b'; // Emerald for CC0, Slate for others
+          }
+          return colorScale(d.type);
+      })
+      .attr("stroke", (d: any) => {
+          // Add a glow/stroke for CC0 nodes
+          if (d.type === 'DOCUMENT' && d.license === 'CC0') return '#34d399';
+          return "#fff";
+      })
+      .attr("stroke-width", (d: any) => d.type === 'DOCUMENT' && d.license === 'CC0' ? 3 : 1.5)
       .call(drag(simulation) as any)
       .on("click", (event, d) => {
           setSelectedNode(d as unknown as GraphNode);
@@ -124,7 +133,14 @@ const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ data, width = 600, he
   return (
     <div className="relative rounded-lg overflow-hidden border border-slate-700 bg-slate-900/50">
       <svg ref={svgRef} width={width} height={height} className="cursor-pointer" />
-      <div className="absolute top-2 left-2 flex flex-col gap-2 pointer-events-none">
+      <div className="absolute top-2 left-2 flex flex-col gap-2 pointer-events-none bg-slate-950/80 p-2 rounded border border-slate-800">
+         <div className="flex items-center gap-2 text-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 border border-emerald-300"></span> Public Document (CC0)
+         </div>
+         <div className="flex items-center gap-2 text-xs">
+            <span className="w-2 h-2 rounded-full bg-slate-500"></span> Private/Commercial Doc
+         </div>
+         <div className="h-px bg-slate-800 w-full my-1"></div>
          <div className="flex items-center gap-2 text-xs">
             <span className="w-2 h-2 rounded-full bg-blue-500"></span> Person
          </div>
@@ -138,7 +154,12 @@ const GraphVisualizer: React.FC<GraphVisualizerProps> = ({ data, width = 600, he
       {selectedNode && (
           <div className="absolute bottom-4 right-4 bg-slate-800 p-3 rounded border border-slate-600 shadow-xl max-w-xs animate-in fade-in slide-in-from-bottom-2">
               <h4 className="font-bold text-white text-sm">{selectedNode.label}</h4>
-              <p className="text-xs text-slate-400 capitalize">{selectedNode.type}</p>
+              <p className="text-xs text-slate-400 capitalize flex items-center gap-1">
+                  {selectedNode.type}
+                  {selectedNode.license === 'CC0' && (
+                      <span className="bg-emerald-500/20 text-emerald-300 text-[9px] px-1 rounded border border-emerald-500/30">CC0</span>
+                  )}
+              </p>
               <p className="text-xs text-slate-500 mt-1">Relevance Score: {selectedNode.relevance.toFixed(2)}</p>
           </div>
       )}

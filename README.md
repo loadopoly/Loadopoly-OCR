@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.5.0-blueviolet.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.5.1-blueviolet.svg)](CHANGELOG.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -47,6 +47,11 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
 - **Multi-Mode Capture:** Optimized extraction pipelines for **Documents**, **Physical Artifacts**, and **Scenery**.
 - **Accessibility First:** Auto-generated alt-text, reading order, and screen reader support
 - **AR Scanner (v1.3):** Real-time camera overlay simulating detection of nearby knowledge nodes and artifacts.
+
+### 📱 Progressive Web App (PWA) (v1.5.1)
+- **Installable:** Add to home screen on iOS, Android, and Desktop.
+- **Offline-Capable:** Interface caches locally; offline processing queue for later sync.
+- **Immersive:** Standalone display mode removes browser chrome for a native app feel.
 
 ### 🗺️ GIS & Location
 - **Automatic Geotagging:** Capture GPS coordinates with every scan
@@ -280,6 +285,7 @@ Key dependencies:
 
 ## Roadmap
 
+- [x] PWA (Installable on iOS/Android)
 - [ ] iOS App Store release
 - [ ] Google Play Store release
 - [ ] Offline AI processing (on-device models)

@@ -72,6 +72,7 @@ export interface GraphNode {
   label: string;
   type: 'PERSON' | 'LOCATION' | 'ORGANIZATION' | 'DATE' | 'CONCEPT' | 'CLUSTER' | 'DOCUMENT';
   relevance: number; // 0-1
+  license?: string; // e.g., 'CC0' or 'COMMERCIAL'
 }
 
 export interface GraphLink {
