@@ -2,7 +2,7 @@
   "id": "/",
   "name": "GeoGraph Node",
   "short_name": "GeoGraph",
-  "description": "Advanced OCR-to-Graph platform for historical data extraction and GIS metadata generation.",
+  "description": "Advanced OCR-to-Graph platform for historical data extraction, GIS metadata generation, and AI training dataset creation.",
   "lang": "en",
   "dir": "ltr",
   "start_url": "/",
@@ -35,18 +35,39 @@
   ],
   "screenshots": [
     {
-      "src": "/screenshot-desktop.png",
+      "src": "/screenshot-desktop-1.png",
       "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "GeoGraph Dashboard on Desktop"
+      "label": "Dashboard - Central command center with stats, graph activity, and GIS context"
     },
     {
-      "src": "/screenshot-mobile.png",
+      "src": "/screenshot-desktop-2.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Structured Database - Cloud dataframes with tabular cluster view"
+    },
+    {
+      "src": "/screenshot-desktop-3.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Knowledge Graph - Interactive entity relationship visualization"
+    },
+    {
+      "src": "/screenshot-mobile-1.png",
       "sizes": "390x844",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "AR Scanner on Mobile"
+      "label": "Mobile Dashboard - Stats and recent activity on the go"
+    },
+    {
+      "src": "/screenshot-mobile-2.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "AR Scanner - Real-time environment analysis and data capture"
     }
   ],
   "shortcuts": [
