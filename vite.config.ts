@@ -11,7 +11,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      '@': resolve(__dirname, './src'),
+      '@': resolve(__dirname, './'),
       process: "process/browser",
       stream: "stream-browserify",
       zlib: "browserify-zlib",
