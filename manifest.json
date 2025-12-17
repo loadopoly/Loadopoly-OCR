@@ -1,4 +1,5 @@
 {
+  "id": "geograph-node-v1",
   "name": "GeoGraph Node",
   "short_name": "GeoGraph",
   "description": "OCR-to-Graph platform for historical data and AI training.",
@@ -7,17 +8,12 @@
   "background_color": "#020617",
   "theme_color": "#020617",
   "orientation": "portrait-primary",
+  "categories": ["education", "productivity", "utilities"],
   "icons": [
     {
-      "src": "/pwa-192x192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "/pwa-512x512.png",
-      "sizes": "512x512",
-      "type": "image/png",
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ]
