@@ -2,17 +2,33 @@
   "id": "geograph-node-pwa",
   "name": "GeoGraph Node",
   "short_name": "GeoGraph",
-  "description": "OCR-to-Graph platform for historical data and AI training.",
+  "description": "Advanced OCR-to-Graph platform for historical data extraction and GIS metadata generation.",
   "lang": "en",
   "dir": "ltr",
   "scope": "/",
-  "start_url": "/",
+  "start_url": "/?utm_source=pwa",
   "display": "standalone",
-  "display_override": ["window-controls-overlay", "standalone"],
+  "display_override": [
+    "window-controls-overlay",
+    "tabbed",
+    "standalone"
+  ],
   "background_color": "#020617",
   "theme_color": "#020617",
-  "orientation": "portrait-primary",
-  "categories": ["education", "productivity", "utilities"],
+  "orientation": "any",
+  "categories": [
+    "education",
+    "productivity",
+    "utilities"
+  ],
+  "iarc_rating_id": "8427f27a-80b5-466d-8378-a23d64614741",
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "scope_extensions": [
+    {
+      "origin": "https://geograph.foundation"
+    }
+  ],
   "icons": [
     {
       "src": "/icon-192.png",
@@ -39,30 +55,91 @@
       "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide",
-      "label": "GeoGraph Dashboard"
+      "label": "GeoGraph Dashboard on Desktop"
     },
     {
       "src": "/screenshot-mobile.png",
       "sizes": "750x1334",
       "type": "image/png",
       "form_factor": "narrow",
-      "label": "AR Scanner View"
+      "label": "AR Scanner on Mobile"
     }
   ],
   "shortcuts": [
     {
       "name": "Quick Process",
       "short_name": "Process",
-      "description": "Quickly scan and ingest documents",
+      "description": "Start a new high-throughput batch scan",
       "url": "/?tab=batch",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "AR Scanner",
       "short_name": "AR",
-      "description": "Open the AR augmented reality scanner",
+      "description": "Open the immersive AR field scanner",
       "url": "/?tab=ar",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
-  ]
+  ],
+  "file_handlers": [
+    {
+      "action": "/?action=open-file",
+      "accept": {
+        "image/*": [
+          ".jpg",
+          ".jpeg",
+          ".png",
+          ".webp",
+          ".heic"
+        ],
+        "application/pdf": [
+          ".pdf"
+        ]
+      }
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+geograph",
+      "url": "/?uri=%s"
+    }
+  ],
+  "share_target": {
+    "action": "/?action=share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "name",
+      "text": "description",
+      "files": [
+        {
+          "name": "media",
+          "accept": [
+            "image/*",
+            "application/pdf"
+          ]
+        }
+      ]
+    }
+  ],
+  "note_taking": {
+    "new_note_url": "/?tab=batch&mode=new"
+  },
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "widgets": []
 }
