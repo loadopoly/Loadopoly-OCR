@@ -2,7 +2,8 @@ import './polyfills';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 
-// App is now at the root level, satisfying the flat project structure.
+// Load the main App component using a dynamic import to ensure polyfills are ready.
+// The path is root-relative (./App) to follow the flattened project structure.
 import('./App')
   .then(({ default: App }) => {
     const rootElement = document.getElementById('root');
