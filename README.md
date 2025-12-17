@@ -131,6 +131,12 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
    http://localhost:3000
    ```
 
+### Database Setup (Optional)
+
+The application works in "Local-First" mode using IndexedDB by default. To enable global syncing, cloud storage, and the marketplace, you must configure a Supabase backend.
+
+👉 **[View Database Setup Guide](DATABASE_SETUP.md)** for full schema migrations and SQL scripts.
+
 ### Web3 Configuration
 
 To use the blockchain features:
