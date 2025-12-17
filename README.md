@@ -20,6 +20,34 @@ An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP process
 
 ---
 
+## 🖼️ Visual Tour
+
+### Dashboard & Intelligence
+![Dashboard Overview](screenshots/dashboard.png)
+*The central command center showing global stats, recent graph activity, and real-time GIS environment context.*
+
+### High-Throughput Ingestion
+![Batch Processing](screenshots/quick-processing.png)
+*Optimized pipeline for processing hundreds of documents per hour with automatic error handling and progress tracking.*
+
+### Knowledge Graphs & Semantic Universe
+<div align="center">
+  <img src="screenshots/knowledge-graph.png" width="48%" alt="Knowledge Graph" />
+  <img src="screenshots/semantic-view.png" width="48%" alt="Semantic Universe" />
+</div>
+*Left: Relational mapping of entities extracted by Gemini 3 Pro. Right: The Semantic Universe view clustering documents by era and LLM-derived category.*
+
+### Structured Dataframes & Clusters
+![Structured Database](screenshots/structured-db.png)
+![Database Clusters](screenshots/db-clusters.png)
+*Navigate your corpus using high-density tabular views or explore semantic clusters grouped by source and era.*
+
+### Global Marketplace
+![Marketplace](screenshots/marketplace.png)
+*Fractional ownership of curated datasets through dynamic sharding and community airdrops.*
+
+---
+
 ## About
 
 GeoGraph Node transforms physical documents, artifacts, and locations into structured, AI-ready training data. Using Google's Gemini 3 Pro Preview for intelligent extraction, the platform creates rich knowledge graphs, preserves GIS context, and enables fractional data ownership through blockchain technology.
@@ -50,17 +78,6 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
 - **Automatic Geotagging:** Captures high-accuracy GPS coordinates with every scan.
 - **Zone Inference:** AI-powered environment classification (e.g., "Urban High Density", "Rural Agricultural").
 - **Landmark Detection:** Automatically identifies and links nearby POIs to the knowledge graph.
-
-### 🕸️ Knowledge Graphs & Database
-- **Dynamic Grouping:** Pivot your entire repository on the fly by **Source Collection**, **GIS Zone**, **NLP Category**, or **Rights Statement**.
-- **Tabular Dataframes:** High-performance table view with description-centric columns and exportable JSON/JSONL records.
-- **Semantic Canvas:** 2D/3D universe view of your entire corpus using force-directed graph algorithms.
-- **Global Corpus View:** Real-time access to the master repository of all contributed assets across the network.
-
-### 📦 Smart Marketplace
-- **Community Airdrops:** Admins can broadcast CC0 datasets as free "Community Drops" for all nodes to claim.
-- **Smart Deduplication:** Automatic analysis of bundle contents against local holdings to prevent redundant data acquisition.
-- **Fractional Sharding:** Dynamic shard supply that scales with the underlying database volume.
 
 ---
 
