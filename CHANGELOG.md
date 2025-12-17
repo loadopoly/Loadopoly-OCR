@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.5.1] - 2025-01-06
+
+### Added
+- **PWA Support:** Added `manifest.json` and meta tags to support installation as a standalone app on iOS, Android, and Desktop.
+- **Mobile Optimizations:** Updated viewport settings to prevent accidental zooming on mobile inputs.
+
 ## [1.5.0] - 2025-01-05
 
 ### Added

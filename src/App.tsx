@@ -652,6 +652,8 @@ export default function App() {
           label: a.sqlRecord?.DOCUMENT_TITLE || 'Untitled',
           type: 'DOCUMENT' as const,
           relevance: 1.0,
+          // Inject license info for visualization
+          license: a.sqlRecord?.DATA_LICENSE
       }));
 
       const entityNodesMap = new Map<string, GraphNode>();
@@ -1372,7 +1374,13 @@ export default function App() {
                                        <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{rec.NLP_DERIVED_GIS_ZONE || '-'}</td>
                                        <td className="px-4 py-3 text-center border-r border-slate-800">{rec.NODE_COUNT}</td>
                                        <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap max-w-[150px] truncate">{rec.NLP_NODE_CATEGORIZATION}</td>
-                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap">{rec.RIGHTS_STATEMENT}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap">
+                                           {rec.DATA_LICENSE === 'CC0' ? (
+                                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-900/50 text-emerald-400 border border-emerald-500/30">CC0 (Public)</span>
+                                           ) : (
+                                               <span className="text-slate-500">{rec.RIGHTS_STATEMENT}</span>
+                                           )}
+                                       </td>
                                        <td className="px-4 py-3 border-r border-slate-800">{rec.FILE_FORMAT}</td>
                                        <td className="px-4 py-3 border-r border-slate-800 text-right">{rec.FILE_SIZE_BYTES.toLocaleString()}</td>
                                        <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap text-[9px] text-slate-600" title={rec.FIXITY_CHECKSUM}>{rec.FIXITY_CHECKSUM.substring(0,8)}...</td>

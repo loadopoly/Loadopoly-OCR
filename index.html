@@ -2,9 +2,17 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
     <meta name="color-scheme" content="dark light">
     <meta name="theme-color" content="#020617">
+    
+    <!-- PWA Meta Tags -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="GeoGraph">
+    <link rel="apple-touch-icon" href="/pwa-192x192.png">
+
     <title>GeoGraph OCR Node</title>
     <script>
       // Immediate polyfill for global to prevent library crashes before bundle loads
@@ -58,6 +66,7 @@
       body {
         background-color: #020617;
         color: #f8fafc;
+        overscroll-behavior-y: none; /* Prevent pull-to-refresh on mobile PWA */
       }
       /* Custom Scrollbar */
       ::-webkit-scrollbar {
