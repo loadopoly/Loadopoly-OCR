@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.6.0] - 2025-01-07
+
+### Added
+- **Engine Upgrade:** Migrated to `gemini-3-pro-preview` for enhanced complex text reasoning and better entity extraction in messy scans.
+- **Graph Visualizer Panning/Zooming:** Integrated `d3.zoom` into the `GraphVisualizer` component, enabling users to explore dense knowledge graphs via mouse/touch.
+- **Structured DB Clusters:** Added a hierarchical "Cluster View" to the database tab, allowing grouping by Source, GIS Zone, Category, or Rights.
+- **Cloud Refresh Logic:** Explicit "Refresh Cloud" button in Master View to force-pull latest dataframes from Supabase.
+- **Relational Integrity:** Enhanced the Supabase fetching service to reconstruct D3-compatible nodes and links from flattened SQL records.
+
+### Changed
+- **Database Default View:** Set "Tabular View" as the default view for the database tab for better data density.
+- **Metadata Labels:** Replaced the "Rights" column in the main database table with "Description" to prioritize semantic content visibility.
+- **Collection Naming:** Integrated Gemini-suggested collection names to replace the generic "Batch Ingest" label.
+
+### Fixed
+- **Image Persistence:** Resolved a race condition where blob URLs were not being converted to permanent storage URLs fast enough for local persistence.
+- **TypeScript Strictness:** Added missing types and `@ts-ignore` markers for `import.meta.env` access in non-Vite contexts.
+
 ## [1.5.1] - 2025-01-06
 
 ### Added
@@ -14,62 +32,10 @@ All notable changes to this project will be documented in this file.
 - **Admin Broadcast Console:** Enabled administrators (and Master View users) to broadcast data to the network as "Public Airdrops".
 - **Community Airdrops:** The Marketplace now features a dedicated section for "Community Airdrops (Free)", allowing all nodes to sync broadcasted data without cost.
 - **CC0 Licensing Pipeline:** Ingestion pipeline updated to support explicit `CC0` (Public Domain) licensing triggers during broadcast events.
-- **Smart Claim Logic:** The Purchase Modal now detects free items, bypassing cost calculations and enabling a "Smart Sync" flow for public data.
 
-## [1.4.0] - 2025-01-04
-
-### Added
-- **Universal Data Ingestion:** Implemented automatic background syncing to the Supabase global corpus for all processed assets. This ensures data persistence across sessions for all users.
-- **Anonymous Contributions:** Users without accounts now contribute data via a generated UUID session ID, allowing for frictionless guest usage while maintaining database integrity.
-- **Global Master View:** The "Switch to Master View" toggle is now available to all users (previously Admin only), enabling everyone to visualize and explore the entire global corpus during the testing phase.
-
-### Changed
-- **Production Deployment Fixes:** 
-    - Removed conflicting `<importmap>` from `index.html` to resolve React version conflicts (black screen issues) on Vercel/Production.
-    - Added `vercel.json` rewrite rules to support Single Page Application (SPA) routing.
-    - Updated `vite.config.ts` to polyfill `process.env` for compatibility with third-party libraries.
-
-## [1.3.0] - 2025-01-03
-
-### Added
-- **AR Scanner Enhancements:** Improved AR tab with simulated overlays, scanning animations, and better camera integration.
-- **Shard Analytics:** User Profile settings now display total collected shards and contribution count derived from local asset data.
-- **Robust Error Handling:** Added detailed error tracking for failed ingestions; improved batch processing resilience.
-- **File Bundling Improvements:** Enhanced stability of the bundling service with better empty-group handling and try-catch blocks.
-
-## [1.2.0] - 2025-01-02
-
-### Added
-- **Smart Marketplace Deduplication:** Implemented logic to compare bundle contents against the user's local repository.
-- **Smart Filter Purchase:** Users can now purchase only the "delta" (unique items) of a bundle, filtering out assets they already own to save costs and avoid redundancy.
-- **Dynamic Database Grouping:** The Structured Database view now allows dynamic grouping by Source Collection, GIS Zone, NLP Category, and Rights Statement.
-
-### Changed
-- **Stat Card Interaction:** Dashboard stat cards are now clickable and navigate to the relevant filtered views.
-- **Marketplace UI:** Updated bundle cards to reflect ownership status and real-time token/shard calculations.
-
-## [1.1.0] - 2025-01-01
-
-### Added
-- **Web3 Integration Toggle:** New setting in the Settings Panel allowing users to choose between "Enabled" (Strict Blockchain Verification) and "Disabled" (Frictionless/Virtual) modes.
-- **Client-Side Minting:** Implemented `mintShardClientSide` using `ethers.js` v6 to interact directly with the Shard Contract on Polygon via the user's browser wallet.
-- **Multi-Wallet Support:** Added support for EIP-1193 providers, enabling connections via MetaMask, Coinbase Wallet, Rabby, and others.
-- **Network Switching:** Automatic switching to Polygon Mainnet when interacting with blockchain features.
-- **Real-Time Feedback:** Contribute button now shows "Confirming..." and "Shard Minted" states based on real transaction receipts.
-
-### Changed
-- **Removed Simulation:** Deprecated the simulated NFT generation logic in `geminiService` and `web3Service`. NFT data is now only generated upon successful on-chain transaction.
-- **Updated Settings UI:** Redesigned the Settings Panel to include the Web3 toggle and clarify the distinction between local-first and blockchain-enabled workflows.
-- **Refactored Contribution Flow:** The `ContributeButton` now strictly checks the Web3 setting before attempting to trigger wallet actions.
-
-### Fixed
-- **Type Safety:** Resolved TypeScript enum mismatches in `ContributeButton` regarding `AssetStatus`.
-- **Wallet Connection:** Improved error handling for user rejection during wallet connection requests.
+## [1.4.0] - 2024-12-28
+- **Universal Data Ingestion:** Automatic background syncing to Supabase global corpus.
+- **Anonymous Contributions:** Frictionless guest usage via session-based UUIDs.
 
 ## [1.0.0] - 2024-12-01
-
-### Initial Release
-- Core OCR and Graph functionality.
-- Gemini 2.5 Flash integration.
-- IndexedDB local storage.
-- Basic visualization and bundling.
+- Initial public release of the GeoGraph Node.

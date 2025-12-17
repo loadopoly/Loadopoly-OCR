@@ -38,7 +38,9 @@ import {
   Volume2,
   Globe,
   Lock,
-  Radio
+  Radio,
+  List,
+  CloudDownload
 } from 'lucide-react';
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG, GraphData, GraphNode } from './types';
 import { processImageWithGemini } from './services/geminiService';
@@ -58,7 +60,7 @@ import BatchImporter from './components/BatchImporter';
 import SettingsPanel from './components/SettingsPanel';
 import SmartUploadSelector from './components/SmartUploadSelector';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
-import PurchaseModal from './components/PurchaseModal'; // Import new modal
+import PurchaseModal from './components/PurchaseModal';
 import { announce } from './lib/accessibility';
 
 // --- Helper Functions ---
@@ -68,20 +70,6 @@ async function calculateSHA256(file: File): Promise<string> {
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
-
-const bitmapToFile = async (bitmap: ImageBitmap, fileName: string): Promise<File> => {
-    const canvas = document.createElement('canvas');
-    canvas.width = bitmap.width;
-    canvas.height = bitmap.height;
-    const ctx = canvas.getContext('2d');
-    if(ctx) ctx.drawImage(bitmap, 0, 0);
-    
-    const blob = await new Promise<Blob | null>(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
-    if (!blob) throw new Error("Failed to convert bitmap to blob");
-    return new File([blob], fileName, { type: 'image/jpeg' });
-};
-
-// --- Sub-components ---
 
 const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
   <button
@@ -112,177 +100,97 @@ const StatCard = ({ label, value, icon: Icon, color, onClick }: any) => (
   </div>
 );
 
-// --- Main App ---
-
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  
-  // Data Sources
   const [localAssets, setLocalAssets] = useState<DigitalAsset[]>([]);
   const [globalAssets, setGlobalAssets] = useState<DigitalAsset[]>([]);
-  
-  // Auth & View Mode
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isGlobalView, setIsGlobalView] = useState(false);
-
-  // Derived active asset list based on view mode
   const assets = isGlobalView ? globalAssets : localAssets;
-
-  // Combined list of Single Assets AND Bundles for display
   const [displayItems, setDisplayItems] = useState<(DigitalAsset | ImageBundle)[]>([]);
-  
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [geoPermission, setGeoPermission] = useState<boolean>(false);
-  
-  // Database & Grouping State
   const [groupBy, setGroupBy] = useState<'SOURCE' | 'ZONE' | 'CATEGORY' | 'RIGHTS'>('SOURCE');
-  const [dbViewMode, setDbViewMode] = useState<'GROUPS' | 'DRILLDOWN'>('GROUPS');
+  const [dbViewMode, setDbViewMode] = useState<'GROUPS' | 'DRILLDOWN'>('DRILLDOWN');
   const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 50;
-
-  // Graph View State
   const [graphViewMode, setGraphViewMode] = useState<'SINGLE' | 'GLOBAL'>('SINGLE');
-
-  // Batch Processing State
+  const [graphFilters, setGraphFilters] = useState({ era: 'all', category: 'all', contested: false });
   const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
   const [selectedScanType, setSelectedScanType] = useState<ScanType | null>(null);
-  const [isPublicBroadcast, setIsPublicBroadcast] = useState(false); // Admin toggle for free airdrops
-
-  // Asset View State
+  const [isPublicBroadcast, setIsPublicBroadcast] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
-
-  // AR State
   const [arSessionQueue, setArSessionQueue] = useState<File[]>([]);
-
-  // Privacy Policy
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
-
-  // Purchasing / Marketplace State
   const [ownedAssetIds, setOwnedAssetIds] = useState<Set<string>>(new Set());
   const [purchaseModalData, setPurchaseModalData] = useState<{title: string, assets: DigitalAsset[]} | null>(null);
 
-  // Stats derivation
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
 
   useEffect(() => {
-    // Check Geo permissions on mount
-    navigator.permissions.query({ name: 'geolocation' }).then((result) => {
-      setGeoPermission(result.state === 'granted');
-    });
-
-    // Check Auth
-    getCurrentUser().then(({ data }) => {
-        if(data.user) {
-            setUser(data.user);
-            setIsAdmin(true); 
-        }
-    });
-
-    // Initialize Auto Sync
+    navigator.permissions.query({ name: 'geolocation' }).then((result) => setGeoPermission(result.state === 'granted'));
+    getCurrentUser().then(({ data }) => { if(data.user) { setUser(data.user); setIsAdmin(true); } });
     initSync();
-
-    // Load persisted local assets
-    loadAssets().then(loadedAssets => {
-        setLocalAssets(loadedAssets);
-    });
-
-    // Load purchased assets from LocalStorage (Simulating a user wallet/portfolio database)
+    loadAssets().then(setLocalAssets);
     const storedPurchases = localStorage.getItem('geograph-owned-assets');
-    if (storedPurchases) {
-        setOwnedAssetIds(new Set(JSON.parse(storedPurchases)));
-    }
-
-    // Listen for background file events
-    const handleNewFile = (event: CustomEvent<File>) => {
-        ingestFile(event.detail, "Auto-Sync");
-    };
-
-    // @ts-ignore
-    window.addEventListener('geograph-new-file', handleNewFile);
-
-    return () => {
-        // @ts-ignore
-        window.removeEventListener('geograph-new-file', handleNewFile);
-    }
+    if (storedPurchases) setOwnedAssetIds(new Set(JSON.parse(storedPurchases)));
+    const handleNewFile = (event: CustomEvent<File>) => ingestFile(event.detail, "Auto-Sync");
+    window.addEventListener('geograph-new-file', handleNewFile as any);
+    return () => window.removeEventListener('geograph-new-file', handleNewFile as any);
   }, []);
 
-  // Fetch Global Assets when Admin Mode is toggled
+  const refreshGlobalData = async () => {
+    setIsProcessing(true);
+    try {
+      const data = await fetchGlobalCorpus();
+      setGlobalAssets(data);
+      announce(`Synced ${data.length} cloud assets.`);
+    } catch (err) {
+      console.error("Global fetch failed", err);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   useEffect(() => {
-      if (isGlobalView && globalAssets.length === 0) {
-          setIsProcessing(true);
-          fetchGlobalCorpus()
-            .then(data => {
-                setGlobalAssets(data);
-                announce(`Loaded ${data.length} global assets`);
-            })
-            .catch(err => console.error("Global fetch failed", err))
-            .finally(() => setIsProcessing(false));
-      }
+    if (isGlobalView && globalAssets.length === 0) refreshGlobalData();
   }, [isGlobalView]);
 
-  // --- Bundling Effect ---
-  // When assets change, re-run bundling logic
   useEffect(() => {
     if (assets.length > 0) {
-        // Only bundle assets that have been processed (MINTED or READY)
-        // Using "status" MINTED here loosely to mean processed by AI, 
-        // though strictly it means NFT minted. 
-        // Let's filter by if they have sqlRecord
         const processedAssets = assets.filter(a => !!a.sqlRecord);
         const processingAssets = assets.filter(a => !a.sqlRecord);
-        
-        // Create bundles
         const bundles = createBundles(processedAssets);
-        
-        // Combine bundles with assets that are still processing
         setDisplayItems([...processingAssets, ...bundles]);
     } else {
         setDisplayItems([]);
     }
   }, [assets]);
 
-  // Handle Asset Update (e.g. from Contribute Button)
   const handleAssetUpdate = async (updatedAsset: DigitalAsset) => {
-      // We only update local assets directly. Global assets are read-only in this view usually, 
-      // or updated via a separate admin process.
-      if (!isGlobalView) {
-          setLocalAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
-          await saveAsset(updatedAsset);
-      }
+    if (!isGlobalView) {
+        setLocalAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+        await saveAsset(updatedAsset);
+    }
   };
 
-  // --- Purchase Logic ---
   const handlePurchase = (purchasedItems: DigitalAsset[]) => {
-      // Add new IDs to owned set
       const newSet = new Set(ownedAssetIds);
-      let newCount = 0;
-      purchasedItems.forEach(item => {
-          if(!newSet.has(item.id)) {
-              newSet.add(item.id);
-              newCount++;
-          }
-      });
-      
+      purchasedItems.forEach(item => newSet.add(item.id));
       setOwnedAssetIds(newSet);
-      // Persist to "database" (LocalStorage for this node)
       localStorage.setItem('geograph-owned-assets', JSON.stringify(Array.from(newSet)));
-      
       setPurchaseModalData(null);
-      
-      const msg = `Successfully added ${purchasedItems.length} assets to your node. ${newCount} new items detected.`;
-      alert(msg);
-      announce(msg);
+      alert(`Successfully added ${purchasedItems.length} assets to your node.`);
   };
 
-  // --- Tab Switching Logic (AR Session Handling) ---
   const switchTab = async (newTab: string) => {
-      // If we are leaving the AR tab and have items in the session queue
       if (activeTab === 'ar' && newTab !== 'ar' && arSessionQueue.length > 0) {
           if (window.confirm(`Process ${arSessionQueue.length} items from your AR Session?`)) {
-              processArSession();
+              handleBatchFiles(arSessionQueue);
+              setArSessionQueue([]);
           } else {
               setArSessionQueue([]);
           }
@@ -290,29 +198,16 @@ export default function App() {
       setActiveTab(newTab);
   };
 
-  const processArSession = () => {
-      if (arSessionQueue.length === 0) return;
-      handleBatchFiles(arSessionQueue);
-      announce(`${arSessionQueue.length} AR items sent to processing queue.`);
-      setArSessionQueue([]);
-  };
-
-  // --- Processing Logic ---
-
   const createInitialAsset = async (file: File): Promise<DigitalAsset> => {
       const checksum = await calculateSHA256(file);
       const ingestDate = new Date().toISOString();
-      const fileSize = file.size;
-      const fileType = file.type;
       const id = Math.random().toString(36).substring(7);
-
-      // Extract scan type if attached during batch upload
       const scanType = (file as any).scanType || ScanType.DOCUMENT;
 
       return {
-        id: id,
+        id,
         imageUrl: URL.createObjectURL(file),
-        imageBlob: file, // Store for persistence
+        imageBlob: file,
         timestamp: ingestDate,
         ocrText: "",
         status: AssetStatus.PROCESSING,
@@ -328,11 +223,11 @@ export default function App() {
           NLP_NODE_CATEGORIZATION: "PENDING",
           RAW_OCR_TRANSCRIPTION: "",
           PREPROCESS_OCR_TRANSCRIPTION: "",
-          SOURCE_COLLECTION: "Batch Ingest",
+          SOURCE_COLLECTION: "Processing...",
           DOCUMENT_TITLE: file.name,
           DOCUMENT_DESCRIPTION: "Pending Analysis",
-          FILE_FORMAT: fileType,
-          FILE_SIZE_BYTES: fileSize,
+          FILE_FORMAT: file.type,
+          FILE_SIZE_BYTES: file.size,
           RESOLUTION_DPI: 72,
           COLOR_MODE: "RGB",
           CREATOR_AGENT: null,
@@ -345,39 +240,28 @@ export default function App() {
           CONFIDENCE_SCORE: 0,
           ENTITIES_EXTRACTED: [],
           RELATED_ASSETS: [],
-          PRESERVATION_EVENTS: [{
-             eventType: "INGESTION",
-             timestamp: ingestDate,
-             agent: "SYSTEM_USER",
-             outcome: "SUCCESS"
-          }],
+          PRESERVATION_EVENTS: [{ eventType: "INGESTION", timestamp: ingestDate, agent: "SYSTEM_USER", outcome: "SUCCESS" }],
           KEYWORDS_TAGS: [],
           ACCESS_RESTRICTIONS: false,
-          scan_type: scanType, // From selector
+          scan_type: scanType,
           CONTRIBUTOR_ID: null,
           CONTRIBUTED_AT: null,
-          // Apply Public Domain License if Broadcast Mode is active
           DATA_LICENSE: isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0', 
           CONTRIBUTOR_NFT_MINTED: false
         }
       };
   };
 
-  const processAssetPipeline = async (asset: DigitalAsset, file: File, customLocation?: {lat: number, lng: number}) => {
-      let location: {lat: number, lng: number} | null = customLocation || null;
-      
-      if (!location && navigator.geolocation) {
+  const processAssetPipeline = async (asset: DigitalAsset, file: File) => {
+      let location: {lat: number, lng: number} | null = null;
+      if (navigator.geolocation) {
         try {
-          const position = await new Promise<GeolocationPosition>((resolve, reject) => {
-             navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 });
-          });
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 }));
           location = { lat: position.coords.latitude, lng: position.coords.longitude };
-        } catch (e) { /* ignore */ }
+        } catch (e) {}
       }
 
-      // Determine Scan Type to guide the AI extraction
       const scanType = (asset.sqlRecord?.scan_type as ScanType) || ScanType.DOCUMENT;
-
       const analysis = await processImageWithGemini(file, location, scanType);
       
       const updatedSqlRecord: HistoricalDocumentMetadata = {
@@ -393,42 +277,32 @@ export default function App() {
             PREPROCESS_OCR_TRANSCRIPTION: analysis.preprocessOcrTranscription,
             DOCUMENT_TITLE: analysis.documentTitle,
             DOCUMENT_DESCRIPTION: analysis.documentDescription,
+            SOURCE_COLLECTION: analysis.suggestedCollection || asset.sqlRecord!.SOURCE_COLLECTION || "Unsorted",
             CREATOR_AGENT: analysis.creatorAgent,
             RIGHTS_STATEMENT: analysis.rightsStatement,
             LANGUAGE_CODE: analysis.languageCode,
             LAST_MODIFIED: new Date().toISOString(),
-            PROCESSING_STATUS: AssetStatus.MINTED, // Ready for minting/contribution
+            PROCESSING_STATUS: AssetStatus.MINTED,
             CONFIDENCE_SCORE: analysis.confidenceScore,
             ENTITIES_EXTRACTED: analysis.graphData?.nodes ? analysis.graphData.nodes.map(n => n.label) : [],
             KEYWORDS_TAGS: analysis.keywordsTags || [],
             ACCESS_RESTRICTIONS: analysis.accessRestrictions,
-            
-            // Map the new rich metadata fields
             TAXONOMY: analysis.taxonomy,
             ITEM_ATTRIBUTES: analysis.itemAttributes,
             SCENERY_ATTRIBUTES: analysis.sceneryAttributes,
-
-            // Accessibility Mappings
             alt_text_short: analysis.alt_text_short,
             alt_text_long: analysis.alt_text_long,
             reading_order: analysis.reading_order,
             accessibility_score: analysis.accessibility_score,
-
             PRESERVATION_EVENTS: [
               ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
               { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }
             ]
       };
 
-      // Announce completion for accessibility
-      announce(`Processed ${analysis.documentTitle}. Category: ${analysis.nlpNodeCategorization}`);
-
-      // NOTE: Removed simulation logic. Asset does NOT have NFT data yet.
-      // NFT data is added only after user clicks "Earn Shard" and mints.
-
-      return {
+      const resultAsset = {
             ...asset,
-            status: AssetStatus.MINTED, // Using MINTED as 'Processed' here for UI compat
+            status: AssetStatus.MINTED,
             ocrText: analysis.ocrText,
             gisMetadata: analysis.gisMetadata,
             graphData: analysis.graphData,
@@ -437,73 +311,38 @@ export default function App() {
             location: location ? { latitude: location.lat, longitude: location.lng, accuracy: 1 } : undefined,
             sqlRecord: updatedSqlRecord
       };
+
+      // Background contribution
+      const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+      contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any).then(syncResult => {
+          if (syncResult.success && syncResult.publicUrl) {
+              // Update local state with the permanent cloud URL
+              setLocalAssets(prev => prev.map(a => a.id === asset.id ? { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl } : a));
+          }
+      }).catch(err => console.error("Auto-sync background failed", err));
+
+      return resultAsset;
   };
 
-  // --- Unified Ingestion Handler ---
-  // Works for Single Upload, Camera Capture, and Batch processing
   const ingestFile = async (file: File, source: string = "Upload") => {
     setIsProcessing(true);
-    let newAsset: DigitalAsset | null = null;
     try {
-      newAsset = await createInitialAsset(file);
-      // Update source if needed
+      const newAsset = await createInitialAsset(file);
       if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = source;
-
-      // Optimistically update UI
-      setLocalAssets(prev => [newAsset!, ...prev]);
-      // Persist pending asset
+      setLocalAssets(prev => [newAsset, ...prev]);
       await saveAsset(newAsset);
-      
-      if (source !== "Batch Folder" && source !== "Auto-Sync") {
-        setActiveTab('assets');
-      }
-      
+      if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
       const processedAsset = await processAssetPipeline(newAsset, file);
-      
-      // Update UI (Local)
-      setLocalAssets(prev => prev.map(a => a.id === newAsset!.id ? processedAsset : a));
-      // Persist processed asset (Local)
+      setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
       await saveAsset(processedAsset);
-
-      // AUTOMATIC GLOBAL CONTRIBUTION (Background)
-      // This ensures all data goes to Supabase, even if not logged in.
-      // If user is null, service will generate anonymous UUID.
-      // PASS LICENSE TYPE: If Broadcast toggle is on, pass 'CC0'
-      const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-      contributeAssetToGlobalCorpus(processedAsset, user?.id, license).catch(err => {
-          console.error("Background contribution failed:", err);
-      });
-
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      if (newAsset) {
-          const failedAsset: DigitalAsset = { 
-              ...newAsset, 
-              status: AssetStatus.FAILED, 
-              errorMessage: err.message || "Unknown error during processing" 
-          };
-          setLocalAssets(prev => prev.map(a => a.id === newAsset!.id ? failedAsset : a));
-          // Persist the failure state so we know it failed later
-          await saveAsset(failedAsset);
-      }
     } finally {
       setIsProcessing(false);
     }
   };
 
-  const handleCameraCapture = (file: File) => {
-    ingestFile(file, "Mobile Camera");
-  };
-
-  const handleSingleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) ingestFile(file, "Direct Upload");
-  };
-
-  // --- Unified Batch File Handler ---
   const handleBatchFiles = (files: File[]) => {
-      if (!files || files.length === 0) return;
-
       const newQueueItems: BatchItem[] = files.map(file => ({
           id: Math.random().toString(36).substring(7),
           file,
@@ -511,50 +350,29 @@ export default function App() {
           progress: 0,
           scanType: (file as any).scanType || selectedScanType || ScanType.DOCUMENT
       }));
-
       setBatchQueue(prev => [...prev, ...newQueueItems]);
-      
-      // If we came from AR, we want to jump to the Batch tab to show progress
       setActiveTab('batch');
-      
-      // Trigger processing queue
       setTimeout(() => processNextBatchItem(), 100);
   };
 
   const processNextBatchItem = async () => {
       setBatchQueue(currentQueue => {
           const nextItemIndex = currentQueue.findIndex(i => i.status === 'QUEUED');
-          if (nextItemIndex === -1) return currentQueue; // Done
-
+          if (nextItemIndex === -1) return currentQueue;
           const itemToProcess = currentQueue[nextItemIndex];
-          
           (async () => {
              try {
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'PROCESSING', progress: 10 } : i));
-                
-                // Ensure the file has the scan type attached for createInitialAsset
-                if (itemToProcess.scanType) {
-                    (itemToProcess.file as any).scanType = itemToProcess.scanType;
-                }
-
+                if (itemToProcess.scanType) (itemToProcess.file as any).scanType = itemToProcess.scanType;
                 const newAsset = await createInitialAsset(itemToProcess.file);
-                if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = "Batch Ingest"; 
                 setLocalAssets(prev => [newAsset, ...prev]);
                 await saveAsset(newAsset);
-
                 const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
                 setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
                 await saveAsset(processedAsset);
-
-                // Auto-contribute batch items too
-                // PASS LICENSE TYPE: If Broadcast toggle is on, pass 'CC0'
-                const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-                await contributeAssetToGlobalCorpus(processedAsset, user?.id, license);
-
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
              } catch (e: any) {
-                 console.error("Batch Error", e);
-                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Processing Failed" } : i));
+                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Failed" } : i));
              } finally {
                  processNextBatchItem();
              }
@@ -563,69 +381,6 @@ export default function App() {
       });
   };
 
-  const handleARManualCapture = (file: File) => {
-    // Add file to temporary session queue
-    // Tag it so it knows it came from AR
-    (file as any).scanType = ScanType.ITEM; // Default AR to Item or contextual
-    setArSessionQueue(prev => [...prev, file]);
-    announce(`Captured image. Session total: ${arSessionQueue.length + 1}`);
-  };
-
-  const handlePhygitalRedeem = async (asset: DigitalAsset) => {
-      if(!asset.nft?.dcc1?.isRedeemable) {
-          alert(`You need ${asset.nft?.dcc1?.shardsRequired} shards to redeem. You have ${asset.nft?.dcc1?.shardsCollected}.`);
-          return;
-      }
-      try {
-          const txHash = await redeemPhygitalCertificate(asset.id);
-          alert(`Redemption Success! Certificate Minted.\nTx: ${txHash}`);
-          
-          const updatedNFT = { ...asset.nft!, dcc1: { ...asset.nft!.dcc1!, shardsCollected: 0, isRedeemable: false, certificateTokenId: 'PENDING' } };
-          const updatedAsset = { ...asset, nft: updatedNFT };
-          
-          // Update local state and DB
-          setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
-          await saveAsset(updatedAsset);
-
-      } catch(e: any) {
-          alert("Redemption failed: " + e.message);
-      }
-  };
-
-  const deleteSingleAsset = async (id: string) => {
-      if (!window.confirm("Are you sure you want to delete this asset from the repository?")) return;
-      await deleteAsset(id);
-      setLocalAssets(prev => prev.filter(a => a.id !== id));
-      if (selectedAssetId === id) setSelectedAssetId(null);
-  };
-
-  const retryBatchItem = (itemId: string) => {
-      setBatchQueue(prev => prev.map(i => i.id === itemId ? { ...i, status: 'QUEUED', progress: 0, errorMsg: undefined } : i));
-      processNextBatchItem();
-  };
-
-  const retryAllErrors = () => {
-    setBatchQueue(prev => prev.map(i => i.status === 'ERROR' ? { ...i, status: 'QUEUED', progress: 0, errorMsg: undefined } : i));
-    setTimeout(() => processNextBatchItem(), 100);
-  };
-
-  const removeBatchItem = (itemId: string) => {
-      setBatchQueue(prev => prev.filter(i => i.id !== itemId));
-  };
-
-
-  const downloadJSON = (asset: DigitalAsset) => {
-    if (!asset.sqlRecord) return;
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(asset.sqlRecord, null, 2));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href",     dataStr);
-    downloadAnchorNode.setAttribute("download", `GEOGRAPH_DB_${asset.id}.json`);
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
-  };
-
-  const selectedAsset = assets.find(a => a.id === selectedAssetId);
   const getAggregatedGroups = () => {
     const groups: Record<string, DigitalAsset[]> = {};
     assets.forEach(asset => {
@@ -639,61 +394,40 @@ export default function App() {
     });
     return groups;
   };
+
   const aggregatedGroups = getAggregatedGroups();
-  const drillDownAssets = selectedGroupKey ? (aggregatedGroups[selectedGroupKey] || []) : [];
-  const totalPages = Math.ceil(drillDownAssets.length / ITEMS_PER_PAGE);
+  const drillDownAssets = selectedGroupKey ? (aggregatedGroups[selectedGroupKey] || []) : assets;
   const paginatedAssets = drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  // MEMOIZED: Prevent infinite re-renders/blanks in D3
   const globalGraphData = useMemo<GraphData>(() => {
-      // 1. Document Nodes
-      const docNodes = assets.map(a => ({
-          id: a.id,
-          label: a.sqlRecord?.DOCUMENT_TITLE || 'Untitled',
-          type: 'DOCUMENT' as const,
-          relevance: 1.0,
-          // Inject license info for visualization
-          license: a.sqlRecord?.DATA_LICENSE
-      }));
-
+      const filteredAssets = assets.filter(asset => {
+          const r = asset.sqlRecord;
+          if (!r) return false;
+          if (graphFilters.category !== 'all' && r.NLP_NODE_CATEGORIZATION !== graphFilters.category) return false;
+          const eraKey = r.NLP_DERIVED_TIMESTAMP?.match(/\d{4}/)?.[0]?.slice(0,3) + '0s' || 'Unknown';
+          if (graphFilters.era !== 'all' && eraKey !== graphFilters.era) return false;
+          const isContested = r.ACCESS_RESTRICTIONS || /controversy|removed|relocated/i.test(r.DOCUMENT_DESCRIPTION);
+          if (graphFilters.contested && !isContested) return false;
+          return true;
+      });
+      const docNodes = filteredAssets.map(a => ({ id: a.id, label: a.sqlRecord?.DOCUMENT_TITLE || 'Untitled', type: 'DOCUMENT' as const, relevance: 1.0, license: a.sqlRecord?.DATA_LICENSE }));
       const entityNodesMap = new Map<string, GraphNode>();
       const links: any[] = [];
-
-      assets.forEach(asset => {
-         // Link to Category Cluster (existing logic, simplified)
+      filteredAssets.forEach(asset => {
          const cat = asset.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized';
          const catId = `CAT_${cat.replace(/\s+/g, '_')}`;
-         if (!entityNodesMap.has(catId)) {
-             entityNodesMap.set(catId, { id: catId, label: cat, type: 'CLUSTER', relevance: 0.8 });
-         }
+         if (!entityNodesMap.has(catId)) entityNodesMap.set(catId, { id: catId, label: cat, type: 'CLUSTER', relevance: 0.8 });
          links.push({ source: asset.id, target: catId, relationship: "CATEGORIZED_AS" });
-
-         // Link to Extracted Entities
          if (asset.graphData?.nodes) {
              asset.graphData.nodes.forEach(node => {
-                 // De-duplicate entities by label (simple normalization)
                  const entityId = `ENT_${node.label.replace(/\s+/g, '_').toUpperCase()}`;
-                 
-                 if (!entityNodesMap.has(entityId)) {
-                     entityNodesMap.set(entityId, { 
-                         id: entityId, 
-                         label: node.label, 
-                         type: node.type, 
-                         relevance: node.relevance 
-                     });
-                 }
-
-                 // Create link
+                 if (!entityNodesMap.has(entityId)) entityNodesMap.set(entityId, { ...node, id: entityId });
                  links.push({ source: asset.id, target: entityId, relationship: "CONTAINS" });
              });
          }
       });
-
-      return { 
-          nodes: [...docNodes, ...Array.from(entityNodesMap.values())], 
-          links 
-      };
-  }, [assets]); // Only recompute when assets array changes
+      return { nodes: [...docNodes, ...Array.from(entityNodesMap.values())], links };
+  }, [assets, graphFilters]);
 
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30">
@@ -722,7 +456,6 @@ export default function App() {
           </div>
         </nav>
 
-        {/* Global/Local View Toggle (Visible to ALL users for testing) */}
         <div className="p-4 border-t border-slate-800">
             <div className={`p-3 rounded-xl border transition-all ${isGlobalView ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-900 border-slate-800'}`}>
                 <div className="flex items-center justify-between mb-2">
@@ -741,17 +474,8 @@ export default function App() {
                         : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
                     }`}
                 >
-                    {isGlobalView ? (
-                        <>Switch to Local <Lock size={12}/></>
-                    ) : (
-                        <>Switch to Master <Globe size={12}/></>
-                    )}
+                    {isGlobalView ? <>Switch to Local <Lock size={12}/></> : <>Switch to Master <Globe size={12}/></>}
                 </button>
-                {isGlobalView && (
-                    <p className="text-[10px] text-indigo-300 mt-2 text-center">
-                        Viewing Entire Corpus
-                    </p>
-                )}
             </div>
         </div>
 
@@ -771,102 +495,58 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        
-        {/* Header */}
         <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-950/80 backdrop-blur z-10">
             <div className="flex items-center gap-4">
-                <h2 className="text-lg font-semibold text-white capitalize">{activeTab === 'database' ? 'HISTORICAL DOCUMENTS DATABASE' : activeTab === 'batch' ? 'HIGH THROUGHPUT INGESTION' : activeTab}</h2>
-                {isGlobalView && (
-                    <span className="px-2 py-0.5 bg-indigo-500 text-white text-[10px] font-bold rounded shadow-lg shadow-indigo-500/20">
-                        MASTER VIEW
-                    </span>
-                )}
+                <h2 className="text-lg font-semibold text-white capitalize">{activeTab === 'database' ? 'CLOUD DATAFRAMES: CLUSTER VIEW' : activeTab}</h2>
+                {isGlobalView && <span className="px-2 py-0.5 bg-indigo-500 text-white text-[10px] font-bold rounded shadow-lg shadow-indigo-500/20">MASTER VIEW</span>}
             </div>
           <div className="flex items-center gap-2">
-             {activeTab !== 'batch' && activeTab !== 'ar' && !isGlobalView && (
+             {!isGlobalView && activeTab !== 'batch' && activeTab !== 'ar' && (
                 <>
-                  <CameraCapture onCapture={handleCameraCapture} />
-                  
-                  {/* Keep standard upload but hidden/alternative if needed */}
+                  <CameraCapture onCapture={(file) => ingestFile(file, "Mobile Camera")} />
                   <label className={`flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                       {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Upload size={18} />}
                       <span>Upload</span>
-                      <input type="file" className="hidden" accept="image/*, application/pdf" onChange={handleSingleFileUpload} disabled={isProcessing} />
+                      <input type="file" className="hidden" accept="image/*, application/pdf" onChange={(e) => e.target.files?.[0] && ingestFile(e.target.files[0], "Direct Upload")} disabled={isProcessing} />
                   </label>
                 </>
+             )}
+             {isGlobalView && (
+                 <button 
+                    onClick={refreshGlobalData}
+                    disabled={isProcessing}
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50"
+                 >
+                     <RefreshCw size={18} className={isProcessing ? 'animate-spin' : ''} />
+                     <span>Refresh Cloud</span>
+                 </button>
              )}
           </div>
         </header>
 
         <div className="flex-1 overflow-auto p-8 relative">
           
-          {/* Dashboard View */}
           {activeTab === 'dashboard' && (
             <div className="space-y-8 max-w-6xl mx-auto">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <StatCard 
-                    label="Total Assets" 
-                    value={assets.length} 
-                    icon={FileText} 
-                    color="text-blue-500" 
-                    onClick={() => setActiveTab('assets')}
-                />
-                <StatCard 
-                    label="Knowledge Nodes" 
-                    value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} 
-                    icon={Network} 
-                    color="text-purple-500" 
-                    onClick={() => setActiveTab('graph')}
-                />
-                <StatCard 
-                    label="Training Tokens" 
-                    value={totalTokens.toLocaleString()} 
-                    icon={Cpu} 
-                    color="text-emerald-500" 
-                    onClick={() => setActiveTab('database')}
-                />
-                <StatCard 
-                    label="Active Bundles" 
-                    value={displayItems.filter(i => 'bundleId' in i).length} 
-                    icon={Package} 
-                    color="text-amber-500" 
-                    onClick={() => setActiveTab('market')}
-                />
+                <StatCard label="Total Assets" value={assets.length} icon={FileText} color="text-blue-500" onClick={() => setActiveTab('assets')} />
+                <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} icon={Network} color="text-purple-500" onClick={() => setActiveTab('graph')} />
+                <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" onClick={() => setActiveTab('database')} />
+                <StatCard label="Active Bundles" value={displayItems.filter(i => 'bundleId' in i).length} icon={Package} color="text-amber-500" onClick={() => setActiveTab('market')} />
               </div>
-
               {assets.length === 0 ? (
                 <div className="h-64 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 gap-4">
-                  {isGlobalView ? (
-                      <div className="text-center">
-                          <Globe size={48} className="mx-auto mb-4 text-slate-600" />
-                          <p>Global Corpus is empty or failed to load.</p>
-                      </div>
-                  ) : (
-                    <>
-                        <div className="flex gap-4">
-                            <CameraCapture onCapture={handleCameraCapture} />
-                            <label className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg cursor-pointer transition-all border border-slate-700">
-                                <Upload size={20} />
-                                <span>Upload File</span>
-                                <input type="file" className="hidden" accept="image/*, application/pdf" onChange={handleSingleFileUpload} />
-                            </label>
-                        </div>
-                        <p className="mt-2">Use the Camera or Upload to begin extraction</p>
-                    </>
-                  )}
+                    <Globe size={48} className="mx-auto mb-4 text-slate-600" />
+                    <p>{isGlobalView ? 'Global Corpus is empty.' : 'Upload items to begin extraction.'}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                    <h3 className="text-white font-medium mb-4 flex items-center gap-2">
-                       <Network size={18} className="text-primary-500"/> Recent Graph Activity
-                    </h3>
+                    <h3 className="text-white font-medium mb-4 flex items-center gap-2"><Network size={18} className="text-primary-500"/> Recent Graph Activity</h3>
                     {assets[0].graphData && <GraphVisualizer data={assets[0].graphData} height={300} width={500} />}
                   </div>
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                    <h3 className="text-white font-medium mb-4 flex items-center gap-2">
-                      <MapIcon size={18} className="text-emerald-500"/> GIS Context
-                    </h3>
+                    <h3 className="text-white font-medium mb-4 flex items-center gap-2"><MapIcon size={18} className="text-emerald-500"/> GIS Context</h3>
                     <div className="space-y-4">
                         {assets.slice(0, 3).map(asset => (
                             <div key={asset.id} className="flex items-start gap-4 p-3 rounded bg-slate-950/50 border border-slate-800">
@@ -874,11 +554,6 @@ export default function App() {
                                 <div>
                                     <h4 className="text-sm font-bold text-slate-200">{asset.gisMetadata?.zoneType || 'Processing...'}</h4>
                                     <p className="text-xs text-slate-400 mt-1 line-clamp-2">{asset.processingAnalysis}</p>
-                                    {asset.status === AssetStatus.FAILED && (
-                                        <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
-                                            <AlertCircle size={10} /> {asset.errorMessage || 'Failed'}
-                                        </p>
-                                    )}
                                 </div>
                             </div>
                         ))}
@@ -889,396 +564,29 @@ export default function App() {
             </div>
           )}
 
-          {/* AR View */}
-          {activeTab === 'ar' && (
-              <div className="h-full flex flex-col bg-black rounded-2xl overflow-hidden relative border border-slate-800">
-                  <ARScene onCapture={handleARManualCapture} onFinishSession={processArSession} sessionCount={arSessionQueue.length} />
-              </div>
-          )}
-
-          {/* Settings Tab */}
-          {activeTab === 'settings' && (
-              <SettingsPanel onOpenPrivacy={() => setShowPrivacyPolicy(true)} />
-          )}
-
-          {/* Quick Processing / Batch Tab */}
-          {activeTab === 'batch' && (
-             <div className="max-w-6xl mx-auto h-full flex flex-col">
-                {isGlobalView ? (
-                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
-                        {/* 
-                           ADMIN OVERRIDE: 
-                           Normally we lock ingestion in Global View to prevent accidental user pollution.
-                           However, we want Admins to be able to "Broadcast" data here.
-                        */}
-                        {isAdmin || isGlobalView ? ( // Check if User is Admin (simulated by isGlobalView for this demo)
-                            <div className="w-full max-w-4xl p-6">
-                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
-                                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                                        <Radio className="text-red-500 animate-pulse" /> Admin Broadcast Console
-                                    </h3>
-                                    
-                                    <div className="flex items-center gap-4 bg-red-950/20 border border-red-900/50 p-4 rounded-lg mb-6">
-                                        <div className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${isPublicBroadcast ? 'bg-emerald-600' : 'bg-slate-700'}`} onClick={() => setIsPublicBroadcast(!isPublicBroadcast)}>
-                                            <div className={`w-4 h-4 bg-white rounded-full shadow-md transform transition-transform ${isPublicBroadcast ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                                        </div>
-                                        <div>
-                                            <h4 className="text-sm font-bold text-white">Broadcast as Public Airdrop</h4>
-                                            <p className="text-xs text-slate-400">
-                                                If enabled, ingested assets will be licensed as <strong>CC0 (Public Domain)</strong> and marked as free for all users to sync.
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {!selectedScanType ? (
-                                        <SmartUploadSelector onTypeSelected={setSelectedScanType} />
-                                    ) : (
-                                        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
-                                            <h4 className="text-white font-bold mb-2">Broadcasting Type: {SCAN_TYPE_CONFIG[selectedScanType].label}</h4>
-                                            <BatchImporter 
-                                                onFilesSelected={(files) => {
-                                                    files.forEach(file => { (file as any).scanType = selectedScanType; });
-                                                    handleBatchFiles(files);
-                                                }}
-                                                isProcessing={isProcessing}
-                                            />
-                                            <button onClick={() => setSelectedScanType(null)} className="text-xs text-slate-500 underline mt-2">Change Type</button>
-                                        </div>
-                                    )}
-
-                                    {/* Admin Queue View */}
-                                    {batchQueue.length > 0 && (
-                                        <div className="mt-6">
-                                            <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">Broadcast Queue</h4>
-                                            <div className="bg-slate-950 rounded border border-slate-800 p-2 text-xs font-mono text-slate-300">
-                                                {batchQueue.map(i => (
-                                                    <div key={i.id} className="flex justify-between py-1 border-b border-slate-900 last:border-0">
-                                                        <span>{i.file.name}</span>
-                                                        <span className={i.status === 'COMPLETED' ? 'text-emerald-500' : 'text-amber-500'}>{i.status}</span>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        ) : (
-                            // Standard User Lockout for Global View
-                            <div className="text-center">
-                                <Lock size={48} className="mb-4 opacity-50 mx-auto" />
-                                <h3 className="text-xl font-bold text-white mb-2">Ingestion Locked</h3>
-                                <p>Switch to Local Mode to ingest new assets.</p>
-                                <button onClick={() => setIsGlobalView(false)} className="mt-4 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Return to Local</button>
-                            </div>
-                        )}
-                    </div>
-                ) : !selectedScanType ? (
-                  <SmartUploadSelector onTypeSelected={setSelectedScanType} />
-                ) : (
-                  <>
-                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
-                        <div className="flex justify-between items-start mb-4">
-                          <div>
-                              <button 
-                                onClick={() => setSelectedScanType(null)}
-                                className="mb-2 text-slate-400 hover:text-white flex items-center gap-2 text-sm"
-                              >
-                                ← Back to Selection
-                              </button>
-                              <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                                <Zap className="text-amber-500" /> Batch Processor: <span className="text-primary-400">{SCAN_TYPE_CONFIG[selectedScanType].label}</span>
-                              </h3>
-                              <p className="text-slate-400 text-sm mt-1">
-                                Optimized for 500+ documents/hr. Automatic bundling by time & location.
-                              </p>
-                          </div>
-                          <div className="text-right">
-                              <p className="text-2xl font-mono text-white">{batchQueue.filter(i => i.status === 'COMPLETED').length} <span className="text-sm text-slate-500">/ {batchQueue.length}</span></p>
-                              <p className="text-xs text-slate-500">Processed</p>
-                          </div>
-                        </div>
-                        
-                        {/* Replaced Upload Area with BatchImporter */}
-                        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
-                            <BatchImporter 
-                                onFilesSelected={(files) => {
-                                  // Auto-tag every file with the selected type for memory persistence
-                                  files.forEach(file => {
-                                    (file as any).scanType = selectedScanType;
-                                  });
-                                  handleBatchFiles(files);
-                                }}
-                                isProcessing={isProcessing}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Queue Table */}
-                    <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
-                        <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
-                            <h4 className="text-xs font-bold text-slate-400 uppercase">Processing Queue</h4>
-                            <div className="flex gap-2">
-                              {batchQueue.some(i => i.status === 'ERROR') && (
-                                <button onClick={retryAllErrors} className="text-xs text-primary-500 hover:text-primary-400 flex items-center gap-1 bg-primary-900/20 px-2 py-1 rounded border border-primary-900/50">
-                                    <RefreshCw size={12} /> Retry Errors
-                                </button>
-                              )}
-                              {batchQueue.length > 0 && (
-                                  <button onClick={() => setBatchQueue([])} className="text-xs text-red-500 hover:text-red-400 flex items-center gap-1 px-2 py-1">
-                                      <Trash2 size={12} /> Clear All
-                                  </button>
-                              )}
-                            </div>
-                        </div>
-                        <div className="flex-1 overflow-auto">
-                            <table className="w-full text-left border-collapse">
-                                <thead className="bg-slate-950 sticky top-0">
-                                    <tr>
-                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Status</th>
-                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Type</th>
-                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">File Name</th>
-                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Size</th>
-                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase">Message</th>
-                                        <th className="px-4 py-2 text-[10px] text-slate-500 font-bold uppercase text-right">Action</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-800">
-                                    {batchQueue.map((item) => (
-                                        <tr key={item.id} className="text-xs group hover:bg-slate-800/30">
-                                            <td className="px-4 py-2">
-                                                {item.status === 'QUEUED' && <span className="inline-block w-2 h-2 rounded-full bg-slate-600" title="Queued"></span>}
-                                                {item.status === 'PROCESSING' && <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" title="Processing"></div>}
-                                                {item.status === 'COMPLETED' && <CheckCircle size={14} className="text-emerald-500" />}
-                                                {item.status === 'ERROR' && <AlertCircle size={14} className="text-red-500" />}
-                                            </td>
-                                            <td className="px-4 py-2 text-slate-400">
-                                              {item.scanType || 'DOC'}
-                                            </td>
-                                            <td className="px-4 py-2 text-slate-300 font-mono">{item.file.name}</td>
-                                            <td className="px-4 py-2 text-slate-500">{(item.file.size / 1024).toFixed(1)} KB</td>
-                                            <td className="px-4 py-2">
-                                                {item.status === 'ERROR' ? (
-                                                    <span className="text-red-400">{item.errorMsg}</span>
-                                                ) : item.status === 'COMPLETED' ? (
-                                                    <span className="text-emerald-500/70">Ingested to DB</span>
-                                                ) : (
-                                                    <span className="text-slate-600">Waiting for worker...</span>
-                                                )}
-                                            </td>
-                                            <td className="px-4 py-2 text-right">
-                                                {item.status === 'ERROR' && (
-                                                    <button onClick={() => retryBatchItem(item.id)} className="text-primary-500 hover:text-white mr-2" title="Retry">
-                                                        <RefreshCw size={14} />
-                                                    </button>
-                                                )}
-                                                <button onClick={() => removeBatchItem(item.id)} className="text-slate-600 hover:text-red-500" title="Remove">
-                                                    <X size={14} />
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                  </>
-                )}
-             </div>
-          )}
-
-          {/* Semantic View */}
-          {activeTab === 'semantic' && (
-             <div className="h-full p-4 md:p-8 flex flex-col">
-               <h2 className="text-2xl font-bold text-white mb-6">Semantic Knowledge Universe</h2>
-               <div className="flex-1 min-h-0 border border-slate-800 rounded-xl bg-black">
-                  <SemanticCanvas assets={assets} />
-               </div>
-             </div>
-          )}
-
-          {/* Assets Exploratory View with BUNDLES */}
-          {activeTab === 'assets' && (
-             <div className="h-full overflow-y-auto">
-                 <div className="flex justify-between items-center mb-6">
-                     <h3 className="text-lg font-bold text-white">Exploratory Analysis & Bundles</h3>
-                     <div className="flex gap-2 text-xs text-slate-400 bg-slate-900 px-3 py-1 rounded border border-slate-800">
-                         <span>Showing {displayItems.length} items</span>
-                     </div>
-                 </div>
-
-                 {/* Masonry Grid Simulation */}
-                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
-                     {displayItems.map(item => {
-                         if ('bundleId' in item) {
-                             // Render Bundle Card
-                             return (
-                                 <BundleCard key={item.bundleId} bundle={item as ImageBundle} onClick={() => console.log('View bundle details')} onAssetUpdated={handleAssetUpdate} />
-                             );
-                         } else {
-                             // Render Single Asset Card
-                             const asset = item as DigitalAsset;
-                             return (
-                                <div key={asset.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:shadow-lg hover:shadow-primary-900/10 transition-all hover:-translate-y-1 group">
-                                    {/* Image Header */}
-                                    <div className="relative h-48 bg-slate-950 group overflow-hidden">
-                                        <img src={asset.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" />
-                                        <button 
-                                           onClick={() => setExpandedImage(asset.imageUrl)}
-                                           className="absolute top-2 right-2 p-1.5 bg-black/60 rounded text-white opacity-0 group-hover:opacity-100 transition-opacity hover:bg-black"
-                                        >
-                                            <Maximize2 size={14} />
-                                        </button>
-                                        {!isGlobalView && (
-                                            <button
-                                            onClick={() => deleteSingleAsset(asset.id)}
-                                            className="absolute top-2 left-2 p-1.5 bg-red-900/60 rounded text-red-200 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-900"
-                                            title="Delete from Repository"
-                                            >
-                                                <Trash2 size={14} />
-                                            </button>
-                                        )}
-                                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent p-4 pt-12">
-                                            <div className="flex justify-between items-end">
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${asset.sqlRecord?.CONFIDENCE_SCORE && asset.sqlRecord.CONFIDENCE_SCORE > 0.8 ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'}`}>
-                                                    Conf: {(asset.sqlRecord?.CONFIDENCE_SCORE || 0) * 100}%
-                                                </span>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Card Body */}
-                                    <div className="p-4">
-                                        <h4 className="font-bold text-white text-sm mb-1 truncate" title={asset.sqlRecord?.DOCUMENT_TITLE}>{asset.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
-                                        <p className="text-xs text-slate-500 mb-3">{asset.sqlRecord?.NLP_NODE_CATEGORIZATION}</p>
-
-                                        {/* Key Stats Row */}
-                                        <div className="flex justify-between items-center py-3 border-t border-b border-slate-800 mb-3">
-                                            <div className="text-center">
-                                                <p className="text-[10px] text-slate-500 uppercase">Nodes</p>
-                                                <p className="text-sm font-mono text-primary-400">{asset.sqlRecord?.NODE_COUNT || 0}</p>
-                                            </div>
-                                            <div className="h-6 w-px bg-slate-800"></div>
-                                            <div className="text-center">
-                                                <p className="text-[10px] text-slate-500 uppercase">Year</p>
-                                                <p className="text-sm font-mono text-indigo-400">{asset.sqlRecord?.NLP_DERIVED_TIMESTAMP?.substring(0, 4) || 'N/A'}</p>
-                                            </div>
-                                            <div className="h-6 w-px bg-slate-800"></div>
-                                            <div className="text-center">
-                                                <p className="text-[10px] text-slate-500 uppercase">Zone</p>
-                                                <p className="text-sm font-mono text-emerald-400 max-w-[80px] truncate" title={asset.sqlRecord?.LOCAL_GIS_ZONE}>{asset.sqlRecord?.LOCAL_GIS_ZONE || 'N/A'}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* DCC1 Redemption Widget */}
-                                        {asset.nft?.dcc1 && (
-                                            <div className="mb-3 bg-slate-950 p-2 rounded border border-slate-800">
-                                                <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                                                    <span>Phygital Progress</span>
-                                                    <span className={asset.nft.dcc1.isRedeemable ? "text-emerald-400 font-bold" : ""}>
-                                                        {asset.nft.dcc1.shardsCollected}/{asset.nft.dcc1.shardsRequired}
-                                                    </span>
-                                                </div>
-                                                <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                                    <div 
-                                                        className={`h-full ${asset.nft.dcc1.isRedeemable ? 'bg-emerald-500' : 'bg-purple-600'}`} 
-                                                        style={{ width: `${Math.min(100, (asset.nft.dcc1.shardsCollected / asset.nft.dcc1.shardsRequired) * 100)}%` }}
-                                                    ></div>
-                                                </div>
-                                                {asset.nft.dcc1.isRedeemable && (
-                                                    <button 
-                                                        onClick={() => handlePhygitalRedeem(asset)}
-                                                        className="w-full mt-2 py-1 bg-emerald-900/50 hover:bg-emerald-800/50 text-emerald-400 border border-emerald-800 rounded text-[10px] font-bold flex items-center justify-center gap-1 transition-colors"
-                                                    >
-                                                        <Gift size={12} /> Redeem Physical
-                                                    </button>
-                                                )}
-                                            </div>
-                                        )}
-                                        
-                                        {/* Accessibility Block */}
-                                        <div className="mb-3 p-3 bg-slate-950/50 rounded border border-slate-800">
-                                           <div className="flex justify-between items-center mb-2">
-                                              <h4 className="text-xs font-bold text-slate-400 uppercase flex items-center gap-1">
-                                                 <Eye size={10} /> Screen Reader
-                                              </h4>
-                                              <button
-                                                 onClick={() => {
-                                                    const text = asset.sqlRecord?.alt_text_long || asset.sqlRecord?.DOCUMENT_DESCRIPTION || "";
-                                                    const utter = new SpeechSynthesisUtterance(text);
-                                                    speechSynthesis.speak(utter);
-                                                 }}
-                                                 className="text-[10px] flex items-center gap-1 bg-slate-800 hover:bg-slate-700 px-2 py-1 rounded text-slate-300 transition-colors"
-                                                 aria-label="Play Audio Description"
-                                              >
-                                                 <Volume2 size={10} /> Play Audio
-                                              </button>
-                                           </div>
-                                           <p className="text-xs text-slate-400 leading-relaxed line-clamp-3">
-                                              {asset.sqlRecord?.alt_text_long || "No description generated."}
-                                           </p>
-                                        </div>
-                                        
-                                        <div className="flex gap-2 mt-auto">
-                                            <button onClick={() => { setSelectedAssetId(asset.id); setActiveTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 transition-colors">
-                                                View Graph
-                                            </button>
-                                            <button onClick={() => downloadJSON(asset)} className="px-2 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded border border-slate-700 transition-colors">
-                                                <Download size={14} />
-                                            </button>
-                                            <ContributeButton asset={asset} onAssetUpdated={handleAssetUpdate} />
-                                        </div>
-                                    </div>
-                                </div>
-                             );
-                         }
-                     })}
-                     
-                     {displayItems.length === 0 && (
-                         <div className="col-span-full py-20 text-center">
-                             <div className="w-16 h-16 bg-slate-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-slate-800">
-                                 <ImageIcon className="text-slate-600" size={32} />
-                             </div>
-                             <h3 className="text-slate-400 font-bold">No assets found</h3>
-                             <p className="text-slate-600 text-sm mt-2">Upload items in Dashboard or Batch Processing to populate the grid.</p>
-                         </div>
-                     )}
-                 </div>
-             </div>
-          )}
-
-          {/* Structured Database View - HIERARCHICAL REFACTOR */}
           {activeTab === 'database' && (
              <div className="h-full flex flex-col gap-4">
-               {/* Controls */}
                <div className="flex flex-col md:flex-row justify-between items-end bg-slate-900 p-4 rounded-xl border border-slate-800 gap-4">
                    <div className="space-y-1">
                       <h3 className="text-white font-bold flex items-center gap-2">
-                          <Database size={18} className="text-primary-500" /> Repository Master List
+                          <Database size={18} className="text-primary-500" /> 
+                          {isGlobalView ? 'Master Cloud Dataframes' : 'Local Node Dataframes'}
                       </h3>
-                      {dbViewMode === 'GROUPS' ? (
-                          <p className="text-xs text-slate-400">Select a feature to group the repository by.</p>
-                      ) : (
-                          <p className="text-xs text-slate-400 flex items-center gap-2">
-                             <span className="text-slate-500">Group:</span> {selectedGroupKey} 
-                             <span className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300">{drillDownAssets.length} items</span>
-                          </p>
-                      )}
+                      <p className="text-xs text-slate-400 flex items-center gap-2">
+                         <span className="text-slate-500">View:</span> Tabular Dataframes
+                         <span className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300 ml-2">{drillDownAssets.length} items</span>
+                      </p>
                    </div>
-                   
                    <div className="flex flex-wrap gap-4">
-                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 min-w-[240px]">
+                       <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
+                            <button onClick={() => { setDbViewMode('DRILLDOWN'); setSelectedGroupKey(null); }} className={`px-3 py-1.5 text-xs font-medium rounded flex items-center gap-2 transition-colors ${dbViewMode === 'DRILLDOWN' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}><List size={14} /> Table</button>
+                            <button onClick={() => setDbViewMode('GROUPS')} className={`px-3 py-1.5 text-xs font-medium rounded flex items-center gap-2 transition-colors ${dbViewMode === 'GROUPS' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}><FolderOpen size={14} /> Clusters</button>
+                       </div>
+                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 min-w-[200px]">
                            <Filter size={14} className="text-primary-500" />
                            <div className="flex-1 flex flex-col">
                               <span className="text-[9px] text-slate-500 uppercase font-bold">Grouping Feature</span>
-                              <select 
-                                className="bg-transparent border-none text-xs text-slate-200 focus:outline-none cursor-pointer font-bold"
-                                value={groupBy}
-                                onChange={(e) => {
-                                    setGroupBy(e.target.value as any);
-                                    setDbViewMode('GROUPS');
-                                    setSelectedGroupKey(null);
-                                }}
-                              >
+                              <select className="bg-transparent border-none text-xs text-slate-200 focus:outline-none cursor-pointer font-bold" value={groupBy} onChange={(e) => setGroupBy(e.target.value as any)}>
                                   <option value="SOURCE">Source Collection</option>
                                   <option value="ZONE">GIS Zone</option>
                                   <option value="CATEGORY">NLP Category</option>
@@ -1289,69 +597,30 @@ export default function App() {
                    </div>
                </div>
 
-               {/* VIEW 1: DATASET GROUPS (FOLDERS) */}
                {dbViewMode === 'GROUPS' && (
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-auto pb-4">
                     {Object.entries(aggregatedGroups).map(([groupName, groupAssets]) => (
-                       <button 
-                           key={groupName} 
-                           onClick={() => { setSelectedGroupKey(groupName); setDbViewMode('DRILLDOWN'); setCurrentPage(1); }}
-                           className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-primary-500/50 hover:bg-slate-800/50 transition-all text-left group relative overflow-hidden"
-                       >
-                          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                              <FolderOpen size={64} />
-                          </div>
-                          
+                       <button key={groupName} onClick={() => { setSelectedGroupKey(groupName); setDbViewMode('DRILLDOWN'); setCurrentPage(1); }} className="bg-slate-900 border border-slate-800 rounded-xl p-5 hover:border-primary-500/50 hover:bg-slate-800/50 transition-all text-left group relative overflow-hidden">
+                          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity"><FolderOpen size={64} /></div>
                           <div className="relative z-10">
-                              <div className="flex items-center gap-2 mb-2">
-                                  <FolderOpen size={20} className="text-primary-500" />
-                                  <span className="text-xs text-slate-500 font-mono uppercase">{groupBy} Group</span>
-                              </div>
+                              <div className="flex items-center gap-2 mb-2"><FolderOpen size={20} className="text-primary-500" /><span className="text-xs text-slate-500 font-mono uppercase">{groupBy} Group</span></div>
                               <h4 className="text-lg font-bold text-white mb-4 line-clamp-2">{groupName}</h4>
-                              
-                              <div className="space-y-2 mb-4">
-                                  <div className="flex justify-between text-xs">
-                                     <span className="text-slate-400">Items</span>
-                                     <span className="text-white font-mono">{groupAssets.length}</span>
-                                  </div>
-                                  <div className="flex justify-between text-xs">
-                                     <span className="text-slate-400">Est. Tokens</span>
-                                     <span className="text-emerald-400 font-mono">
-                                        {groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0).toLocaleString()}
-                                     </span>
-                                  </div>
+                              <div className="space-y-2">
+                                  <div className="flex justify-between text-xs"><span className="text-slate-400">Items</span><span className="text-white font-mono">{groupAssets.length}</span></div>
                               </div>
                           </div>
                        </button>
                     ))}
-                    {Object.keys(aggregatedGroups).length === 0 && (
-                        <div className="col-span-full py-20 text-center text-slate-500">
-                            No data available. Ingest assets to create groups.
-                        </div>
-                    )}
                  </div>
                )}
 
-               {/* VIEW 2: DRILL DOWN LIST */}
                {dbViewMode === 'DRILLDOWN' && (
-               <>
-                 <div className="flex items-center gap-2 mb-2">
-                     <button 
-                        onClick={() => setDbViewMode('GROUPS')}
-                        className="flex items-center gap-1 text-xs text-primary-400 hover:text-white transition-colors"
-                     >
-                        <ArrowLeft size={14} /> Back to Groups
-                     </button>
-                 </div>
-
-                 <div className="flex-1 overflow-auto bg-slate-900 border border-slate-800 rounded-xl shadow-inner scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900 relative">
+                 <div className="flex-1 overflow-auto bg-slate-900 border border-slate-800 rounded-xl shadow-inner scrollbar-thin relative">
                     <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-950 sticky top-0 z-10 shadow-sm">
+                        <thead className="bg-slate-950 sticky top-0 z-10">
                           <tr>
-                            {['ASSET_ID', 'DOC_TITLE', 'ENTITIES', 'LOCAL_TIMESTAMP', 'OCR_TIMESTAMP', 'NLP_TIMESTAMP', 'LOCAL_GIS', 'OCR_GIS', 'NLP_GIS', 'NODES', 'CATEGORY', 'RIGHTS', 'FORMAT', 'SIZE (B)', 'FIXITY (SHA256)', 'CONFIDENCE', 'ACCESS', 'ACTION'].map(h => (
-                                <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">
-                                    {h}
-                                </th>
+                            {['ID', 'TITLE', 'COLLECTION', 'ENTITIES', 'GIS ZONE', 'NODES', 'CATEGORY', 'DESCRIPTION', 'ACTION'].map(h => (
+                                <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -1361,46 +630,16 @@ export default function App() {
                                if (!rec) return null;
                                return (
                                    <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
-                                       <td className="px-4 py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{rec.ASSET_ID.substring(0,8)}...</td>
-                                       <td className="px-4 py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate" title={rec.DOCUMENT_TITLE}>{rec.DOCUMENT_TITLE}</td>
-                                       <td className="px-4 py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate" title={rec.ENTITIES_EXTRACTED.join(', ')}>
-                                          {rec.ENTITIES_EXTRACTED.slice(0, 3).join(', ')}{rec.ENTITIES_EXTRACTED.length > 3 ? '...' : ''}
-                                       </td>
-                                       <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{new Date(rec.LOCAL_TIMESTAMP).toLocaleDateString()}</td>
-                                       <td className="px-4 py-3 text-primary-400 border-r border-slate-800 whitespace-nowrap">{rec.OCR_DERIVED_TIMESTAMP || '-'}</td>
-                                       <td className="px-4 py-3 text-indigo-400 border-r border-slate-800 whitespace-nowrap">{rec.NLP_DERIVED_TIMESTAMP || '-'}</td>
-                                       <td className="px-4 py-3 text-emerald-400 border-r border-slate-800 whitespace-nowrap">{rec.LOCAL_GIS_ZONE}</td>
-                                       <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{rec.OCR_DERIVED_GIS_ZONE || '-'}</td>
-                                       <td className="px-4 py-3 text-slate-400 border-r border-slate-800 whitespace-nowrap">{rec.NLP_DERIVED_GIS_ZONE || '-'}</td>
+                                       <td className="px-4 py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{rec.ASSET_ID.substring(0,8)}</td>
+                                       <td className="px-4 py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate">{rec.DOCUMENT_TITLE}</td>
+                                       <td className="px-4 py-3 text-blue-400 border-r border-slate-800 whitespace-nowrap">{rec.SOURCE_COLLECTION}</td>
+                                       <td className="px-4 py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px]">{rec.ENTITIES_EXTRACTED.slice(0, 3).join(', ')}</td>
+                                       <td className="px-4 py-3 text-emerald-400 border-r border-slate-800">{rec.LOCAL_GIS_ZONE}</td>
                                        <td className="px-4 py-3 text-center border-r border-slate-800">{rec.NODE_COUNT}</td>
-                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap max-w-[150px] truncate">{rec.NLP_NODE_CATEGORIZATION}</td>
-                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap">
-                                           {rec.DATA_LICENSE === 'CC0' ? (
-                                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-900/50 text-emerald-400 border border-emerald-500/30">CC0 (Public)</span>
-                                           ) : (
-                                               <span className="text-slate-500">{rec.RIGHTS_STATEMENT}</span>
-                                           )}
-                                       </td>
-                                       <td className="px-4 py-3 border-r border-slate-800">{rec.FILE_FORMAT}</td>
-                                       <td className="px-4 py-3 border-r border-slate-800 text-right">{rec.FILE_SIZE_BYTES.toLocaleString()}</td>
-                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap text-[9px] text-slate-600" title={rec.FIXITY_CHECKSUM}>{rec.FIXITY_CHECKSUM.substring(0,8)}...</td>
-                                       <td className="px-4 py-3 border-r border-slate-800 text-center">
-                                           <span className={`px-1.5 py-0.5 rounded ${rec.CONFIDENCE_SCORE > 0.8 ? 'bg-green-900 text-green-400' : 'bg-red-900 text-red-400'}`}>
-                                               {(rec.CONFIDENCE_SCORE * 100).toFixed(0)}%
-                                           </span>
-                                       </td>
-                                       <td className="px-4 py-3 border-r border-slate-800 text-center">
-                                           {rec.ACCESS_RESTRICTIONS ? <EyeOff size={12} className="text-red-500 mx-auto"/> : <Eye size={12} className="text-green-500 mx-auto"/>}
-                                       </td>
+                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap">{rec.NLP_NODE_CATEGORIZATION}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 truncate max-w-[200px] text-slate-400">{rec.DOCUMENT_DESCRIPTION}</td>
                                        <td className="px-4 py-3 text-center flex gap-2 justify-center">
-                                          <button onClick={() => downloadJSON(asset)} className="text-primary-500 hover:text-white" title="Export JSON">
-                                              <Download size={14} />
-                                          </button>
-                                          {!isGlobalView && (
-                                            <button onClick={() => deleteSingleAsset(asset.id)} className="text-slate-600 hover:text-red-500" title="Delete">
-                                                <Trash2 size={14} />
-                                            </button>
-                                          )}
+                                          <button onClick={() => downloadJSON(asset)} className="text-primary-500 hover:text-white"><Download size={14} /></button>
                                        </td>
                                    </tr>
                                )
@@ -1408,342 +647,131 @@ export default function App() {
                         </tbody>
                     </table>
                  </div>
-                 
-                 {/* Pagination Controls */}
-                 <div className="flex justify-between items-center bg-slate-900 p-3 rounded-lg border border-slate-800 text-xs text-slate-400">
-                    <div>
-                        Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, drillDownAssets.length)} of {drillDownAssets.length} entries
-                    </div>
-                    <div className="flex gap-2">
-                        <button 
-                           onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                           disabled={currentPage === 1}
-                           className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <ChevronLeft size={16} />
-                        </button>
-                        <span className="flex items-center px-2 font-mono text-white">Page {currentPage} of {totalPages || 1}</span>
-                        <button 
-                           onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                           disabled={currentPage === totalPages || totalPages === 0}
-                           className="p-1 rounded hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            <ChevronRight size={16} />
-                        </button>
-                    </div>
-                 </div>
-               </>
                )}
              </div>
           )}
 
-          {/* Graph Tab */}
-          {activeTab === 'graph' && (
-            <div className="flex gap-6 h-full flex-col">
-               {/* Controls */}
-               <div className="flex items-center justify-between">
-                  <h3 className="text-lg font-bold text-white">Knowledge Graph</h3>
-                  <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
-                      <button 
-                        onClick={() => setGraphViewMode('SINGLE')}
-                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'SINGLE' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                      >
-                        Single Asset Focus
-                      </button>
-                      <button 
-                        onClick={() => setGraphViewMode('GLOBAL')}
-                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'GLOBAL' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                      >
-                        Global Corpus
-                      </button>
-                  </div>
-               </div>
-
-               {/* GLOBAL VIEW */}
-               {graphViewMode === 'GLOBAL' && (
-                  <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
-                      <div className="flex justify-between items-center mb-2">
-                         <h4 className="text-sm font-bold text-slate-400">Semantic Bundling (All Assets)</h4>
-                         <p className="text-xs text-slate-500">Clusters based on NLP Categories & Extracted Entities</p>
-                      </div>
-                      <div className="flex-1 relative">
-                          <GraphVisualizer data={globalGraphData} width={1000} height={600} />
-                      </div>
-                  </div>
-               )}
-
-               {/* SINGLE VIEW */}
-               {graphViewMode === 'SINGLE' && (
-                <div className="flex gap-6 h-full">
-                    {/* List */}
-                    <div className="w-72 flex-shrink-0 border-r border-slate-800 pr-6 overflow-y-auto">
-                        <h3 className="text-xs font-bold text-slate-500 uppercase mb-4">Select Asset</h3>
-                        <div className="space-y-2">
-                        {assets.map(asset => (
-                            <button 
-                                key={asset.id}
-                                onClick={() => setSelectedAssetId(asset.id)}
-                                className={`w-full text-left p-3 rounded-lg border transition-all ${selectedAssetId === asset.id ? 'bg-primary-600/10 border-primary-500/50' : 'bg-slate-900 border-slate-800 hover:border-slate-700'}`}
-                            >
-                            <div className="flex items-center justify-between mb-2">
-                                <span className="text-xs font-mono text-slate-500">ID: {asset.id.substring(0,8)}</span>
-                                {asset.status === AssetStatus.MINTED && <CheckCircle size={12} className="text-emerald-500"/>}
+          {activeTab === 'batch' && (
+             <div className="max-w-6xl mx-auto h-full flex flex-col">
+                {isGlobalView ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
+                        {isAdmin ? (
+                            <div className="w-full max-w-4xl p-6">
+                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Radio className="text-red-500 animate-pulse" /> Admin Broadcast Console</h3>
+                                    {!selectedScanType ? <SmartUploadSelector onTypeSelected={setSelectedScanType} /> : (
+                                        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
+                                            <h4 className="text-white font-bold mb-2">Broadcasting Type: {SCAN_TYPE_CONFIG[selectedScanType].label}</h4>
+                                            <BatchImporter onFilesSelected={(files) => handleBatchFiles(files)} isProcessing={isProcessing} />
+                                            <button onClick={() => setSelectedScanType(null)} className="text-xs text-slate-500 underline mt-2">Change Type</button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            <p className="text-xs text-slate-400 truncate font-bold">{asset.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</p>
-                            </button>
-                        ))}
+                        ) : (
+                            <div className="text-center">
+                                <Lock size={48} className="mb-4 opacity-50 mx-auto" />
+                                <h3 className="text-xl font-bold text-white mb-2">Ingestion Locked</h3>
+                                <button onClick={() => setIsGlobalView(false)} className="mt-4 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Return to Local</button>
+                            </div>
+                        )}
+                    </div>
+                ) : !selectedScanType ? <SmartUploadSelector onTypeSelected={setSelectedScanType} /> : (
+                  <div className="flex-1 flex flex-col">
+                    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
+                        <div className="flex justify-between items-start mb-4">
+                          <div>
+                              <button onClick={() => setSelectedScanType(null)} className="mb-2 text-slate-400 hover:text-white flex items-center gap-2 text-sm">← Selection</button>
+                              <h3 className="text-lg font-bold text-white flex items-center gap-2"><Zap className="text-amber-500" /> Batch Processor: <span className="text-primary-400">{SCAN_TYPE_CONFIG[selectedScanType].label}</span></h3>
+                          </div>
+                          <div className="text-right">
+                              <p className="text-2xl font-mono text-white">{batchQueue.filter(i => i.status === 'COMPLETED').length} <span className="text-sm text-slate-500">/ {batchQueue.length}</span></p>
+                              <p className="text-xs text-slate-500">Processed</p>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
+                            <BatchImporter onFilesSelected={handleBatchFiles} isProcessing={isProcessing} />
                         </div>
                     </div>
-
-                    {/* Detail Panel */}
-                    {selectedAsset ? (
-                        <div className="flex-1 overflow-y-auto pr-2">
-                            {selectedAsset.status === AssetStatus.MINTED && (
-                                <div className="space-y-8 animate-in fade-in duration-500">
-                                    <div className="bg-slate-900 p-1 rounded-xl border border-slate-800">
-                                        <div className="p-4 border-b border-slate-800 mb-2 flex justify-between items-center">
-                                            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Semantic Knowledge Graph</h3>
-                                            <span className="text-xs text-slate-500">{selectedAsset.graphData?.nodes?.length || 0} Nodes</span>
-                                        </div>
-                                        {selectedAsset.graphData && <GraphVisualizer data={selectedAsset.graphData} width={800} height={500} />}
-                                    </div>
-                                    <div className="bg-slate-900 p-5 rounded-xl border border-slate-800">
-                                        <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider mb-4">Extracted Entities</h3>
-                                        <div className="flex flex-wrap gap-2">
-                                            {selectedAsset.graphData?.nodes?.map((node, i) => (
-                                                <div key={i} className={`flex items-center gap-2 px-3 py-1.5 rounded border text-xs ${
-                                                    node.type === 'PERSON' ? 'bg-blue-900/20 border-blue-800 text-blue-300' :
-                                                    node.type === 'LOCATION' ? 'bg-emerald-900/20 border-emerald-800 text-emerald-300' :
-                                                    'bg-slate-800 border-slate-700 text-slate-300'
-                                                }`}>
-                                                    <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70"></span>
-                                                    <span className="font-bold">{node.label}</span>
-                                                    <span className="opacity-50 ml-1 text-[10px] uppercase">{node.type}</span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                    <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+                        <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center"><h4 className="text-xs font-bold text-slate-400 uppercase">Processing Queue</h4></div>
+                        <div className="flex-1 overflow-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-slate-950 sticky top-0">
+                                    <tr><th className="px-4 py-2 text-[10px] text-slate-500 uppercase">Status</th><th className="px-4 py-2 text-[10px] text-slate-500 uppercase">File</th><th className="px-4 py-2 text-[10px] text-slate-500 uppercase">Message</th></tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800">
+                                    {batchQueue.map((item) => (
+                                        <tr key={item.id} className="text-xs group hover:bg-slate-800/30">
+                                            <td className="px-4 py-2">{item.status === 'COMPLETED' ? <CheckCircle size={14} className="text-emerald-500" /> : <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />}</td>
+                                            <td className="px-4 py-2 text-slate-300 font-mono">{item.file.name}</td>
+                                            <td className="px-4 py-2 text-slate-500">{item.status}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
                         </div>
-                    ) : (
-                        <div className="flex-1 flex items-center justify-center text-slate-600">
-                            <p>Select an asset to view its specific graph</p>
-                        </div>
-                    )}
-                </div>
-               )}
-            </div>
+                    </div>
+                  </div>
+                )}
+             </div>
           )}
 
-          {/* Marketplace / NFT View - AGGREGATED BUNDLES */}
-          {activeTab === 'market' && (
-              <div className="max-w-6xl mx-auto">
-                  <div className="flex justify-between items-end mb-8">
-                      <div>
-                          <h2 className="text-3xl font-bold text-white mb-2">Sharded Data Bundles</h2>
-                          <p className="text-slate-400 max-w-2xl">
-                             Purchase fractional ownership of entire curated datasets. 
-                             <span className="text-primary-400 block mt-1">
-                               Dynamic Sharding: Total shard supply increases automatically as more data is added to the background database.
-                             </span>
-                          </p>
-                      </div>
-                      
-                      <div className="bg-slate-900 px-4 py-2 rounded-lg border border-slate-800 text-right">
-                          <p className="text-xs text-slate-500 uppercase">Current Grouping</p>
-                          <p className="text-lg font-bold text-white">{groupBy}</p>
-                      </div>
-                  </div>
-
-                  {/* FREE / COMMUNITY DROPS SECTION */}
-                  {Object.entries(aggregatedGroups).filter(([_, group]) => group.some(a => a.sqlRecord?.DATA_LICENSE === 'CC0')).length > 0 && (
-                     <div className="mb-12">
-                         <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                             <Gift className="text-emerald-500" /> Community Airdrops (Free)
-                         </h3>
-                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {Object.entries(aggregatedGroups)
-                              .filter(([_, group]) => group.some(a => a.sqlRecord?.DATA_LICENSE === 'CC0'))
-                              .map(([groupName, groupAssets]) => {
-                                  const bundleSize = groupAssets.length;
-                                  const totalTokens = groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
-                                  const ownedCount = groupAssets.filter(a => ownedAssetIds.has(a.id)).length;
-                                  const isFullyOwned = ownedCount === bundleSize && bundleSize > 0;
-                                  
-                                  return (
-                                    <div key={groupName} className="bg-slate-900 border border-emerald-900/50 rounded-xl overflow-hidden group hover:border-emerald-500/50 transition-all flex flex-col relative">
-                                        <div className="absolute top-0 right-0 p-2 z-20">
-                                            <span className="px-2 py-0.5 bg-emerald-500 text-black text-[10px] font-bold rounded shadow-lg">FREE CLAIM</span>
-                                        </div>
-                                        <div className="h-32 bg-gradient-to-br from-emerald-900/40 to-slate-950 relative p-6 flex flex-col justify-between">
-                                            <div className="absolute top-0 right-0 p-4 opacity-10">
-                                                <Globe size={80} />
-                                            </div>
-                                            <div className="relative z-10">
-                                                <div className="flex justify-between items-start">
-                                                    <span className="px-2 py-1 bg-black/40 rounded text-[10px] font-mono text-emerald-300 border border-emerald-500/20 uppercase tracking-wide">
-                                                        Public Domain
-                                                    </span>
-                                                    {isFullyOwned && (
-                                                        <span className="flex items-center gap-1 px-2 py-1 bg-emerald-900/80 text-emerald-400 text-[10px] font-bold rounded border border-emerald-500/50">
-                                                            <CheckCircle size={12} /> Synced
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                            <h3 className="text-xl font-bold text-white relative z-10 truncate">{groupName}</h3>
-                                        </div>
-                                        
-                                        <div className="p-6 flex-1 flex flex-col">
-                                            <div className="grid grid-cols-2 gap-4 mb-6">
-                                                <div>
-                                                    <p className="text-[10px] text-slate-500 uppercase">Documents</p>
-                                                    <p className="text-lg font-mono text-white">{bundleSize}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-[10px] text-slate-500 uppercase">Tokens</p>
-                                                    <p className="text-lg font-mono text-emerald-400">{totalTokens.toLocaleString()}</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="mt-auto">
-                                                <button 
-                                                    onClick={() => setPurchaseModalData({ title: groupName, assets: groupAssets })}
-                                                    className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-emerald-900/20"
-                                                >
-                                                    <Download size={16} /> {isFullyOwned ? 'Re-Sync' : 'Claim Free Bundle'}
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                  );
-                            })}
-                         </div>
-                     </div>
-                  )}
-
-                  {/* PREMIUM BUNDLES SECTION */}
-                  <div>
-                      <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                          <Coins className="text-amber-500" /> Premium Datasets
-                      </h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                          {Object.entries(aggregatedGroups)
-                             .filter(([_, group]) => !group.some(a => a.sqlRecord?.DATA_LICENSE === 'CC0'))
-                             .map(([groupName, groupAssets]) => {
-                              const bundleSize = groupAssets.length;
-                              const totalShards = bundleSize * 1000;
-                              const bundlePriceEth = (bundleSize * 0.05).toFixed(3);
-                              const totalTokens = groupAssets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
-                              
-                              // Check ownership status for UI indication
-                              const ownedCount = groupAssets.filter(a => ownedAssetIds.has(a.id)).length;
-                              const isFullyOwned = ownedCount === bundleSize && bundleSize > 0;
-                              
-                              return (
-                                <div key={groupName} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden group hover:border-primary-500/50 transition-all flex flex-col">
-                                    <div className="h-32 bg-gradient-to-br from-slate-800 to-slate-950 relative p-6 flex flex-col justify-between">
-                                        <div className="absolute top-0 right-0 p-4 opacity-10">
-                                            <Package size={80} />
-                                        </div>
-                                        <div className="relative z-10">
-                                            <div className="flex justify-between items-start">
-                                                <span className="px-2 py-1 bg-black/40 rounded text-[10px] font-mono text-slate-300 border border-white/10 uppercase tracking-wide">
-                                                    {groupBy} Bundle
-                                                </span>
-                                                {isFullyOwned && (
-                                                    <span className="flex items-center gap-1 px-2 py-1 bg-emerald-900/80 text-emerald-400 text-[10px] font-bold rounded border border-emerald-500/50">
-                                                        <CheckCircle size={12} /> Owned
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                        <h3 className="text-xl font-bold text-white relative z-10 truncate">{groupName}</h3>
-                                    </div>
-                                    
-                                    <div className="p-6 flex-1 flex flex-col">
-                                        <div className="grid grid-cols-2 gap-4 mb-6">
-                                            <div>
-                                                <p className="text-[10px] text-slate-500 uppercase">Documents</p>
-                                                <p className="text-lg font-mono text-white">{bundleSize}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] text-slate-500 uppercase">Total Tokens</p>
-                                                <p className="text-lg font-mono text-emerald-400">{totalTokens.toLocaleString()}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] text-slate-500 uppercase">Dynamic Shards</p>
-                                                <p className="text-lg font-mono text-purple-400">{totalShards.toLocaleString()}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] text-slate-500 uppercase">Bundle Price</p>
-                                                <p className="text-lg font-mono text-amber-500">Ξ {bundlePriceEth}</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="mt-auto">
-                                            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden mb-4">
-                                                <div className="bg-gradient-to-r from-primary-500 to-purple-600 h-full w-3/4"></div>
-                                            </div>
-                                            <div className="flex gap-2">
-                                                <button 
-                                                    onClick={() => setPurchaseModalData({ title: groupName, assets: groupAssets })}
-                                                    className="flex-1 py-2.5 bg-primary-600 hover:bg-primary-500 text-white font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
-                                                >
-                                                    <Coins size={16} /> {isFullyOwned ? 'Re-Purchase' : 'Buy Shards'}
-                                                </button>
-                                                <button className="px-3 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white transition-colors">
-                                                    <Share2 size={18} />
-                                                </button>
-                                            </div>
-                                            <p className="text-[10px] text-center text-slate-500 mt-2">
-                                                Contract updates automatically on ingest
-                                            </p>
-                                        </div>
-                                    </div>
+          {activeTab === 'assets' && (
+             <div className="h-full overflow-y-auto">
+                 <div className="flex justify-between items-center mb-6">
+                     <h3 className="text-lg font-bold text-white">Exploratory Analysis & Bundles</h3>
+                 </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
+                     {displayItems.map(item => ('bundleId' in item) ? <BundleCard key={item.bundleId} bundle={item as ImageBundle} onAssetUpdated={handleAssetUpdate} /> : (
+                        <div key={item.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:shadow-lg transition-all group">
+                            <div className="relative h-48 bg-slate-950 overflow-hidden">
+                                <img src={item.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" />
+                            </div>
+                            <div className="p-4">
+                                <h4 className="font-bold text-white text-sm mb-1 truncate">{item.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
+                                <div className="flex gap-2 mt-4">
+                                    <button onClick={() => { setSelectedAssetId(item.id); setActiveTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700">View Graph</button>
+                                    <ContributeButton asset={item} onAssetUpdated={handleAssetUpdate} />
                                 </div>
-                              );
-                          })}
-                      </div>
+                            </div>
+                        </div>
+                     ))}
+                 </div>
+             </div>
+          )}
+
+          {activeTab === 'graph' && (
+            <div className="flex gap-6 h-full flex-col">
+               <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-white">Knowledge Graph</h3></div>
+               {graphViewMode === 'GLOBAL' && (
+                  <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
+                      <div className="flex-1 relative"><GraphVisualizer data={globalGraphData} width={1000} height={600} /></div>
                   </div>
-                  
-                  {Object.keys(aggregatedGroups).length === 0 && (
-                      <div className="col-span-3 py-12 text-center text-slate-500">
-                          <AlertCircle className="mx-auto mb-2 opacity-50" size={32}/>
-                          No bundles available. Go to Quick Processing to ingest data.
-                      </div>
-                  )}
-              </div>
+               )}
+            </div>
           )}
 
         </div>
         
-        {/* Full Screen Image Modal */}
         {expandedImage && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm" onClick={() => setExpandedImage(null)}>
-                <button className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white">
-                    <X size={24} />
-                </button>
+                <button className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white"><X size={24} /></button>
                 <img src={expandedImage} className="max-w-full max-h-full p-4 object-contain select-none" alt="Expanded Asset" />
             </div>
         )}
-
-        {/* Privacy Policy Modal */}
-        {showPrivacyPolicy && <PrivacyPolicyModal onClose={() => setShowPrivacyPolicy(false)} />}
-
-        {/* Purchase Confirmation Modal */}
-        {purchaseModalData && (
-            <PurchaseModal 
-                bundleTitle={purchaseModalData.title}
-                assets={purchaseModalData.assets}
-                ownedAssetIds={ownedAssetIds}
-                onClose={() => setPurchaseModalData(null)}
-                onConfirm={handlePurchase}
-            />
-        )}
-
       </main>
     </div>
   );
+}
+
+function downloadJSON(asset: DigitalAsset) {
+  if (!asset.sqlRecord) return;
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(asset.sqlRecord, null, 2));
+  const downloadAnchorNode = document.createElement('a');
+  downloadAnchorNode.setAttribute("href", dataStr);
+  downloadAnchorNode.setAttribute("download", `GEOGRAPH_DB_${asset.id}.json`);
+  document.body.appendChild(downloadAnchorNode);
+  downloadAnchorNode.click();
+  downloadAnchorNode.remove();
 }

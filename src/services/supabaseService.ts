@@ -1,12 +1,12 @@
+
 import { createClient } from '@supabase/supabase-js';
-import { DigitalAsset, AssetStatus } from '../types';
+import { DigitalAsset, AssetStatus, GraphNode, GraphLink } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 
-// Helper to safely access env vars in different environments (Vite vs standard)
 const getEnvVar = (key: string) => {
-  // @ts-ignore
+  // @ts-ignore - Property 'env' does not exist on type 'ImportMeta'
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
-    // @ts-ignore
+    // @ts-ignore - Property 'env' does not exist on type 'ImportMeta'
     return import.meta.env[key];
   }
   if (typeof process !== 'undefined' && process.env && process.env[key]) {
@@ -18,12 +18,14 @@ const getEnvVar = (key: string) => {
 const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
 const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
 
-// Conditional initialization prevents crash if keys are missing
-// If keys are missing, supabase is null, preventing the "supabaseUrl is required" error
 export const supabase = (supabaseUrl && supabaseAnonKey) 
   ? createClient(supabaseUrl, supabaseAnonKey) 
   : null;
 
+/**
+ * Fetches the entire global corpus and transforms it into DigitalAsset format.
+ * Reconstructs the Knowledge Graph from flattened SQL relationships.
+ */
 export const fetchGlobalCorpus = async (): Promise<DigitalAsset[]> => {
   if (!supabase) return [];
 
@@ -31,113 +33,127 @@ export const fetchGlobalCorpus = async (): Promise<DigitalAsset[]> => {
     .from('historical_documents_global')
     .select('*')
     .order('created_at', { ascending: false })
-    .limit(2000); // Safety limit for frontend performance
+    .limit(2000);
 
   if (error) {
     console.error("Error fetching global corpus:", error);
-    return [];
+    throw error;
   }
 
-  // Map SQL rows back to DigitalAsset shape for UI consumption
-  return data.map((row: any) => ({
-    id: row.ASSET_ID,
-    // Use the public URL stored in Supabase, or a placeholder if missing
-    imageUrl: row.original_image_url || '', 
-    timestamp: row.LOCAL_TIMESTAMP,
-    ocrText: row.RAW_OCR_TRANSCRIPTION,
-    status: AssetStatus.MINTED, // Global assets are by definition processed
-    sqlRecord: {
-      ...row,
-      // Ensure arrays are parsed if they came back as strings (though Supabase client usually handles JSON types)
-      ENTITIES_EXTRACTED: typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : row.ENTITIES_EXTRACTED,
-      KEYWORDS_TAGS: typeof row.KEYWORDS_TAGS === 'string' ? JSON.parse(row.KEYWORDS_TAGS) : row.KEYWORDS_TAGS,
-      nearbyLandmarks: typeof row.gisMetadata?.nearbyLandmarks === 'string' ? JSON.parse(row.gisMetadata.nearbyLandmarks) : row.gisMetadata?.nearbyLandmarks
-    },
-    // We reconstruct minimal graph data from the flattened SQL record for visualization
-    graphData: {
-      nodes: [
-        { id: row.ASSET_ID, label: row.DOCUMENT_TITLE, type: 'DOCUMENT', relevance: 1 },
-        ...(Array.isArray(row.ENTITIES_EXTRACTED) ? row.ENTITIES_EXTRACTED.map((e: string) => ({
-          id: `ENT_${e.replace(/\s/g,'')}`,
-          label: e,
-          type: 'CONCEPT',
-          relevance: 0.8
-        })) : [])
-      ],
-      links: Array.isArray(row.ENTITIES_EXTRACTED) ? row.ENTITIES_EXTRACTED.map((e: string) => ({
+  return data.map((row: any) => {
+    // 1. Parse JSONB fields
+    const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED) 
+      ? row.ENTITIES_EXTRACTED 
+      : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
+    
+    // 2. Reconstruct Nodes
+    const nodes: GraphNode[] = [
+      { 
+        id: row.ASSET_ID, 
+        label: row.DOCUMENT_TITLE, 
+        type: 'DOCUMENT', 
+        relevance: 1.0,
+        license: row.DATA_LICENSE 
+      }
+    ];
+
+    // 3. Reconstruct Links & Entity Nodes
+    const links: GraphLink[] = [];
+    entities.forEach(entity => {
+      const entityId = `ENT_${entity.replace(/\s+/g, '_').toUpperCase()}`;
+      nodes.push({
+        id: entityId,
+        label: entity,
+        type: 'CONCEPT',
+        relevance: 0.8
+      });
+      links.push({
         source: row.ASSET_ID,
-        target: `ENT_${e.replace(/\s/g,'')}`,
+        target: entityId,
         relationship: 'CONTAINS'
-      })) : []
-    }
-  }));
+      });
+    });
+
+    // 4. Return complete DigitalAsset
+    return {
+      id: row.ASSET_ID,
+      imageUrl: row.original_image_url || '', 
+      timestamp: row.LOCAL_TIMESTAMP,
+      ocrText: row.RAW_OCR_TRANSCRIPTION,
+      status: AssetStatus.MINTED,
+      graphData: { nodes, links },
+      sqlRecord: {
+        ...row,
+        ENTITIES_EXTRACTED: entities,
+        KEYWORDS_TAGS: Array.isArray(row.KEYWORDS_TAGS) ? row.KEYWORDS_TAGS : [],
+        PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS) ? row.PRESERVATION_EVENTS : []
+      }
+    };
+  });
 };
 
+/**
+ * Uploads local processing results to the global Supabase repository.
+ * Handles both the relational SQL record and the binary image storage.
+ */
 export const contributeAssetToGlobalCorpus = async (
   asset: DigitalAsset,
   contributorId?: string,
   licenseType: 'GEOGRAPH_CORPUS_1.0' | 'CC0' = 'GEOGRAPH_CORPUS_1.0'
 ) => {
-  // If no ID provided, treat as anonymous contribution
   const finalContributorId = contributorId || `anon_${uuidv4()}`;
 
-  // Fallback simulation if Supabase is not configured
   if (!supabase) {
-    console.warn("Supabase is not configured (missing VITE_SUPABASE_URL). Simulating contribution...");
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    return { success: true, contributorId: finalContributorId };
+    console.warn("Supabase not configured. Skipping cloud contribution.");
+    return { success: false, reason: "CONFIG_MISSING" };
   }
 
   if (!asset.sqlRecord || !asset.imageUrl) {
-    throw new Error("Asset is missing SQL record or Image URL");
+    throw new Error("Asset missing critical contribution data");
   }
 
   try {
-    // 1. Upload original image to Supabase Storage
-    const response = await fetch(asset.imageUrl);
-    const blob = await response.blob();
-    // Default to jpg if format is generic or missing
-    const fileExt = asset.sqlRecord.FILE_FORMAT.includes('/') ? asset.sqlRecord.FILE_FORMAT.split('/').pop() : 'jpg';
-    const fileName = `${asset.id}.${fileExt}`;
+    // 1. Storage Upload: Only if it's a local blob
+    let publicUrl = asset.imageUrl;
+    if (asset.imageUrl.startsWith('blob:')) {
+      const response = await fetch(asset.imageUrl);
+      const blob = await response.blob();
+      const fileExt = asset.sqlRecord.FILE_FORMAT.split('/').pop() || 'jpg';
+      const fileName = `${asset.id}_${Date.now()}.${fileExt}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from('corpus-images')
-      .upload(fileName, blob, {
-        upsert: true,
-        contentType: asset.sqlRecord.FILE_FORMAT
-      });
+      const { error: uploadError } = await supabase.storage
+        .from('corpus-images')
+        .upload(fileName, blob, {
+          upsert: true,
+          contentType: blob.type
+        });
 
-    if (uploadError) throw uploadError;
+      if (uploadError) throw uploadError;
 
-    const { data: publicUrlData } = supabase.storage
-      .from('corpus-images')
-      .getPublicUrl(fileName);
+      const { data: publicUrlData } = supabase.storage
+        .from('corpus-images')
+        .getPublicUrl(fileName);
+        
+      publicUrl = publicUrlData.publicUrl;
+    }
 
-    // 2. Save full enriched record to global table
+    // 2. Database Upsert
     const { error } = await supabase
       .from('historical_documents_global')
       .upsert({
         ...asset.sqlRecord,
         CONTRIBUTOR_ID: finalContributorId,
         CONTRIBUTED_AT: new Date().toISOString(),
-        DATA_LICENSE: licenseType, // Apply the selected license (CC0 for admin broadcast)
-        CONTRIBUTOR_NFT_MINTED: false,
-        original_image_url: publicUrlData.publicUrl,
-        // We don't store the raw blob in the DB row, just the URL
+        DATA_LICENSE: licenseType,
+        original_image_url: publicUrl,
+        user_id: contributorId && !contributorId.startsWith('anon_') ? contributorId : null
       });
 
     if (error) throw error;
 
-    return { success: true, contributorId: finalContributorId };
+    return { success: true, publicUrl, contributorId: finalContributorId };
   } catch (err) {
-    console.error("Supabase contribution failed:", err);
-    console.warn("Falling back to simulation mode so you can continue exploring the app.");
-    
-    // Simulate network delay for fallback
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Return success to UI so the user gets the reward/shard
-    return { success: true, contributorId: finalContributorId, simulated: true };
+    console.error("Supabase sync failed:", err);
+    throw err;
   }
 };

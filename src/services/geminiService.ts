@@ -1,28 +1,15 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { GISMetadata, GraphData, TokenizationData, AssetStatus, ScanType, TaxonomyData, ItemAttributes, SceneryAttributes, ReadingOrderBlock } from "../types";
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+// Update to recommended model for complex reasoning and extraction tasks
+const GEMINI_MODEL = "gemini-3-pro-preview";
 
-// Helper to safely access API Key in both Node and Browser (Vite) environments
+// Helper to obtain API Key exclusively from process.env.API_KEY as per guidelines
 const getApiKey = (): string => {
-  try {
-    // Check process.env (Node/Next.js/Webpack)
-    if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
-      return process.env.API_KEY;
-    }
-  } catch (e) { /* ignore reference errors */ }
-
-  try {
-    // Check import.meta.env (Vite)
-    // @ts-ignore
-    if (typeof import.meta !== 'undefined' && import.meta.env) {
-      // @ts-ignore
-      if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
-      // @ts-ignore
-      if (import.meta.env.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
-    }
-  } catch (e) { /* ignore */ }
-
+  if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
+    return process.env.API_KEY;
+  }
   return '';
 };
 
@@ -68,6 +55,9 @@ interface ProcessResponse {
   confidenceScore: number;
   keywordsTags: string[];
   accessRestrictions: boolean;
+  
+  // Suggested Collection Name (replaces Batch Ingest)
+  suggestedCollection: string;
 
   // Scan Type Specific
   taxonomy?: TaxonomyData;
@@ -89,6 +79,7 @@ const getAiClient = () => {
     if (!key) {
         console.warn("Gemini API Key is missing. Calls will fail.");
     }
+    // Initialize strictly with the provided API key
     aiInstance = new GoogleGenAI({ apiKey: key });
   }
   return aiInstance;
@@ -102,7 +93,7 @@ export const processImageWithGemini = async (
   
   const apiKey = getApiKey();
   if (!apiKey) {
-      console.warn("Missing Gemini API Key. Ensure API_KEY or VITE_GEMINI_API_KEY is set.");
+      console.warn("Missing Gemini API Key. Ensure process.env.API_KEY is set.");
       // We throw here so the UI can catch it and show an error instead of crashing silently
       throw new Error("Missing Gemini API Key. Please configure your environment variables.");
   }
@@ -127,6 +118,10 @@ export const processImageWithGemini = async (
        - Use 'ORGANIZATION' for companies or groups.
        - Use 'LOCATION' for places.
     4. **Relationships**: Link these item nodes to the main document node or a central concept node (e.g., "Pikachu" -> "TYPE_OF" -> "Pokemon").
+    
+    **NAMING & GROUPING:**
+    - Provide a specific "documentTitle" for the file.
+    - Provide a "suggestedCollection" name. Do NOT use "Batch Ingest". E.g., if it's a map, suggest "Cartographic Archives". If it's a receipt, "Financial Records".
 
     Return strict JSON matching the schema with:
     - "scan_type": "${scanType}"
@@ -198,6 +193,7 @@ export const processImageWithGemini = async (
       
       // Classification
       nlpNodeCategorization: { type: Type.STRING },
+      suggestedCollection: { type: Type.STRING, description: "Proposed name for the collection this item belongs to" },
       keywordsTags: { type: Type.ARRAY, items: { type: Type.STRING } },
       accessRestrictions: { type: Type.BOOLEAN },
       confidenceScore: { type: Type.NUMBER, description: "0.0 to 1.0 confidence in extraction" },
@@ -312,7 +308,7 @@ export const processImageWithGemini = async (
     },
     required: [
       "ocrText", "preprocessOcrTranscription", "gisMetadata", "graphData", "tokenization", "analysis",
-      "documentTitle", "documentDescription", "rightsStatement", "languageCode", "keywordsTags"
+      "documentTitle", "documentDescription", "rightsStatement", "languageCode", "keywordsTags", "suggestedCollection"
     ]
   };
 
@@ -361,7 +357,8 @@ export const processImageWithGemini = async (
       alt_text_short: parsed.alt_text_short,
       alt_text_long: parsed.alt_text_long,
       reading_order: parsed.reading_order,
-      accessibility_score: parsed.accessibility_score
+      accessibility_score: parsed.accessibility_score,
+      suggestedCollection: parsed.suggestedCollection || "Unsorted Processing"
     };
 
   } catch (error) {
