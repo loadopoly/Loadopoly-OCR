@@ -12,7 +12,7 @@ An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP process
 ---
 
 ## 🚀 What's New in v1.6.0
-- **Gemini 3 Pro Preview:** Upgraded the extraction engine to the latest high-reasoning model for superior entity detection and relational mapping.
+- **Gemini 2.5 Flash:** Upgraded the extraction engine to the latest high-performance model for blazing fast entity detection and relational mapping.
 - **Enhanced Graph Interaction:** Full D3.js zoom and pan support in all graph visualizations.
 - **Relational Cloud Integrity:** Robust reconstruction of knowledge graphs from Supabase JSONB dataframes, ensuring global views are as rich as local ones.
 - **Cluster View Database:** New hierarchical "Cluster View" for exploring the repository through semantic groupings (Era, Category, GIS Zone).
@@ -35,7 +35,7 @@ An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP process
   <img src="screenshots/knowledge-graph.png" width="48%" alt="Knowledge Graph" />
   <img src="screenshots/semantic-view.png" width="48%" alt="Semantic Universe" />
 </div>
-*Left: Relational mapping of entities extracted by Gemini 3 Pro. Right: The Semantic Universe view clustering documents by era and LLM-derived category.*
+*Left: Relational mapping of entities extracted by Gemini 2.5 Flash. Right: The Semantic Universe view clustering documents by era and LLM-derived category.*
 
 ### Structured Dataframes & Clusters
 ![Structured Database](screenshots/structured-db.png)
@@ -50,7 +50,7 @@ An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP process
 
 ## About
 
-GeoGraph Node transforms physical documents, artifacts, and locations into structured, AI-ready training data. Using Google's Gemini 3 Pro Preview for intelligent extraction, the platform creates rich knowledge graphs, preserves GIS context, and enables fractional data ownership through blockchain technology.
+GeoGraph Node transforms physical documents, artifacts, and locations into structured, AI-ready training data. Using Google's Gemini 2.5 Flash for intelligent extraction, the platform creates rich knowledge graphs, preserves GIS context, and enables fractional data ownership through blockchain technology.
 
 ### Use Cases
 
@@ -64,7 +64,7 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
 ## Features
 
 ### 🔍 Intelligent Scanning
-- **Gemini 3 Pro Integration:** State-of-the-art OCR with temporal extraction, GIS zone inference, and complex entity relationship detection.
+- **Gemini 2.5 Flash Integration:** State-of-the-art OCR with temporal extraction, GIS zone inference, and complex entity relationship detection.
 - **Multi-Mode Capture:** Optimized extraction pipelines for **Documents**, **Physical Artifacts**, and **Scenery**.
 - **Accessibility First:** Auto-generated alt-text (WCAG compliant), logical reading order, and screen reader audio playback.
 - **AR Scanner:** Real-time camera overlay simulating detection of nearby knowledge nodes and physical artifacts.

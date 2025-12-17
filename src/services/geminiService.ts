@@ -1,9 +1,8 @@
-
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { GISMetadata, GraphData, TokenizationData, AssetStatus, ScanType, TaxonomyData, ItemAttributes, SceneryAttributes, ReadingOrderBlock } from "../types";
 
-// Update to recommended model for complex reasoning and extraction tasks
-const GEMINI_MODEL = "gemini-3-pro-preview";
+// Using Gemini 2.5 Flash as requested for optimized speed and efficient extraction
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 // Helper to obtain API Key exclusively from process.env.API_KEY as per guidelines
 const getApiKey = (): string => {
