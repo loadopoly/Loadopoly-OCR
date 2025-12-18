@@ -54,7 +54,7 @@ import GraphVisualizer from './components/GraphVisualizer';
 import ContributeButton from './components/ContributeButton';
 import BundleCard from './components/BundleCard';
 import ARScene from './components/ARScene';
-import SemanticCanvas from './components/SemanticCanvas';
+// import SemanticCanvas from './components/SemanticCanvas';
 import CameraCapture from './components/CameraCapture';
 import BatchImporter from './components/BatchImporter';
 import SettingsPanel from './components/SettingsPanel';
