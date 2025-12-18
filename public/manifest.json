@@ -13,20 +13,87 @@
   "orientation": "any",
   "categories": ["education", "productivity", "utilities"],
   "prefer_related_applications": false,
-  "icons": [],
-  "screenshots": [],
+  "icons": [
+    {
+      "src": "/icon-192a.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512a.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512a.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshot-desktop-1a.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Dashboard - Central command center with stats, graph activity, and GIS context"
+    },
+    {
+      "src": "/screenshot-desktop-2a.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Structured Database - Cloud dataframes with tabular cluster view"
+    },
+    {
+      "src": "/screenshot-desktop-3a.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Knowledge Graph - Interactive entity relationship visualization"
+    },
+    {
+      "src": "/screenshot-mobile-1a.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile Dashboard - Stats and recent activity on the go"
+    },
+    {
+      "src": "/screenshot-mobile-2a.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "AR Scanner - Real-time environment analysis and data capture"
+    }
+  ],
   "shortcuts": [
     {
       "name": "Quick Process",
       "short_name": "Process",
       "description": "Start a new high-throughput batch scan",
-      "url": "/?tab=batch"
+      "url": "/?tab=batch",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "AR Scanner",
       "short_name": "AR",
       "description": "Open the immersive AR field scanner",
-      "url": "/?tab=ar"
+      "url": "/?tab=ar",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ],
   "share_target": {
