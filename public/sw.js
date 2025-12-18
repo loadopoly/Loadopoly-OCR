@@ -3,11 +3,7 @@ const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon.svg',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/screenshot-desktop.png',
-  '/screenshot-mobile.png'
+  '/icon.svg'
 ];
 
 self.addEventListener('install', (event) => {
@@ -51,12 +47,34 @@ self.addEventListener('fetch', (event) => {
           cache.put(event.request, responseToCache);
         });
         return response;
-      }).catch(() => {
-        // Fallback for document navigation if offline
-        if (event.request.mode === 'navigate') {
-          return caches.match('/index.html');
-        }
       });
+    })
+  );
+});
+
+// Background Sync
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-data') {
+    // event.waitUntil(syncData());
+    console.log('Background sync triggered');
+  }
+});
+
+// Periodic Sync
+self.addEventListener('periodicsync', (event) => {
+  if (event.tag === 'update-content') {
+    // event.waitUntil(updateContent());
+    console.log('Periodic sync triggered');
+  }
+});
+
+// Push Notifications
+self.addEventListener('push', (event) => {
+  const data = event.data ? event.data.text() : 'No payload';
+  event.waitUntil(
+    self.registration.showNotification('GeoGraph', {
+      body: data,
+      icon: '/icon.svg'
     })
   );
 });
