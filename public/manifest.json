@@ -103,5 +103,20 @@
   ],
   "edge_side_panel": {
     "preferred_width": 400
-  }
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+geograph",
+      "url": "/?graph=%s"
+    }
+  ],
+  "note_taking": {
+    "new_note_url": "/?note=new"
+  },
+  "scope_extensions": [
+    {
+      "origin": "https://geographocrnode.vercel.app"
+    }
+  ],
+  "related_applications": []
 }
