@@ -1,11 +1,13 @@
-const CACHE_NAME = 'geograph-v3';
+const CACHE_NAME = 'geograph-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
   '/icon.svg',
   '/icon-192.png',
-  '/icon-512.png'
+  '/icon-512.png',
+  '/screenshot-desktop.png',
+  '/screenshot-mobile.png'
 ];
 
 self.addEventListener('install', (event) => {
@@ -50,6 +52,7 @@ self.addEventListener('fetch', (event) => {
         });
         return response;
       }).catch(() => {
+        // Fallback for document navigation if offline
         if (event.request.mode === 'navigate') {
           return caches.match('/index.html');
         }

@@ -16,7 +16,7 @@ GeoGraph Node is an advanced OCR-to-Graph platform integrating GIS metadata, sem
 - **Full PWA Capability:** Install GeoGraph as a standalone application on mobile or desktop with robust service worker caching for offline access.
 - **Atomic Root Architecture:** Re-engineered project structure for zero-config module resolution and high-performance loading.
 - **D3.js interactive Graphs:** Full support for zoom, pan, and interactive node inspection in the knowledge graph visualizations.
-- **Semantic Cluster Database:** Explore your repository through a hierarchical "Cluster View" grouping items by GIS Zone, Era, or NLP Category. 
+- **Semantic Cluster Database:** Explore your repository through a hierarchical "Cluster View" grouping items by GIS Zone, Era, or NLP Category.
 
 ---
 
