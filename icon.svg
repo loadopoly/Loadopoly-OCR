@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="100" fill="#1e293b"/>
+  
+  <!-- Tombstone Base -->
+  <path d="M60 400 L452 400 L470 470 L42 470 Z" fill="#475569" stroke="#0f172a" stroke-width="8" stroke-linejoin="round"/>
+  
+  <!-- Tombstone Body -->
+  <path d="M100 400 L100 120 C100 80, 140 50, 200 50 L312 50 C372 50, 412 80, 412 120 L412 400 Z" fill="#64748b" stroke="#0f172a" stroke-width="10" stroke-linejoin="round"/>
+  
+  <!-- Surface Texture / Cracks -->
+  <path d="M100 200 L140 180" stroke="#334155" stroke-width="4" stroke-linecap="round"/>
+  <path d="M412 100 L370 130" stroke="#334155" stroke-width="4" stroke-linecap="round"/>
+  <path d="M412 280 L380 300" stroke="#334155" stroke-width="4" stroke-linecap="round"/>
+  <path d="M100 340 L160 360" stroke="#334155" stroke-width="4" stroke-linecap="round"/>
+  
+  <!-- Highlight/Shadow Detail -->
+  <path d="M120 400 L120 130 C120 100, 150 75, 200 75" fill="none" stroke="#94a3b8" stroke-width="4" opacity="0.3"/>
+  
+  <!-- Small Chipped Detail -->
+  <path d="M220 350 Q240 370 260 350" fill="none" stroke="#0f172a" stroke-width="6" stroke-linecap="round" opacity="0.6"/>
+</svg>
