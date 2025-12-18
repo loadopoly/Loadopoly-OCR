@@ -15,19 +15,19 @@
   "prefer_related_applications": false,
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "/aicon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/aicon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-maskable-512.png",
+      "src": "/aicon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -35,35 +35,35 @@
   ],
   "screenshots": [
     {
-      "src": "/screenshot-desktop-1.png",
+      "src": "/ascreenshot-desktop-1.png",
       "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide",
       "label": "Dashboard - Central command center with stats, graph activity, and GIS context"
     },
     {
-      "src": "/screenshot-desktop-2.png",
+      "src": "/ascreenshot-desktop-2.png",
       "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide",
       "label": "Structured Database - Cloud dataframes with tabular cluster view"
     },
     {
-      "src": "/screenshot-desktop-3.png",
+      "src": "/ascreenshot-desktop-3.png",
       "sizes": "1280x720",
       "type": "image/png",
       "form_factor": "wide",
       "label": "Knowledge Graph - Interactive entity relationship visualization"
     },
     {
-      "src": "/screenshot-mobile-1.png",
+      "src": "/ascreenshot-mobile-1.png",
       "sizes": "390x844",
       "type": "image/png",
       "form_factor": "narrow",
       "label": "Mobile Dashboard - Stats and recent activity on the go"
     },
     {
-      "src": "/screenshot-mobile-2.png",
+      "src": "/ascreenshot-mobile-2.png",
       "sizes": "390x844",
       "type": "image/png",
       "form_factor": "narrow",
