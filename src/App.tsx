@@ -34,6 +34,7 @@ import {
   Scan,
   Plus,
   Settings,
+  User,
   Gift,
   Volume2,
   Globe,
@@ -146,6 +147,7 @@ export default function App() {
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [ownedAssetIds, setOwnedAssetIds] = useState<Set<string>>(new Set());
   const [purchaseModalData, setPurchaseModalData] = useState<{title: string, assets: DigitalAsset[]} | null>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { isOpen: isShortcutsOpen, setIsOpen: setIsShortcutsOpen } = useKeyboardShortcutsHelp() as any;
   const isOnline = useOnlineStatus();
   const [syncOn, setSyncOn] = useState(false);
@@ -543,8 +545,8 @@ export default function App() {
   return (
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30">
       
-      {/* Sidebar */}
-      <div className="w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex flex-col">
+      {/* Sidebar - Desktop */}
+      <div className="hidden lg:flex w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex-col">
         <div className="p-6">
           <div className="flex items-center gap-2 text-primary-500 mb-1">
             <Database size={24} />
@@ -604,12 +606,51 @@ export default function App() {
         </div>
       </div>
 
+      {/* Mobile Sidebar Overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-[60] lg:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+          <div className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 border-r border-slate-800 flex flex-col animate-in slide-in-from-left duration-300">
+            <div className="p-6 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-primary-500">
+                <Database size={24} />
+                <h1 className="text-xl font-bold tracking-tight text-white">GeoGraph</h1>
+              </div>
+              <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+            <nav className="flex-1 px-2 space-y-1">
+              <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { switchTab('dashboard'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => { switchTab('batch'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => { switchTab('ar'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => { switchTab('assets'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => { switchTab('graph'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => { switchTab('semantic'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { switchTab('market'); setIsMobileMenuOpen(false); }} />
+              <div className="pt-4 mt-4 border-t border-slate-800">
+                <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsMobileMenuOpen(false); }} />
+              </div>
+            </nav>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-8 bg-slate-950/80 backdrop-blur z-10">
+        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-4 lg:px-8 bg-slate-950/80 backdrop-blur z-10">
             <div className="flex items-center gap-4">
-                <h2 className="text-lg font-semibold text-white capitalize">{activeTab === 'database' ? 'CLOUD DATAFRAMES: CLUSTER VIEW' : activeTab}</h2>
-                {isGlobalView && <span className="px-2 py-0.5 bg-indigo-500 text-white text-[10px] font-bold rounded shadow-lg shadow-indigo-500/20">MASTER VIEW</span>}
+                <button 
+                  onClick={() => setIsMobileMenuOpen(true)}
+                  className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                >
+                  <List size={24} />
+                </button>
+                <h2 className="text-lg font-semibold text-white capitalize hidden sm:block">
+                  {activeTab === 'database' ? 'CLOUD DATAFRAMES' : activeTab}
+                </h2>
+                {isGlobalView && <span className="px-2 py-0.5 bg-indigo-500 text-white text-[10px] font-bold rounded shadow-lg shadow-indigo-500/20">MASTER</span>}
             </div>
           <div className="flex items-center gap-2">
              {!isGlobalView && activeTab !== 'batch' && activeTab !== 'ar' && (
@@ -1010,8 +1051,9 @@ export default function App() {
 
         {purchaseModalData && (
           <PurchaseModal 
-            title={purchaseModalData.title}
+            bundleTitle={purchaseModalData.title}
             assets={purchaseModalData.assets}
+            ownedAssetIds={ownedAssetIds}
             onClose={() => setPurchaseModalData(null)}
             onConfirm={handlePurchase}
           />

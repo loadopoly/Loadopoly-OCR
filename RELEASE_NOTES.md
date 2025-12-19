@@ -1,12 +1,17 @@
-# 🚀 GeoGraph Node: v1.6.x Release Notes
+# 🚀 GeoGraph Node: v1.7.0 Release Notes
 
-This series of updates transforms the GeoGraph Node from a web utility into a robust, native-feeling application with enhanced data visualization and a streamlined onboarding experience.
+This release focuses on the "Human Integration Factor," making the platform more intuitive, informative, and ready for global marketplace distribution.
 
-## 📱 Native & PWA Integration
-*   **Advanced PWA Capabilities:** Implemented `file_handlers` (open images/PDFs directly), `share_target` (receive content from other apps), and `protocol_handlers` for `web+geograph://` deep links.
-*   **System Widgets:** Added Adaptive Card support for Windows 11 and Android home screen integration via [public/widgets/status.json](public/widgets/status.json).
-*   **Desktop Experience:** Enabled **Window Controls Overlay** for a custom title bar area, providing a seamless native desktop feel.
-*   **Asset Optimization:** High-quality PNG icons and screenshots added to [public/icons/](public/icons/) for better OS compatibility.
+## 🤖 Human Integration & Guidance
+*   **Smart Suggestions Engine:** A new dashboard intelligence layer that analyzes your local environment and suggests high-value actions (e.g., "Enable Web3 to earn shards" or "Connect a network scanner").
+*   **Real-time Status Bar:** A persistent footer providing instant visibility into network connectivity, local asset counts, and sync status.
+*   **Redesigned Auth Experience:** The sign-in flow now clearly communicates the value of cloud integration, making the transition from guest to authenticated user seamless.
+*   **Hardware Bridge Feedback:** Improved UI for network scanner connections with clear "Connected" states and easy disconnection.
+
+## 📱 Marketplace & Device Readiness
+*   **Google Play Store Optimization:** Fully compliant `manifest.json` and high-resolution assets prepared for Android TWA (Trusted Web Activity) submission.
+*   **Mobile-First Refinements:** Optimized touch targets and responsive layouts for field research on mobile and tablet devices.
+*   **Marketplace Checklist:** Comprehensive guide for Chrome Web Store and Google Play Store submission added to the repository.
 
 ## 🎨 UI/UX & Accessibility
 *   **Interactive Onboarding:** A new 6-step [Onboarding.tsx](src/components/Onboarding.tsx) guide helps new users master the GeoGraph ecosystem.

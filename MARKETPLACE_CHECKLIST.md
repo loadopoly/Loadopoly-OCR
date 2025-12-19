@@ -6,7 +6,7 @@
 - [x] Code minified (no .map files)
 - [x] Build passes TypeScript compilation
 - [x] Supabase configuration ready
-- [x] Version: 1.6.2
+- [x] Version: 1.7.0
 
 ## ✅ Assets Ready
 - [x] Icon 192x192: `/public/icon-192.png`
@@ -51,14 +51,32 @@
 - [x] Keyboard shortcuts
 - [x] Offline indicator
 - [x] WCAG 2.1 AA compliance
+- [x] Smart Suggestions (Human Integration)
+- [x] Real-time Status Bar
+
+## 📱 Google Play Store (Android) Checklist
+- [x] **PWA Quality**: Manifest.json is fully compliant with Play Store requirements.
+- [x] **Icons**: 512x512 and Maskable icons provided.
+- [x] **Screenshots**: Narrow form factor (mobile) screenshots provided.
+- [ ] **TWA Wrapper**: Generate Android App Bundle (.aab) using Bubblewrap or PWABuilder.
+- [ ] **Digital Asset Links**: Host `.well-known/assetlinks.json` on the production domain.
+- [ ] **Privacy Policy**: Hosted at `/public/privacy-policy.html`.
+- [ ] **Developer Account**: Google Play Console account active.
 
 ## 📝 Submission Steps
-1. Visit: https://chrome.google.com/webstore/devconsole
-2. Click "New item"
-3. Upload `geograph-ocr-extension.zip`
-4. Fill in store listing details
-5. Add promotional images (440x280, 920x680)
-6. Submit for review
+1. **Chrome Web Store**:
+   - Visit: https://chrome.google.com/webstore/devconsole
+   - Click "New item"
+   - Upload `geograph-ocr-extension.zip`
+   - Fill in store listing details
+   - Add promotional images (440x280, 920x680)
+   - Submit for review
+
+2. **Google Play Store**:
+   - Use [PWABuilder](https://www.pwabuilder.com/) to package the URL as an Android App.
+   - Download the `.aab` file.
+   - Upload to Google Play Console.
+   - Set up "Digital Asset Links" to remove the browser URL bar.
 
 ## 📦 Files Location
 | File | Location |
@@ -72,4 +90,4 @@
 
 ---
 Last Updated: December 19, 2025
-Version: 1.6.2
+Version: 1.7.0
