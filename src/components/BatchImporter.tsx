@@ -82,6 +82,16 @@ export default function BatchImporter({ onFilesSelected, isProcessing }: BatchIm
 
   return (
     <div className="space-y-4 w-full">
+      <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 mb-4">
+          <h4 className="text-sm font-bold text-white mb-2 flex items-center gap-2">
+              <FolderOpen size={16} className="text-primary-500" />
+              Pro Tip: Batch Ingestion
+          </h4>
+          <p className="text-xs text-slate-400 leading-relaxed">
+              You can select multiple files or an entire folder. For best results with Gemini OCR, ensure documents are flat and well-lit.
+          </p>
+      </div>
+
       {/* Live Camera Button */}
       <button
         onClick={startCamera}
