@@ -17,6 +17,14 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Build artifacts
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts
+
+# Extension zip (regenerate with npm run zip:extension)
+*.zip
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.6.1-blueviolet.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.6.2-blueviolet.svg)](CHANGELOG.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -11,13 +11,51 @@ An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP process
 
 ---
 
-## 🚀 What's New in v1.6.1
-- **Supabase Cloud Storage:** Automatic cloud storage for authenticated users with user-specific asset management.
-- **Session-Based Access:** Unauthenticated users get temporary workspace with automatic cleanup between sessions.
-- **Advanced PWA Suite:** Full desktop-class integration with Window Controls Overlay, File Handling (drag-and-drop images/PDFs), and Share Target support.
-- **System Widgets:** Added Windows 11/Android widgets for real-time OCR status monitoring directly from the OS shell.
-- **Protocol Handlers:** Deep linking support via `web+geograph://` for instant graph navigation.
-- **Asset Optimization:** Migrated all static assets to optimized PNGs for better cross-platform compatibility.
+## 🚀 Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/loadopoly/Loadopoly-OCR.git
+cd Loadopoly-OCR
+
+# Install dependencies
+npm install
+
+# Copy environment template and add your keys
+cp .env.example .env.local
+# Edit .env.local with your Supabase and Gemini API keys
+
+# Start development server
+npm run dev
+```
+
+### Environment Setup
+
+Create a `.env.local` file with:
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+API_KEY=your-gemini-api-key
+```
+
+Get your credentials:
+- **Supabase:** [supabase.com/dashboard](https://supabase.com/dashboard) → Project Settings → API
+- **Gemini API:** [makersuite.google.com/app/apikey](https://makersuite.google.com/app/apikey)
+
+---
+
+## 🚀 What's New in v1.6.2
+- **Enhanced UI/UX:** Toast notifications, skeleton loading, error boundaries with recovery
+- **Onboarding Flow:** 6-step interactive guide for new users
+- **Keyboard Shortcuts:** Press `?` to view all available shortcuts
+- **Accessibility (WCAG 2.1 AA):** Full screen reader support, keyboard navigation, reduced motion
+- **Offline Indicator:** Real-time connection status with sync notifications
+- **Build Scripts:** Extension packaging ready for Chrome Web Store submission
+
+### Previous (v1.6.1)
+- **Supabase Cloud Storage:** Automatic cloud storage for authenticated users
+- **Advanced PWA Suite:** Window Controls Overlay, File Handling, Share Target
+- **System Widgets:** Windows 11/Android widgets for OCR status monitoring
 
 ---
 
