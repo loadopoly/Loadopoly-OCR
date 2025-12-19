@@ -1,26 +1,9 @@
-
-import { createClient } from '@supabase/supabase-js';
 import { DigitalAsset, AssetStatus, GraphNode, GraphLink } from '../types';
 import { v4 as uuidv4 } from 'uuid';
+import { supabase, isSupabaseConfigured, testSupabaseConnection } from '../lib/supabaseClient';
 
-const getEnvVar = (key: string) => {
-  // @ts-ignore - Property 'env' does not exist on type 'ImportMeta'
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
-    // @ts-ignore - Property 'env' does not exist on type 'ImportMeta'
-    return import.meta.env[key];
-  }
-  if (typeof process !== 'undefined' && process.env && process.env[key]) {
-    return process.env[key];
-  }
-  return '';
-};
-
-const supabaseUrl = getEnvVar('VITE_SUPABASE_URL');
-const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY');
-
-export const supabase = (supabaseUrl && supabaseAnonKey) 
-  ? createClient(supabaseUrl, supabaseAnonKey) 
-  : null;
+// Re-export utilities for convenience
+export { supabase, isSupabaseConfigured, testSupabaseConnection };
 
 /**
  * Fetches the entire global corpus and transforms it into DigitalAsset format.
