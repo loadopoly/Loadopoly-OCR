@@ -1,0 +1,8 @@
+[{
+  "relation": ["delegate_permission/common.handle_all_urls"],
+  "target": {
+    "namespace": "android_app",
+    "package_name": "app.vercel.geographocrnode.twa",
+    "sha256_cert_fingerprints": ["85:DB:90:F0:8B:BC:E5:04:89:30:2D:8B:35:5E:14:BD:06:FE:56:3B:13:E3:C9:E1:67:22:5E:9D:37:2E:8E:CC"]
+  }
+}]
