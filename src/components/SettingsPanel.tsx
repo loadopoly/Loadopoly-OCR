@@ -6,24 +6,36 @@ import { getCurrentUser } from '../lib/auth';
 import AuthModal from './AuthModal';
 import ProfileSettings from './ProfileSettings';
 
-export default function SettingsPanel({ onOpenPrivacy }: { onOpenPrivacy: () => void }) {
-  const [syncOn, setSyncOn] = useState(false);
+interface SettingsPanelProps {
+    onOpenPrivacy: () => void;
+    syncOn: boolean;
+    setSyncOn: (val: boolean) => void;
+    web3Enabled: boolean;
+    setWeb3Enabled: (val: boolean) => void;
+    scannerConnected: boolean;
+    setScannerConnected: (val: boolean) => void;
+}
+
+export default function SettingsPanel({ 
+    onOpenPrivacy, 
+    syncOn, 
+    setSyncOn, 
+    web3Enabled, 
+    setWeb3Enabled,
+    scannerConnected,
+    setScannerConnected
+}: SettingsPanelProps) {
   const [scannerUrl, setScannerUrl] = useState('');
   const [savedScannerUrl, setSavedScannerUrl] = useState('');
   const [user, setUser] = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
-  const [web3Enabled, setWeb3Enabled] = useState(false);
 
   useEffect(() => {
-    isSyncEnabled().then(setSyncOn);
     const storedUrl = localStorage.getItem('geograph-scanner-url');
     if (storedUrl) {
         setScannerUrl(storedUrl);
         setSavedScannerUrl(storedUrl);
     }
-    
-    // Check Web3 setting (default to false if not set to reduce friction, or true if previously configured)
-    setWeb3Enabled(localStorage.getItem('geograph-web3-enabled') === 'true');
 
     getCurrentUser().then(({ data }) => {
         setUser(data.user);
@@ -49,6 +61,8 @@ export default function SettingsPanel({ onOpenPrivacy }: { onOpenPrivacy: () => 
   const handleSaveScanner = () => {
       setEngineScannerUrl(scannerUrl);
       setSavedScannerUrl(scannerUrl);
+      setScannerConnected(!!scannerUrl);
+      localStorage.setItem('geograph-scanner-url', scannerUrl);
   };
 
   const handleClearData = async () => {
@@ -176,20 +190,32 @@ export default function SettingsPanel({ onOpenPrivacy }: { onOpenPrivacy: () => 
                         placeholder="http://192.168.1.50:8080/scan-drop"
                         value={scannerUrl}
                         onChange={(e) => setScannerUrl(e.target.value)}
-                        className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-4 py-2 text-white text-sm focus:border-purple-500 outline-none"
+                        className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white text-sm focus:border-purple-500 outline-none transition-all focus:ring-1 focus:ring-purple-500"
                     />
                     <button
                         onClick={handleSaveScanner}
-                        className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium text-sm"
+                        className={`px-4 py-2 rounded-lg font-medium text-sm transition-all ${
+                            savedScannerUrl === scannerUrl && scannerUrl !== ''
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-purple-600 hover:bg-purple-500 text-white'
+                        }`}
                     >
-                        Connect
+                        {savedScannerUrl === scannerUrl && scannerUrl !== '' ? 'Connected' : 'Connect'}
                     </button>
                 </div>
                 
                 {savedScannerUrl && (
-                    <div className="flex items-center gap-2 text-xs text-slate-500 mt-2">
-                        <CheckCircle size={12} className="text-purple-500" />
-                        Connected to: <span className="font-mono text-slate-400">{savedScannerUrl}</span>
+                    <div className="flex items-center justify-between mt-2">
+                        <div className="flex items-center gap-2 text-xs text-slate-500">
+                            <CheckCircle size={12} className="text-emerald-500" />
+                            Connected to: <span className="font-mono text-slate-400">{savedScannerUrl}</span>
+                        </div>
+                        <button 
+                            onClick={() => { setScannerUrl(''); handleSaveScanner(); }}
+                            className="text-[10px] text-slate-600 hover:text-red-400 transition-colors"
+                        >
+                            Disconnect
+                        </button>
                     </div>
                 )}
             </div>

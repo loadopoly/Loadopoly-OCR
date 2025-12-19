@@ -45,7 +45,7 @@ import {
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG, GraphData, GraphNode } from './types';
 import { processImageWithGemini } from './services/geminiService';
 import { createBundles } from './services/bundleService';
-import { initSync } from './lib/syncEngine';
+import { initSync, isSyncEnabled } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
 import { redeemPhygitalCertificate } from './services/web3Service';
 import { getCurrentUser } from './lib/auth';
@@ -61,8 +61,26 @@ import SettingsPanel from './components/SettingsPanel';
 import SmartUploadSelector from './components/SmartUploadSelector';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import PurchaseModal from './components/PurchaseModal';
+import SmartSuggestions from './components/SmartSuggestions';
+import StatusBar from './components/StatusBar';
 import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/KeyboardShortcuts';
 import { announce } from './lib/accessibility';
+
+// --- Custom Hooks ---
+function useOnlineStatus() {
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+  return isOnline;
+}
 
 // --- Helper Functions ---
 async function calculateSHA256(file: File): Promise<string> {
@@ -129,6 +147,10 @@ export default function App() {
   const [ownedAssetIds, setOwnedAssetIds] = useState<Set<string>>(new Set());
   const [purchaseModalData, setPurchaseModalData] = useState<{title: string, assets: DigitalAsset[]} | null>(null);
   const { isOpen: isShortcutsOpen, setIsOpen: setIsShortcutsOpen } = useKeyboardShortcutsHelp() as any;
+  const isOnline = useOnlineStatus();
+  const [syncOn, setSyncOn] = useState(false);
+  const [web3Enabled, setWeb3Enabled] = useState(false);
+  const [scannerConnected, setScannerConnected] = useState(false);
 
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
 
@@ -157,6 +179,10 @@ export default function App() {
     navigator.permissions.query({ name: 'geolocation' }).then((result) => setGeoPermission(result.state === 'granted'));
     
     initSync();
+    isSyncEnabled().then(setSyncOn);
+    setWeb3Enabled(localStorage.getItem('geograph-web3-enabled') === 'true');
+    setScannerConnected(!!localStorage.getItem('geograph-scanner-url'));
+
     const storedPurchases = localStorage.getItem('geograph-owned-assets');
     if (storedPurchases) setOwnedAssetIds(new Set(JSON.parse(storedPurchases)));
     
@@ -606,6 +632,12 @@ export default function App() {
                      <span>Refresh Cloud</span>
                  </button>
              )}
+             <button 
+                onClick={() => setActiveTab('settings')}
+                className={`p-2 rounded-full border transition-all ${user ? 'bg-primary-900/20 border-primary-500/50 text-primary-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
+             >
+                <User size={20} />
+             </button>
           </div>
         </header>
 
@@ -619,6 +651,16 @@ export default function App() {
                 <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" onClick={() => setActiveTab('database')} />
                 <StatCard label="Active Bundles" value={displayItems.filter(i => 'bundleId' in i).length} icon={Package} color="text-amber-500" onClick={() => setActiveTab('market')} />
               </div>
+
+              <SmartSuggestions 
+                user={user}
+                localAssetCount={localAssets.length}
+                syncEnabled={syncOn}
+                web3Enabled={web3Enabled}
+                scannerConnected={scannerConnected}
+                onAction={(tab) => setActiveTab(tab)}
+              />
+
               {assets.length === 0 ? (
                 <div className="h-64 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 gap-4">
                     <Globe size={48} className="mx-auto mb-4 text-slate-600" />
@@ -946,7 +988,15 @@ export default function App() {
           )}
 
           {activeTab === 'settings' && (
-            <SettingsPanel onOpenPrivacy={() => setShowPrivacyPolicy(true)} />
+            <SettingsPanel 
+              onOpenPrivacy={() => setShowPrivacyPolicy(true)} 
+              syncOn={syncOn}
+              setSyncOn={setSyncOn}
+              web3Enabled={web3Enabled}
+              setWeb3Enabled={setWeb3Enabled}
+              scannerConnected={scannerConnected}
+              setScannerConnected={setScannerConnected}
+            />
           )}
 
         </div>
@@ -974,6 +1024,14 @@ export default function App() {
         <KeyboardShortcutsHelp 
           isOpen={isShortcutsOpen} 
           onClose={() => setIsShortcutsOpen(false)} 
+        />
+
+        <StatusBar 
+          user={user}
+          syncOn={syncOn}
+          isOnline={isOnline}
+          localCount={localAssets.length}
+          onTabChange={(tab) => setActiveTab(tab)}
         />
       </main>
     </div>

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { signUp, signIn } from '../lib/auth';
-import { X, Mail, Lock, ArrowRight, AlertCircle } from 'lucide-react';
+import { X, Mail, Lock, ArrowRight, AlertCircle, Shield, Cloud, Zap } from 'lucide-react';
 
 export default function AuthModal({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState('');
@@ -18,6 +18,7 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
     
     if (!error) {
         onClose();
+        window.location.reload(); // Refresh to update user state across app
     } else {
         setError(error.message);
     }
@@ -25,19 +26,54 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
-      <div className="bg-slate-900 w-full max-w-md rounded-2xl border border-slate-700 shadow-2xl overflow-hidden relative">
+      <div className="bg-slate-900 w-full max-w-4xl rounded-2xl border border-slate-700 shadow-2xl overflow-hidden relative flex flex-col md:flex-row">
         <button 
             onClick={onClose}
-            className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
+            className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors z-10"
         >
             <X size={20} />
         </button>
         
-        <div className="p-8">
+        {/* Left Side: Info */}
+        <div className="hidden md:flex flex-1 bg-gradient-to-br from-primary-900/40 to-slate-900 p-10 flex-col justify-center border-r border-slate-800">
+            <h2 className="text-3xl font-bold text-white mb-6">Elevate Your Research</h2>
+            <div className="space-y-6">
+                <div className="flex gap-4">
+                    <div className="p-2 bg-primary-500/20 rounded-lg text-primary-400 h-fit">
+                        <Cloud size={20} />
+                    </div>
+                    <div>
+                        <h4 className="text-white font-bold">Cloud Sync</h4>
+                        <p className="text-slate-400 text-sm">Access your datasets from any device, anytime.</p>
+                    </div>
+                </div>
+                <div className="flex gap-4">
+                    <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-400 h-fit">
+                        <Shield size={20} />
+                    </div>
+                    <div>
+                        <h4 className="text-white font-bold">Secure Backup</h4>
+                        <p className="text-slate-400 text-sm">Your local repository is automatically backed up to our secure cloud.</p>
+                    </div>
+                </div>
+                <div className="flex gap-4">
+                    <div className="p-2 bg-amber-500/20 rounded-lg text-amber-400 h-fit">
+                        <Zap size={20} />
+                    </div>
+                    <div>
+                        <h4 className="text-white font-bold">Global Contribution</h4>
+                        <p className="text-slate-400 text-sm">Contribute to the global corpus and earn shards for your work.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* Right Side: Form */}
+        <div className="flex-1 p-8 md:p-12">
             <h2 className="text-2xl font-bold text-white mb-2">
             {mode === 'login' ? 'Welcome Back' : 'Create Account'}
             </h2>
-            <p className="text-slate-400 text-sm mb-6">
+            <p className="text-slate-400 text-sm mb-8">
                 {mode === 'login' ? 'Sign in to access your datasets and scanners.' : 'Join the GeoGraph network to contribute and earn.'}
             </p>
 
@@ -74,7 +110,7 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
             <button 
                 onClick={handle} 
                 disabled={loading}
-                className="w-full py-3 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-lg mt-6 flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                className="w-full py-3 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-lg mt-8 flex items-center justify-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-primary-900/20"
             >
                 {loading ? 'Processing...' : (
                     <>
@@ -83,7 +119,7 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
                 )}
             </button>
 
-            <div className="mt-6 text-center">
+            <div className="mt-8 text-center">
                 <button 
                     onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(null); }} 
                     className="text-sm text-slate-400 hover:text-white transition-colors"
