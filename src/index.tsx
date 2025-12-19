@@ -1,6 +1,9 @@
 import './polyfills';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastProvider, ConnectionStatus } from './components/Toast';
+import { Onboarding } from './components/Onboarding';
 
 // Dynamic import ensures that 'polyfills' (above) has finished executing 
 // and attaching to window/global before 'App' and its dependencies (ethers, etc) are evaluated.
@@ -14,7 +17,13 @@ import('./App')
     const root = ReactDOM.createRoot(rootElement);
     root.render(
       <React.StrictMode>
-        <App />
+        <ErrorBoundary>
+          <ToastProvider>
+            <ConnectionStatus />
+            <Onboarding onComplete={() => console.log('Onboarding completed')} />
+            <App />
+          </ToastProvider>
+        </ErrorBoundary>
       </React.StrictMode>
     );
   })
