@@ -49,7 +49,7 @@ import { initSync } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
 import { redeemPhygitalCertificate } from './services/web3Service';
 import { getCurrentUser } from './lib/auth';
-import { fetchGlobalCorpus, contributeAssetToGlobalCorpus } from './services/supabaseService';
+import { fetchGlobalCorpus, contributeAssetToGlobalCorpus, fetchUserAssets } from './services/supabaseService';
 import GraphVisualizer from './components/GraphVisualizer';
 import ContributeButton from './components/ContributeButton';
 import BundleCard from './components/BundleCard';
@@ -132,9 +132,37 @@ export default function App() {
 
   useEffect(() => {
     navigator.permissions.query({ name: 'geolocation' }).then((result) => setGeoPermission(result.state === 'granted'));
-    getCurrentUser().then(({ data }) => { if(data.user) { setUser(data.user); setIsAdmin(true); } });
+    getCurrentUser().then(({ data }) => { 
+      if(data.user) { 
+        setUser(data.user); 
+        setIsAdmin(true);
+        // Load user's assets from Supabase
+        fetchUserAssets(data.user.id).then(setLocalAssets).catch(err => {
+          console.error('Failed to load user assets:', err);
+          loadAssets().then(setLocalAssets);
+        });
+      } else {
+        // Unauthenticated: load from IndexedDB only
+        loadAssets().then(setLocalAssets);
+        
+        // Clear session data when page unloads for unauthenticated users
+        const handleUnload = () => {
+          // Mark for cleanup on next load if still unauthenticated
+          sessionStorage.setItem('geograph-cleanup-needed', 'true');
+        };
+        window.addEventListener('beforeunload', handleUnload);
+        
+        // Cleanup from previous session if needed
+        if (sessionStorage.getItem('geograph-cleanup-needed') === 'true') {
+          import('./lib/indexeddb').then(({ clearAllAssets }) => {
+            clearAllAssets().then(() => {
+              sessionStorage.removeItem('geograph-cleanup-needed');
+            });
+          });
+        }
+      }
+    });
     initSync();
-    loadAssets().then(setLocalAssets);
     const storedPurchases = localStorage.getItem('geograph-owned-assets');
     if (storedPurchases) setOwnedAssetIds(new Set(JSON.parse(storedPurchases)));
     const handleNewFile = (event: CustomEvent<File>) => ingestFile(event.detail, "Auto-Sync");
@@ -173,7 +201,15 @@ export default function App() {
   const handleAssetUpdate = async (updatedAsset: DigitalAsset) => {
     if (!isGlobalView) {
         setLocalAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
-        await saveAsset(updatedAsset);
+        if (user?.id) {
+          // Authenticated users: update in Supabase
+          const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+          contributeAssetToGlobalCorpus(updatedAsset, user.id, license as any, true)
+            .catch(err => console.error("Failed to update asset in Supabase", err));
+        } else {
+          // Unauthenticated users: save to IndexedDB only
+          await saveAsset(updatedAsset);
+        }
     }
   };
 
@@ -312,14 +348,17 @@ export default function App() {
             sqlRecord: updatedSqlRecord
       };
 
-      // Background contribution
-      const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-      contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any).then(syncResult => {
+      // Auto-store to Supabase if user is authenticated
+      if (user?.id) {
+        const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+        contributeAssetToGlobalCorpus(resultAsset, user.id, license as any, true).then(syncResult => {
           if (syncResult.success && syncResult.publicUrl) {
-              // Update local state with the permanent cloud URL
-              setLocalAssets(prev => prev.map(a => a.id === asset.id ? { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl } : a));
+            // Update local state with the permanent cloud URL
+            const updatedAsset = { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl };
+            setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
           }
-      }).catch(err => console.error("Auto-sync background failed", err));
+        }).catch(err => console.error("Auto-sync to Supabase failed", err));
+      }
 
       return resultAsset;
   };
@@ -330,11 +369,13 @@ export default function App() {
       const newAsset = await createInitialAsset(file);
       if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = source;
       setLocalAssets(prev => [newAsset, ...prev]);
-      await saveAsset(newAsset);
+      // Only save to IndexedDB for unauthenticated users
+      if (!user) await saveAsset(newAsset);
       if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
       const processedAsset = await processAssetPipeline(newAsset, file);
       setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-      await saveAsset(processedAsset);
+      // Only save to IndexedDB for unauthenticated users (authenticated users save to Supabase automatically)
+      if (!user) await saveAsset(processedAsset);
     } catch (err) {
       console.error(err);
     } finally {
@@ -366,10 +407,12 @@ export default function App() {
                 if (itemToProcess.scanType) (itemToProcess.file as any).scanType = itemToProcess.scanType;
                 const newAsset = await createInitialAsset(itemToProcess.file);
                 setLocalAssets(prev => [newAsset, ...prev]);
-                await saveAsset(newAsset);
+                // Only save to IndexedDB for unauthenticated users
+                if (!user) await saveAsset(newAsset);
                 const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
                 setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-                await saveAsset(processedAsset);
+                // Only save to IndexedDB for unauthenticated users (authenticated users save to Supabase automatically)
+                if (!user) await saveAsset(processedAsset);
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
              } catch (e: any) {
                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Failed" } : i));
