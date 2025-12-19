@@ -16,20 +16,20 @@ export default function StatusBar({ user, syncOn, isOnline, localCount, onTabCha
                 <div className="flex items-center gap-1.5">
                     {isOnline ? (
                         <span className="flex items-center gap-1 text-emerald-500">
-                            <Wifi size={12} /> Network Online
+                            <Wifi size={12} /> <span className="hidden sm:inline">Network Online</span>
                         </span>
                     ) : (
                         <span className="flex items-center gap-1 text-red-500">
-                            <WifiOff size={12} /> Offline Mode
+                            <WifiOff size={12} /> <span className="hidden sm:inline">Offline Mode</span>
                         </span>
                     )}
                 </div>
                 
-                <div className="h-3 w-px bg-slate-800" />
+                <div className="h-3 w-px bg-slate-800 hidden sm:block" />
                 
                 <div className="flex items-center gap-1.5">
                     <Database size={12} />
-                    <span>{localCount} Local Assets</span>
+                    <span>{localCount} <span className="hidden sm:inline">Local Assets</span></span>
                 </div>
             </div>
 
@@ -39,7 +39,7 @@ export default function StatusBar({ user, syncOn, isOnline, localCount, onTabCha
                     className={`flex items-center gap-1.5 transition-colors hover:text-white ${syncOn ? 'text-emerald-500' : 'text-slate-500'}`}
                 >
                     {syncOn ? <Cloud size={12} /> : <CloudOff size={12} />}
-                    {syncOn ? 'Auto-Sync Active' : 'Sync Disabled'}
+                    <span className="hidden sm:inline">{syncOn ? 'Auto-Sync Active' : 'Sync Disabled'}</span>
                 </button>
 
                 <div className="h-3 w-px bg-slate-800" />
@@ -51,12 +51,12 @@ export default function StatusBar({ user, syncOn, isOnline, localCount, onTabCha
                     {user ? (
                         <>
                             <Shield size={12} />
-                            <span>{user.email}</span>
+                            <span className="max-w-[100px] truncate">{user.email}</span>
                         </>
                     ) : (
                         <>
                             <User size={12} />
-                            <span>Guest Session</span>
+                            <span>Guest</span>
                         </>
                     )}
                 </button>

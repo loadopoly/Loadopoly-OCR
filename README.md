@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.6.2-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-1.7.0-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -44,7 +44,14 @@ Get your credentials:
 
 ---
 
-## 🚀 What's New in v1.6.2
+## 🚀 What's New in v1.7.0
+- **Human Integration Factor:** Smart suggestions engine on the dashboard for guided onboarding.
+- **Real-time Status Bar:** Persistent monitoring of network, sync, and local asset counts.
+- **Enhanced Auth Flow:** Redesigned sign-in experience with clear value propositions for cloud sync.
+- **Hardware Bridge Improvements:** Better visual feedback for network scanner connections.
+- **Device Friendliness:** Optimized touch targets and responsive layouts for mobile/tablet use.
+
+### Previous (v1.6.2)
 - **Enhanced UI/UX:** Toast notifications, skeleton loading, error boundaries with recovery
 - **Onboarding Flow:** 6-step interactive guide for new users
 - **Keyboard Shortcuts:** Press `?` to view all available shortcuts

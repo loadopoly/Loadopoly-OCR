@@ -85,7 +85,7 @@ export default function SettingsPanel({
       {user ? (
         <ProfileSettings />
       ) : (
-        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex items-center justify-between">
+        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
                 <div className="p-3 rounded-lg bg-blue-900/30 text-blue-500">
                     <User size={24} />
@@ -97,7 +97,7 @@ export default function SettingsPanel({
             </div>
             <button 
                 onClick={() => setShowAuthModal(true)}
-                className="px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-bold text-sm flex items-center gap-2"
+                className="w-full sm:w-auto px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2"
             >
                 <LogIn size={18} /> Sign In
             </button>
