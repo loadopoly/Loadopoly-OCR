@@ -54,13 +54,14 @@ import GraphVisualizer from './components/GraphVisualizer';
 import ContributeButton from './components/ContributeButton';
 import BundleCard from './components/BundleCard';
 import ARScene from './components/ARScene';
-// import SemanticCanvas from './components/SemanticCanvas';
+import SemanticCanvas from './components/SemanticCanvas';
 import CameraCapture from './components/CameraCapture';
 import BatchImporter from './components/BatchImporter';
 import SettingsPanel from './components/SettingsPanel';
 import SmartUploadSelector from './components/SmartUploadSelector';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import PurchaseModal from './components/PurchaseModal';
+import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/KeyboardShortcuts';
 import { announce } from './lib/accessibility';
 
 // --- Helper Functions ---
@@ -127,16 +128,59 @@ export default function App() {
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [ownedAssetIds, setOwnedAssetIds] = useState<Set<string>>(new Set());
   const [purchaseModalData, setPurchaseModalData] = useState<{title: string, assets: DigitalAsset[]} | null>(null);
+  const { isOpen: isShortcutsOpen, setIsOpen: setIsShortcutsOpen } = useKeyboardShortcutsHelp() as any;
 
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
 
   useEffect(() => {
+    const handleShortcuts = (e: KeyboardEvent) => {
+      if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
+      
+      switch(e.key.toLowerCase()) {
+        case '1': setActiveTab('dashboard'); break;
+        case '2': setActiveTab('batch'); break;
+        case '3': setActiveTab('ar'); break;
+        case '4': setActiveTab('assets'); break;
+        case '5': setActiveTab('graph'); break;
+        case '6': setActiveTab('database'); break;
+        case 's': setActiveTab('settings'); break;
+        case 'g': setIsGlobalView(prev => !prev); break;
+        case 'r': if (isGlobalView) refreshGlobalData(); break;
+      }
+    };
+
+    window.addEventListener('keydown', handleShortcuts);
+    return () => window.removeEventListener('keydown', handleShortcuts);
+  }, [isGlobalView]);
+
+  useEffect(() => {
     navigator.permissions.query({ name: 'geolocation' }).then((result) => setGeoPermission(result.state === 'granted'));
-    getCurrentUser().then(({ data }) => { 
+    
+    initSync();
+    const storedPurchases = localStorage.getItem('geograph-owned-assets');
+    if (storedPurchases) setOwnedAssetIds(new Set(JSON.parse(storedPurchases)));
+    
+    const handleNewFile = (event: CustomEvent<File>) => ingestFile(event.detail, "Auto-Sync");
+    window.addEventListener('geograph-new-file', handleNewFile as any);
+
+    getCurrentUser().then(async ({ data }) => { 
       if(data.user) { 
         setUser(data.user); 
         setIsAdmin(true);
-        // Load user's assets from Supabase
+        
+        // 1. Sync local assets to cloud if they aren't there yet
+        const local = await loadAssets();
+        for (const asset of local) {
+          if (asset.status === AssetStatus.MINTED && !asset.sqlRecord?.user_id) {
+            try {
+              await contributeAssetToGlobalCorpus(asset, data.user.id, 'GEOGRAPH_CORPUS_1.0', true);
+            } catch (e) {
+              console.error("Failed to sync local asset to cloud:", e);
+            }
+          }
+        }
+
+        // 2. Load user's assets from Supabase
         fetchUserAssets(data.user.id).then(setLocalAssets).catch(err => {
           console.error('Failed to load user assets:', err);
           loadAssets().then(setLocalAssets);
@@ -162,12 +206,10 @@ export default function App() {
         }
       }
     });
-    initSync();
-    const storedPurchases = localStorage.getItem('geograph-owned-assets');
-    if (storedPurchases) setOwnedAssetIds(new Set(JSON.parse(storedPurchases)));
-    const handleNewFile = (event: CustomEvent<File>) => ingestFile(event.detail, "Auto-Sync");
-    window.addEventListener('geograph-new-file', handleNewFile as any);
-    return () => window.removeEventListener('geograph-new-file', handleNewFile as any);
+
+    return () => {
+      window.removeEventListener('geograph-new-file', handleNewFile as any);
+    };
   }, []);
 
   const refreshGlobalData = async () => {
@@ -786,13 +828,125 @@ export default function App() {
 
           {activeTab === 'graph' && (
             <div className="flex gap-6 h-full flex-col">
-               <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-white">Knowledge Graph</h3></div>
+               <div className="flex items-center justify-between">
+                 <h3 className="text-lg font-bold text-white">Knowledge Graph</h3>
+                 <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
+                    <button 
+                      onClick={() => setGraphViewMode('SINGLE')} 
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'SINGLE' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      Single Asset
+                    </button>
+                    <button 
+                      onClick={() => setGraphViewMode('GLOBAL')} 
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'GLOBAL' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      Global Corpus
+                    </button>
+                 </div>
+               </div>
+               
+               {graphViewMode === 'SINGLE' && (
+                 <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
+                   {selectedAssetId ? (
+                     <>
+                       <div className="flex justify-between items-center mb-4">
+                         <h4 className="text-sm font-bold text-slate-400 uppercase">Asset: {assets.find(a => a.id === selectedAssetId)?.sqlRecord?.DOCUMENT_TITLE || selectedAssetId}</h4>
+                         <button onClick={() => setSelectedAssetId(null)} className="text-xs text-primary-500 hover:underline">Clear Selection</button>
+                       </div>
+                       <div className="flex-1 relative">
+                         <GraphVisualizer 
+                           data={assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] }} 
+                           width={1000} 
+                           height={600} 
+                         />
+                       </div>
+                     </>
+                   ) : (
+                     <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
+                       <Network size={48} className="opacity-20" />
+                       <p>Select an asset from the Assets tab to view its specific graph.</p>
+                       <button onClick={() => setActiveTab('assets')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Go to Assets</button>
+                     </div>
+                   )}
+                 </div>
+               )}
+
                {graphViewMode === 'GLOBAL' && (
                   <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
                       <div className="flex-1 relative"><GraphVisualizer data={globalGraphData} width={1000} height={600} /></div>
                   </div>
                )}
             </div>
+          )}
+
+          {activeTab === 'semantic' && (
+            <div className="h-full bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+              <SemanticCanvas assets={assets} />
+            </div>
+          )}
+
+          {activeTab === 'ar' && (
+            <div className="h-full rounded-xl overflow-hidden border border-slate-800 bg-black relative">
+              <ARScene 
+                onCapture={(file) => setArSessionQueue(prev => [...prev, file])} 
+                sessionCount={arSessionQueue.length}
+              />
+              {arSessionQueue.length > 0 && (
+                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
+                  <button 
+                    onClick={() => switchTab('batch')}
+                    className="px-6 py-3 bg-primary-600 hover:bg-primary-500 text-white rounded-full font-bold shadow-xl flex items-center gap-2 animate-bounce"
+                  >
+                    <CheckCircle size={20} />
+                    Process {arSessionQueue.length} Captures
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {activeTab === 'market' && (
+            <div className="h-full flex flex-col gap-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white">Data Marketplace</h3>
+                  <p className="text-sm text-slate-400">Acquire high-fidelity training datasets from the global corpus.</p>
+                </div>
+                <div className="flex items-center gap-4 bg-slate-900 p-2 rounded-lg border border-slate-800">
+                  <div className="text-right">
+                    <p className="text-[10px] text-slate-500 uppercase font-bold">Node Balance</p>
+                    <p className="text-sm font-mono text-primary-400">1,240 SHARDS</p>
+                  </div>
+                  <div className="p-2 bg-primary-500/10 rounded text-primary-500">
+                    <Coins size={20} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto pb-8">
+                {displayItems.filter(item => 'bundleId' in item).map(bundle => (
+                  <div key={(bundle as ImageBundle).bundleId} className="relative group">
+                    <BundleCard 
+                      bundle={bundle as ImageBundle} 
+                      onAssetUpdated={handleAssetUpdate} 
+                    />
+                    <div className="absolute top-4 right-4 z-10">
+                      <button 
+                        onClick={() => setPurchaseModalData({ title: (bundle as ImageBundle).title, assets: assets.filter(a => (bundle as ImageBundle).imageUrls.includes(a.imageUrl)) })}
+                        className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-full shadow-lg transition-transform group-hover:scale-110"
+                      >
+                        <ShoppingBag size={18} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'settings' && (
+            <SettingsPanel onOpenPrivacy={() => setShowPrivacyPolicy(true)} />
           )}
 
         </div>
@@ -803,6 +957,24 @@ export default function App() {
                 <img src={expandedImage} className="max-w-full max-h-full p-4 object-contain select-none" alt="Expanded Asset" />
             </div>
         )}
+
+        {purchaseModalData && (
+          <PurchaseModal 
+            title={purchaseModalData.title}
+            assets={purchaseModalData.assets}
+            onClose={() => setPurchaseModalData(null)}
+            onConfirm={handlePurchase}
+          />
+        )}
+
+        {showPrivacyPolicy && (
+          <PrivacyPolicyModal onClose={() => setShowPrivacyPolicy(false)} />
+        )}
+
+        <KeyboardShortcutsHelp 
+          isOpen={isShortcutsOpen} 
+          onClose={() => setIsShortcutsOpen(false)} 
+        />
       </main>
     </div>
   );

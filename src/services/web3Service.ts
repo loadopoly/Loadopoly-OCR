@@ -1,4 +1,6 @@
 import { ethers } from 'ethers';
+import { recordWeb3Transaction } from './supabaseService';
+import { getCurrentUser } from '../lib/auth';
 
 // Configuration
 // Using a placeholder address for now. In production, this would be an ENV variable.
@@ -113,7 +115,7 @@ export const mintShardClientSide = async (assetId: string) => {
         }
 
         // Return real data derived from the transaction
-        return {
+        const result = {
             txHash: receipt.hash,
             blockNumber: receipt.blockNumber,
             assetId: assetId,
@@ -121,6 +123,14 @@ export const mintShardClientSide = async (assetId: string) => {
             contractAddress: DCC1_ADDRESS,
             owner: wallet.address
         };
+
+        // Record in Supabase if user is logged in
+        const { data: { user } } = await getCurrentUser();
+        if (user) {
+            await recordWeb3Transaction(user.id, assetId, receipt.hash, result);
+        }
+
+        return result;
     } catch (err: any) {
         // Handle User Rejection
         if (err.code === 'ACTION_REJECTED' || err.code === 4001) {
