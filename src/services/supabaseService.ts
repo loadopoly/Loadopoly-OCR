@@ -93,20 +93,92 @@ export const fetchGlobalCorpus = async (): Promise<DigitalAsset[]> => {
 };
 
 /**
- * Uploads local processing results to the global Supabase repository.
+ * Fetches assets belonging to a specific authenticated user.
+ */
+export const fetchUserAssets = async (userId: string): Promise<DigitalAsset[]> => {
+  if (!supabase || !userId) return [];
+
+  const { data, error } = await supabase
+    .from('historical_documents_global')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error("Error fetching user assets:", error);
+    throw error;
+  }
+
+  return data.map((row: any) => {
+    // Parse JSONB fields
+    const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED) 
+      ? row.ENTITIES_EXTRACTED 
+      : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
+    
+    // Reconstruct Nodes
+    const nodes: GraphNode[] = [
+      { 
+        id: row.ASSET_ID, 
+        label: row.DOCUMENT_TITLE, 
+        type: 'DOCUMENT', 
+        relevance: 1.0,
+        license: row.DATA_LICENSE 
+      }
+    ];
+
+    // Reconstruct Links & Entity Nodes
+    const links: GraphLink[] = [];
+    entities.forEach(entity => {
+      const entityId = `ENT_${entity.replace(/\s+/g, '_').toUpperCase()}`;
+      nodes.push({
+        id: entityId,
+        label: entity,
+        type: 'CONCEPT',
+        relevance: 0.8
+      });
+      links.push({
+        source: row.ASSET_ID,
+        target: entityId,
+        relationship: 'CONTAINS'
+      });
+    });
+
+    // Return complete DigitalAsset
+    return {
+      id: row.ASSET_ID,
+      imageUrl: row.original_image_url || '', 
+      timestamp: row.LOCAL_TIMESTAMP,
+      ocrText: row.RAW_OCR_TRANSCRIPTION,
+      status: AssetStatus.MINTED,
+      graphData: { nodes, links },
+      sqlRecord: {
+        ...row,
+        ENTITIES_EXTRACTED: entities,
+        KEYWORDS_TAGS: Array.isArray(row.KEYWORDS_TAGS) ? row.KEYWORDS_TAGS : [],
+        PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS) ? row.PRESERVATION_EVENTS : []
+      }
+    };
+  });
+};
+
+/**
+ * Uploads local processing results to the Supabase repository.
  * Handles both the relational SQL record and the binary image storage.
+ * For authenticated users, this is automatic. For anonymous users, it's opt-in.
  */
 export const contributeAssetToGlobalCorpus = async (
   asset: DigitalAsset,
-  contributorId?: string,
-  licenseType: 'GEOGRAPH_CORPUS_1.0' | 'CC0' = 'GEOGRAPH_CORPUS_1.0'
+  userId?: string,
+  licenseType: 'GEOGRAPH_CORPUS_1.0' | 'CC0' = 'GEOGRAPH_CORPUS_1.0',
+  isAutoSave: boolean = false
 ) => {
-  const finalContributorId = contributorId || `anon_${uuidv4()}`;
-
   if (!supabase) {
     console.warn("Supabase not configured. Skipping cloud contribution.");
     return { success: false, reason: "CONFIG_MISSING" };
   }
+
+  // Only anonymous users without auto-save need contributor ID
+  const finalContributorId = userId || `anon_${uuidv4()}`;
 
   if (!asset.sqlRecord || !asset.imageUrl) {
     throw new Error("Asset missing critical contribution data");
@@ -146,7 +218,7 @@ export const contributeAssetToGlobalCorpus = async (
         CONTRIBUTED_AT: new Date().toISOString(),
         DATA_LICENSE: licenseType,
         original_image_url: publicUrl,
-        user_id: contributorId && !contributorId.startsWith('anon_') ? contributorId : null
+        user_id: userId || null
       });
 
     if (error) throw error;
