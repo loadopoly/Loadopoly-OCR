@@ -52,22 +52,24 @@ Productivity
 ### Language
 English
 
-## Required Assets
+## Available Assets
 
 ### Icons
-- [x] 16x16 PNG - `/public/icons/icon-16.svg` (convert to PNG)
-- [x] 32x32 PNG - `/public/icons/icon-32.svg` (convert to PNG)
-- [x] 48x48 PNG - `/public/icons/icon-48.svg` (convert to PNG)
-- [x] 128x128 PNG - `/public/icons/icon-128.svg` (convert to PNG)
+- ✅ 192x192 PNG - `/public/icon-192.png`
+- ✅ 512x512 PNG - `/public/icon-512.png`
+- ✅ SVG icons - `/public/icons/icon-{16,32,48,128}.svg`
 
-### Screenshots (1280x800 or 640x400)
-Required: At least 1, maximum 5
+### Screenshots (1280x720 / 390x844)
+Available: 5 screenshots
 
-1. **Dashboard** - Central command center showing stats, recent graph activity, and GIS context
-2. **Batch Processing** - High-throughput document scanning interface
-3. **Knowledge Graph** - Interactive entity relationship visualization
-4. **Structured DB** - Cloud dataframes with tabular cluster view
-5. **Settings** - Configuration panel with sync and integration options
+**Desktop Screenshots (1280x720):**
+1. `/public/screenshot-desktop-1.png` - Dashboard view
+2. `/public/screenshot-desktop-2.png` - Database/structured view
+3. `/public/screenshot-desktop-3.png` - Knowledge graph visualization
+
+**Mobile Screenshots (390x844):**
+1. `/public/screenshot-mobile-1.png` - Mobile dashboard
+2. `/public/screenshot-mobile-2.png` - AR scanner interface
 
 ### Promotional Images
 - Small tile: 440x280 PNG
@@ -93,7 +95,7 @@ A standalone privacy policy page is included at `/public/privacy-policy.html`
 # Install dependencies
 npm install
 
-# Build for production
+# Build the extension
 npm run build:extension
 
 # Create zip for submission
@@ -102,7 +104,26 @@ npm run zip:extension
 
 The extension zip will be created at `geograph-ocr-extension.zip`
 
-## Testing Checklist
+## Assets to Submit
+
+### 1. Extension Package
+- File: `geograph-ocr-extension.zip`
+- Contains: Built code, manifest, all icons and assets
+
+### 2. Store Listing Images
+Copy these files to Chrome Web Store submission:
+
+**Icon:**
+- `/public/icon-192.png` - (Chrome uses 128x128 minimum)
+- `/public/icon-512.png` - (Large store icon)
+
+**Screenshots:**
+Upload to store (1280x720 or larger):
+- `/public/screenshot-desktop-1.png` - Dashboard
+- `/public/screenshot-desktop-2.png` - Database view  
+- `/public/screenshot-desktop-3.png` - Knowledge graph
+- `/public/screenshot-mobile-1.png` - Mobile interface
+- `/public/screenshot-mobile-2.png` - AR scanner
 
 - [ ] All icons display correctly at all sizes
 - [ ] Popup opens and renders correctly
