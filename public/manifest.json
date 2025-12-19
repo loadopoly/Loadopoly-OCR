@@ -118,5 +118,29 @@
       "origin": "https://geographocrnode.vercel.app"
     }
   ],
-  "related_applications": []
+  "related_applications": [],
+  "widgets": [
+    {
+      "name": "GeoGraph Status",
+      "description": "Check your current OCR processing status",
+      "tag": "status",
+      "template": "status-widget",
+      "ms_ac_template": "widgets/status.json",
+      "data": "widgets/status-data.json",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "/icon.svg",
+          "sizes": "192x192",
+          "label": "Widget Preview"
+        }
+      ],
+      "icons": [
+        {
+          "src": "/icon.svg",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
 }
