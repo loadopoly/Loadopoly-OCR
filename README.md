@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.6.0-blueviolet.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.6.1-blueviolet.svg)](CHANGELOG.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -11,36 +11,33 @@ An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP process
 
 ---
 
-## 🚀 What's New in v1.6.0
-- **Gemini 2.5 Flash:** Upgraded the extraction engine to the latest high-performance model for blazing fast entity detection and relational mapping.
-- **Enhanced Graph Interaction:** Full D3.js zoom and pan support in all graph visualizations.
-- **Relational Cloud Integrity:** Robust reconstruction of knowledge graphs from Supabase JSONB dataframes, ensuring global views are as rich as local ones.
-- **Cluster View Database:** New hierarchical "Cluster View" for exploring the repository through semantic groupings (Era, Category, GIS Zone).
-- **Direct Cloud Sync:** One-click "Refresh Cloud" functionality to sync the latest global repository dataframes.
+## 🚀 What's New in v1.6.1
+- **Advanced PWA Suite:** Full desktop-class integration with Window Controls Overlay, File Handling (drag-and-drop images/PDFs), and Share Target support.
+- **System Widgets:** Added Windows 11/Android widgets for real-time OCR status monitoring directly from the OS shell.
+- **Protocol Handlers:** Deep linking support via `web+geograph://` for instant graph navigation.
+- **Asset Optimization:** Migrated all static assets to optimized PNGs for better cross-platform compatibility.
 
 ---
 
 ## 🖼️ Visual Tour
 
 ### Dashboard & Intelligence
-![Dashboard Overview](screenshots/dashboard.png)
+![Dashboard Overview](public/screenshot-desktop-1.png)
 *The central command center showing global stats, recent graph activity, and real-time GIS environment context.*
 
-### High-Throughput Ingestion
-![Batch Processing](screenshots/quick-processing.png)
-*Optimized pipeline for processing hundreds of documents per hour with automatic error handling and progress tracking.*
-
-### Knowledge Graphs & Semantic Universe
+### Knowledge Graphs & Structured Data
 <div align="center">
-  <img src="screenshots/knowledge-graph.png" width="48%" alt="Knowledge Graph" />
-  <img src="screenshots/semantic-view.png" width="48%" alt="Semantic Universe" />
+  <img src="public/screenshot-desktop-3.png" width="48%" alt="Knowledge Graph" />
+  <img src="public/screenshot-desktop-2.png" width="48%" alt="Structured Database" />
 </div>
-*Left: Relational mapping of entities extracted by Gemini 2.5 Flash. Right: The Semantic Universe view clustering documents by era and LLM-derived category.*
+*Left: Relational mapping of entities extracted by Gemini 2.5 Flash. Right: Cloud dataframes with tabular cluster view.*
 
-### Structured Dataframes & Clusters
-![Structured Database](screenshots/structured-db.png)
-![Database Clusters](screenshots/db-clusters.png)
-*Navigate your corpus using high-density tabular views or explore semantic clusters grouped by source and era.*
+### Mobile Experience
+<div align="center">
+  <img src="public/screenshot-mobile-1.png" width="30%" alt="Mobile Dashboard" />
+  <img src="public/screenshot-mobile-2.png" width="30%" alt="AR Scanner" />
+</div>
+*Fully responsive mobile interface with AR scanning capabilities.*
 
 ---
 
