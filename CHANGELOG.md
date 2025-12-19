@@ -1,6 +1,14 @@
 # Changelog
 
 All notable changes to this project will be documented in this file.
+See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
+
+## [1.6.2] - 2025-12-19
+
+### Added
+- **Enhanced UI/UX:** Integrated `Toast` notifications for real-time feedback, `Skeleton` loading states for better perceived performance, and `ErrorBoundary` components with recovery options.
+- **Onboarding Flow:** Added a 6-step interactive `Onboarding` guide to help new users navigate the GeoGraph ecosystem.
+- **Keyboard Shortcuts:** Implemented a global `KeyboardShortcuts` listener (press `?` to toggle) for power-user navigation.
 
 ## [1.6.1] - 2025-12-19
 

@@ -28,10 +28,10 @@ const supabaseUrl = getEnvVar('VITE_SUPABASE_URL')
 const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY')
 
 // Create typed Supabase client
-export const supabase: SupabaseClient<Database> | null = 
+export const supabase = 
   supabaseUrl && supabaseAnonKey
     ? createClient<Database>(supabaseUrl, supabaseAnonKey)
-    : null
+    : null;
 
 // Connection status helper
 export const isSupabaseConfigured = (): boolean => {

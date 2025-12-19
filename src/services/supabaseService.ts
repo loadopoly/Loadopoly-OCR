@@ -1,6 +1,8 @@
 import { DigitalAsset, AssetStatus, GraphNode, GraphLink } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, isSupabaseConfigured, testSupabaseConnection } from '../lib/supabaseClient';
+import { encryptData, decryptData } from '../lib/encryption';
+import type { Database } from '../lib/database.types';
 
 // Re-export utilities for convenience
 export { supabase, isSupabaseConfigured, testSupabaseConnection };
@@ -92,7 +94,18 @@ export const fetchUserAssets = async (userId: string): Promise<DigitalAsset[]> =
     throw error;
   }
 
-  return data.map((row: any) => {
+  const assets = await Promise.all(data.map(async (row: any) => {
+    // Decrypt sensitive data if it looks encrypted (base64)
+    let ocrText = row.RAW_OCR_TRANSCRIPTION;
+    let description = row.DOCUMENT_DESCRIPTION;
+
+    if (ocrText && ocrText.length > 20 && !ocrText.includes(' ')) {
+      ocrText = await decryptData(ocrText, userId);
+    }
+    if (description && description.length > 20 && !description.includes(' ')) {
+      description = await decryptData(description, userId);
+    }
+
     // Parse JSONB fields
     const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED) 
       ? row.ENTITIES_EXTRACTED 
@@ -131,17 +144,21 @@ export const fetchUserAssets = async (userId: string): Promise<DigitalAsset[]> =
       id: row.ASSET_ID,
       imageUrl: row.original_image_url || '', 
       timestamp: row.LOCAL_TIMESTAMP,
-      ocrText: row.RAW_OCR_TRANSCRIPTION,
+      ocrText: ocrText,
       status: AssetStatus.MINTED,
       graphData: { nodes, links },
       sqlRecord: {
         ...row,
+        RAW_OCR_TRANSCRIPTION: ocrText,
+        DOCUMENT_DESCRIPTION: description,
         ENTITIES_EXTRACTED: entities,
         KEYWORDS_TAGS: Array.isArray(row.KEYWORDS_TAGS) ? row.KEYWORDS_TAGS : [],
         PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS) ? row.PRESERVATION_EVENTS : []
       }
     };
-  });
+  }));
+
+  return assets;
 };
 
 /**
@@ -193,10 +210,20 @@ export const contributeAssetToGlobalCorpus = async (
     }
 
     // 2. Database Upsert
+    let sqlRecord = { ...asset.sqlRecord };
+    
+    // Encrypt sensitive data if user is authenticated
+    if (userId && sqlRecord.RAW_OCR_TRANSCRIPTION) {
+      sqlRecord.RAW_OCR_TRANSCRIPTION = await encryptData(sqlRecord.RAW_OCR_TRANSCRIPTION, userId);
+      if (sqlRecord.DOCUMENT_DESCRIPTION) {
+        sqlRecord.DOCUMENT_DESCRIPTION = await encryptData(sqlRecord.DOCUMENT_DESCRIPTION, userId);
+      }
+    }
+
     const { error } = await supabase
       .from('historical_documents_global')
       .upsert({
-        ...asset.sqlRecord,
+        ...sqlRecord,
         CONTRIBUTOR_ID: finalContributorId,
         CONTRIBUTED_AT: new Date().toISOString(),
         DATA_LICENSE: licenseType,
@@ -210,5 +237,37 @@ export const contributeAssetToGlobalCorpus = async (
   } catch (err) {
     console.error("Supabase sync failed:", err);
     throw err;
+  }
+};
+
+/**
+ * Records a Web3 transaction in Supabase with optional encryption.
+ */
+export const recordWeb3Transaction = async (
+  userId: string,
+  assetId: string,
+  txHash: string,
+  details: any
+) => {
+  if (!supabase) return;
+
+  try {
+    const detailsString = JSON.stringify(details);
+    const encryptedDetails = await encryptData(detailsString, userId);
+
+    const insertData: Database['public']['Tables']['web3_transactions']['Insert'] = {
+      user_id: userId,
+      asset_id: assetId,
+      tx_hash: txHash,
+      details: encryptedDetails
+    };
+
+    const { error } = await (supabase as any)
+      .from('web3_transactions')
+      .insert(insertData);
+
+    if (error) throw error;
+  } catch (err) {
+    console.error("Failed to record web3 transaction:", err);
   }
 };

@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
-import { getCurrentUser, signOut } from '../lib/auth';
+import { getCurrentUser, signOut, deleteUserAccount } from '../lib/auth';
 import { loadAssets } from '../lib/indexeddb';
 import BluetoothScannerConnect from './BluetoothScannerConnect';
-import { User, LogOut, Settings, Shield, Coins, Layers } from 'lucide-react';
+import { User, LogOut, Settings, Shield, Coins, Layers, Trash2, AlertTriangle } from 'lucide-react';
 import { AssetStatus } from '../types';
 
 export default function ProfileSettings() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ shards: 0, contributions: 0 });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -32,6 +33,16 @@ export default function ProfileSettings() {
       await signOut();
       setUser(null);
       window.location.reload(); // Simple reload to reset state
+  };
+
+  const handleDeleteAccount = async () => {
+      const { error } = await deleteUserAccount();
+      if (error) {
+          alert("Failed to delete account: " + error.message);
+      } else {
+          setUser(null);
+          window.location.reload();
+      }
   };
 
   if (loading) return <div className="text-center py-8 text-slate-500 animate-pulse">Loading profile data...</div>;
@@ -89,12 +100,44 @@ export default function ProfileSettings() {
         </div>
       </div>
 
-      <button 
-        onClick={handleSignOut} 
-        className="w-full py-3 bg-red-900/20 hover:bg-red-900/30 text-red-400 border border-red-900/50 rounded-lg flex items-center justify-center gap-2 transition-colors"
-      >
-          <LogOut size={18} /> Sign Out
-      </button>
+      <div className="space-y-3">
+        <button 
+            onClick={handleSignOut} 
+            className="w-full py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 rounded-lg flex items-center justify-center gap-2 transition-colors"
+        >
+            <LogOut size={18} /> Sign Out
+        </button>
+
+        {!showDeleteConfirm ? (
+            <button 
+                onClick={() => setShowDeleteConfirm(true)} 
+                className="w-full py-3 bg-red-900/10 hover:bg-red-900/20 text-red-500/70 hover:text-red-500 text-sm flex items-center justify-center gap-2 transition-colors"
+            >
+                <Trash2 size={16} /> Delete Account
+            </button>
+        ) : (
+            <div className="p-4 bg-red-950/20 border border-red-900/50 rounded-lg space-y-3">
+                <div className="flex items-start gap-3 text-red-400 text-sm">
+                    <AlertTriangle size={20} className="shrink-0" />
+                    <p>Are you sure? This will permanently delete your account and all associated data from the cloud. This action cannot be undone.</p>
+                </div>
+                <div className="flex gap-2">
+                    <button 
+                        onClick={handleDeleteAccount}
+                        className="flex-1 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-bold text-sm transition-colors"
+                    >
+                        Yes, Delete Everything
+                    </button>
+                    <button 
+                        onClick={() => setShowDeleteConfirm(false)}
+                        className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-sm transition-colors"
+                    >
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        )}
+      </div>
     </div>
   );
 }
