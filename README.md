@@ -12,6 +12,8 @@ An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP process
 ---
 
 ## 🚀 What's New in v1.6.1
+- **Supabase Cloud Storage:** Automatic cloud storage for authenticated users with user-specific asset management.
+- **Session-Based Access:** Unauthenticated users get temporary workspace with automatic cleanup between sessions.
 - **Advanced PWA Suite:** Full desktop-class integration with Window Controls Overlay, File Handling (drag-and-drop images/PDFs), and Share Target support.
 - **System Widgets:** Added Windows 11/Android widgets for real-time OCR status monitoring directly from the OS shell.
 - **Protocol Handlers:** Deep linking support via `web+geograph://` for instant graph navigation.
@@ -44,6 +46,22 @@ An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP process
 ## About
 
 GeoGraph Node transforms physical documents, artifacts, and locations into structured, AI-ready training data. Using Google's Gemini 2.5 Flash for intelligent extraction, the platform creates rich knowledge graphs, preserves GIS context, and enables fractional data ownership through blockchain technology.
+
+### Storage Architecture
+
+**Authenticated Users:**
+- All uploads are automatically stored in Supabase cloud storage
+- Images saved to `corpus-images` storage bucket
+- Metadata persisted in `historical_documents_global` database
+- Assets accessible across devices and sessions
+- Full data portability and export capabilities
+
+**Unauthenticated Users:**
+- Temporary workspace using browser's IndexedDB
+- Session-only storage (cleared on page refresh/close)
+- Perfect for testing and one-time processing
+- Can optionally contribute assets to global corpus
+- No account required for basic functionality
 
 ### Use Cases
 
