@@ -202,7 +202,7 @@ export const contributeAssetToGlobalCorpus = async (
         DATA_LICENSE: licenseType,
         original_image_url: publicUrl,
         user_id: userId || null
-      });
+      } as any);
 
     if (error) throw error;
 
