@@ -411,7 +411,7 @@ export default function App() {
             const syncResult = await contributeAssetToGlobalCorpus(resultAsset, user.id, license as any, true);
             if (syncResult.success && syncResult.publicUrl) {
               // Update local state and IndexedDB with the permanent cloud URL
-              const updatedAsset: DigitalAsset = { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl };
+              const updatedAsset: DigitalAsset = { ...resultAsset, imageUrl: syncResult.publicUrl };
               setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
               // Save to IndexedDB after successful Supabase sync
               await saveAsset(updatedAsset);
@@ -419,9 +419,12 @@ export default function App() {
             }
           } catch (err) {
             console.error("Auto-sync to Supabase failed", err);
-            // Even if Supabase sync fails, save to IndexedDB
-            await saveAsset(resultAsset);
           }
+          // Save to IndexedDB even if Supabase sync fails for authenticated users
+          await saveAsset(resultAsset);
+        } else {
+          // Save to IndexedDB for unauthenticated users
+          await saveAsset(resultAsset);
         }
 
         return resultAsset;
@@ -519,8 +522,9 @@ export default function App() {
                   // Always save processed asset to IndexedDB
                   await saveAsset(processedAsset);
                   setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
-                } catch (processingError: any) {
+                } catch (processingError) {
                   console.error("Batch item processing failed:", processingError);
+                  const errorMsg = processingError instanceof Error ? processingError.message : 'Unknown error';
                   // Update asset status to FAILED if processing failed
                   const errorAsset = {
                     ...newAsset,
@@ -528,16 +532,17 @@ export default function App() {
                     sqlRecord: newAsset.sqlRecord ? {
                       ...newAsset.sqlRecord,
                       PROCESSING_STATUS: AssetStatus.FAILED,
-                      DOCUMENT_DESCRIPTION: `Processing failed: ${processingError.message || 'Unknown error'}`
+                      DOCUMENT_DESCRIPTION: `Processing failed: ${errorMsg}`
                     } : undefined
                   };
                   setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? errorAsset : a));
                   await saveAsset(errorAsset);
-                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: processingError.message || "Failed" } : i));
+                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg } : i));
                 }
-             } catch (e: any) {
+             } catch (e) {
                  console.error("Batch item creation failed:", e);
-                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Failed" } : i));
+                 const errorMsg = e instanceof Error ? e.message : 'Failed';
+                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg } : i));
              } finally {
                  processNextBatchItem();
              }
