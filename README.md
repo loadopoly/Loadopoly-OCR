@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.7.1-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-1.7.2-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -44,7 +44,14 @@ Get your credentials:
 
 ---
 
-## 🚀 What's New in v1.7.0
+## 🚀 What's New in v1.7.2
+- **Automatic Cloud Sync:** All assets (including failed ones) are now automatically synced to Supabase cloud storage upon import, regardless of authentication status.
+- **Robust Data Mapping:** Improved handling of case-insensitive database columns (ASSET_ID vs asset_id) for better cloud-to-local synchronization.
+- **Marketplace Restoration:** Fixed the data marketplace view and bundle purchase logic.
+- **Developer Tools:** New "Debug Mode" in settings for verbose logging and detailed AI processing error reports.
+- **Cloud Fallback:** Implemented smart fallback for global corpus fetching to ensure the "Master" view remains functional even with schema inconsistencies.
+
+### Previous (v1.7.0)
 - **Human Integration Factor:** Smart suggestions engine on the dashboard for guided onboarding.
 - **Real-time Status Bar:** Persistent monitoring of network, sync, and local asset counts.
 - **Enhanced Auth Flow:** Redesigned sign-in experience with clear value propositions for cloud sync.

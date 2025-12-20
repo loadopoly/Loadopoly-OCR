@@ -1078,7 +1078,43 @@ export default function App() {
 
           {activeTab === 'market' && (
             <div className="h-full flex flex-col gap-6">
-              {/* ... existing market code ... */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white">Data Marketplace</h3>
+                  <p className="text-sm text-slate-400">Acquire high-quality training datasets and sharded document bundles.</p>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-xs font-bold">
+                  <ShoppingBag size={14} />
+                  {displayItems.filter(i => 'bundleId' in i).length} BUNDLES AVAILABLE
+                </div>
+              </div>
+
+              <div className="flex-1 overflow-auto pr-2 custom-scrollbar">
+                {displayItems.filter(i => 'bundleId' in i).length === 0 ? (
+                  <div className="h-64 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 gap-4">
+                    <Package size={48} className="opacity-20" />
+                    <div className="text-center">
+                      <p className="font-bold text-slate-400">No Bundles Available</p>
+                      <p className="text-xs max-w-xs mt-1">Upload more related documents to trigger automatic clustering and bundle generation.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {displayItems
+                      .filter((item): item is ImageBundle => 'bundleId' in item)
+                      .map((bundle) => (
+                        <BundleCard 
+                          key={bundle.bundleId} 
+                          bundle={bundle} 
+                          onClick={() => setPurchaseModalData({ title: bundle.title, assets: assets.filter(a => bundle.imageUrls.includes(a.imageUrl)) })}
+                          onAssetUpdated={(updatedAsset) => {
+                            setLocalAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+                          }}
+                        />
+                      ))}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
