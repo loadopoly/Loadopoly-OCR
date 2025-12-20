@@ -97,15 +97,17 @@ const getAiClient = () => {
 export const processImageWithGemini = async (
   file: File, 
   location: { lat: number; lng: number } | null,
-  scanType: ScanType = ScanType.DOCUMENT
+  scanType: ScanType = ScanType.DOCUMENT,
+  debugMode: boolean = false
 ): Promise<ProcessResponse> => {
   
   const apiKey = getApiKey();
   if (!apiKey) {
-      console.warn("Missing Gemini API Key. Ensure process.env.API_KEY is set.");
-      // We throw here so the UI can catch it and show an error instead of crashing silently
-      throw new Error("Missing Gemini API Key. Please configure your environment variables.");
+      if (debugMode) console.error("DEBUG: Gemini API Key is missing.");
+      throw new Error("Missing Gemini API Key. Please configure VITE_GEMINI_API_KEY in your environment.");
   }
+
+  if (debugMode) console.log(`DEBUG: Starting Gemini processing for ${file.name} (${file.type}, ${file.size} bytes)`);
 
   const imagePart = await fileToGenerativePart(file);
 
@@ -322,6 +324,7 @@ export const processImageWithGemini = async (
   };
 
   try {
+    if (debugMode) console.log("DEBUG: Sending request to Gemini API...");
     const response = await getAiClient().models.generateContent({
       model: GEMINI_MODEL,
       contents: [
@@ -340,7 +343,12 @@ export const processImageWithGemini = async (
     });
 
     const text = response.text;
-    if (!text) throw new Error("No response from Gemini");
+    if (!text) {
+      if (debugMode) console.error("DEBUG: Gemini returned an empty response.");
+      throw new Error("Gemini returned an empty response. This might be due to safety filters or an unsupported image.");
+    }
+    
+    if (debugMode) console.log("DEBUG: Gemini response received. Parsing JSON...");
     
     // Parse and Sanitize to ensure arrays exist
     const parsed = JSON.parse(text) as ProcessResponse;
@@ -372,8 +380,26 @@ export const processImageWithGemini = async (
       suggestedCollection: parsed.suggestedCollection || "Unsorted Processing"
     };
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("Gemini Processing Error:", error);
-    throw error;
+    
+    let userFriendlyMessage = "AI processing failed.";
+    
+    if (error.message?.includes("API key")) {
+      userFriendlyMessage = "Invalid or missing API key.";
+    } else if (error.message?.includes("safety")) {
+      userFriendlyMessage = "Content blocked by safety filters.";
+    } else if (error.message?.includes("quota") || error.status === 429) {
+      userFriendlyMessage = "API quota exceeded. Please try again later.";
+    } else if (error.message?.includes("JSON")) {
+      userFriendlyMessage = "Failed to parse AI response.";
+    } else if (error.message) {
+      userFriendlyMessage = error.message;
+    }
+
+    if (debugMode) {
+      throw new Error(`DEBUG_ERR: ${userFriendlyMessage} | Raw: ${error.message || String(error)}`);
+    }
+    throw new Error(userFriendlyMessage);
   }
 };

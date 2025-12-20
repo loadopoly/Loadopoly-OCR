@@ -14,6 +14,8 @@ interface SettingsPanelProps {
     setWeb3Enabled: (val: boolean) => void;
     scannerConnected: boolean;
     setScannerConnected: (val: boolean) => void;
+    debugMode: boolean;
+    setDebugMode: (val: boolean) => void;
 }
 
 export default function SettingsPanel({ 
@@ -23,7 +25,9 @@ export default function SettingsPanel({
     web3Enabled, 
     setWeb3Enabled,
     scannerConnected,
-    setScannerConnected
+    setScannerConnected,
+    debugMode,
+    setDebugMode
 }: SettingsPanelProps) {
   const [scannerUrl, setScannerUrl] = useState('');
   const [savedScannerUrl, setSavedScannerUrl] = useState('');
@@ -56,6 +60,12 @@ export default function SettingsPanel({
       const newState = !web3Enabled;
       setWeb3Enabled(newState);
       localStorage.setItem('geograph-web3-enabled', String(newState));
+  };
+
+  const handleToggleDebug = () => {
+      const newState = !debugMode;
+      setDebugMode(newState);
+      localStorage.setItem('geograph-debug-mode', String(newState));
   };
 
   const handleSaveScanner = () => {
@@ -218,6 +228,27 @@ export default function SettingsPanel({
                         </button>
                     </div>
                 )}
+            </div>
+        </div>
+      </div>
+
+      {/* Debug & Developer Section */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <Radio size={20} className="text-amber-500" /> Developer Tools
+        </h3>
+        <div className="space-y-4">
+            <div className="flex items-center justify-between p-4 bg-slate-950 rounded-lg border border-slate-800">
+                <div>
+                    <h4 className="text-white font-bold">Debug Mode</h4>
+                    <p className="text-xs text-slate-500">Enable verbose logging and detailed error reporting in the processing queue.</p>
+                </div>
+                <button 
+                    onClick={handleToggleDebug}
+                    className={`w-12 h-6 rounded-full transition-colors relative ${debugMode ? 'bg-amber-600' : 'bg-slate-700'}`}
+                >
+                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${debugMode ? 'left-7' : 'left-1'}`} />
+                </button>
             </div>
         </div>
       </div>

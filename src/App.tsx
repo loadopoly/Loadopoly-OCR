@@ -148,6 +148,7 @@ export default function App() {
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [ownedAssetIds, setOwnedAssetIds] = useState<Set<string>>(new Set());
   const [purchaseModalData, setPurchaseModalData] = useState<{title: string, assets: DigitalAsset[]} | null>(null);
+  const [debugMode, setDebugMode] = useState(localStorage.getItem('geograph-debug-mode') === 'true');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { isOpen: isShortcutsOpen, setIsOpen: setIsShortcutsOpen } = useKeyboardShortcutsHelp() as any;
   const isOnline = useOnlineStatus();
@@ -376,7 +377,7 @@ export default function App() {
       }
 
       const scanType = (asset.sqlRecord?.scan_type as ScanType) || ScanType.DOCUMENT;
-      const analysis = await processImageWithGemini(file, location, scanType);
+      const analysis = await processImageWithGemini(file, location, scanType, debugMode);
       
       const updatedSqlRecord: HistoricalDocumentMetadata = {
             ...asset.sqlRecord!,
@@ -955,9 +956,19 @@ export default function App() {
                                 <tbody className="divide-y divide-slate-800">
                                     {batchQueue.map((item) => (
                                         <tr key={item.id} className="text-xs group hover:bg-slate-800/30">
-                                            <td className="px-4 py-2">{item.status === 'COMPLETED' ? <CheckCircle size={14} className="text-emerald-500" /> : <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />}</td>
+                                            <td className="px-4 py-2">
+                                                {item.status === 'COMPLETED' ? (
+                                                    <CheckCircle size={14} className="text-emerald-500" />
+                                                ) : item.status === 'ERROR' ? (
+                                                    <AlertCircle size={14} className="text-red-500" />
+                                                ) : (
+                                                    <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                                                )}
+                                            </td>
                                             <td className="px-4 py-2 text-slate-300 font-mono">{item.file.name}</td>
-                                            <td className="px-4 py-2 text-slate-500">{item.status}</td>
+                                            <td className={`px-4 py-2 ${item.status === 'ERROR' ? 'text-red-400 font-medium' : 'text-slate-500'}`}>
+                                                {item.errorMsg || item.status}
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -1156,17 +1167,10 @@ export default function App() {
               setWeb3Enabled={setWeb3Enabled}
               scannerConnected={scannerConnected}
               setScannerConnected={setScannerConnected}
+              debugMode={debugMode}
+              setDebugMode={setDebugMode}
             />
           )}
-
-        </div>
-        
-        {expandedImage && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm" onClick={() => setExpandedImage(null)}>
-                <button className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white"><X size={24} /></button>
-                <img src={expandedImage} className="max-w-full max-h-full p-4 object-contain select-none" alt="Expanded Asset" />
-            </div>
-        )}
 
         {purchaseModalData && (
           <PurchaseModal 
