@@ -1,12 +1,16 @@
-# 🚀 GeoGraph Node: v1.7.0 Release Notes
+# 🚀 GeoGraph Node: v1.7.1 Release Notes
 
-This release focuses on the "Human Integration Factor," making the platform more intuitive, informative, and ready for global marketplace distribution.
+This release focuses on security, privacy, and robust AI engine connectivity, ensuring the platform is ready for production-grade data extraction.
 
-## 🤖 Human Integration & Guidance
-*   **Smart Suggestions Engine:** A new dashboard intelligence layer that analyzes your local environment and suggests high-value actions (e.g., "Enable Web3 to earn shards" or "Connect a network scanner").
-*   **Real-time Status Bar:** A persistent footer providing instant visibility into network connectivity, local asset counts, and sync status.
-*   **Redesigned Auth Experience:** The sign-in flow now clearly communicates the value of cloud integration, making the transition from guest to authenticated user seamless.
-*   **Hardware Bridge Feedback:** Improved UI for network scanner connections with clear "Connected" states and easy disconnection.
+## 🔒 Privacy & Security (v1.7.0+)
+*   **End-to-End Encryption:** Sensitive OCR data and document descriptions are now encrypted client-side using AES-GCM before being sent to the cloud. Only you can decrypt your data.
+*   **Right to be Forgotten:** A new "Delete Account" feature allows users to permanently wipe their entire cloud footprint, including all assets and transaction logs.
+*   **Encrypted Web3 Logs:** On-chain transaction metadata is now stored in an encrypted state within your private Supabase profile.
+
+## 🤖 AI Engine Reliability (v1.7.1)
+*   **Gemini Flash 2.5 Optimization:** Fixed a critical connectivity issue where the API key was not being correctly exposed to the browser.
+*   **SDK Hardening:** Updated the `@google/genai` integration to handle structured JSON responses more reliably with the latest schema requirements.
+*   **Environment Readiness:** Standardized environment variable naming to `VITE_GEMINI_API_KEY` for seamless deployment on Vercel and other CI/CD platforms.
 
 ## 📱 Marketplace & Device Readiness
 *   **Google Play Store Optimization:** Fully compliant `manifest.json` and high-resolution assets prepared for Android TWA (Trusted Web Activity) submission.

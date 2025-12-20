@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.7.0-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-1.7.1-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -35,7 +35,7 @@ Create a `.env.local` file with:
 ```env
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
-API_KEY=your-gemini-api-key
+VITE_GEMINI_API_KEY=your-gemini-api-key
 ```
 
 Get your credentials:
