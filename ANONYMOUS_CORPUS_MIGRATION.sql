@@ -44,15 +44,16 @@ FOR SELECT USING (
 );
 
 -- Enterprise users can read anonymous corpus items they've purchased
+-- Must check that the specific asset belongs to a purchased bundle
 CREATE POLICY "Enterprise Read Anonymous Corpus" ON public.historical_documents_global 
 FOR SELECT USING (
     "IS_ANONYMOUS_CORPUS" = TRUE AND 
     "ENTERPRISE_ONLY" = TRUE AND
-    EXISTS (
-        SELECT 1 FROM public.user_purchases up
-        JOIN public.packages p ON up.package_id = p.id
+    "ANONYMOUS_CORPUS_BUNDLE_ID" IS NOT NULL AND
+    "ANONYMOUS_CORPUS_BUNDLE_ID" IN (
+        SELECT up.package_id 
+        FROM public.user_purchases up
         WHERE up.user_id = auth.uid()
-        AND p.package_type = 'ANONYMOUS_CORPUS_ENTERPRISE'
     )
 );
 

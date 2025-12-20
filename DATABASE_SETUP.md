@@ -86,24 +86,37 @@ ALTER TABLE public.historical_documents_global ENABLE ROW LEVEL SECURITY;
 -- Public can read successfully processed assets that aren't enterprise-only
 CREATE POLICY "Public Read Non-Enterprise" ON public.historical_documents_global 
 FOR SELECT USING (
-    "ENTERPRISE_ONLY" = FALSE OR "ENTERPRISE_ONLY" IS NULL
+    ("ENTERPRISE_ONLY" = FALSE OR "ENTERPRISE_ONLY" IS NULL) AND
+    ("PROCESSING_STATUS" = 'MINTED' OR "PROCESSING_STATUS" = 'PENDING')
 );
 
--- Anonymous corpus items can only be read as part of enterprise bundles
+-- Enterprise users can read anonymous corpus items they've purchased
+-- Must check that the specific asset belongs to a purchased bundle
 CREATE POLICY "Enterprise Read Anonymous Corpus" ON public.historical_documents_global 
 FOR SELECT USING (
-    ("IS_ANONYMOUS_CORPUS" = FALSE OR "IS_ANONYMOUS_CORPUS" IS NULL) OR
-    (
-        "IS_ANONYMOUS_CORPUS" = TRUE AND 
-        EXISTS (
-            SELECT 1 FROM public.user_purchases up
-            WHERE up.user_id = auth.uid()
-            AND up.package_id IN (
-                SELECT p.id FROM public.packages p 
-                WHERE p.package_type = 'ANONYMOUS_CORPUS_ENTERPRISE'
-            )
-        )
+    "IS_ANONYMOUS_CORPUS" = TRUE AND 
+    "ENTERPRISE_ONLY" = TRUE AND
+    "ANONYMOUS_CORPUS_BUNDLE_ID" IS NOT NULL AND
+    "ANONYMOUS_CORPUS_BUNDLE_ID" IN (
+        SELECT up.package_id 
+        FROM public.user_purchases up
+        WHERE up.user_id = auth.uid()
     )
+);
+
+-- Superusers can view all assets including failed ones
+CREATE POLICY "Superusers View All" ON public.historical_documents_global 
+FOR SELECT USING (
+    EXISTS (
+        SELECT 1 FROM public.user_profiles 
+        WHERE id = auth.uid() AND user_role = 'SUPERUSER'
+    )
+);
+
+-- Users can view their own assets
+CREATE POLICY "Users View Own Assets" ON public.historical_documents_global 
+FOR SELECT USING (
+    auth.uid() = user_id
 );
 
 -- Public can insert new assets
@@ -111,7 +124,7 @@ CREATE POLICY "Public Anonymous Insert" ON public.historical_documents_global
 FOR INSERT WITH CHECK (true);
 
 -- Users and system can update their own assets or failed assets
-CREATE POLICY "Update Own Assets" ON public.historical_documents_global 
+CREATE POLICY "Update Own or Failed Assets" ON public.historical_documents_global 
 FOR UPDATE USING (
     auth.uid() = user_id OR 
     "PROCESSING_STATUS" = 'FAILED' OR 
