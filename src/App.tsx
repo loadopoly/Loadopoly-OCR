@@ -451,34 +451,36 @@ export default function App() {
 
   const ingestFile = async (file: File, source: string = "Upload") => {
     setIsProcessing(true);
-    let newAsset: DigitalAsset | null = null;
     try {
-      newAsset = await createInitialAsset(file);
+      const newAsset = await createInitialAsset(file);
       if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = source;
-      setLocalAssets(prev => [newAsset!, ...prev]);
+      setLocalAssets(prev => [newAsset, ...prev]);
       // Always save to IndexedDB as local-first persistence buffer
       await saveAsset(newAsset);
       if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
-      const processedAsset = await processAssetPipeline(newAsset, file);
-      setLocalAssets(prev => prev.map(a => a.id === newAsset!.id ? processedAsset : a));
-      // Always save processed asset to IndexedDB
-      await saveAsset(processedAsset);
-    } catch (err) {
-      console.error("Error processing file:", err);
-      // Update asset status to FAILED if processing failed
-      if (newAsset) {
+      
+      try {
+        const processedAsset = await processAssetPipeline(newAsset, file);
+        setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+        // Always save processed asset to IndexedDB
+        await saveAsset(processedAsset);
+      } catch (processingError) {
+        console.error("Error processing file:", processingError);
+        // Update asset status to FAILED if processing failed
         const errorAsset = {
           ...newAsset,
           status: AssetStatus.FAILED,
           sqlRecord: newAsset.sqlRecord ? {
             ...newAsset.sqlRecord,
             PROCESSING_STATUS: AssetStatus.FAILED,
-            DOCUMENT_DESCRIPTION: `Processing failed: ${err instanceof Error ? err.message : 'Unknown error'}`
+            DOCUMENT_DESCRIPTION: `Processing failed: ${processingError instanceof Error ? processingError.message : 'Unknown error'}`
           } : undefined
         };
-        setLocalAssets(prev => prev.map(a => a.id === newAsset!.id ? errorAsset : a));
+        setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? errorAsset : a));
         await saveAsset(errorAsset);
       }
+    } catch (err) {
+      console.error("Error creating asset:", err);
     } finally {
       setIsProcessing(false);
     }
@@ -503,35 +505,38 @@ export default function App() {
           if (nextItemIndex === -1) return currentQueue;
           const itemToProcess = currentQueue[nextItemIndex];
           (async () => {
-             let newAsset: DigitalAsset | null = null;
              try {
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'PROCESSING', progress: 10 } : i));
                 if (itemToProcess.scanType) (itemToProcess.file as any).scanType = itemToProcess.scanType;
-                newAsset = await createInitialAsset(itemToProcess.file);
-                setLocalAssets(prev => [newAsset!, ...prev]);
+                const newAsset = await createInitialAsset(itemToProcess.file);
+                setLocalAssets(prev => [newAsset, ...prev]);
                 // Always save to IndexedDB as local-first persistence buffer
                 await saveAsset(newAsset);
-                const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
-                setLocalAssets(prev => prev.map(a => a.id === newAsset!.id ? processedAsset : a));
-                // Always save processed asset to IndexedDB
-                await saveAsset(processedAsset);
-                setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset!.id } : i));
+                
+                try {
+                  const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
+                  setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+                  // Always save processed asset to IndexedDB
+                  await saveAsset(processedAsset);
+                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+                } catch (processingError: any) {
+                  console.error("Batch item processing failed:", processingError);
+                  // Update asset status to FAILED if processing failed
+                  const errorAsset = {
+                    ...newAsset,
+                    status: AssetStatus.FAILED,
+                    sqlRecord: newAsset.sqlRecord ? {
+                      ...newAsset.sqlRecord,
+                      PROCESSING_STATUS: AssetStatus.FAILED,
+                      DOCUMENT_DESCRIPTION: `Processing failed: ${processingError.message || 'Unknown error'}`
+                    } : undefined
+                  };
+                  setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? errorAsset : a));
+                  await saveAsset(errorAsset);
+                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: processingError.message || "Failed" } : i));
+                }
              } catch (e: any) {
-                 console.error("Batch item processing failed:", e);
-                 // Update asset status to FAILED if processing failed
-                 if (newAsset) {
-                   const errorAsset = {
-                     ...newAsset,
-                     status: AssetStatus.FAILED,
-                     sqlRecord: newAsset.sqlRecord ? {
-                       ...newAsset.sqlRecord,
-                       PROCESSING_STATUS: AssetStatus.FAILED,
-                       DOCUMENT_DESCRIPTION: `Processing failed: ${e.message || 'Unknown error'}`
-                     } : undefined
-                   };
-                   setLocalAssets(prev => prev.map(a => a.id === newAsset!.id ? errorAsset : a));
-                   await saveAsset(errorAsset);
-                 }
+                 console.error("Batch item creation failed:", e);
                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Failed" } : i));
              } finally {
                  processNextBatchItem();
