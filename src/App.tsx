@@ -44,7 +44,7 @@ import {
   CloudDownload
 } from 'lucide-react';
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG, GraphData, GraphNode } from './types';
-import { processImageWithGemini } from './services/geminiService';
+import { processImageWithGemini, GEMINI_AGENT_NAME } from './services/geminiService';
 import { createBundles } from './services/bundleService';
 import { initSync, isSyncEnabled } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
@@ -403,7 +403,7 @@ export default function App() {
               accessibility_score: analysis.accessibility_score,
               PRESERVATION_EVENTS: [
                 ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
-                { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }
+                { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: GEMINI_AGENT_NAME, outcome: "SUCCESS" }
               ]
         };
 
@@ -448,7 +448,7 @@ export default function App() {
           SOURCE_COLLECTION: asset.sqlRecord!.SOURCE_COLLECTION || "Failed Processing",
           PRESERVATION_EVENTS: [
             ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
-            { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "FAILURE" }
+            { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: GEMINI_AGENT_NAME, outcome: "FAILURE" }
           ]
         };
 

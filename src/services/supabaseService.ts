@@ -222,9 +222,8 @@ export const contributeAssetToGlobalCorpus = async (
       }
     }
 
-    // Determine if this should go to anonymous corpus (use asset status as single source of truth)
-    // The processingFailed parameter is provided for explicit signaling, but asset.status is authoritative
-    const isFailed = asset.status === AssetStatus.FAILED || (processingFailed && asset.sqlRecord?.PROCESSING_STATUS === AssetStatus.FAILED);
+    // Determine if this should go to anonymous corpus (use asset.status as single source of truth)
+    const isFailed = asset.status === AssetStatus.FAILED;
     const isAnonymousCorpus = isFailed;
     const requiresSuperuserReview = isFailed;
 

@@ -122,6 +122,35 @@ BEGIN
         TRUE
     ) RETURNING id INTO v_package_id;
 
+    -- Create data_assets entries for anonymous corpus items if they don't exist
+    -- This ensures failed processing assets can be bundled
+    INSERT INTO public.data_assets (
+        asset_id, document_title, document_description, nlp_node_categorization,
+        local_gis_zone, source_collection, rights_statement, confidence_score, metadata
+    )
+    SELECT 
+        hdg."ASSET_ID",
+        hdg."DOCUMENT_TITLE",
+        hdg."DOCUMENT_DESCRIPTION",
+        hdg."NLP_NODE_CATEGORIZATION",
+        hdg."LOCAL_GIS_ZONE",
+        hdg."SOURCE_COLLECTION",
+        hdg."RIGHTS_STATEMENT",
+        hdg."CONFIDENCE_SCORE",
+        jsonb_build_object(
+            'processing_status', hdg."PROCESSING_STATUS",
+            'error_message', hdg."PROCESSING_ERROR_MESSAGE"
+        )
+    FROM public.historical_documents_global hdg
+    WHERE hdg."IS_ANONYMOUS_CORPUS" = TRUE
+    AND hdg."ENTERPRISE_ONLY" = TRUE
+    AND hdg."ANONYMOUS_CORPUS_BUNDLE_ID" IS NULL
+    AND NOT EXISTS (
+        SELECT 1 FROM public.data_assets da 
+        WHERE da.asset_id = hdg."ASSET_ID"
+    )
+    LIMIT p_max_assets;
+
     -- Add anonymous corpus assets to the package (limit to p_max_assets)
     WITH selected_assets AS (
         SELECT da.id
