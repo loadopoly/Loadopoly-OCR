@@ -451,7 +451,6 @@ export default function App() {
         newAsset.sqlRecord.SOURCE_COLLECTION = source;
         newAsset.sqlRecord.IS_ENTERPRISE = false; // Initially not enterprise
       }
-      currentAsset = newAsset;
       setLocalAssets(prev => [newAsset, ...prev]);
       
       // Initial upload to Supabase as PENDING if authenticated
@@ -1171,6 +1170,14 @@ export default function App() {
               setDebugMode={setDebugMode}
             />
           )}
+        </div>
+        
+        {expandedImage && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm" onClick={() => setExpandedImage(null)}>
+                <button className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white"><X size={24} /></button>
+                <img src={expandedImage} className="max-w-full max-h-full p-4 object-contain select-none" alt="Expanded Asset" />
+            </div>
+        )}
 
         {purchaseModalData && (
           <PurchaseModal 
