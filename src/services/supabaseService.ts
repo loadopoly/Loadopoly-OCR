@@ -170,7 +170,9 @@ export const contributeAssetToGlobalCorpus = async (
   asset: DigitalAsset,
   userId?: string,
   licenseType: 'GEOGRAPH_CORPUS_1.0' | 'CC0' = 'GEOGRAPH_CORPUS_1.0',
-  isAutoSave: boolean = false
+  isAutoSave: boolean = false,
+  processingFailed: boolean = false,
+  errorMessage?: string
 ) => {
   if (!supabase) {
     console.warn("Supabase not configured. Skipping cloud contribution.");
@@ -220,6 +222,10 @@ export const contributeAssetToGlobalCorpus = async (
       }
     }
 
+    // Determine if this should go to anonymous corpus (failed processing)
+    const isAnonymousCorpus = processingFailed || asset.status === AssetStatus.FAILED;
+    const requiresSuperuserReview = isAnonymousCorpus;
+
     const { error } = await supabase
       .from('historical_documents_global')
       .upsert({
@@ -228,7 +234,11 @@ export const contributeAssetToGlobalCorpus = async (
         CONTRIBUTED_AT: new Date().toISOString(),
         DATA_LICENSE: licenseType,
         original_image_url: publicUrl,
-        user_id: userId || null
+        user_id: userId || null,
+        PROCESSING_ERROR_MESSAGE: errorMessage || null,
+        REQUIRES_SUPERUSER_REVIEW: requiresSuperuserReview,
+        IS_ANONYMOUS_CORPUS: isAnonymousCorpus,
+        ENTERPRISE_ONLY: isAnonymousCorpus // Anonymous corpus is enterprise-only
       } as any);
 
     if (error) throw error;

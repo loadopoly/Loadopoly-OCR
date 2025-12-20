@@ -367,70 +367,111 @@ export default function App() {
         } catch (e) {}
       }
 
-      const scanType = (asset.sqlRecord?.scan_type as ScanType) || ScanType.DOCUMENT;
-      const analysis = await processImageWithGemini(file, location, scanType);
-      
-      const updatedSqlRecord: HistoricalDocumentMetadata = {
-            ...asset.sqlRecord!,
-            OCR_DERIVED_TIMESTAMP: analysis.ocrDerivedTimestamp,
-            NLP_DERIVED_TIMESTAMP: analysis.nlpDerivedTimestamp,
-            LOCAL_GIS_ZONE: analysis.gisMetadata?.zoneType || "Unknown",
-            OCR_DERIVED_GIS_ZONE: analysis.ocrDerivedGisZone,
-            NLP_DERIVED_GIS_ZONE: analysis.nlpDerivedGisZone,
-            NODE_COUNT: analysis.graphData?.nodes?.length || 0,
-            NLP_NODE_CATEGORIZATION: analysis.nlpNodeCategorization,
-            RAW_OCR_TRANSCRIPTION: analysis.ocrText,
-            PREPROCESS_OCR_TRANSCRIPTION: analysis.preprocessOcrTranscription,
-            DOCUMENT_TITLE: analysis.documentTitle,
-            DOCUMENT_DESCRIPTION: analysis.documentDescription,
-            SOURCE_COLLECTION: analysis.suggestedCollection || asset.sqlRecord!.SOURCE_COLLECTION || "Unsorted",
-            CREATOR_AGENT: analysis.creatorAgent,
-            RIGHTS_STATEMENT: analysis.rightsStatement,
-            LANGUAGE_CODE: analysis.languageCode,
-            LAST_MODIFIED: new Date().toISOString(),
-            PROCESSING_STATUS: AssetStatus.MINTED,
-            CONFIDENCE_SCORE: analysis.confidenceScore,
-            ENTITIES_EXTRACTED: analysis.graphData?.nodes ? analysis.graphData.nodes.map(n => n.label) : [],
-            KEYWORDS_TAGS: analysis.keywordsTags || [],
-            ACCESS_RESTRICTIONS: analysis.accessRestrictions,
-            TAXONOMY: analysis.taxonomy,
-            ITEM_ATTRIBUTES: analysis.itemAttributes,
-            SCENERY_ATTRIBUTES: analysis.sceneryAttributes,
-            alt_text_short: analysis.alt_text_short,
-            alt_text_long: analysis.alt_text_long,
-            reading_order: analysis.reading_order,
-            accessibility_score: analysis.accessibility_score,
-            PRESERVATION_EVENTS: [
-              ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
-              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }
-            ]
-      };
+      try {
+        const scanType = (asset.sqlRecord?.scan_type as ScanType) || ScanType.DOCUMENT;
+        const analysis = await processImageWithGemini(file, location, scanType);
+        
+        const updatedSqlRecord: HistoricalDocumentMetadata = {
+              ...asset.sqlRecord!,
+              OCR_DERIVED_TIMESTAMP: analysis.ocrDerivedTimestamp,
+              NLP_DERIVED_TIMESTAMP: analysis.nlpDerivedTimestamp,
+              LOCAL_GIS_ZONE: analysis.gisMetadata?.zoneType || "Unknown",
+              OCR_DERIVED_GIS_ZONE: analysis.ocrDerivedGisZone,
+              NLP_DERIVED_GIS_ZONE: analysis.nlpDerivedGisZone,
+              NODE_COUNT: analysis.graphData?.nodes?.length || 0,
+              NLP_NODE_CATEGORIZATION: analysis.nlpNodeCategorization,
+              RAW_OCR_TRANSCRIPTION: analysis.ocrText,
+              PREPROCESS_OCR_TRANSCRIPTION: analysis.preprocessOcrTranscription,
+              DOCUMENT_TITLE: analysis.documentTitle,
+              DOCUMENT_DESCRIPTION: analysis.documentDescription,
+              SOURCE_COLLECTION: analysis.suggestedCollection || asset.sqlRecord!.SOURCE_COLLECTION || "Unsorted",
+              CREATOR_AGENT: analysis.creatorAgent,
+              RIGHTS_STATEMENT: analysis.rightsStatement,
+              LANGUAGE_CODE: analysis.languageCode,
+              LAST_MODIFIED: new Date().toISOString(),
+              PROCESSING_STATUS: AssetStatus.MINTED,
+              CONFIDENCE_SCORE: analysis.confidenceScore,
+              ENTITIES_EXTRACTED: analysis.graphData?.nodes ? analysis.graphData.nodes.map(n => n.label) : [],
+              KEYWORDS_TAGS: analysis.keywordsTags || [],
+              ACCESS_RESTRICTIONS: analysis.accessRestrictions,
+              TAXONOMY: analysis.taxonomy,
+              ITEM_ATTRIBUTES: analysis.itemAttributes,
+              SCENERY_ATTRIBUTES: analysis.sceneryAttributes,
+              alt_text_short: analysis.alt_text_short,
+              alt_text_long: analysis.alt_text_long,
+              reading_order: analysis.reading_order,
+              accessibility_score: analysis.accessibility_score,
+              PRESERVATION_EVENTS: [
+                ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
+                { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }
+              ]
+        };
 
-      const resultAsset = {
-            ...asset,
-            status: AssetStatus.MINTED,
-            ocrText: analysis.ocrText,
-            gisMetadata: analysis.gisMetadata,
-            graphData: analysis.graphData,
-            tokenization: analysis.tokenization,
-            processingAnalysis: analysis.analysis,
-            location: location ? { latitude: location.lat, longitude: location.lng, accuracy: 1 } : undefined,
-            sqlRecord: updatedSqlRecord
-      };
+        const resultAsset = {
+              ...asset,
+              status: AssetStatus.MINTED,
+              ocrText: analysis.ocrText,
+              gisMetadata: analysis.gisMetadata,
+              graphData: analysis.graphData,
+              tokenization: analysis.tokenization,
+              processingAnalysis: analysis.analysis,
+              location: location ? { latitude: location.lat, longitude: location.lng, accuracy: 1 } : undefined,
+              sqlRecord: updatedSqlRecord
+        };
 
-      // Auto-store to Supabase if user is authenticated
-      if (user?.id) {
-        const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-        contributeAssetToGlobalCorpus(resultAsset, user.id, license as any, true).then(syncResult => {
-          if (syncResult.success && syncResult.publicUrl) {
-            // Update local state with the permanent cloud URL
-            const updatedAsset = { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl };
-            setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
-          }
-        }).catch(err => console.error("Auto-sync to Supabase failed", err));
+        // Auto-store to Supabase if user is authenticated (successful processing)
+        if (user?.id) {
+          const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+          contributeAssetToGlobalCorpus(resultAsset, user.id, license as any, true, false).then(syncResult => {
+            if (syncResult.success && syncResult.publicUrl) {
+              // Update local state with the permanent cloud URL
+              const updatedAsset = { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl };
+              setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
+            }
+          }).catch(err => console.error("Auto-sync to Supabase failed", err));
+        }
+
+        return resultAsset;
+      } catch (processingError: any) {
+        // Handle processing failure
+        console.error("Processing failed:", processingError);
+        
+        const errorMessage = processingError.message || "Unknown processing error";
+        const failedSqlRecord: HistoricalDocumentMetadata = {
+          ...asset.sqlRecord!,
+          PROCESSING_STATUS: AssetStatus.FAILED,
+          LAST_MODIFIED: new Date().toISOString(),
+          PROCESSING_ERROR_MESSAGE: errorMessage,
+          REQUIRES_SUPERUSER_REVIEW: true,
+          IS_ANONYMOUS_CORPUS: true,
+          ENTERPRISE_ONLY: true,
+          SOURCE_COLLECTION: asset.sqlRecord!.SOURCE_COLLECTION || "Failed Processing",
+          PRESERVATION_EVENTS: [
+            ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
+            { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "FAILURE" }
+          ]
+        };
+
+        const failedAsset = {
+          ...asset,
+          status: AssetStatus.FAILED,
+          errorMessage: errorMessage,
+          sqlRecord: failedSqlRecord
+        };
+
+        // Store failed asset to Supabase for superuser review
+        if (user?.id) {
+          const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+          contributeAssetToGlobalCorpus(failedAsset, user.id, license as any, true, true, errorMessage).then(syncResult => {
+            if (syncResult.success && syncResult.publicUrl) {
+              const updatedAsset = { ...failedAsset, imageUrl: syncResult.publicUrl || failedAsset.imageUrl };
+              setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
+            }
+          }).catch(err => console.error("Failed to sync failed asset to Supabase", err));
+        }
+
+        return failedAsset;
       }
-
-      return resultAsset;
   };
 
   const ingestFile = async (file: File, source: string = "Upload") => {

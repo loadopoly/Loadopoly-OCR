@@ -65,17 +65,58 @@ CREATE TABLE IF NOT EXISTS public.historical_documents_global (
     "DATA_LICENSE" TEXT DEFAULT 'GEOGRAPH_CORPUS_1.0',
     "CONTRIBUTOR_NFT_MINTED" BOOLEAN DEFAULT FALSE,
     original_image_url TEXT, -- Permanent Storage Link
-    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL
+    user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    "PROCESSING_ERROR_MESSAGE" TEXT, -- Error message if processing failed
+    "REQUIRES_SUPERUSER_REVIEW" BOOLEAN DEFAULT FALSE, -- Flag for failed images requiring review
+    "IS_ANONYMOUS_CORPUS" BOOLEAN DEFAULT FALSE, -- Flag for anonymous corpus (failed/unprocessed)
+    "ANONYMOUS_CORPUS_BUNDLE_ID" UUID, -- Link to enterprise bundle
+    "ENTERPRISE_ONLY" BOOLEAN DEFAULT FALSE -- Flag for enterprise-only access
 );
 
 -- INDEXING FOR PERFORMANCE
 CREATE INDEX IF NOT EXISTS idx_hdg_category ON public.historical_documents_global("NLP_NODE_CATEGORIZATION");
 CREATE INDEX IF NOT EXISTS idx_hdg_collection ON public.historical_documents_global("SOURCE_COLLECTION");
+CREATE INDEX IF NOT EXISTS idx_hdg_processing_status ON public.historical_documents_global("PROCESSING_STATUS");
+CREATE INDEX IF NOT EXISTS idx_hdg_superuser_review ON public.historical_documents_global("REQUIRES_SUPERUSER_REVIEW") WHERE "REQUIRES_SUPERUSER_REVIEW" = TRUE;
+CREATE INDEX IF NOT EXISTS idx_hdg_anonymous_corpus ON public.historical_documents_global("IS_ANONYMOUS_CORPUS") WHERE "IS_ANONYMOUS_CORPUS" = TRUE;
 
 -- RLS POLICIES
 ALTER TABLE public.historical_documents_global ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public Read" ON public.historical_documents_global FOR SELECT USING (true);
-CREATE POLICY "Public Anonymous Insert" ON public.historical_documents_global FOR INSERT WITH CHECK (true);
+
+-- Public can read successfully processed assets that aren't enterprise-only
+CREATE POLICY "Public Read Non-Enterprise" ON public.historical_documents_global 
+FOR SELECT USING (
+    "ENTERPRISE_ONLY" = FALSE OR "ENTERPRISE_ONLY" IS NULL
+);
+
+-- Anonymous corpus items can only be read as part of enterprise bundles
+CREATE POLICY "Enterprise Read Anonymous Corpus" ON public.historical_documents_global 
+FOR SELECT USING (
+    ("IS_ANONYMOUS_CORPUS" = FALSE OR "IS_ANONYMOUS_CORPUS" IS NULL) OR
+    (
+        "IS_ANONYMOUS_CORPUS" = TRUE AND 
+        EXISTS (
+            SELECT 1 FROM public.user_purchases up
+            WHERE up.user_id = auth.uid()
+            AND up.package_id IN (
+                SELECT p.id FROM public.packages p 
+                WHERE p.package_type = 'ANONYMOUS_CORPUS_ENTERPRISE'
+            )
+        )
+    )
+);
+
+-- Public can insert new assets
+CREATE POLICY "Public Anonymous Insert" ON public.historical_documents_global 
+FOR INSERT WITH CHECK (true);
+
+-- Users and system can update their own assets or failed assets
+CREATE POLICY "Update Own Assets" ON public.historical_documents_global 
+FOR UPDATE USING (
+    auth.uid() = user_id OR 
+    "PROCESSING_STATUS" = 'FAILED' OR 
+    "PROCESSING_STATUS" = 'PENDING'
+);
 
 -- WEB3 TRANSACTIONS TABLE (ENCRYPTED)
 CREATE TABLE IF NOT EXISTS public.web3_transactions (
@@ -96,6 +137,7 @@ CREATE TABLE IF NOT EXISTS public.user_profiles (
     email TEXT,
     display_name TEXT,
     wallet_address TEXT,
+    user_role TEXT DEFAULT 'USER', -- USER, SUPERUSER, ENTERPRISE
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -104,6 +146,15 @@ ALTER TABLE public.user_profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Users can view own profile" ON public.user_profiles FOR SELECT USING (auth.uid() = id);
 CREATE POLICY "Users can update own profile" ON public.user_profiles FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "Users can insert own profile" ON public.user_profiles FOR INSERT WITH CHECK (auth.uid() = id);
+
+-- Superuser policy to view failed assets requiring review
+CREATE POLICY "Superusers can view failed assets" ON public.historical_documents_global 
+FOR SELECT USING (
+    EXISTS (
+        SELECT 1 FROM public.user_profiles 
+        WHERE id = auth.uid() AND user_role = 'SUPERUSER'
+    )
+);
 
 -- DATA ASSETS TABLE (for marketplace)
 CREATE TABLE IF NOT EXISTS public.data_assets (

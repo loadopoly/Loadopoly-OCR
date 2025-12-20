@@ -174,6 +174,11 @@ export interface HistoricalDocumentMetadata {
   CONTRIBUTOR_NFT_MINTED: boolean;
   user_id?: string | null; // Supabase auth user ID
   original_image_url?: string | null; // Public URL from Supabase Storage
+  PROCESSING_ERROR_MESSAGE?: string | null; // Error message if processing failed
+  REQUIRES_SUPERUSER_REVIEW?: boolean; // Flag for failed images requiring review
+  IS_ANONYMOUS_CORPUS?: boolean; // Flag for anonymous corpus (failed/unprocessed)
+  ANONYMOUS_CORPUS_BUNDLE_ID?: string | null; // Link to enterprise bundle
+  ENTERPRISE_ONLY?: boolean; // Flag for enterprise-only access
 }
 
 export interface DigitalAsset {
