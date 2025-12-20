@@ -1,8 +1,8 @@
-const CACHE_NAME = 'geograph-v1.7.0';
+const CACHE_NAME = 'geograph-v1.7.1';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
-  '/manifest.json?v=1.7.0',
+  '/manifest.json?v=1.7.1',
   '/icon.svg'
 ];
 
