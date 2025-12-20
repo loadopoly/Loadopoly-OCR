@@ -1,4 +1,4 @@
-import { DigitalAsset, AssetStatus, GraphNode, GraphLink } from '../types';
+import { DigitalAsset, AssetStatus, GraphNode, GraphLink, HistoricalDocumentMetadata } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase, isSupabaseConfigured, testSupabaseConnection } from '../lib/supabaseClient';
 import { encryptData, decryptData } from '../lib/encryption';
@@ -170,7 +170,9 @@ export const contributeAssetToGlobalCorpus = async (
   asset: DigitalAsset,
   userId?: string,
   licenseType: 'GEOGRAPH_CORPUS_1.0' | 'CC0' = 'GEOGRAPH_CORPUS_1.0',
-  isAutoSave: boolean = false
+  isAutoSave: boolean = false,
+  processingFailed: boolean = false,
+  errorMessage?: string
 ) => {
   if (!supabase) {
     console.warn("Supabase not configured. Skipping cloud contribution.");
@@ -220,6 +222,9 @@ export const contributeAssetToGlobalCorpus = async (
       }
     }
 
+    // Determine if this should go to anonymous corpus (use asset.status as single source of truth)
+    const processingFailed = asset.status === AssetStatus.FAILED;
+
     const { error } = await supabase
       .from('historical_documents_global')
       .upsert({
@@ -228,7 +233,11 @@ export const contributeAssetToGlobalCorpus = async (
         CONTRIBUTED_AT: new Date().toISOString(),
         DATA_LICENSE: licenseType,
         original_image_url: publicUrl,
-        user_id: userId || null
+        user_id: userId || null,
+        PROCESSING_ERROR_MESSAGE: errorMessage || null,
+        REQUIRES_SUPERUSER_REVIEW: processingFailed,
+        IS_ANONYMOUS_CORPUS: processingFailed,
+        ENTERPRISE_ONLY: processingFailed // Anonymous corpus is enterprise-only
       } as any);
 
     if (error) throw error;
@@ -269,5 +278,112 @@ export const recordWeb3Transaction = async (
     if (error) throw error;
   } catch (err) {
     console.error("Failed to record web3 transaction:", err);
+  }
+};
+
+/**
+ * Fetches assets that require superuser review (failed processing).
+ * Only accessible to users with SUPERUSER role.
+ */
+export const fetchFailedAssets = async (): Promise<DigitalAsset[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('historical_documents_global')
+    .select('*')
+    .eq('REQUIRES_SUPERUSER_REVIEW', true)
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error("Error fetching failed assets:", error);
+    throw error;
+  }
+
+  return data.map((row: any) => {
+    // Parse JSONB fields
+    const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED) 
+      ? row.ENTITIES_EXTRACTED 
+      : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
+    
+    // Reconstruct Nodes
+    const nodes: GraphNode[] = [
+      { 
+        id: row.ASSET_ID, 
+        label: row.DOCUMENT_TITLE || 'Failed Asset', 
+        type: 'DOCUMENT', 
+        relevance: 1.0,
+        license: row.DATA_LICENSE 
+      }
+    ];
+
+    // Reconstruct Links & Entity Nodes
+    const links: GraphLink[] = [];
+    entities.forEach(entity => {
+      const entityId = `ENT_${entity.replace(/\s+/g, '_').toUpperCase()}`;
+      nodes.push({
+        id: entityId,
+        label: entity,
+        type: 'CONCEPT',
+        relevance: 0.8
+      });
+      links.push({
+        source: row.ASSET_ID,
+        target: entityId,
+        relationship: 'CONTAINS'
+      });
+    });
+
+    // Return complete DigitalAsset
+    return {
+      id: row.ASSET_ID,
+      imageUrl: row.original_image_url || '', 
+      timestamp: row.LOCAL_TIMESTAMP,
+      ocrText: row.RAW_OCR_TRANSCRIPTION || '',
+      status: AssetStatus.FAILED,
+      errorMessage: row.PROCESSING_ERROR_MESSAGE,
+      graphData: { nodes, links },
+      sqlRecord: {
+        ...row,
+        ENTITIES_EXTRACTED: entities,
+        KEYWORDS_TAGS: Array.isArray(row.KEYWORDS_TAGS) ? row.KEYWORDS_TAGS : [],
+        PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS) ? row.PRESERVATION_EVENTS : []
+      }
+    };
+  });
+};
+
+/**
+ * Updates an asset's processing status after superuser review.
+ * Only accessible to users with SUPERUSER role.
+ */
+export const updateAssetAfterReview = async (
+  assetId: string,
+  newStatus: AssetStatus,
+  updates: Partial<HistoricalDocumentMetadata>
+) => {
+  if (!supabase) {
+    console.warn("Supabase not configured.");
+    return { success: false };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('historical_documents_global')
+      .update({
+        ...updates,
+        // PROCESSING_STATUS matches the database column (see DATABASE_SETUP.md line 48)
+        PROCESSING_STATUS: newStatus,
+        REQUIRES_SUPERUSER_REVIEW: newStatus === AssetStatus.FAILED,
+        IS_ANONYMOUS_CORPUS: newStatus === AssetStatus.FAILED,
+        LAST_MODIFIED: new Date().toISOString()
+      } as any)
+      .eq('ASSET_ID', assetId);
+
+    if (error) throw error;
+
+    return { success: true };
+  } catch (err) {
+    console.error("Failed to update asset:", err);
+    throw err;
   }
 };

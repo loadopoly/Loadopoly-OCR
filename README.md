@@ -100,6 +100,7 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
 - Metadata persisted in `historical_documents_global` database
 - Assets accessible across devices and sessions
 - Full data portability and export capabilities
+- **Failed processing** assets are flagged for superuser review
 
 **Unauthenticated Users:**
 - Temporary workspace using browser's IndexedDB
@@ -108,12 +109,20 @@ GeoGraph Node transforms physical documents, artifacts, and locations into struc
 - Can optionally contribute assets to global corpus
 - No account required for basic functionality
 
+**Anonymous Corpus (New):**
+- Failed processing images are set aside for superuser review
+- Automatically flagged as `REQUIRES_SUPERUSER_REVIEW`
+- Available to enterprise customers as bundled datasets
+- Provides training data for edge cases and quality improvement
+- See [ANONYMOUS_CORPUS_GUIDE.md](ANONYMOUS_CORPUS_GUIDE.md) for details
+
 ### Use Cases
 
 - **Archives & Museums:** Digitize collections with high-fidelity metadata extraction.
 - **Historical Research:** Build complex, connected knowledge graphs from scanned documents.
 - **AI/ML Training:** Generate high-quality, ethically sourced, and licensed training datasets.
 - **Field Documentation:** Capture and catalog items with real-time location and environmental context.
+- **Enterprise Data:** Access anonymous corpus bundles for specialized ML training and quality assurance.
 
 ---
 

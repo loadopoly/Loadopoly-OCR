@@ -3,6 +3,7 @@ import { GISMetadata, GraphData, TokenizationData, AssetStatus, ScanType, Taxono
 
 // Using Gemini 2.5 Flash as requested for optimized speed and efficient extraction
 const GEMINI_MODEL = "gemini-2.5-flash";
+export const GEMINI_AGENT_NAME = "Gemini 2.5 Flash"; // Consistent agent name for preservation events
 
 // Helper to obtain API Key exclusively from process.env.API_KEY as per guidelines
 const getApiKey = (): string => {
