@@ -386,13 +386,17 @@ export const processImageWithGemini = async (
     let userFriendlyMessage = "AI processing failed.";
     
     if (error.message?.includes("API key")) {
-      userFriendlyMessage = "Invalid or missing API key.";
+      userFriendlyMessage = "Invalid or missing API key. Check VITE_GEMINI_API_KEY.";
     } else if (error.message?.includes("safety")) {
       userFriendlyMessage = "Content blocked by safety filters.";
     } else if (error.message?.includes("quota") || error.status === 429) {
       userFriendlyMessage = "API quota exceeded. Please try again later.";
     } else if (error.message?.includes("JSON")) {
-      userFriendlyMessage = "Failed to parse AI response.";
+      userFriendlyMessage = "Failed to parse AI response. The image might be too complex or blurry.";
+    } else if (error.message?.includes("unsupported") || error.message?.includes("format")) {
+      userFriendlyMessage = "Unsupported file format or corrupted image.";
+    } else if (error.message?.includes("large")) {
+      userFriendlyMessage = "File size too large for Gemini processing.";
     } else if (error.message) {
       userFriendlyMessage = error.message;
     }

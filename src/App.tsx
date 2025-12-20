@@ -428,17 +428,15 @@ export default function App() {
             sqlRecord: updatedSqlRecord
       };
 
-      // Auto-store to Supabase if user is authenticated
-      if (user?.id) {
-        const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-        contributeAssetToGlobalCorpus(resultAsset, user.id, license as any, true).then(syncResult => {
-          if (syncResult.success && syncResult.publicUrl) {
-            // Update local state with the permanent cloud URL
-            const updatedAsset = { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl };
-            setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
-          }
-        }).catch(err => console.error("Auto-sync to Supabase failed", err));
-      }
+      // Auto-store to Supabase (Automatic Cloud Sync)
+      const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+      contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true).then(syncResult => {
+        if (syncResult.success && syncResult.publicUrl) {
+          // Update local state with the permanent cloud URL
+          const updatedAsset = { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl };
+          setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
+        }
+      }).catch(err => console.error("Auto-sync to Supabase failed", err));
 
       return resultAsset;
   };
@@ -453,13 +451,11 @@ export default function App() {
       }
       setLocalAssets(prev => [newAsset, ...prev]);
       
-      // Initial upload to Supabase as PENDING if authenticated
-      if (user?.id) {
-        const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-        await contributeAssetToGlobalCorpus(newAsset, user.id, license as any, true);
-      } else {
-        await saveAsset(newAsset);
-      }
+      // Initial upload to Supabase as PENDING (Automatic Cloud Sync)
+      const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+      contributeAssetToGlobalCorpus(newAsset, user?.id, license as any, true).catch(err => {
+        console.warn("Initial cloud sync failed (offline or config missing):", err);
+      });
 
       if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
       
@@ -485,12 +481,9 @@ export default function App() {
         };
         setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? failedAsset : a));
         
-        if (user?.id) {
-          const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-          await contributeAssetToGlobalCorpus(failedAsset, user.id, license as any, true);
-        } else {
-          await saveAsset(failedAsset);
-        }
+        // Sync the failure to Supabase so it can be reviewed by admins (Automatic Cloud Sync)
+        const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+        contributeAssetToGlobalCorpus(failedAsset, user?.id, license as any, true).catch(e => console.error("Failed to sync error state", e));
       }
     } catch (err) {
       console.error("Ingestion failed:", err);

@@ -233,22 +233,25 @@ export default function SettingsPanel({
       </div>
 
       {/* Debug & Developer Section */}
-      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-            <Radio size={20} className="text-amber-500" /> Developer Tools
-        </h3>
-        <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 bg-slate-950 rounded-lg border border-slate-800">
-                <div>
-                    <h4 className="text-white font-bold">Debug Mode</h4>
-                    <p className="text-xs text-slate-500">Enable verbose logging and detailed error reporting in the processing queue.</p>
+      <div className="bg-slate-900 border border-amber-900/30 rounded-xl p-6">
+        <div className="flex items-start gap-4">
+            <div className="p-3 rounded-lg bg-amber-900/20 text-amber-500">
+                <Radio size={24} />
+            </div>
+            <div className="flex-1">
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-bold text-white">Developer Tools</h3>
+                    <button 
+                        onClick={handleToggleDebug}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${debugMode ? 'bg-amber-600' : 'bg-slate-700'}`}
+                    >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${debugMode ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
                 </div>
-                <button 
-                    onClick={handleToggleDebug}
-                    className={`w-12 h-6 rounded-full transition-colors relative ${debugMode ? 'bg-amber-600' : 'bg-slate-700'}`}
-                >
-                    <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${debugMode ? 'left-7' : 'left-1'}`} />
-                </button>
+                <p className="text-sm text-slate-400">
+                    Enable verbose logging and detailed error reporting in the processing queue. 
+                    Useful for troubleshooting AI extraction failures.
+                </p>
             </div>
         </div>
       </div>
