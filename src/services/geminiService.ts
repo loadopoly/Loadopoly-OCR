@@ -4,8 +4,18 @@ import { GISMetadata, GraphData, TokenizationData, AssetStatus, ScanType, Taxono
 // Using Gemini 2.5 Flash as requested for optimized speed and efficient extraction
 const GEMINI_MODEL = "gemini-2.5-flash";
 
-// Helper to obtain API Key exclusively from process.env.API_KEY as per guidelines
+// Helper to obtain API Key from environment variables
 const getApiKey = (): string => {
+  // Vite environment variables (prefixed with VITE_)
+  // @ts-ignore - Vite's import.meta.env
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    // @ts-ignore
+    if (import.meta.env.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
+    // @ts-ignore
+    if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
+  }
+  
+  // Node.js environment variables
   if (typeof process !== 'undefined' && process.env && process.env.API_KEY) {
     return process.env.API_KEY;
   }
@@ -314,13 +324,15 @@ export const processImageWithGemini = async (
   try {
     const response = await getAiClient().models.generateContent({
       model: GEMINI_MODEL,
-      contents: {
-        role: 'user',
-        parts: [
-          imagePart,
-          { text: prompt }
-        ]
-      },
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            imagePart,
+            { text: prompt }
+          ]
+        }
+      ],
       config: {
         responseMimeType: "application/json",
         responseSchema: schema

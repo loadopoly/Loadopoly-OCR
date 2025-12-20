@@ -139,19 +139,16 @@ Upload to store (1280x720 or larger):
 
 ## Version History
 
-### v1.6.2 (Current)
-- Added comprehensive error handling with ErrorBoundary
-- Added toast notification system
-- Added skeleton loading states
-- Added onboarding flow for new users
-- Added keyboard shortcuts
-- Improved accessibility (WCAG 2.1 AA)
-- Added offline/online status indicator
-- Updated build scripts for extension packaging
+### v1.7.1 (Current)
+- Fixed Gemini 2.5 Flash connectivity and API key detection in browser
+- Standardized environment variables for client-side exposure
+- Improved SDK reliability for structured data extraction
 
-### v1.6.1
-- Initial public release
-- AI-powered OCR with Gemini 2.5 Flash
-- Knowledge graph generation
-- GIS metadata enrichment
-- Local-first architecture with optional cloud sync
+### v1.7.0
+- Added client-side AES-GCM encryption for OCR data
+- Added secure account deletion and "Right to be Forgotten"
+- Added encrypted Web3 transaction logging
+- Added automatic local-to-cloud asset synchronization
+
+### v1.6.2
+- Added comprehensive error handling with ErrorBoundary

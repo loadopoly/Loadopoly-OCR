@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [1.7.1] - 2025-12-20
+
+### Fixed
+- **Gemini Engine Connectivity:** Resolved an issue where the Gemini API key was not correctly detected in browser environments by adding support for `VITE_GEMINI_API_KEY`.
+- **SDK Integration:** Fixed a schema mismatch in the `@google/genai` SDK by correctly wrapping the request contents in an array.
+- **Environment Configuration:** Updated `.env.example` and `README.md` with the correct environment variable naming for client-side exposure.
+
+## [1.7.0] - 2025-12-19
+
+### Added
+- **Data Encryption:** Implemented client-side AES-GCM encryption for sensitive OCR text and document descriptions before cloud transmission.
+- **Account Deletion:** Added a secure account deletion flow that removes all user-associated data from Supabase and the authentication system.
+- **Web3 Transaction Logging:** Encrypted recording of on-chain minting events to the user's private cloud profile.
+- **Automatic Cloud Sync:** Local assets are now automatically synchronized to the user's Supabase account upon login.
+
 ## [1.6.2] - 2025-12-19
 
 ### Added
