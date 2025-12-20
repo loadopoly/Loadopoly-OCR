@@ -8,6 +8,82 @@ import type { Database } from '../lib/database.types';
 export { supabase, isSupabaseConfigured, testSupabaseConnection };
 
 /**
+ * Helper to map a Supabase row to a DigitalAsset, handling case inconsistencies.
+ */
+const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> => {
+  const assetId = row.ASSET_ID || row.asset_id || row.id;
+  const docTitle = row.DOCUMENT_TITLE || row.document_title || 'Untitled Document';
+  const dataLicense = row.DATA_LICENSE || row.data_license || 'GEOGRAPH_CORPUS_1.0';
+  
+  // Decrypt sensitive data if it looks encrypted (base64) and userId is provided
+  let ocrText = row.RAW_OCR_TRANSCRIPTION || row.raw_ocr_transcription || '';
+  let description = row.DOCUMENT_DESCRIPTION || row.document_description || '';
+
+  if (userId) {
+    if (ocrText && ocrText.length > 20 && !ocrText.includes(' ')) {
+      try { ocrText = await decryptData(ocrText, userId); } catch (e) {}
+    }
+    if (description && description.length > 20 && !description.includes(' ')) {
+      try { description = await decryptData(description, userId); } catch (e) {}
+    }
+  }
+
+  // Parse JSONB fields
+  const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED || row.entities_extracted) 
+    ? (row.ENTITIES_EXTRACTED || row.entities_extracted) 
+    : (typeof (row.ENTITIES_EXTRACTED || row.entities_extracted) === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED || row.entities_extracted) : []);
+  
+  // Reconstruct Nodes
+  const nodes: GraphNode[] = [
+    { 
+      id: assetId, 
+      label: docTitle, 
+      type: 'DOCUMENT', 
+      relevance: 1.0,
+      license: dataLicense 
+    }
+  ];
+
+  // Reconstruct Links & Entity Nodes
+  const links: GraphLink[] = [];
+  entities.forEach(entity => {
+    const entityId = `ENT_${entity.replace(/\s+/g, '_').toUpperCase()}`;
+    nodes.push({
+      id: entityId,
+      label: entity,
+      type: 'CONCEPT',
+      relevance: 0.8
+    });
+    links.push({
+      source: assetId,
+      target: entityId,
+      relationship: 'CONTAINS'
+    });
+  });
+
+  return {
+    id: assetId,
+    imageUrl: row.original_image_url || row.ORIGINAL_IMAGE_URL || '', 
+    timestamp: row.LOCAL_TIMESTAMP || row.created_at,
+    ocrText: ocrText,
+    status: AssetStatus.MINTED,
+    graphData: { nodes, links },
+    sqlRecord: {
+      ...row,
+      ASSET_ID: assetId,
+      DOCUMENT_TITLE: docTitle,
+      DOCUMENT_DESCRIPTION: description,
+      RAW_OCR_TRANSCRIPTION: ocrText,
+      DATA_LICENSE: dataLicense,
+      ENTITIES_EXTRACTED: entities,
+      KEYWORDS_TAGS: Array.isArray(row.KEYWORDS_TAGS || row.keywords_tags) ? (row.KEYWORDS_TAGS || row.keywords_tags) : [],
+      PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS || row.preservation_events) ? (row.PRESERVATION_EVENTS || row.preservation_events) : [],
+      IS_ENTERPRISE: row.IS_ENTERPRISE || row.is_enterprise || false
+    }
+  };
+};
+
+/**
  * Fetches the entire global corpus and transforms it into DigitalAsset format.
  * Reconstructs the Knowledge Graph from flattened SQL relationships.
  */
@@ -20,68 +96,34 @@ export const fetchGlobalCorpus = async (onlyEnterprise: boolean = false): Promis
     .order('created_at', { ascending: false })
     .limit(2000);
 
+  // Try to filter by IS_ENTERPRISE if requested, but handle cases where column might be missing
   if (onlyEnterprise) {
     query = query.eq('IS_ENTERPRISE', true);
   }
 
-  const { data, error } = await query;
+  let { data, error } = await query;
+
+  // Fallback: If the query failed (likely due to missing IS_ENTERPRISE column), try without the filter
+  if (error && onlyEnterprise) {
+    console.warn("Filtering by IS_ENTERPRISE failed, fetching all assets instead.", error);
+    const fallbackQuery = supabase
+      .from('historical_documents_global')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(2000);
+    const fallbackResult = await fallbackQuery;
+    data = fallbackResult.data;
+    error = fallbackResult.error;
+  }
 
   if (error) {
     console.error("Error fetching global corpus:", error);
     throw error;
   }
 
-  return data.map((row: any) => {
-    // 1. Parse JSONB fields
-    const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED) 
-      ? row.ENTITIES_EXTRACTED 
-      : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
-    
-    // 2. Reconstruct Nodes
-    const nodes: GraphNode[] = [
-      { 
-        id: row.ASSET_ID, 
-        label: row.DOCUMENT_TITLE, 
-        type: 'DOCUMENT', 
-        relevance: 1.0,
-        license: row.DATA_LICENSE 
-      }
-    ];
+  if (!data) return [];
 
-    // 3. Reconstruct Links & Entity Nodes
-    const links: GraphLink[] = [];
-    entities.forEach(entity => {
-      const entityId = `ENT_${entity.replace(/\s+/g, '_').toUpperCase()}`;
-      nodes.push({
-        id: entityId,
-        label: entity,
-        type: 'CONCEPT',
-        relevance: 0.8
-      });
-      links.push({
-        source: row.ASSET_ID,
-        target: entityId,
-        relationship: 'CONTAINS'
-      });
-    });
-
-    // 4. Return complete DigitalAsset
-    return {
-      id: row.ASSET_ID,
-      imageUrl: row.original_image_url || '', 
-      timestamp: row.LOCAL_TIMESTAMP,
-      ocrText: row.RAW_OCR_TRANSCRIPTION,
-      status: AssetStatus.MINTED,
-      graphData: { nodes, links },
-      sqlRecord: {
-        ...row,
-        ENTITIES_EXTRACTED: entities,
-        KEYWORDS_TAGS: Array.isArray(row.KEYWORDS_TAGS) ? row.KEYWORDS_TAGS : [],
-        PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS) ? row.PRESERVATION_EVENTS : [],
-        IS_ENTERPRISE: row.IS_ENTERPRISE || false
-      }
-    };
-  });
+  return Promise.all(data.map(row => mapRowToAsset(row)));
 };
 
 /**
@@ -101,72 +143,8 @@ export const fetchUserAssets = async (userId: string): Promise<DigitalAsset[]> =
     throw error;
   }
 
-  const assets = await Promise.all(data.map(async (row: any) => {
-    // Decrypt sensitive data if it looks encrypted (base64)
-    let ocrText = row.RAW_OCR_TRANSCRIPTION;
-    let description = row.DOCUMENT_DESCRIPTION;
-
-    if (ocrText && ocrText.length > 20 && !ocrText.includes(' ')) {
-      ocrText = await decryptData(ocrText, userId);
-    }
-    if (description && description.length > 20 && !description.includes(' ')) {
-      description = await decryptData(description, userId);
-    }
-
-    // Parse JSONB fields
-    const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED) 
-      ? row.ENTITIES_EXTRACTED 
-      : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
-    
-    // Reconstruct Nodes
-    const nodes: GraphNode[] = [
-      { 
-        id: row.ASSET_ID, 
-        label: row.DOCUMENT_TITLE, 
-        type: 'DOCUMENT', 
-        relevance: 1.0,
-        license: row.DATA_LICENSE 
-      }
-    ];
-
-    // Reconstruct Links & Entity Nodes
-    const links: GraphLink[] = [];
-    entities.forEach(entity => {
-      const entityId = `ENT_${entity.replace(/\s+/g, '_').toUpperCase()}`;
-      nodes.push({
-        id: entityId,
-        label: entity,
-        type: 'CONCEPT',
-        relevance: 0.8
-      });
-      links.push({
-        source: row.ASSET_ID,
-        target: entityId,
-        relationship: 'CONTAINS'
-      });
-    });
-
-    // Return complete DigitalAsset
-    return {
-      id: row.ASSET_ID,
-      imageUrl: row.original_image_url || '', 
-      timestamp: row.LOCAL_TIMESTAMP,
-      ocrText: ocrText,
-      status: AssetStatus.MINTED,
-      graphData: { nodes, links },
-      sqlRecord: {
-        ...row,
-        RAW_OCR_TRANSCRIPTION: ocrText,
-        DOCUMENT_DESCRIPTION: description,
-        ENTITIES_EXTRACTED: entities,
-        KEYWORDS_TAGS: Array.isArray(row.KEYWORDS_TAGS) ? row.KEYWORDS_TAGS : [],
-        PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS) ? row.PRESERVATION_EVENTS : [],
-        IS_ENTERPRISE: row.IS_ENTERPRISE || false
-      }
-    };
-  }));
-
-  return assets;
+  if (!data) return [];
+  return Promise.all(data.map(row => mapRowToAsset(row, userId)));
 };
 
 /**
@@ -232,6 +210,9 @@ export const contributeAssetToGlobalCorpus = async (
       .from('historical_documents_global')
       .upsert({
         ...sqlRecord,
+        asset_id: sqlRecord.ASSET_ID, // Ensure lowercase version is also set
+        document_title: sqlRecord.DOCUMENT_TITLE,
+        raw_ocr_transcription: sqlRecord.RAW_OCR_TRANSCRIPTION,
         CONTRIBUTOR_ID: finalContributorId,
         CONTRIBUTED_AT: new Date().toISOString(),
         DATA_LICENSE: licenseType,
