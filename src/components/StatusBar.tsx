@@ -1,15 +1,17 @@
 import React from 'react';
-import { Cloud, CloudOff, Database, User, Shield, Wifi, WifiOff } from 'lucide-react';
+import { Cloud, CloudOff, Database, User, Shield, Wifi, WifiOff, Globe, Lock } from 'lucide-react';
 
 interface StatusBarProps {
     user: any;
     syncOn: boolean;
     isOnline: boolean;
     localCount: number;
+    isGlobalView: boolean;
+    setIsGlobalView: (val: boolean) => void;
     onTabChange: (tab: string) => void;
 }
 
-export default function StatusBar({ user, syncOn, isOnline, localCount, onTabChange }: StatusBarProps) {
+export default function StatusBar({ user, syncOn, isOnline, localCount, isGlobalView, setIsGlobalView, onTabChange }: StatusBarProps) {
     return (
         <div className="fixed bottom-0 left-0 right-0 bg-slate-950/80 backdrop-blur-md border-t border-slate-800 px-4 py-1.5 flex items-center justify-between z-50 text-[10px] font-medium text-slate-500">
             <div className="flex items-center gap-4">
@@ -30,6 +32,25 @@ export default function StatusBar({ user, syncOn, isOnline, localCount, onTabCha
                 <div className="flex items-center gap-1.5">
                     <Database size={12} />
                     <span>{localCount} <span className="hidden sm:inline">Local Assets</span></span>
+                </div>
+
+                <div className="h-3 w-px bg-slate-800 hidden sm:block" />
+
+                <div className="flex items-center bg-slate-900 rounded-full p-0.5 border border-slate-800">
+                    <button 
+                        onClick={() => setIsGlobalView(false)}
+                        className={`px-2 py-0.5 rounded-full transition-all flex items-center gap-1 ${!isGlobalView ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        <Lock size={10} />
+                        <span>LOCAL</span>
+                    </button>
+                    <button 
+                        onClick={() => setIsGlobalView(true)}
+                        className={`px-2 py-0.5 rounded-full transition-all flex items-center gap-1 ${isGlobalView ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        <Globe size={10} />
+                        <span>MASTER</span>
+                    </button>
                 </div>
             </div>
 
