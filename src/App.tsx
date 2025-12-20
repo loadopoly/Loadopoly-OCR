@@ -406,9 +406,9 @@ export default function App() {
 
         // Auto-store to Supabase if user is authenticated
         if (user?.id) {
-          const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+          const license: 'GEOGRAPH_CORPUS_1.0' | 'CC0' = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
           try {
-            const syncResult = await contributeAssetToGlobalCorpus(resultAsset, user.id, license as any, true);
+            const syncResult = await contributeAssetToGlobalCorpus(resultAsset, user.id, license, true);
             if (syncResult.success && syncResult.publicUrl) {
               // Update local state and IndexedDB with the permanent cloud URL
               const updatedAsset: DigitalAsset = { ...resultAsset, imageUrl: syncResult.publicUrl };
