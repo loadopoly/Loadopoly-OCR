@@ -216,22 +216,6 @@ export default function App() {
       } else {
         // Unauthenticated: load from IndexedDB only
         loadAssets().then(setLocalAssets);
-        
-        // Clear session data when page unloads for unauthenticated users
-        const handleUnload = () => {
-          // Mark for cleanup on next load if still unauthenticated
-          sessionStorage.setItem('geograph-cleanup-needed', 'true');
-        };
-        window.addEventListener('beforeunload', handleUnload);
-        
-        // Cleanup from previous session if needed
-        if (sessionStorage.getItem('geograph-cleanup-needed') === 'true') {
-          import('./lib/indexeddb').then(({ clearAllAssets }) => {
-            clearAllAssets().then(() => {
-              sessionStorage.removeItem('geograph-cleanup-needed');
-            });
-          });
-        }
       }
     });
 
@@ -358,7 +342,7 @@ export default function App() {
       };
   };
 
-  const processAssetPipeline = async (asset: DigitalAsset, file: File) => {
+  const processAssetPipeline = async (asset: DigitalAsset, file: File): Promise<DigitalAsset> => {
       let location: {lat: number, lng: number} | null = null;
       if (navigator.geolocation) {
         try {
@@ -368,69 +352,104 @@ export default function App() {
       }
 
       const scanType = (asset.sqlRecord?.scan_type as ScanType) || ScanType.DOCUMENT;
-      const analysis = await processImageWithGemini(file, location, scanType);
       
-      const updatedSqlRecord: HistoricalDocumentMetadata = {
-            ...asset.sqlRecord!,
-            OCR_DERIVED_TIMESTAMP: analysis.ocrDerivedTimestamp,
-            NLP_DERIVED_TIMESTAMP: analysis.nlpDerivedTimestamp,
-            LOCAL_GIS_ZONE: analysis.gisMetadata?.zoneType || "Unknown",
-            OCR_DERIVED_GIS_ZONE: analysis.ocrDerivedGisZone,
-            NLP_DERIVED_GIS_ZONE: analysis.nlpDerivedGisZone,
-            NODE_COUNT: analysis.graphData?.nodes?.length || 0,
-            NLP_NODE_CATEGORIZATION: analysis.nlpNodeCategorization,
-            RAW_OCR_TRANSCRIPTION: analysis.ocrText,
-            PREPROCESS_OCR_TRANSCRIPTION: analysis.preprocessOcrTranscription,
-            DOCUMENT_TITLE: analysis.documentTitle,
-            DOCUMENT_DESCRIPTION: analysis.documentDescription,
-            SOURCE_COLLECTION: analysis.suggestedCollection || asset.sqlRecord!.SOURCE_COLLECTION || "Unsorted",
-            CREATOR_AGENT: analysis.creatorAgent,
-            RIGHTS_STATEMENT: analysis.rightsStatement,
-            LANGUAGE_CODE: analysis.languageCode,
+      try {
+        const analysis = await processImageWithGemini(file, location, scanType);
+        
+        const updatedSqlRecord: HistoricalDocumentMetadata = {
+              ...asset.sqlRecord!,
+              OCR_DERIVED_TIMESTAMP: analysis.ocrDerivedTimestamp,
+              NLP_DERIVED_TIMESTAMP: analysis.nlpDerivedTimestamp,
+              LOCAL_GIS_ZONE: analysis.gisMetadata?.zoneType || "Unknown",
+              OCR_DERIVED_GIS_ZONE: analysis.ocrDerivedGisZone,
+              NLP_DERIVED_GIS_ZONE: analysis.nlpDerivedGisZone,
+              NODE_COUNT: analysis.graphData?.nodes?.length || 0,
+              NLP_NODE_CATEGORIZATION: analysis.nlpNodeCategorization,
+              RAW_OCR_TRANSCRIPTION: analysis.ocrText,
+              PREPROCESS_OCR_TRANSCRIPTION: analysis.preprocessOcrTranscription,
+              DOCUMENT_TITLE: analysis.documentTitle,
+              DOCUMENT_DESCRIPTION: analysis.documentDescription,
+              SOURCE_COLLECTION: analysis.suggestedCollection || asset.sqlRecord!.SOURCE_COLLECTION || "Unsorted",
+              CREATOR_AGENT: analysis.creatorAgent,
+              RIGHTS_STATEMENT: analysis.rightsStatement,
+              LANGUAGE_CODE: analysis.languageCode,
+              LAST_MODIFIED: new Date().toISOString(),
+              PROCESSING_STATUS: AssetStatus.MINTED,
+              CONFIDENCE_SCORE: analysis.confidenceScore,
+              ENTITIES_EXTRACTED: analysis.graphData?.nodes ? analysis.graphData.nodes.map(n => n.label) : [],
+              KEYWORDS_TAGS: analysis.keywordsTags || [],
+              ACCESS_RESTRICTIONS: analysis.accessRestrictions,
+              TAXONOMY: analysis.taxonomy,
+              ITEM_ATTRIBUTES: analysis.itemAttributes,
+              SCENERY_ATTRIBUTES: analysis.sceneryAttributes,
+              alt_text_short: analysis.alt_text_short,
+              alt_text_long: analysis.alt_text_long,
+              reading_order: analysis.reading_order,
+              accessibility_score: analysis.accessibility_score,
+              PRESERVATION_EVENTS: [
+                ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
+                { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }
+              ]
+        };
+
+        const resultAsset: DigitalAsset = {
+              ...asset,
+              status: AssetStatus.MINTED,
+              ocrText: analysis.ocrText,
+              gisMetadata: analysis.gisMetadata,
+              graphData: analysis.graphData,
+              tokenization: analysis.tokenization,
+              processingAnalysis: analysis.analysis,
+              location: location ? { latitude: location.lat, longitude: location.lng, accuracy: 1 } : undefined,
+              sqlRecord: updatedSqlRecord
+        };
+
+        // Auto-store to Supabase if user is authenticated
+        if (user?.id) {
+          const license: 'GEOGRAPH_CORPUS_1.0' | 'CC0' = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+          try {
+            const syncResult = await contributeAssetToGlobalCorpus(resultAsset, user.id, license, true);
+            if (syncResult.success && syncResult.publicUrl) {
+              // Update local state and IndexedDB with the permanent cloud URL
+              const updatedAsset: DigitalAsset = { ...resultAsset, imageUrl: syncResult.publicUrl };
+              setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
+              // Save to IndexedDB after successful Supabase sync
+              await saveAsset(updatedAsset);
+              return updatedAsset;
+            }
+          } catch (err) {
+            console.error("Auto-sync to Supabase failed", err);
+          }
+          // Save to IndexedDB even if Supabase sync fails for authenticated users
+          await saveAsset(resultAsset);
+        } else {
+          // Save to IndexedDB for unauthenticated users
+          await saveAsset(resultAsset);
+        }
+
+        return resultAsset;
+      } catch (error) {
+        console.error("processAssetPipeline error:", error);
+        // Update asset to FAILED status
+        const errorAsset: DigitalAsset = {
+          ...asset,
+          status: AssetStatus.FAILED,
+          errorMessage: error instanceof Error ? error.message : 'Unknown error',
+          sqlRecord: asset.sqlRecord ? {
+            ...asset.sqlRecord,
+            PROCESSING_STATUS: AssetStatus.FAILED,
+            DOCUMENT_DESCRIPTION: `Processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
             LAST_MODIFIED: new Date().toISOString(),
-            PROCESSING_STATUS: AssetStatus.MINTED,
-            CONFIDENCE_SCORE: analysis.confidenceScore,
-            ENTITIES_EXTRACTED: analysis.graphData?.nodes ? analysis.graphData.nodes.map(n => n.label) : [],
-            KEYWORDS_TAGS: analysis.keywordsTags || [],
-            ACCESS_RESTRICTIONS: analysis.accessRestrictions,
-            TAXONOMY: analysis.taxonomy,
-            ITEM_ATTRIBUTES: analysis.itemAttributes,
-            SCENERY_ATTRIBUTES: analysis.sceneryAttributes,
-            alt_text_short: analysis.alt_text_short,
-            alt_text_long: analysis.alt_text_long,
-            reading_order: analysis.reading_order,
-            accessibility_score: analysis.accessibility_score,
             PRESERVATION_EVENTS: [
               ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
-              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }
+              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "FAILURE" }
             ]
-      };
-
-      const resultAsset = {
-            ...asset,
-            status: AssetStatus.MINTED,
-            ocrText: analysis.ocrText,
-            gisMetadata: analysis.gisMetadata,
-            graphData: analysis.graphData,
-            tokenization: analysis.tokenization,
-            processingAnalysis: analysis.analysis,
-            location: location ? { latitude: location.lat, longitude: location.lng, accuracy: 1 } : undefined,
-            sqlRecord: updatedSqlRecord
-      };
-
-      // Auto-store to Supabase if user is authenticated
-      if (user?.id) {
-        const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-        contributeAssetToGlobalCorpus(resultAsset, user.id, license as any, true).then(syncResult => {
-          if (syncResult.success && syncResult.publicUrl) {
-            // Update local state with the permanent cloud URL
-            const updatedAsset = { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl };
-            setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
-          }
-        }).catch(err => console.error("Auto-sync to Supabase failed", err));
+          } : undefined
+        };
+        // Save error state to IndexedDB
+        await saveAsset(errorAsset);
+        throw error;
       }
-
-      return resultAsset;
   };
 
   const ingestFile = async (file: File, source: string = "Upload") => {
@@ -439,15 +458,32 @@ export default function App() {
       const newAsset = await createInitialAsset(file);
       if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = source;
       setLocalAssets(prev => [newAsset, ...prev]);
-      // Only save to IndexedDB for unauthenticated users
-      if (!user) await saveAsset(newAsset);
+      // Always save to IndexedDB as local-first persistence buffer
+      await saveAsset(newAsset);
       if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
-      const processedAsset = await processAssetPipeline(newAsset, file);
-      setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-      // Only save to IndexedDB for unauthenticated users (authenticated users save to Supabase automatically)
-      if (!user) await saveAsset(processedAsset);
+      
+      try {
+        const processedAsset = await processAssetPipeline(newAsset, file);
+        setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+        // Always save processed asset to IndexedDB
+        await saveAsset(processedAsset);
+      } catch (processingError) {
+        console.error("Error processing file:", processingError);
+        // Update asset status to FAILED if processing failed
+        const errorAsset = {
+          ...newAsset,
+          status: AssetStatus.FAILED,
+          sqlRecord: newAsset.sqlRecord ? {
+            ...newAsset.sqlRecord,
+            PROCESSING_STATUS: AssetStatus.FAILED,
+            DOCUMENT_DESCRIPTION: `Processing failed: ${processingError instanceof Error ? processingError.message : 'Unknown error'}`
+          } : undefined
+        };
+        setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? errorAsset : a));
+        await saveAsset(errorAsset);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Error creating asset:", err);
     } finally {
       setIsProcessing(false);
     }
@@ -477,15 +513,36 @@ export default function App() {
                 if (itemToProcess.scanType) (itemToProcess.file as any).scanType = itemToProcess.scanType;
                 const newAsset = await createInitialAsset(itemToProcess.file);
                 setLocalAssets(prev => [newAsset, ...prev]);
-                // Only save to IndexedDB for unauthenticated users
-                if (!user) await saveAsset(newAsset);
-                const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
-                setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-                // Only save to IndexedDB for unauthenticated users (authenticated users save to Supabase automatically)
-                if (!user) await saveAsset(processedAsset);
-                setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
-             } catch (e: any) {
-                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Failed" } : i));
+                // Always save to IndexedDB as local-first persistence buffer
+                await saveAsset(newAsset);
+                
+                try {
+                  const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
+                  setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+                  // Always save processed asset to IndexedDB
+                  await saveAsset(processedAsset);
+                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+                } catch (processingError) {
+                  console.error("Batch item processing failed:", processingError);
+                  const errorMsg = processingError instanceof Error ? processingError.message : 'Unknown error';
+                  // Update asset status to FAILED if processing failed
+                  const errorAsset = {
+                    ...newAsset,
+                    status: AssetStatus.FAILED,
+                    sqlRecord: newAsset.sqlRecord ? {
+                      ...newAsset.sqlRecord,
+                      PROCESSING_STATUS: AssetStatus.FAILED,
+                      DOCUMENT_DESCRIPTION: `Processing failed: ${errorMsg}`
+                    } : undefined
+                  };
+                  setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? errorAsset : a));
+                  await saveAsset(errorAsset);
+                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg } : i));
+                }
+             } catch (e) {
+                 console.error("Batch item creation failed:", e);
+                 const errorMsg = e instanceof Error ? e.message : 'Failed';
+                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg } : i));
              } finally {
                  processNextBatchItem();
              }
