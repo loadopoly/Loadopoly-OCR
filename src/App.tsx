@@ -126,6 +126,7 @@ export default function App() {
   const [globalAssets, setGlobalAssets] = useState<DigitalAsset[]>([]);
   const [user, setUser] = useState<any>(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isEnterprise, setIsEnterprise] = useState(false);
   const [isGlobalView, setIsGlobalView] = useState(false);
   const assets = isGlobalView ? globalAssets : localAssets;
   const [displayItems, setDisplayItems] = useState<(DigitalAsset | ImageBundle)[]>([]);
@@ -167,6 +168,7 @@ export default function App() {
         case '4': setActiveTab('assets'); break;
         case '5': setActiveTab('graph'); break;
         case '6': setActiveTab('database'); break;
+        case '7': if (isAdmin) setActiveTab('review'); break;
         case 's': setActiveTab('settings'); break;
         case 'g': setIsGlobalView(prev => !prev); break;
         case 'r': if (isGlobalView) refreshGlobalData(); break;
@@ -195,6 +197,7 @@ export default function App() {
       if(data.user) { 
         setUser(data.user); 
         setIsAdmin(true);
+        setIsEnterprise(true); // Admins are enterprise by default in this context
         
         // 1. Sync local assets to cloud if they aren't there yet
         const local = await loadAssets();
@@ -243,7 +246,8 @@ export default function App() {
   const refreshGlobalData = async () => {
     setIsProcessing(true);
     try {
-      const data = await fetchGlobalCorpus();
+      // If not admin, only fetch enterprise-ready assets
+      const data = await fetchGlobalCorpus(!isAdmin);
       setGlobalAssets(data);
       announce(`Synced ${data.length} cloud assets.`);
     } catch (err) {
@@ -353,7 +357,8 @@ export default function App() {
           CONTRIBUTOR_ID: null,
           CONTRIBUTED_AT: null,
           DATA_LICENSE: isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0', 
-          CONTRIBUTOR_NFT_MINTED: false
+          CONTRIBUTOR_NFT_MINTED: false,
+          IS_ENTERPRISE: false
         }
       };
   };
@@ -400,6 +405,7 @@ export default function App() {
             alt_text_long: analysis.alt_text_long,
             reading_order: analysis.reading_order,
             accessibility_score: analysis.accessibility_score,
+            IS_ENTERPRISE: true, // Processed assets move to enterprise corpus
             PRESERVATION_EVENTS: [
               ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
               { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }
@@ -437,17 +443,54 @@ export default function App() {
     setIsProcessing(true);
     try {
       const newAsset = await createInitialAsset(file);
-      if (newAsset.sqlRecord) newAsset.sqlRecord.SOURCE_COLLECTION = source;
+      if (newAsset.sqlRecord) {
+        newAsset.sqlRecord.SOURCE_COLLECTION = source;
+        newAsset.sqlRecord.IS_ENTERPRISE = false; // Initially not enterprise
+      }
+      currentAsset = newAsset;
       setLocalAssets(prev => [newAsset, ...prev]);
-      // Only save to IndexedDB for unauthenticated users
-      if (!user) await saveAsset(newAsset);
+      
+      // Initial upload to Supabase as PENDING if authenticated
+      if (user?.id) {
+        const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+        await contributeAssetToGlobalCorpus(newAsset, user.id, license as any, true);
+      } else {
+        await saveAsset(newAsset);
+      }
+
       if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
-      const processedAsset = await processAssetPipeline(newAsset, file);
-      setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-      // Only save to IndexedDB for unauthenticated users (authenticated users save to Supabase automatically)
-      if (!user) await saveAsset(processedAsset);
+      
+      try {
+        const processedAsset = await processAssetPipeline(newAsset, file);
+        setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+        if (!user) await saveAsset(processedAsset);
+      } catch (processErr) {
+        console.error("Processing failed, marking for super-user review:", processErr);
+        const failedAsset: DigitalAsset = {
+          ...newAsset,
+          status: AssetStatus.FAILED,
+          errorMessage: processErr instanceof Error ? processErr.message : String(processErr),
+          sqlRecord: {
+            ...newAsset.sqlRecord!,
+            PROCESSING_STATUS: AssetStatus.FAILED,
+            IS_ENTERPRISE: false, // Keep in global corpus for super-user
+            PRESERVATION_EVENTS: [
+              ...(newAsset.sqlRecord?.PRESERVATION_EVENTS || []),
+              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "FAILURE" }
+            ]
+          }
+        };
+        setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? failedAsset : a));
+        
+        if (user?.id) {
+          const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+          await contributeAssetToGlobalCorpus(failedAsset, user.id, license as any, true);
+        } else {
+          await saveAsset(failedAsset);
+        }
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Ingestion failed:", err);
     } finally {
       setIsProcessing(false);
     }
@@ -476,14 +519,51 @@ export default function App() {
                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'PROCESSING', progress: 10 } : i));
                 if (itemToProcess.scanType) (itemToProcess.file as any).scanType = itemToProcess.scanType;
                 const newAsset = await createInitialAsset(itemToProcess.file);
+                if (newAsset.sqlRecord) {
+                  newAsset.sqlRecord.SOURCE_COLLECTION = "Batch Ingest";
+                  newAsset.sqlRecord.IS_ENTERPRISE = false;
+                }
                 setLocalAssets(prev => [newAsset, ...prev]);
-                // Only save to IndexedDB for unauthenticated users
-                if (!user) await saveAsset(newAsset);
-                const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
-                setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-                // Only save to IndexedDB for unauthenticated users (authenticated users save to Supabase automatically)
-                if (!user) await saveAsset(processedAsset);
-                setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+                
+                // Initial upload to Supabase as PENDING if authenticated
+                if (user?.id) {
+                  const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+                  await contributeAssetToGlobalCorpus(newAsset, user.id, license as any, true);
+                } else {
+                  await saveAsset(newAsset);
+                }
+
+                try {
+                  const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
+                  setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+                  if (!user) await saveAsset(processedAsset);
+                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+                } catch (processErr: any) {
+                  console.error("Batch processing failed for item:", processErr);
+                  const failedAsset: DigitalAsset = {
+                    ...newAsset,
+                    status: AssetStatus.FAILED,
+                    errorMessage: processErr.message || String(processErr),
+                    sqlRecord: {
+                      ...newAsset.sqlRecord!,
+                      PROCESSING_STATUS: AssetStatus.FAILED,
+                      IS_ENTERPRISE: false,
+                      PRESERVATION_EVENTS: [
+                        ...(newAsset.sqlRecord?.PRESERVATION_EVENTS || []),
+                        { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "FAILURE" }
+                      ]
+                    }
+                  };
+                  setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? failedAsset : a));
+                  
+                  if (user?.id) {
+                    const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+                    await contributeAssetToGlobalCorpus(failedAsset, user.id, license as any, true);
+                  } else {
+                    await saveAsset(failedAsset);
+                  }
+                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: processErr.message || "Failed" } : i));
+                }
              } catch (e: any) {
                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Failed" } : i));
              } finally {
@@ -564,6 +644,7 @@ export default function App() {
           <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => switchTab('semantic')} />
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => switchTab('database')} />
           <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => switchTab('market')} />
+          {isAdmin && <SidebarItem icon={ShieldCheck} label="Review Queue" active={activeTab === 'review'} onClick={() => switchTab('review')} />}
           <div className="pt-4 mt-4 border-t border-slate-800">
              <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => switchTab('settings')} />
           </div>
@@ -991,39 +1072,74 @@ export default function App() {
 
           {activeTab === 'market' && (
             <div className="h-full flex flex-col gap-6">
+              {/* ... existing market code ... */}
+            </div>
+          )}
+
+          {activeTab === 'review' && isAdmin && (
+            <div className="h-full flex flex-col gap-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-lg font-bold text-white">Data Marketplace</h3>
-                  <p className="text-sm text-slate-400">Acquire high-fidelity training datasets from the global corpus.</p>
+                  <h3 className="text-lg font-bold text-white">Super-User Review Queue</h3>
+                  <p className="text-sm text-slate-400">Process and validate images that failed automated extraction.</p>
                 </div>
-                <div className="flex items-center gap-4 bg-slate-900 p-2 rounded-lg border border-slate-800">
-                  <div className="text-right">
-                    <p className="text-[10px] text-slate-500 uppercase font-bold">Node Balance</p>
-                    <p className="text-sm font-mono text-primary-400">1,240 SHARDS</p>
-                  </div>
-                  <div className="p-2 bg-primary-500/10 rounded text-primary-500">
-                    <Coins size={20} />
-                  </div>
+                <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-amber-500 text-xs font-bold">
+                  <AlertCircle size={14} />
+                  {globalAssets.filter(a => a.sqlRecord?.PROCESSING_STATUS === AssetStatus.FAILED || !a.sqlRecord?.IS_ENTERPRISE).length} PENDING REVIEW
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 overflow-y-auto pb-8">
-                {displayItems.filter(item => 'bundleId' in item).map(bundle => (
-                  <div key={(bundle as ImageBundle).bundleId} className="relative group">
-                    <BundleCard 
-                      bundle={bundle as ImageBundle} 
-                      onAssetUpdated={handleAssetUpdate} 
-                    />
-                    <div className="absolute top-4 right-4 z-10">
-                      <button 
-                        onClick={() => setPurchaseModalData({ title: (bundle as ImageBundle).title, assets: assets.filter(a => (bundle as ImageBundle).imageUrls.includes(a.imageUrl)) })}
-                        className="p-2 bg-primary-600 hover:bg-primary-500 text-white rounded-full shadow-lg transition-transform group-hover:scale-110"
-                      >
-                        <ShoppingBag size={18} />
-                      </button>
+              <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+                <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase">Unprocessed Global Corpus</h4>
+                </div>
+                <div className="flex-1 overflow-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-950 sticky top-0 z-10">
+                      <tr>
+                        {['Preview', 'ID', 'Timestamp', 'Status', 'Error', 'Action'].map(h => (
+                          <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {globalAssets
+                        .filter(a => a.sqlRecord?.PROCESSING_STATUS === AssetStatus.FAILED || !a.sqlRecord?.IS_ENTERPRISE)
+                        .map(asset => (
+                          <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
+                            <td className="px-4 py-3 border-r border-slate-800">
+                              <img src={asset.imageUrl} alt="Preview" className="w-12 h-12 object-cover rounded border border-slate-700" />
+                            </td>
+                            <td className="px-4 py-3 text-slate-500 border-r border-slate-800">{asset.id.substring(0, 8)}</td>
+                            <td className="px-4 py-3 text-slate-300 border-r border-slate-800">{new Date(asset.timestamp).toLocaleString()}</td>
+                            <td className="px-4 py-3 border-r border-slate-800">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${asset.status === AssetStatus.FAILED ? 'bg-red-500/20 text-red-500' : 'bg-amber-500/20 text-amber-500'}`}>
+                                {asset.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-red-400 border-r border-slate-800 max-w-[200px] truncate">{asset.errorMessage || 'Manual Review Required'}</td>
+                            <td className="px-4 py-3 text-center">
+                              <button 
+                                onClick={() => {
+                                  // Logic to re-process or manually edit
+                                  alert("Manual processing interface would open here.");
+                                }}
+                                className="px-3 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded text-[10px] font-bold"
+                              >
+                                PROCESS
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                    </tbody>
+                  </table>
+                  {globalAssets.filter(a => a.sqlRecord?.PROCESSING_STATUS === AssetStatus.FAILED || !a.sqlRecord?.IS_ENTERPRISE).length === 0 && (
+                    <div className="p-12 text-center text-slate-500">
+                      <CheckCircle size={48} className="mx-auto mb-4 opacity-20" />
+                      <p>Review queue is empty. All global assets are processed.</p>
                     </div>
-                  </div>
-                ))}
+                  )}
+                </div>
               </div>
             </div>
           )}

@@ -172,6 +172,7 @@ export interface HistoricalDocumentMetadata {
   CONTRIBUTED_AT: string | null;
   DATA_LICENSE: 'CC0' | 'GEOGRAPH_CORPUS_1.0' | 'CUSTOM';
   CONTRIBUTOR_NFT_MINTED: boolean;
+  IS_ENTERPRISE?: boolean; // Flag for enterprise-only corpus
   user_id?: string | null; // Supabase auth user ID
   original_image_url?: string | null; // Public URL from Supabase Storage
 }

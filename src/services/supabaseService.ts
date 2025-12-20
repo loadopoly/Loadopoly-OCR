@@ -11,14 +11,20 @@ export { supabase, isSupabaseConfigured, testSupabaseConnection };
  * Fetches the entire global corpus and transforms it into DigitalAsset format.
  * Reconstructs the Knowledge Graph from flattened SQL relationships.
  */
-export const fetchGlobalCorpus = async (): Promise<DigitalAsset[]> => {
+export const fetchGlobalCorpus = async (onlyEnterprise: boolean = false): Promise<DigitalAsset[]> => {
   if (!supabase) return [];
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('historical_documents_global')
     .select('*')
     .order('created_at', { ascending: false })
     .limit(2000);
+
+  if (onlyEnterprise) {
+    query = query.eq('IS_ENTERPRISE', true);
+  }
+
+  const { data, error } = await query;
 
   if (error) {
     console.error("Error fetching global corpus:", error);
@@ -71,7 +77,8 @@ export const fetchGlobalCorpus = async (): Promise<DigitalAsset[]> => {
         ...row,
         ENTITIES_EXTRACTED: entities,
         KEYWORDS_TAGS: Array.isArray(row.KEYWORDS_TAGS) ? row.KEYWORDS_TAGS : [],
-        PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS) ? row.PRESERVATION_EVENTS : []
+        PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS) ? row.PRESERVATION_EVENTS : [],
+        IS_ENTERPRISE: row.IS_ENTERPRISE || false
       }
     };
   });
@@ -153,7 +160,8 @@ export const fetchUserAssets = async (userId: string): Promise<DigitalAsset[]> =
         DOCUMENT_DESCRIPTION: description,
         ENTITIES_EXTRACTED: entities,
         KEYWORDS_TAGS: Array.isArray(row.KEYWORDS_TAGS) ? row.KEYWORDS_TAGS : [],
-        PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS) ? row.PRESERVATION_EVENTS : []
+        PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS) ? row.PRESERVATION_EVENTS : [],
+        IS_ENTERPRISE: row.IS_ENTERPRISE || false
       }
     };
   }));
@@ -228,7 +236,8 @@ export const contributeAssetToGlobalCorpus = async (
         CONTRIBUTED_AT: new Date().toISOString(),
         DATA_LICENSE: licenseType,
         original_image_url: publicUrl,
-        user_id: userId || null
+        user_id: userId || null,
+        IS_ENTERPRISE: sqlRecord.IS_ENTERPRISE || false
       } as any);
 
     if (error) throw error;
