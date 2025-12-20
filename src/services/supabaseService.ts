@@ -223,9 +223,7 @@ export const contributeAssetToGlobalCorpus = async (
     }
 
     // Determine if this should go to anonymous corpus (use asset.status as single source of truth)
-    const isFailed = asset.status === AssetStatus.FAILED;
-    const isAnonymousCorpus = isFailed;
-    const requiresSuperuserReview = isFailed;
+    const processingFailed = asset.status === AssetStatus.FAILED;
 
     const { error } = await supabase
       .from('historical_documents_global')
@@ -237,9 +235,9 @@ export const contributeAssetToGlobalCorpus = async (
         original_image_url: publicUrl,
         user_id: userId || null,
         PROCESSING_ERROR_MESSAGE: errorMessage || null,
-        REQUIRES_SUPERUSER_REVIEW: requiresSuperuserReview,
-        IS_ANONYMOUS_CORPUS: isAnonymousCorpus,
-        ENTERPRISE_ONLY: isAnonymousCorpus // Anonymous corpus is enterprise-only
+        REQUIRES_SUPERUSER_REVIEW: processingFailed,
+        IS_ANONYMOUS_CORPUS: processingFailed,
+        ENTERPRISE_ONLY: processingFailed // Anonymous corpus is enterprise-only
       } as any);
 
     if (error) throw error;
@@ -373,6 +371,7 @@ export const updateAssetAfterReview = async (
       .from('historical_documents_global')
       .update({
         ...updates,
+        // PROCESSING_STATUS matches the database column (see DATABASE_SETUP.md line 48)
         PROCESSING_STATUS: newStatus,
         REQUIRES_SUPERUSER_REVIEW: newStatus === AssetStatus.FAILED,
         IS_ANONYMOUS_CORPUS: newStatus === AssetStatus.FAILED,

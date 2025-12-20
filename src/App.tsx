@@ -201,7 +201,15 @@ export default function App() {
         for (const asset of local) {
           if (asset.status === AssetStatus.MINTED && !asset.sqlRecord?.user_id) {
             try {
-              await contributeAssetToGlobalCorpus(asset, data.user.id, 'GEOGRAPH_CORPUS_1.0', true, false, undefined);
+              // Sync locally processed assets to cloud (successful processing, no failure)
+              await contributeAssetToGlobalCorpus(
+                asset, 
+                data.user.id, 
+                'GEOGRAPH_CORPUS_1.0', 
+                /* isAutoSave */ true, 
+                /* processingFailed */ false, 
+                /* errorMessage */ undefined
+              );
             } catch (e) {
               console.error("Failed to sync local asset to cloud:", e);
             }
@@ -273,9 +281,16 @@ export default function App() {
         setLocalAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
         if (user?.id) {
           // Authenticated users: update in Supabase
-          const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-          contributeAssetToGlobalCorpus(updatedAsset, user.id, license as any, true, false, undefined)
-            .catch(err => console.error("Failed to update asset in Supabase", err));
+          type LicenseType = 'GEOGRAPH_CORPUS_1.0' | 'CC0';
+          const license: LicenseType = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+          contributeAssetToGlobalCorpus(
+            updatedAsset, 
+            user.id, 
+            license, 
+            /* isAutoSave */ true, 
+            /* processingFailed */ false, 
+            /* errorMessage */ undefined
+          ).catch(err => console.error("Failed to update asset in Supabase", err));
         } else {
           // Unauthenticated users: save to IndexedDB only
           await saveAsset(updatedAsset);
