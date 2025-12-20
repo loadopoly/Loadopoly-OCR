@@ -189,6 +189,7 @@ export interface DigitalAsset {
   tokenization?: TokenizationData;
   nft?: NFTData;
   status: AssetStatus;
+  progress?: number; // 0-100 for ingestion tracking
   processingAnalysis?: string; // Raw LLM thoughts
   errorMessage?: string; // Captured error during processing
   

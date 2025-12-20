@@ -325,6 +325,7 @@ export default function App() {
         timestamp: ingestDate,
         ocrText: "",
         status: AssetStatus.PROCESSING,
+        progress: 10,
         sqlRecord: {
           ASSET_ID: id,
           LOCAL_TIMESTAMP: ingestDate,
@@ -419,6 +420,7 @@ export default function App() {
       const resultAsset = {
             ...asset,
             status: AssetStatus.MINTED,
+            progress: 100,
             ocrText: analysis.ocrText,
             gisMetadata: analysis.gisMetadata,
             graphData: analysis.graphData,
@@ -468,6 +470,7 @@ export default function App() {
         const failedAsset: DigitalAsset = {
           ...newAsset,
           status: AssetStatus.FAILED,
+          progress: 100,
           errorMessage: processErr instanceof Error ? processErr.message : String(processErr),
           sqlRecord: {
             ...newAsset.sqlRecord!,
@@ -539,6 +542,7 @@ export default function App() {
                   const failedAsset: DigitalAsset = {
                     ...newAsset,
                     status: AssetStatus.FAILED,
+                    progress: 100,
                     errorMessage: processErr.message || String(processErr),
                     sqlRecord: {
                       ...newAsset.sqlRecord!,
@@ -710,6 +714,29 @@ export default function App() {
                 <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsMobileMenuOpen(false); }} />
               </div>
             </nav>
+
+            <div className="p-4 border-t border-slate-800">
+                <div className={`p-3 rounded-xl border transition-all ${isGlobalView ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-900 border-slate-800'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold uppercase text-slate-400">View Mode</span>
+                        <div className="flex items-center gap-1">
+                            {isGlobalView && <Globe size={12} className="text-indigo-400" />}
+                            {isGlobalView ? <span className="text-[10px] text-indigo-400 font-bold">GLOBAL</span> : <span className="text-[10px] text-slate-500">LOCAL</span>}
+                        </div>
+                    </div>
+                    
+                    <button 
+                        onClick={() => { setIsGlobalView(!isGlobalView); setIsMobileMenuOpen(false); }}
+                        className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${
+                            isGlobalView 
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50' 
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+                        }`}
+                    >
+                        {isGlobalView ? <>Switch to Local <Lock size={12}/></> : <>Switch to Master <Globe size={12}/></>}
+                    </button>
+                </div>
+            </div>
           </div>
         </div>
       )}
@@ -725,9 +752,22 @@ export default function App() {
                   <List size={24} />
                 </button>
                 <h2 className="text-lg font-semibold text-white capitalize hidden sm:block">
-                  {activeTab === 'database' ? 'CLOUD DATAFRAMES' : activeTab}
+                  {activeTab === 'database' ? (isGlobalView ? 'CLOUD DATAFRAMES' : 'LOCAL DATAFRAMES') : activeTab}
                 </h2>
-                {isGlobalView && <span className="px-2 py-0.5 bg-indigo-500 text-white text-[10px] font-bold rounded shadow-lg shadow-indigo-500/20">MASTER</span>}
+                <div className="flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800 ml-2">
+                    <button 
+                        onClick={() => setIsGlobalView(false)}
+                        className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${!isGlobalView ? 'bg-primary-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        LOCAL
+                    </button>
+                    <button 
+                        onClick={() => setIsGlobalView(true)}
+                        className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${isGlobalView ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        MASTER
+                    </button>
+                </div>
             </div>
           <div className="flex items-center gap-2">
              {!isGlobalView && activeTab !== 'batch' && activeTab !== 'ar' && (
@@ -864,7 +904,7 @@ export default function App() {
                     <table className="w-full text-left border-collapse">
                         <thead className="bg-slate-950 sticky top-0 z-10">
                           <tr>
-                            {['ID', 'TITLE', 'COLLECTION', 'ENTITIES', 'GIS ZONE', 'NODES', 'CATEGORY', 'DESCRIPTION', 'ACTION'].map(h => (
+                            {['ID', 'TITLE', 'COLLECTION', 'ENTITIES', 'GIS ZONE', 'NODES', 'CATEGORY', 'PROGRESS', 'ACTION'].map(h => (
                                 <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">{h}</th>
                             ))}
                           </tr>
@@ -872,19 +912,25 @@ export default function App() {
                         <tbody className="divide-y divide-slate-800">
                            {paginatedAssets.map(asset => {
                                const rec = asset.sqlRecord;
-                               if (!rec) return null;
                                return (
                                    <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
-                                       <td className="px-4 py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{rec.ASSET_ID.substring(0,8)}</td>
-                                       <td className="px-4 py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate">{rec.DOCUMENT_TITLE}</td>
-                                       <td className="px-4 py-3 text-blue-400 border-r border-slate-800 whitespace-nowrap">{rec.SOURCE_COLLECTION}</td>
-                                       <td className="px-4 py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px]">{rec.ENTITIES_EXTRACTED.slice(0, 3).join(', ')}</td>
-                                       <td className="px-4 py-3 text-emerald-400 border-r border-slate-800">{rec.LOCAL_GIS_ZONE}</td>
-                                       <td className="px-4 py-3 text-center border-r border-slate-800">{rec.NODE_COUNT}</td>
-                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap">{rec.NLP_NODE_CATEGORIZATION}</td>
-                                       <td className="px-4 py-3 border-r border-slate-800 truncate max-w-[200px] text-slate-400">{rec.DOCUMENT_DESCRIPTION}</td>
+                                       <td className="px-4 py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{asset.id.substring(0,8)}</td>
+                                       <td className="px-4 py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate">{rec?.DOCUMENT_TITLE || 'Processing...'}</td>
+                                       <td className="px-4 py-3 text-blue-400 border-r border-slate-800 whitespace-nowrap">{rec?.SOURCE_COLLECTION || 'Pending'}</td>
+                                       <td className="px-4 py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px]">{rec?.ENTITIES_EXTRACTED.slice(0, 3).join(', ') || '...'}</td>
+                                       <td className="px-4 py-3 text-emerald-400 border-r border-slate-800">{rec?.LOCAL_GIS_ZONE || '...'}</td>
+                                       <td className="px-4 py-3 text-center border-r border-slate-800">{rec?.NODE_COUNT || 0}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap">{rec?.NLP_NODE_CATEGORIZATION || '...'}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 min-w-[120px]">
+                                            <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                                <div 
+                                                    className={`h-full transition-all duration-500 ${asset.status === AssetStatus.FAILED ? 'bg-red-500' : asset.status === AssetStatus.MINTED ? 'bg-emerald-500' : 'bg-primary-500'}`}
+                                                    style={{ width: `${asset.progress || (asset.status === AssetStatus.MINTED ? 100 : 0)}%` }}
+                                                />
+                                            </div>
+                                       </td>
                                        <td className="px-4 py-3 text-center flex gap-2 justify-center">
-                                          <button onClick={() => downloadJSON(asset)} className="text-primary-500 hover:text-white"><Download size={14} /></button>
+                                          {rec && <button onClick={() => downloadJSON(asset)} className="text-primary-500 hover:text-white"><Download size={14} /></button>}
                                        </td>
                                    </tr>
                                )
@@ -943,7 +989,12 @@ export default function App() {
                         <div className="flex-1 overflow-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead className="bg-slate-950 sticky top-0">
-                                    <tr><th className="px-4 py-2 text-[10px] text-slate-500 uppercase">Status</th><th className="px-4 py-2 text-[10px] text-slate-500 uppercase">File</th><th className="px-4 py-2 text-[10px] text-slate-500 uppercase">Message</th></tr>
+                                    <tr>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 uppercase">Status</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 uppercase">File</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 uppercase">Progress</th>
+                                        <th className="px-4 py-2 text-[10px] text-slate-500 uppercase">Message</th>
+                                    </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-800">
                                     {batchQueue.map((item) => (
@@ -958,6 +1009,14 @@ export default function App() {
                                                 )}
                                             </td>
                                             <td className="px-4 py-2 text-slate-300 font-mono">{item.file.name}</td>
+                                            <td className="px-4 py-2 min-w-[150px]">
+                                                <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                                                    <div 
+                                                        className={`h-full transition-all duration-500 ${item.status === 'ERROR' ? 'bg-red-500' : item.status === 'COMPLETED' ? 'bg-emerald-500' : 'bg-primary-500'}`}
+                                                        style={{ width: `${item.progress}%` }}
+                                                    />
+                                                </div>
+                                            </td>
                                             <td className={`px-4 py-2 ${item.status === 'ERROR' ? 'text-red-400 font-medium' : 'text-slate-500'}`}>
                                                 {item.errorMsg || item.status}
                                             </td>
@@ -1232,6 +1291,8 @@ export default function App() {
           syncOn={syncOn}
           isOnline={isOnline}
           localCount={localAssets.length}
+          isGlobalView={isGlobalView}
+          setIsGlobalView={setIsGlobalView}
           onTabChange={(tab) => setActiveTab(tab)}
         />
       </main>
