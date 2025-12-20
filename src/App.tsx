@@ -196,8 +196,11 @@ export default function App() {
     getCurrentUser().then(async ({ data }) => { 
       if(data.user) { 
         setUser(data.user); 
-        setIsAdmin(true);
-        setIsEnterprise(true); // Admins are enterprise by default in this context
+        
+        // Baseline Super User Assignment
+        const isSuperUser = data.user.email === 'loadopoly@gmail.com';
+        setIsAdmin(isSuperUser);
+        setIsEnterprise(true); // Authenticated users are treated as enterprise-tier
         
         // 1. Sync local assets to cloud if they aren't there yet
         const local = await loadAssets();
