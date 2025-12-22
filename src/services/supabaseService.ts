@@ -210,9 +210,9 @@ export const contributeAssetToGlobalCorpus = async (
       .from('historical_documents_global')
       .upsert({
         ...sqlRecord,
-        asset_id: sqlRecord.ASSET_ID, // Ensure lowercase version is also set
-        document_title: sqlRecord.DOCUMENT_TITLE,
-        raw_ocr_transcription: sqlRecord.RAW_OCR_TRANSCRIPTION,
+        // REMOVED: asset_id, document_title, raw_ocr_transcription
+        // These lowercase columns do not exist in the schema defined in DATABASE_SETUP.md
+        // and cause "Column not found" errors during upsert.
         CONTRIBUTOR_ID: finalContributorId,
         CONTRIBUTED_AT: new Date().toISOString(),
         DATA_LICENSE: licenseType,
