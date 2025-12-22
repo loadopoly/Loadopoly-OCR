@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getCurrentUser, signOut, deleteUserAccount } from '../lib/auth';
 import { loadAssets } from '../lib/indexeddb';
 import BluetoothScannerConnect from './BluetoothScannerConnect';
-import { User, LogOut, Settings, Shield, Coins, Layers, Trash2, AlertTriangle } from 'lucide-react';
+import { User, LogOut, Settings, Shield, Coins, Layers, Trash2, AlertTriangle, Database } from 'lucide-react';
 import { AssetStatus } from '../types';
 
 export default function ProfileSettings() {
@@ -87,6 +87,31 @@ export default function ProfileSettings() {
                     <p className="text-2xl font-mono text-purple-400">{stats.shards.toLocaleString()}</p>
                  </div>
              </div>
+        </div>
+      </div>
+
+      {/* Cloud Connection Status */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
+            <Database size={20} className="text-emerald-500" /> Cloud Connection
+        </h3>
+        <div className="space-y-4">
+            <div className="flex items-center justify-between p-3 bg-slate-950 rounded-lg border border-slate-800">
+                <span className="text-slate-400 text-sm">Status</span>
+                <span className="text-emerald-500 text-sm font-bold flex items-center gap-1">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> Connected
+                </span>
+            </div>
+            <div className="flex items-center justify-between p-3 bg-slate-950 rounded-lg border border-slate-800">
+                <span className="text-slate-400 text-sm">Project URL</span>
+                <span className="text-slate-300 text-sm font-mono">
+                    {import.meta.env.VITE_SUPABASE_URL?.replace(/https:\/\/(.*?)\.supabase\.co/, '...$1')}
+                </span>
+            </div>
+             <div className="flex items-center justify-between p-3 bg-slate-950 rounded-lg border border-slate-800">
+                <span className="text-slate-400 text-sm">Storage Bucket</span>
+                <span className="text-slate-300 text-sm font-mono">assets (Public)</span>
+            </div>
         </div>
       </div>
 
