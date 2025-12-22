@@ -295,7 +295,7 @@ User requests asset
 
 ### RLS Errors
 - Make sure user is authenticated
-- Check policy conditions match your use case
+- Check policy conditions match your use case. Note: v1.7.3+ includes "Public Anonymous Update/Delete" policies for the global corpus to ensure seamless ingestion.
 - Use service role key for admin operations (API routes only)
 
 ### Type Mismatches
