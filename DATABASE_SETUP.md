@@ -7,6 +7,30 @@ Follow these steps to configure your Supabase backend for Loadopoly OCR.
 2. Go to **Storage**.
 3. Create a new bucket named `corpus-images`.
 4. Set the bucket to **Public**.
+5. **IMPORTANT:** You must add a Storage Policy to allow uploads.
+   - Go to **Storage** -> **Policies**.
+   - Under `corpus-images`, click **New Policy**.
+   - Choose **"For full customization"**.
+   - Name: "Allow Public Uploads".
+   - Allowed operations: Select **INSERT**.
+   - Target roles: Select **anon** and **authenticated**.
+   - WITH CHECK expression: `true` (or restrict as needed).
+   - Click **Review** and **Save**.
+
+   *Alternatively, run this SQL:*
+   ```sql
+   -- Allow public uploads to corpus-images bucket
+   CREATE POLICY "Allow Public Uploads"
+   ON storage.objects FOR INSERT
+   TO public
+   WITH CHECK ( bucket_id = 'corpus-images' );
+   
+   -- Allow public reads (already covered by "Public" bucket setting, but good to be explicit)
+   CREATE POLICY "Allow Public Reads"
+   ON storage.objects FOR SELECT
+   TO public
+   USING ( bucket_id = 'corpus-images' );
+   ```
 
 ## 2. Run Database Migrations
 Go to the **SQL Editor** and run the following script to initialize the complete relational schema.
