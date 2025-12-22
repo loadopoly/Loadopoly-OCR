@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.7.2-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-1.7.3-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -44,7 +44,12 @@ Get your credentials:
 
 ---
 
-## 🚀 What's New in v1.7.2
+## 🚀 What's New in v1.7.3
+- **Reliable Ingestion Pipeline:** Fixed "new row violates row-level security policy" errors by deferring cloud sync until processing is complete, ensuring compatibility with restricted RLS environments.
+- **Local-First Persistence:** Initial ingestion states are now saved to IndexedDB immediately, preventing data loss during processing.
+- **Improved Error Recovery:** Better handling of processing failures with automatic local fallback and detailed error reporting in the queue.
+
+### Previous (v1.7.2)
 - **Automatic Cloud Sync:** All assets (including failed ones) are now automatically synced to Supabase cloud storage upon import, regardless of authentication status.
 - **Robust Data Mapping:** Improved handling of case-insensitive database columns (ASSET_ID vs asset_id) for better cloud-to-local synchronization.
 - **Marketplace Restoration:** Fixed the data marketplace view and bundle purchase logic.
