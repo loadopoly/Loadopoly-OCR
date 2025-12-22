@@ -110,7 +110,7 @@ export default function ProfileSettings() {
             </div>
              <div className="flex items-center justify-between p-3 bg-slate-950 rounded-lg border border-slate-800">
                 <span className="text-slate-400 text-sm">Storage Bucket</span>
-                <span className="text-slate-300 text-sm font-mono">assets (Public)</span>
+                <span className="text-slate-300 text-sm font-mono">corpus-images (Public)</span>
             </div>
         </div>
       </div>
