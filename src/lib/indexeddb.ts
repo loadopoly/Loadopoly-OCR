@@ -51,11 +51,17 @@ export const loadAssets = async (): Promise<DigitalAsset[]> => {
     const assets = await db.assets.toArray();
     // Revive ObjectURLs from Blobs
     return assets.map(asset => {
-        if (asset.imageBlob && (!asset.imageUrl || !asset.imageUrl.startsWith('blob:'))) {
-            return {
-                ...asset,
-                imageUrl: URL.createObjectURL(asset.imageBlob)
-            };
+        // If we have the raw blob, always prefer regenerating a fresh ObjectURL
+        // unless we have a remote http/https URL which might be the permanent cloud link.
+        if (asset.imageBlob) {
+            const isRemote = asset.imageUrl && asset.imageUrl.startsWith('http') && !asset.imageUrl.startsWith('http://localhost') && !asset.imageUrl.includes('blob:');
+            
+            if (!isRemote) {
+                return {
+                    ...asset,
+                    imageUrl: URL.createObjectURL(asset.imageBlob)
+                };
+            }
         }
         return asset;
     }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
