@@ -150,11 +150,6 @@
   "note_taking": {
     "new_note_url": "/?note=new"
   },
-  "scope_extensions": [
-    {
-      "origin": "https://geographocrnode.vercel.app"
-    }
-  ],
   "related_applications": [],
   "widgets": [
     {
