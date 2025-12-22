@@ -121,6 +121,11 @@ export const fetchGlobalCorpus = async (onlyEnterprise: boolean = false): Promis
     throw error;
   }
 
+  console.log("Fetched global corpus - Row count:", data?.length || 0);
+  if (data && data.length > 0) {
+    console.log("Sample row:", data[0]);
+  }
+
   if (!data) return [];
 
   return Promise.all(data.map(row => mapRowToAsset(row)));
@@ -206,13 +211,10 @@ export const contributeAssetToGlobalCorpus = async (
       }
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('historical_documents_global')
       .upsert({
         ...sqlRecord,
-        // REMOVED: asset_id, document_title, raw_ocr_transcription
-        // These lowercase columns do not exist in the schema defined in DATABASE_SETUP.md
-        // and cause "Column not found" errors during upsert.
         CONTRIBUTOR_ID: finalContributorId,
         CONTRIBUTED_AT: new Date().toISOString(),
         DATA_LICENSE: licenseType,
@@ -221,7 +223,12 @@ export const contributeAssetToGlobalCorpus = async (
         IS_ENTERPRISE: sqlRecord.IS_ENTERPRISE || false
       } as any);
 
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase upsert error details:", error);
+      throw error;
+    }
+    
+    console.log("Successfully synced asset to Supabase:", asset.id, "Data:", data);
 
     return { success: true, publicUrl, contributorId: finalContributorId };
   } catch (err) {
