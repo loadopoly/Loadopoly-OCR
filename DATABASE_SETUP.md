@@ -76,6 +76,8 @@ CREATE INDEX IF NOT EXISTS idx_hdg_collection ON public.historical_documents_glo
 ALTER TABLE public.historical_documents_global ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public Read" ON public.historical_documents_global FOR SELECT USING (true);
 CREATE POLICY "Public Anonymous Insert" ON public.historical_documents_global FOR INSERT WITH CHECK (true);
+CREATE POLICY "Public Anonymous Update" ON public.historical_documents_global FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "Public Anonymous Delete" ON public.historical_documents_global FOR DELETE USING (true);
 
 -- WEB3 TRANSACTIONS TABLE (ENCRYPTED)
 CREATE TABLE IF NOT EXISTS public.web3_transactions (

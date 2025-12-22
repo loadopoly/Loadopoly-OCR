@@ -454,10 +454,9 @@ export default function App() {
       setLocalAssets(prev => [newAsset, ...prev]);
       
       // Initial upload to Supabase as PENDING (Automatic Cloud Sync)
-      const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-      contributeAssetToGlobalCorpus(newAsset, user?.id, license as any, true).catch(err => {
-        console.warn("Initial cloud sync failed (offline or config missing):", err);
-      });
+      // SKIPPED: We skip initial Supabase upload to avoid RLS update errors (no UPDATE policy).
+      // The asset will be uploaded once processing is complete.
+      await saveAsset(newAsset);
 
       if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
       
@@ -525,12 +524,9 @@ export default function App() {
                 setLocalAssets(prev => [newAsset, ...prev]);
                 
                 // Initial upload to Supabase as PENDING if authenticated
-                if (user?.id) {
-                  const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-                  await contributeAssetToGlobalCorpus(newAsset, user.id, license as any, true);
-                } else {
-                  await saveAsset(newAsset);
-                }
+                // SKIPPED: We skip initial Supabase upload to avoid RLS update errors (no UPDATE policy).
+                // The asset will be uploaded once processing is complete.
+                await saveAsset(newAsset);
 
                 try {
                   const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);

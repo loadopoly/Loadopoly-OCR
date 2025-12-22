@@ -1,6 +1,6 @@
 {
   "name": "geograph-ocr-node",
-  "version": "1.7.1",
+  "version": "1.7.3",
   "type": "module",
   "scripts": {
     "dev": "vite",
