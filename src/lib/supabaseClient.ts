@@ -12,7 +12,6 @@ import { Database } from './database.types'
 
 const getEnvVar = (key: string): string => {
   // Vite environment variables
-  // @ts-ignore - Vite's import.meta.env
   if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
     // @ts-ignore
     return import.meta.env[key]
