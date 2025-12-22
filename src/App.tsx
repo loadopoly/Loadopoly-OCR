@@ -205,21 +205,53 @@ export default function App() {
         
         // 1. Sync local assets to cloud if they aren't there yet
         const local = await loadAssets();
-        for (const asset of local) {
+        const syncPromises = local.map(async (asset) => {
           if (asset.status === AssetStatus.MINTED && !asset.sqlRecord?.user_id) {
             try {
               await contributeAssetToGlobalCorpus(asset, data.user.id, 'GEOGRAPH_CORPUS_1.0', true);
+              // Update local record to show it's synced (optional, but good for UI)
+              if (asset.sqlRecord) asset.sqlRecord.user_id = data.user.id;
+              await saveAsset(asset);
             } catch (e) {
               console.error("Failed to sync local asset to cloud:", e);
             }
           }
-        }
-
-        // 2. Load user's assets from Supabase
-        fetchUserAssets(data.user.id).then(setLocalAssets).catch(err => {
-          console.error('Failed to load user assets:', err);
-          loadAssets().then(setLocalAssets);
+          return asset;
         });
+        
+        await Promise.all(syncPromises);
+
+        // 2. Load user's assets from Supabase and MERGE with local
+        try {
+          const remoteAssets = await fetchUserAssets(data.user.id);
+          const localAssetsAfterSync = await loadAssets();
+          
+          // Create a map of assets by ID
+          const assetMap = new Map<string, DigitalAsset>();
+          
+          // Add local assets first
+          localAssetsAfterSync.forEach(a => assetMap.set(a.id, a));
+          
+          // Merge remote assets (overwriting local if they exist, as remote is "truth" for synced items)
+          // BUT preserve local-only items (like pending uploads or guest work)
+          remoteAssets.forEach(a => assetMap.set(a.id, a));
+          
+          const mergedAssets = Array.from(assetMap.values()).sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+
+          setLocalAssets(mergedAssets);
+          
+          // Update IndexedDB with the merged state to ensure consistency
+          for (const asset of mergedAssets) {
+            await saveAsset(asset);
+          }
+          
+        } catch (err) {
+          console.error('Failed to load user assets:', err);
+          // Fallback to just local assets if remote fetch fails
+          loadAssets().then(setLocalAssets);
+        }
       } else {
         // Unauthenticated: load from IndexedDB only
         loadAssets().then(setLocalAssets);
