@@ -11,13 +11,13 @@ export { supabase, isSupabaseConfigured, testSupabaseConnection };
  * Helper to map a Supabase row to a DigitalAsset, handling case inconsistencies.
  */
 const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> => {
-  const assetId = row.ASSET_ID || row.asset_id || row.id;
-  const docTitle = row.DOCUMENT_TITLE || row.document_title || 'Untitled Document';
-  const dataLicense = row.DATA_LICENSE || row.data_license || 'GEOGRAPH_CORPUS_1.0';
+  const assetId = row.ASSET_ID || row.id;
+  const docTitle = row.DOCUMENT_TITLE || 'Untitled Document';
+  const dataLicense = row.DATA_LICENSE || 'GEOGRAPH_CORPUS_1.0';
   
   // Decrypt sensitive data if it looks encrypted (base64) and userId is provided
-  let ocrText = row.RAW_OCR_TRANSCRIPTION || row.raw_ocr_transcription || '';
-  let description = row.DOCUMENT_DESCRIPTION || row.document_description || '';
+  let ocrText = row.RAW_OCR_TRANSCRIPTION || '';
+  let description = row.DOCUMENT_DESCRIPTION || '';
 
   if (userId) {
     if (ocrText && ocrText.length > 20 && !ocrText.includes(' ')) {
@@ -29,9 +29,9 @@ const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> =
   }
 
   // Parse JSONB fields
-  const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED || row.entities_extracted) 
-    ? (row.ENTITIES_EXTRACTED || row.entities_extracted) 
-    : (typeof (row.ENTITIES_EXTRACTED || row.entities_extracted) === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED || row.entities_extracted) : []);
+  const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED) 
+    ? row.ENTITIES_EXTRACTED 
+    : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
   
   // Reconstruct Nodes
   const nodes: GraphNode[] = [
@@ -63,8 +63,8 @@ const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> =
 
   return {
     id: assetId,
-    imageUrl: row.ORIGINAL_IMAGE_URL || row.original_image_url || '', 
-    timestamp: row.LOCAL_TIMESTAMP || row.created_at,
+    imageUrl: row.ORIGINAL_IMAGE_URL || '', 
+    timestamp: row.LOCAL_TIMESTAMP || row.CREATED_AT,
     ocrText: ocrText,
     status: AssetStatus.MINTED,
     graphData: { nodes, links },
@@ -76,14 +76,14 @@ const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> =
       RAW_OCR_TRANSCRIPTION: ocrText,
       DATA_LICENSE: dataLicense,
       ENTITIES_EXTRACTED: entities,
-      KEYWORDS_TAGS: Array.isArray(row.KEYWORDS_TAGS || row.keywords_tags) ? (row.KEYWORDS_TAGS || row.keywords_tags) : [],
-      PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS || row.preservation_events) ? (row.PRESERVATION_EVENTS || row.preservation_events) : [],
-      IS_ENTERPRISE: row.IS_ENTERPRISE || row.is_enterprise || false,
-      SCAN_TYPE: row.SCAN_TYPE || row.scan_type || 'DOCUMENT',
-      ALT_TEXT_SHORT: row.ALT_TEXT_SHORT || row.alt_text_short,
-      ALT_TEXT_LONG: row.ALT_TEXT_LONG || row.alt_text_long,
-      READING_ORDER: row.READING_ORDER || row.reading_order,
-      ACCESSIBILITY_SCORE: row.ACCESSIBILITY_SCORE || row.accessibility_score
+      KEYWORDS_TAGS: Array.isArray(row.KEYWORDS_TAGS) ? row.KEYWORDS_TAGS : [],
+      PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS) ? row.PRESERVATION_EVENTS : [],
+      IS_ENTERPRISE: row.IS_ENTERPRISE || false,
+      SCAN_TYPE: row.SCAN_TYPE || 'DOCUMENT',
+      ALT_TEXT_SHORT: row.ALT_TEXT_SHORT,
+      ALT_TEXT_LONG: row.ALT_TEXT_LONG,
+      READING_ORDER: row.READING_ORDER,
+      ACCESSIBILITY_SCORE: row.ACCESSIBILITY_SCORE
     }
   };
 };
@@ -98,7 +98,7 @@ export const fetchGlobalCorpus = async (onlyEnterprise: boolean = false): Promis
   let query = supabase
     .from('historical_documents_global')
     .select('*')
-    .order('created_at', { ascending: false })
+    .order('CREATED_AT', { ascending: false })
     .limit(2000);
 
   // Try to filter by IS_ENTERPRISE if requested, but handle cases where column might be missing
@@ -114,7 +114,7 @@ export const fetchGlobalCorpus = async (onlyEnterprise: boolean = false): Promis
     const fallbackQuery = supabase
       .from('historical_documents_global')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order('CREATED_AT', { ascending: false })
       .limit(2000);
     const fallbackResult = await fallbackQuery;
     data = fallbackResult.data;
@@ -146,7 +146,7 @@ export const fetchUserAssets = async (userId: string): Promise<DigitalAsset[]> =
     .from('historical_documents_global')
     .select('*')
     .eq('USER_ID', userId)
-    .order('created_at', { ascending: false });
+    .order('CREATED_AT', { ascending: false });
 
   if (error) {
     console.error("Error fetching user assets:", error);
@@ -257,11 +257,11 @@ export const recordWeb3Transaction = async (
     const detailsString = JSON.stringify(details);
     const encryptedDetails = await encryptData(detailsString, userId);
 
-    const insertData: Database['public']['Tables']['web3_transactions']['Insert'] = {
-      user_id: userId,
-      asset_id: assetId,
-      tx_hash: txHash,
-      details: encryptedDetails
+    const insertData: any = {
+      USER_ID: userId,
+      ASSET_ID: assetId,
+      TX_HASH: txHash,
+      DETAILS: encryptedDetails
     };
 
     const { error } = await (supabase as any)
