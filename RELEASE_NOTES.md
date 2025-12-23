@@ -1,3 +1,11 @@
+# 🚀 GeoGraph Node: v1.8.1 Release Notes
+
+This patch fixes a critical database synchronization error where short random IDs were rejected by Supabase's UUID validation.
+
+## 🛠️ Bug Fixes (v1.8.1)
+*   **Standardized UUIDs:** Replaced legacy short-string ID generation with `uuidv4()`. This ensures that all asset identifiers are valid UUIDs, satisfying PostgreSQL's strict type checking and preventing `400 Bad Request` errors during cloud synchronization.
+*   **Improved Sync Reliability:** All new uploads and batch imports now use globally unique identifiers that are compatible with both `TEXT` and `UUID` database columns.
+
 # 🚀 GeoGraph Node: v1.8.0 Release Notes
 
 This major update standardizes the entire database schema and application codebase to use **UPPERCASE** column names, resolving long-standing case-sensitivity issues with Supabase/PostgREST.

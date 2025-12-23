@@ -3,6 +3,11 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [1.8.1] - 2025-12-23
+
+### Fixed
+- **UUID Validation Error:** Switched from short random strings to standard UUID v4 for all asset and record identifiers. This resolves `22P02` errors in Supabase when columns are configured as `UUID` type.
+
 ## [1.8.0] - 2025-12-23
 
 ### Changed
