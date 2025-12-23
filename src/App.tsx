@@ -43,6 +43,7 @@ import {
   List,
   CloudDownload
 } from 'lucide-react';
+import { v4 as uuidv4 } from 'uuid';
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG, GraphData, GraphNode } from './types';
 import { processImageWithGemini } from './services/geminiService';
 import { createBundles } from './services/bundleService';
@@ -347,7 +348,7 @@ export default function App() {
   const createInitialAsset = async (file: File): Promise<DigitalAsset> => {
       const checksum = await calculateSHA256(file);
       const ingestDate = new Date().toISOString();
-      const id = Math.random().toString(36).substring(7);
+      const id = uuidv4();
       const scanType = (file as any).scanType || ScanType.DOCUMENT;
 
       return {
@@ -530,7 +531,7 @@ export default function App() {
 
   const handleBatchFiles = (files: File[]) => {
       const newQueueItems: BatchItem[] = files.map(file => ({
-          id: Math.random().toString(36).substring(7),
+          id: uuidv4(),
           file,
           status: 'QUEUED',
           progress: 0,
