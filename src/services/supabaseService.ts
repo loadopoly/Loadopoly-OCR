@@ -140,7 +140,7 @@ export const fetchUserAssets = async (userId: string): Promise<DigitalAsset[]> =
   const { data, error } = await supabase
     .from('historical_documents_global')
     .select('*')
-    .eq('user_id', userId)
+    .eq('USER_ID', userId)
     .order('created_at', { ascending: false });
 
   if (error) {

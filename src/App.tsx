@@ -206,11 +206,11 @@ export default function App() {
         // 1. Sync local assets to cloud if they aren't there yet
         const local = await loadAssets();
         const syncPromises = local.map(async (asset) => {
-          if (asset.status === AssetStatus.MINTED && !asset.sqlRecord?.user_id) {
+          if (asset.status === AssetStatus.MINTED && !asset.sqlRecord?.USER_ID) {
             try {
               await contributeAssetToGlobalCorpus(asset, data.user.id, 'GEOGRAPH_CORPUS_1.0', true);
               // Update local record to show it's synced (optional, but good for UI)
-              if (asset.sqlRecord) asset.sqlRecord.user_id = data.user.id;
+              if (asset.sqlRecord) asset.sqlRecord.USER_ID = data.user.id;
               await saveAsset(asset);
             } catch (e) {
               console.error("Failed to sync local asset to cloud:", e);
