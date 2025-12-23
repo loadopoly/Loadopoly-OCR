@@ -78,7 +78,12 @@ const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> =
       ENTITIES_EXTRACTED: entities,
       KEYWORDS_TAGS: Array.isArray(row.KEYWORDS_TAGS || row.keywords_tags) ? (row.KEYWORDS_TAGS || row.keywords_tags) : [],
       PRESERVATION_EVENTS: Array.isArray(row.PRESERVATION_EVENTS || row.preservation_events) ? (row.PRESERVATION_EVENTS || row.preservation_events) : [],
-      IS_ENTERPRISE: row.IS_ENTERPRISE || row.is_enterprise || false
+      IS_ENTERPRISE: row.IS_ENTERPRISE || row.is_enterprise || false,
+      SCAN_TYPE: row.SCAN_TYPE || row.scan_type || 'DOCUMENT',
+      ALT_TEXT_SHORT: row.ALT_TEXT_SHORT || row.alt_text_short,
+      ALT_TEXT_LONG: row.ALT_TEXT_LONG || row.alt_text_long,
+      READING_ORDER: row.READING_ORDER || row.reading_order,
+      ACCESSIBILITY_SCORE: row.ACCESSIBILITY_SCORE || row.accessibility_score
     }
   };
 };

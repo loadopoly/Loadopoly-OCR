@@ -154,7 +154,7 @@ export interface HistoricalDocumentMetadata {
   PRESERVATION_EVENTS: PreservationEvent[];
   KEYWORDS_TAGS: string[];
   ACCESS_RESTRICTIONS: boolean;
-  scan_type: string;
+  SCAN_TYPE: string;
   
   // Rich Metadata based on Scan Type
   TAXONOMY?: TaxonomyData;
@@ -162,10 +162,10 @@ export interface HistoricalDocumentMetadata {
   SCENERY_ATTRIBUTES?: SceneryAttributes;
 
   // Accessibility & Alt Text (WCAG AAA)
-  alt_text_short?: string;
-  alt_text_long?: string;
-  reading_order?: ReadingOrderBlock[];
-  accessibility_score?: number;
+  ALT_TEXT_SHORT?: string;
+  ALT_TEXT_LONG?: string;
+  READING_ORDER?: ReadingOrderBlock[];
+  ACCESSIBILITY_SCORE?: number;
 
   // Contribution Fields
   CONTRIBUTOR_ID: string | null;

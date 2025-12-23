@@ -159,6 +159,23 @@ export interface Database {
           TAXONOMY: Json | null
           ITEM_ATTRIBUTES: Json | null
           SCENERY_ATTRIBUTES: Json | null
+          ALT_TEXT_SHORT: string | null
+          ALT_TEXT_LONG: string | null
+          AUDIO_DESCRIPTION: string | null
+          TACTILE_DESCRIPTION: string | null
+          READING_ORDER: Json | null
+          ACCESSIBILITY_SCORE: number
+          SCAN_TYPE: string
+          SHARD_TOKEN_ID: number | null
+          NFT_TOKEN_ID: number | null
+          REDEMPTION_STATUS: string
+          WALLET_ADDRESS: string | null
+          REDEMPTION_DATE: string | null
+          REDEMPTION_TX_HASH: string | null
+          SHARDS_COLLECTED: number
+          SHARDS_REQUIRED: number
+          SHIPPING_STATUS: string | null
+          TRACKING_NUMBER: string | null
         }
         Insert: {
           id?: string
@@ -227,6 +244,23 @@ export interface Database {
           TAXONOMY?: Json | null
           ITEM_ATTRIBUTES?: Json | null
           SCENERY_ATTRIBUTES?: Json | null
+          ALT_TEXT_SHORT?: string | null
+          ALT_TEXT_LONG?: string | null
+          AUDIO_DESCRIPTION?: string | null
+          TACTILE_DESCRIPTION?: string | null
+          READING_ORDER?: Json | null
+          ACCESSIBILITY_SCORE?: number
+          SCAN_TYPE?: string
+          SHARD_TOKEN_ID?: number | null
+          NFT_TOKEN_ID?: number | null
+          REDEMPTION_STATUS?: string
+          WALLET_ADDRESS?: string | null
+          REDEMPTION_DATE?: string | null
+          REDEMPTION_TX_HASH?: string | null
+          SHARDS_COLLECTED?: number
+          SHARDS_REQUIRED?: number
+          SHIPPING_STATUS?: string | null
+          TRACKING_NUMBER?: string | null
         }
         Update: {
           id?: string
@@ -295,6 +329,23 @@ export interface Database {
           TAXONOMY?: Json | null
           ITEM_ATTRIBUTES?: Json | null
           SCENERY_ATTRIBUTES?: Json | null
+          ALT_TEXT_SHORT?: string | null
+          ALT_TEXT_LONG?: string | null
+          AUDIO_DESCRIPTION?: string | null
+          TACTILE_DESCRIPTION?: string | null
+          READING_ORDER?: Json | null
+          ACCESSIBILITY_SCORE?: number
+          SCAN_TYPE?: string
+          SHARD_TOKEN_ID?: number | null
+          NFT_TOKEN_ID?: number | null
+          REDEMPTION_STATUS?: string
+          WALLET_ADDRESS?: string | null
+          REDEMPTION_DATE?: string | null
+          REDEMPTION_TX_HASH?: string | null
+          SHARDS_COLLECTED?: number
+          SHARDS_REQUIRED?: number
+          SHIPPING_STATUS?: string | null
+          TRACKING_NUMBER?: string | null
         }
       }
       object_attributes: {
