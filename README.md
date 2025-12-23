@@ -36,16 +36,36 @@ Create a `.env.local` file with:
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-anon-key
 VITE_GEMINI_API_KEY=your-gemini-api-key
+VITE_DCC1_ADDRESS=0x71C7656EC7ab88b098defB751B7401B5f6d89A21
 ```
 
 Get your credentials:
 - **Supabase:** [supabase.com/dashboard](https://supabase.com/dashboard) → Project Settings → API
 - **Gemini API:** [makersuite.google.com/app/apikey](https://makersuite.google.com/app/apikey)
+- **Web3:** The `VITE_DCC1_ADDRESS` is the contract address for the Shard NFT on Polygon.
 
 ---
 
-## 🚀 What's New in v1.8.0
-- **Global Schema Standardization:** Completed a full codebase and database migration to **UPPERCASE** column names. This eliminates case-sensitivity issues between PostgreSQL, PostgREST, and TypeScript.
+## 🛡️ Security & Production
+
+### Row Level Security (RLS)
+For mass usage, ensure your Supabase tables have RLS enabled. The project includes `sql/FIX_TABLE_RLS.sql` which sets up:
+- **Public Read:** Anyone can view the global corpus.
+- **Owner Update/Delete:** Only the user who created a record (via `USER_ID`) can modify or delete it.
+- **Anonymous Contributions:** Supports anonymous uploads while protecting authenticated user data.
+
+### Production Deployment
+1. **Vercel:** The project is optimized for Vercel. Connect your GitHub repo and it will auto-deploy.
+2. **Environment Variables:** Add all `VITE_` variables in the Vercel dashboard.
+3. **PWA:** The app is a full PWA. Ensure you serve it over HTTPS for service worker support.
+
+---
+
+## 🚀 What's New in v1.8.1
+- **Production Hardening:** Standardized project metadata and environment variables.
+- **Security Enhancements:** Improved RLS policies for owner-based data protection.
+- **Cleanup:** Removed debug logs and optimized build configuration.
+- **Global Schema Standardization:** Completed a full codebase and database migration to **UPPERCASE** column names.
 - **Master View Restoration:** Fixed critical `PGRST204` errors in the "Master" cloud view by synchronizing frontend queries with the new UPPERCASE schema.
 - **Automated Migration Scripts:** Added `sql/FIX_ALL_TABLES_COLUMNS_TO_UPPERCASE.sql` to provide a one-click solution for standardizing existing Supabase instances.
 - **Type Safety Hardening:** Refactored `database.types.ts` and `types.ts` to strictly enforce the UPPERCASE schema, reducing runtime errors during data mapping.

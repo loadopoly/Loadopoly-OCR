@@ -14,28 +14,43 @@ DROP POLICY IF EXISTS "Allow Public Read" ON public.historical_documents_global;
 DROP POLICY IF EXISTS "Allow Public Insert" ON public.historical_documents_global;
 DROP POLICY IF EXISTS "Allow Public Update" ON public.historical_documents_global;
 
--- 3. Create permissive policies for this public contribution platform
+-- 3. Create robust policies for mass usage
 
--- Allow everyone to read everything
+-- Allow everyone to read everything (Public Corpus)
 CREATE POLICY "Allow Public Read"
 ON public.historical_documents_global
 FOR SELECT
 USING (true);
 
 -- Allow everyone (anon + auth) to insert new records
+-- If authenticated, the USER_ID should match their UID
 CREATE POLICY "Allow Public Insert"
 ON public.historical_documents_global
 FOR INSERT
-WITH CHECK (true);
+WITH CHECK (
+  (auth.uid() IS NULL) OR (auth.uid() = "USER_ID")
+);
 
--- Allow everyone to update records (needed for upsert)
--- Note: In a stricter app, you might restrict this to the creator (USING auth.uid() = "USER_ID")
--- But for this open contribution phase, we'll allow updates to ensure the pipeline works.
-CREATE POLICY "Allow Public Update"
+-- Allow only the owner to update their records
+-- If the record has no USER_ID, it's considered "publicly owned" and can be updated by anyone (for now)
+-- In a more strict environment, you'd prevent updates to records without a USER_ID
+CREATE POLICY "Allow Owner Update"
 ON public.historical_documents_global
 FOR UPDATE
-USING (true)
-WITH CHECK (true);
+USING (
+  ("USER_ID" IS NULL) OR (auth.uid() = "USER_ID")
+)
+WITH CHECK (
+  ("USER_ID" IS NULL) OR (auth.uid() = "USER_ID")
+);
+
+-- Allow only the owner to delete their records
+CREATE POLICY "Allow Owner Delete"
+ON public.historical_documents_global
+FOR DELETE
+USING (
+  auth.uid() = "USER_ID"
+);
 
 -- 4. Reload schema cache
 NOTIFY pgrst, 'reload config';

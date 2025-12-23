@@ -4,7 +4,7 @@ import { getCurrentUser } from '../lib/auth';
 
 // Configuration
 // Using a placeholder address for now. In production, this would be an ENV variable.
-const DCC1_ADDRESS = "0x71C7656EC7ab88b098defB751B7401B5f6d89A21"; 
+const DCC1_ADDRESS = import.meta.env.VITE_DCC1_ADDRESS || "0x71C7656EC7ab88b098defB751B7401B5f6d89A21"; 
 
 // ABI for the Shard Contract (ERC-1155 derivative)
 const DCC1_ABI = [

@@ -65,7 +65,6 @@ export async function testSupabaseConnection(): Promise<{
       return { connected: false, error: error.message }
     }
 
-    console.log('✅ Supabase connection successful!')
     return { connected: true }
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error'

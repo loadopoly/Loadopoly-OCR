@@ -126,11 +126,6 @@ export const fetchGlobalCorpus = async (onlyEnterprise: boolean = false): Promis
     throw error;
   }
 
-  console.log("Fetched global corpus - Row count:", data?.length || 0);
-  if (data && data.length > 0) {
-    console.log("Sample row:", data[0]);
-  }
-
   if (!data) return [];
 
   return Promise.all(data.map(row => mapRowToAsset(row)));
@@ -233,8 +228,6 @@ export const contributeAssetToGlobalCorpus = async (
       throw error;
     }
     
-    console.log("Successfully synced asset to Supabase:", asset.id, "Data:", data);
-
     return { success: true, publicUrl, contributorId: finalContributorId };
   } catch (err) {
     console.error("Supabase sync failed:", err);
