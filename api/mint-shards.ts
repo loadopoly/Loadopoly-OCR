@@ -26,9 +26,9 @@ export default async function handler(req: any, res: any) {
   // 1. Verify user owns the asset in Supabase
   const { data, error } = await supabase
     .from('historical_documents_global')
-    .select('id, user_id')
+    .select('ASSET_ID, USER_ID')
     .eq('ASSET_ID', assetId)
-    .eq('user_id', userId);
+    .eq('USER_ID', userId);
 
   if (error || !data?.length) {
       return res.status(403).json({ error: "Ownership verification failed or asset not found." });

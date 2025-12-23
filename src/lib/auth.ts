@@ -30,7 +30,7 @@ export const deleteUserAccount = async () => {
   const { error: dataError } = await supabase
     .from('historical_documents_global')
     .delete()
-    .eq('user_id', user.id);
+    .eq('USER_ID', user.id);
 
   if (dataError) return { error: dataError };
 
