@@ -34,8 +34,8 @@ export default async function handler(req: any, res: any) {
     const { data, error } = await supabase
         .from('historical_documents_global')
         .select('*')
-        .eq('user_id', user.id)
-        .eq('dataset_id', id);
+        .eq('USER_ID', user.id)
+        .eq('DATASET_ID', id);
 
     if (error) throw error;
 

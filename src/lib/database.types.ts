@@ -4,7 +4,7 @@
  * This file contains TypeScript type definitions for your Supabase database schema.
  * Generated and updated to match the current schema structure.
  * 
- * Last updated: 2025-12-19
+ * Last UPDATED: 2025-12-19
  */
 
 export type Json =
@@ -12,120 +12,116 @@ export type Json =
   | number
   | boolean
   | null
-  | { [key: string]: Json | undefined }
+  | { [KEY: string]: Json | undefined }
   | Json[]
 
 export interface Database {
   public: {
-    Tables: {
-      data_assets: {
+    TABLES: {
+      DATA_ASSETS: {
         Row: {
           id: string
-          asset_id: string
-          document_title: string | null
-          document_description: string | null
-          nlp_node_categorization: string | null
-          local_gis_zone: string | null
-          source_collection: string | null
-          rights_statement: string | null
-          token_count: number
-          file_size_bytes: number
-          confidence_score: number | null
-          metadata: Json | null
-          created_at: string
-          updated_at: string
+          ASSET_ID: string
+          DOCUMENT_TITLE: string | null
+          DOCUMENT_DESCRIPTION: string | null
+          NLP_NODE_CATEGORIZATION: string | null
+          LOCAL_GIS_ZONE: string | null
+          SOURCE_COLLECTION: string | null
+          RIGHTS_STATEMENT: string | null
+          TOKEN_COUNT: number
+          FILE_SIZE_BYTES: number
+          CONFIDENCE_SCORE: number | null
+          METADATA: Json | null
+          CREATED_AT: string
+          UPDATED_AT: string
         }
         Insert: {
           id?: string
-          asset_id: string
-          document_title?: string | null
-          document_description?: string | null
-          nlp_node_categorization?: string | null
-          local_gis_zone?: string | null
-          source_collection?: string | null
-          rights_statement?: string | null
-          token_count?: number
-          file_size_bytes?: number
-          confidence_score?: number | null
-          metadata?: Json | null
-          created_at?: string
-          updated_at?: string
+          ASSET_ID: string
+          DOCUMENT_TITLE?: string | null
+          DOCUMENT_DESCRIPTION?: string | null
+          NLP_NODE_CATEGORIZATION?: string | null
+          LOCAL_GIS_ZONE?: string | null
+          SOURCE_COLLECTION?: string | null
+          RIGHTS_STATEMENT?: string | null
+          TOKEN_COUNT?: number
+          FILE_SIZE_BYTES?: number
+          CONFIDENCE_SCORE?: number | null
+          METADATA?: Json | null
+          CREATED_AT?: string
+          UPDATED_AT?: string
         }
         Update: {
           id?: string
-          asset_id?: string
-          document_title?: string | null
-          document_description?: string | null
-          nlp_node_categorization?: string | null
-          local_gis_zone?: string | null
-          source_collection?: string | null
-          rights_statement?: string | null
-          token_count?: number
-          file_size_bytes?: number
-          confidence_score?: number | null
-          metadata?: Json | null
-          created_at?: string
-          updated_at?: string
+          ASSET_ID?: string
+          DOCUMENT_TITLE?: string | null
+          DOCUMENT_DESCRIPTION?: string | null
+          NLP_NODE_CATEGORIZATION?: string | null
+          LOCAL_GIS_ZONE?: string | null
+          SOURCE_COLLECTION?: string | null
+          RIGHTS_STATEMENT?: string | null
+          TOKEN_COUNT?: number
+          FILE_SIZE_BYTES?: number
+          CONFIDENCE_SCORE?: number | null
+          METADATA?: Json | null
+          CREATED_AT?: string
+          UPDATED_AT?: string
         }
       }
-      dataset_shares: {
+      DATASET_SHARES: {
         Row: {
           id: string
-          dataset_id: string
-          shared_with: string
-          shared_at: string
-          permissions: string
+          DATASET_ID: string
+          SHARED_WITH: string
+          SHARED_AT: string
+          PERMISSIONS: string
         }
         Insert: {
           id?: string
-          dataset_id: string
-          shared_with: string
-          shared_at?: string
-          permissions?: string
+          DATASET_ID: string
+          SHARED_WITH: string
+          SHARED_AT?: string
+          PERMISSIONS?: string
         }
         Update: {
           id?: string
-          dataset_id?: string
-          shared_with?: string
-          shared_at?: string
-          permissions?: string
+          DATASET_ID?: string
+          SHARED_WITH?: string
+          SHARED_AT?: string
+          PERMISSIONS?: string
         }
       }
-      historical_documents_global: {
+      HISTORICAL_DOCUMENTS_GLOBAL: {
         Row: {
           id: string
-          created_at: string
-          contributor_id: string | null
-          contributed_at: string | null
-          data_license: string
-          contributor_nft_minted: boolean
-          original_image_url: string | null
-          asset_id: string | null
-          document_title: string | null
-          raw_ocr_transcription: string | null
-          preprocess_ocr_transcription: string | null
-          user_id: string | null
-          alt_text_short: string | null
-          alt_text_long: string | null
-          audio_description: string | null
-          tactile_description: string | null
-          reading_order: Json | null
-          accessibility_score: number
-          scan_type: string
-          shard_token_id: number | null
-          nft_token_id: number | null
-          redemption_status: string
-          wallet_address: string | null
-          redemption_date: string | null
-          redemption_tx_hash: string | null
-          shards_collected: number
-          shards_required: number
-          shipping_status: string | null
-          tracking_number: string | null
+          CREATED_AT: string
           CONTRIBUTOR_ID: string | null
           CONTRIBUTED_AT: string | null
           DATA_LICENSE: string
           CONTRIBUTOR_NFT_MINTED: boolean
+          ORIGINAL_IMAGE_URL: string | null
+          ASSET_ID: string | null
+          DOCUMENT_TITLE: string | null
+          RAW_OCR_TRANSCRIPTION: string | null
+          PREPROCESS_OCR_TRANSCRIPTION: string | null
+          USER_ID: string | null
+          ALT_TEXT_SHORT: string | null
+          ALT_TEXT_LONG: string | null
+          AUDIO_DESCRIPTION: string | null
+          TACTILE_DESCRIPTION: string | null
+          READING_ORDER: Json | null
+          ACCESSIBILITY_SCORE: number
+          SCAN_TYPE: string
+          SHARD_TOKEN_ID: number | null
+          NFT_TOKEN_ID: number | null
+          REDEMPTION_STATUS: string
+          WALLET_ADDRESS: string | null
+          REDEMPTION_DATE: string | null
+          REDEMPTION_TX_HASH: string | null
+          SHARDS_COLLECTED: number
+          SHARDS_REQUIRED: number
+          SHIPPING_STATUS: string | null
+          TRACKING_NUMBER: string | null
           LOCAL_TIMESTAMP: string
           OCR_DERIVED_TIMESTAMP: string | null
           NLP_DERIVED_TIMESTAMP: string | null
@@ -134,10 +130,7 @@ export interface Database {
           NLP_DERIVED_GIS_ZONE: string | null
           NODE_COUNT: number
           NLP_NODE_CATEGORIZATION: string | null
-          RAW_OCR_TRANSCRIPTION: string | null
-          PREPROCESS_OCR_TRANSCRIPTION: string | null
           SOURCE_COLLECTION: string | null
-          DOCUMENT_TITLE: string | null
           DOCUMENT_DESCRIPTION: string | null
           FILE_FORMAT: string | null
           FILE_SIZE_BYTES: number
@@ -159,504 +152,439 @@ export interface Database {
           TAXONOMY: Json | null
           ITEM_ATTRIBUTES: Json | null
           SCENERY_ATTRIBUTES: Json | null
-          ALT_TEXT_SHORT: string | null
-          ALT_TEXT_LONG: string | null
-          AUDIO_DESCRIPTION: string | null
-          TACTILE_DESCRIPTION: string | null
-          READING_ORDER: Json | null
-          ACCESSIBILITY_SCORE: number
-          SCAN_TYPE: string
-          SHARD_TOKEN_ID: number | null
-          NFT_TOKEN_ID: number | null
-          REDEMPTION_STATUS: string
+        }
+        Insert: {
+          id?: string
+          CREATED_AT?: string
+          CONTRIBUTOR_ID?: string | null
+          CONTRIBUTED_AT?: string | null
+          DATA_LICENSE?: string
+          CONTRIBUTOR_NFT_MINTED?: boolean
+          ORIGINAL_IMAGE_URL?: string | null
+          ASSET_ID?: string | null
+          DOCUMENT_TITLE?: string | null
+          RAW_OCR_TRANSCRIPTION?: string | null
+          PREPROCESS_OCR_TRANSCRIPTION?: string | null
+          USER_ID?: string | null
+          ALT_TEXT_SHORT?: string | null
+          ALT_TEXT_LONG?: string | null
+          AUDIO_DESCRIPTION?: string | null
+          TACTILE_DESCRIPTION?: string | null
+          READING_ORDER?: Json | null
+          ACCESSIBILITY_SCORE?: number
+          SCAN_TYPE?: string
+          SHARD_TOKEN_ID?: number | null
+          NFT_TOKEN_ID?: number | null
+          REDEMPTION_STATUS?: string
+          WALLET_ADDRESS?: string | null
+          REDEMPTION_DATE?: string | null
+          REDEMPTION_TX_HASH?: string | null
+          SHARDS_COLLECTED?: number
+          SHARDS_REQUIRED?: number
+          SHIPPING_STATUS?: string | null
+          TRACKING_NUMBER?: string | null
+          LOCAL_TIMESTAMP?: string
+          OCR_DERIVED_TIMESTAMP?: string | null
+          NLP_DERIVED_TIMESTAMP?: string | null
+          LOCAL_GIS_ZONE?: string | null
+          OCR_DERIVED_GIS_ZONE?: string | null
+          NLP_DERIVED_GIS_ZONE?: string | null
+          NODE_COUNT?: number
+          NLP_NODE_CATEGORIZATION?: string | null
+          SOURCE_COLLECTION?: string | null
+          DOCUMENT_DESCRIPTION?: string | null
+          FILE_FORMAT?: string | null
+          FILE_SIZE_BYTES?: number
+          RESOLUTION_DPI?: number
+          COLOR_MODE?: string
+          CREATOR_AGENT?: string | null
+          RIGHTS_STATEMENT?: string | null
+          LANGUAGE_CODE?: string
+          FIXITY_CHECKSUM?: string | null
+          INGEST_DATE?: string
+          LAST_MODIFIED?: string
+          PROCESSING_STATUS?: string
+          CONFIDENCE_SCORE?: number
+          ENTITIES_EXTRACTED?: Json
+          RELATED_ASSETS?: Json
+          PRESERVATION_EVENTS?: Json
+          KEYWORDS_TAGS?: Json
+          ACCESS_RESTRICTIONS?: boolean
+          TAXONOMY?: Json | null
+          ITEM_ATTRIBUTES?: Json | null
+          SCENERY_ATTRIBUTES?: Json | null
+        }
+        Update: {
+          id?: string
+          CREATED_AT?: string
+          CONTRIBUTOR_ID?: string | null
+          CONTRIBUTED_AT?: string | null
+          DATA_LICENSE?: string
+          CONTRIBUTOR_NFT_MINTED?: boolean
+          ORIGINAL_IMAGE_URL?: string | null
+          ASSET_ID?: string | null
+          DOCUMENT_TITLE?: string | null
+          RAW_OCR_TRANSCRIPTION?: string | null
+          PREPROCESS_OCR_TRANSCRIPTION?: string | null
+          USER_ID?: string | null
+          ALT_TEXT_SHORT?: string | null
+          ALT_TEXT_LONG?: string | null
+          AUDIO_DESCRIPTION?: string | null
+          TACTILE_DESCRIPTION?: string | null
+          READING_ORDER?: Json | null
+          ACCESSIBILITY_SCORE?: number
+          SCAN_TYPE?: string
+          SHARD_TOKEN_ID?: number | null
+          NFT_TOKEN_ID?: number | null
+          REDEMPTION_STATUS?: string
+          WALLET_ADDRESS?: string | null
+          REDEMPTION_DATE?: string | null
+          REDEMPTION_TX_HASH?: string | null
+          SHARDS_COLLECTED?: number
+          SHARDS_REQUIRED?: number
+          SHIPPING_STATUS?: string | null
+          TRACKING_NUMBER?: string | null
+          LOCAL_TIMESTAMP?: string
+          OCR_DERIVED_TIMESTAMP?: string | null
+          NLP_DERIVED_TIMESTAMP?: string | null
+          LOCAL_GIS_ZONE?: string | null
+          OCR_DERIVED_GIS_ZONE?: string | null
+          NLP_DERIVED_GIS_ZONE?: string | null
+          NODE_COUNT?: number
+          NLP_NODE_CATEGORIZATION?: string | null
+          SOURCE_COLLECTION?: string | null
+          DOCUMENT_DESCRIPTION?: string | null
+          FILE_FORMAT?: string | null
+          FILE_SIZE_BYTES?: number
+          RESOLUTION_DPI?: number
+          COLOR_MODE?: string
+          CREATOR_AGENT?: string | null
+          RIGHTS_STATEMENT?: string | null
+          LANGUAGE_CODE?: string
+          FIXITY_CHECKSUM?: string | null
+          INGEST_DATE?: string
+          LAST_MODIFIED?: string
+          PROCESSING_STATUS?: string
+          CONFIDENCE_SCORE?: number
+          ENTITIES_EXTRACTED?: Json
+          RELATED_ASSETS?: Json
+          PRESERVATION_EVENTS?: Json
+          KEYWORDS_TAGS?: Json
+          ACCESS_RESTRICTIONS?: boolean
+          TAXONOMY?: Json | null
+          ITEM_ATTRIBUTES?: Json | null
+          SCENERY_ATTRIBUTES?: Json | null
+        }
+      }
+      OBJECT_ATTRIBUTES: {
+        Row: {
+          id: string
+          ASSET_ID: string
+          TAXONOMY_ID: string | null
+          COMMON_NAME: string | null
+          SCIENTIFIC_NAME: string | null
+          CONFIDENCE_SCORE: number | null
+          MATERIAL: string[] | null
+          TECHNIQUE: string[] | null
+          MAKER_OR_ARTIST: string | null
+          MAKER_ROLE: string | null
+          MANUFACTURER: string | null
+          PRODUCTION_DATE: string | null
+          PERIOD_OR_STYLE: string | null
+          DIMENSIONS: Json | null
+          CONDITION: string | null
+          INSCRIPTIONS_OR_MARKS: string[] | null
+          ARCHITECTURAL_STYLE: string[] | null
+          CONSTRUCTION_DATE: string | null
+          ARCHITECT_OR_BUILDER: string | null
+          SITE_TYPE: string | null
+          GPS_ACCURACY_METERS: number | null
+          CULTURAL_SIGNIFICANCE: string | null
+          PROVENANCE_NOTES: string | null
+          CREATED_AT: string
+          UPDATED_AT: string
+        }
+        Insert: {
+          id?: string
+          ASSET_ID: string
+          TAXONOMY_ID?: string | null
+          COMMON_NAME?: string | null
+          SCIENTIFIC_NAME?: string | null
+          CONFIDENCE_SCORE?: number | null
+          MATERIAL?: string[] | null
+          TECHNIQUE?: string[] | null
+          MAKER_OR_ARTIST?: string | null
+          MAKER_ROLE?: string | null
+          MANUFACTURER?: string | null
+          PRODUCTION_DATE?: string | null
+          PERIOD_OR_STYLE?: string | null
+          DIMENSIONS?: Json | null
+          CONDITION?: string | null
+          INSCRIPTIONS_OR_MARKS?: string[] | null
+          ARCHITECTURAL_STYLE?: string[] | null
+          CONSTRUCTION_DATE?: string | null
+          ARCHITECT_OR_BUILDER?: string | null
+          SITE_TYPE?: string | null
+          GPS_ACCURACY_METERS?: number | null
+          CULTURAL_SIGNIFICANCE?: string | null
+          PROVENANCE_NOTES?: string | null
+          CREATED_AT?: string
+          UPDATED_AT?: string
+        }
+        Update: {
+          id?: string
+          ASSET_ID?: string
+          TAXONOMY_ID?: string | null
+          COMMON_NAME?: string | null
+          SCIENTIFIC_NAME?: string | null
+          CONFIDENCE_SCORE?: number | null
+          MATERIAL?: string[] | null
+          TECHNIQUE?: string[] | null
+          MAKER_OR_ARTIST?: string | null
+          MAKER_ROLE?: string | null
+          MANUFACTURER?: string | null
+          PRODUCTION_DATE?: string | null
+          PERIOD_OR_STYLE?: string | null
+          DIMENSIONS?: Json | null
+          CONDITION?: string | null
+          INSCRIPTIONS_OR_MARKS?: string[] | null
+          ARCHITECTURAL_STYLE?: string[] | null
+          CONSTRUCTION_DATE?: string | null
+          ARCHITECT_OR_BUILDER?: string | null
+          SITE_TYPE?: string | null
+          GPS_ACCURACY_METERS?: number | null
+          CULTURAL_SIGNIFICANCE?: string | null
+          PROVENANCE_NOTES?: string | null
+          CREATED_AT?: string
+          UPDATED_AT?: string
+        }
+      }
+      PACKAGE_ASSETS: {
+        Row: {
+          id: string
+          PACKAGE_ID: string | null
+          ASSET_ID: string | null
+          ADDED_AT: string
+        }
+        Insert: {
+          id?: string
+          PACKAGE_ID?: string | null
+          ASSET_ID?: string | null
+          ADDED_AT?: string
+        }
+        Update: {
+          id?: string
+          PACKAGE_ID?: string | null
+          ASSET_ID?: string | null
+          ADDED_AT?: string
+        }
+      }
+      PACKAGES: {
+        Row: {
+          id: string
+          PACKAGE_NAME: string
+          PACKAGE_TYPE: string
+          GROUPING_KEY: string
+          DESCRIPTION: string | null
+          BASE_PRICE_CENTS: number
+          PRICE_PER_ASSET_CENTS: number
+          TOTAL_ASSETS: number
+          TOTAL_TOKENS: number
+          IS_ACTIVE: boolean
+          CREATED_AT: string
+          UPDATED_AT: string
+        }
+        Insert: {
+          id?: string
+          PACKAGE_NAME: string
+          PACKAGE_TYPE: string
+          GROUPING_KEY: string
+          DESCRIPTION?: string | null
+          BASE_PRICE_CENTS: number
+          PRICE_PER_ASSET_CENTS?: number
+          TOTAL_ASSETS?: number
+          TOTAL_TOKENS?: number
+          IS_ACTIVE?: boolean
+          CREATED_AT?: string
+          UPDATED_AT?: string
+        }
+        Update: {
+          id?: string
+          PACKAGE_NAME?: string
+          PACKAGE_TYPE?: string
+          GROUPING_KEY?: string
+          DESCRIPTION?: string | null
+          BASE_PRICE_CENTS?: number
+          PRICE_PER_ASSET_CENTS?: number
+          TOTAL_ASSETS?: number
+          TOTAL_TOKENS?: number
+          IS_ACTIVE?: boolean
+          CREATED_AT?: string
+          UPDATED_AT?: string
+        }
+      }
+      TAXONOMY: {
+        Row: {
+          id: string
+          TAXON_RANK: string
+          NAME: string
+          PARENT_ID: string | null
+          GBIF_ID: number | null
+          INATURALIST_TAXON_ID: number | null
+          WIKIDATA_QID: string | null
+          CREATED_AT: string
+        }
+        Insert: {
+          id?: string
+          TAXON_RANK: string
+          NAME: string
+          PARENT_ID?: string | null
+          GBIF_ID?: number | null
+          INATURALIST_TAXON_ID?: number | null
+          WIKIDATA_QID?: string | null
+          CREATED_AT?: string
+        }
+        Update: {
+          id?: string
+          TAXON_RANK?: string
+          NAME?: string
+          PARENT_ID?: string | null
+          GBIF_ID?: number | null
+          INATURALIST_TAXON_ID?: number | null
+          WIKIDATA_QID?: string | null
+          CREATED_AT?: string
+        }
+      }
+      USER_ASSET_ACCESS: {
+        Row: {
+          id: string
+          USER_ID: string | null
+          ASSET_ID: string | null
+          SOURCE_PURCHASE_ID: string | null
+          GRANTED_AT: string
+        }
+        Insert: {
+          id?: string
+          USER_ID?: string | null
+          ASSET_ID?: string | null
+          SOURCE_PURCHASE_ID?: string | null
+          GRANTED_AT?: string
+        }
+        Update: {
+          id?: string
+          USER_ID?: string | null
+          ASSET_ID?: string | null
+          SOURCE_PURCHASE_ID?: string | null
+          GRANTED_AT?: string
+        }
+      }
+      USER_PROFILES: {
+        Row: {
+          id: string
+          EMAIL: string | null
+          DISPLAY_NAME: string | null
           WALLET_ADDRESS: string | null
-          REDEMPTION_DATE: string | null
-          REDEMPTION_TX_HASH: string | null
-          SHARDS_COLLECTED: number
-          SHARDS_REQUIRED: number
-          SHIPPING_STATUS: string | null
-          TRACKING_NUMBER: string | null
+          CREATED_AT: string
+          UPDATED_AT: string
         }
         Insert: {
-          id?: string
-          created_at?: string
-          contributor_id?: string | null
-          contributed_at?: string | null
-          data_license?: string
-          contributor_nft_minted?: boolean
-          original_image_url?: string | null
-          asset_id?: string | null
-          document_title?: string | null
-          raw_ocr_transcription?: string | null
-          preprocess_ocr_transcription?: string | null
-          user_id?: string | null
-          alt_text_short?: string | null
-          alt_text_long?: string | null
-          audio_description?: string | null
-          tactile_description?: string | null
-          reading_order?: Json | null
-          accessibility_score?: number
-          scan_type?: string
-          shard_token_id?: number | null
-          nft_token_id?: number | null
-          redemption_status?: string
-          wallet_address?: string | null
-          redemption_date?: string | null
-          redemption_tx_hash?: string | null
-          shards_collected?: number
-          shards_required?: number
-          shipping_status?: string | null
-          tracking_number?: string | null
-          CONTRIBUTOR_ID?: string | null
-          CONTRIBUTED_AT?: string | null
-          DATA_LICENSE?: string
-          CONTRIBUTOR_NFT_MINTED?: boolean
-          LOCAL_TIMESTAMP?: string
-          OCR_DERIVED_TIMESTAMP?: string | null
-          NLP_DERIVED_TIMESTAMP?: string | null
-          LOCAL_GIS_ZONE?: string | null
-          OCR_DERIVED_GIS_ZONE?: string | null
-          NLP_DERIVED_GIS_ZONE?: string | null
-          NODE_COUNT?: number
-          NLP_NODE_CATEGORIZATION?: string | null
-          RAW_OCR_TRANSCRIPTION?: string | null
-          PREPROCESS_OCR_TRANSCRIPTION?: string | null
-          SOURCE_COLLECTION?: string | null
-          DOCUMENT_TITLE?: string | null
-          DOCUMENT_DESCRIPTION?: string | null
-          FILE_FORMAT?: string | null
-          FILE_SIZE_BYTES?: number
-          RESOLUTION_DPI?: number
-          COLOR_MODE?: string
-          CREATOR_AGENT?: string | null
-          RIGHTS_STATEMENT?: string | null
-          LANGUAGE_CODE?: string
-          FIXITY_CHECKSUM?: string | null
-          INGEST_DATE?: string
-          LAST_MODIFIED?: string
-          PROCESSING_STATUS?: string
-          CONFIDENCE_SCORE?: number
-          ENTITIES_EXTRACTED?: Json
-          RELATED_ASSETS?: Json
-          PRESERVATION_EVENTS?: Json
-          KEYWORDS_TAGS?: Json
-          ACCESS_RESTRICTIONS?: boolean
-          TAXONOMY?: Json | null
-          ITEM_ATTRIBUTES?: Json | null
-          SCENERY_ATTRIBUTES?: Json | null
-          ALT_TEXT_SHORT?: string | null
-          ALT_TEXT_LONG?: string | null
-          AUDIO_DESCRIPTION?: string | null
-          TACTILE_DESCRIPTION?: string | null
-          READING_ORDER?: Json | null
-          ACCESSIBILITY_SCORE?: number
-          SCAN_TYPE?: string
-          SHARD_TOKEN_ID?: number | null
-          NFT_TOKEN_ID?: number | null
-          REDEMPTION_STATUS?: string
+          id: string
+          EMAIL?: string | null
+          DISPLAY_NAME?: string | null
           WALLET_ADDRESS?: string | null
-          REDEMPTION_DATE?: string | null
-          REDEMPTION_TX_HASH?: string | null
-          SHARDS_COLLECTED?: number
-          SHARDS_REQUIRED?: number
-          SHIPPING_STATUS?: string | null
-          TRACKING_NUMBER?: string | null
+          CREATED_AT?: string
+          UPDATED_AT?: string
         }
         Update: {
           id?: string
-          created_at?: string
-          contributor_id?: string | null
-          contributed_at?: string | null
-          data_license?: string
-          contributor_nft_minted?: boolean
-          original_image_url?: string | null
-          asset_id?: string | null
-          document_title?: string | null
-          raw_ocr_transcription?: string | null
-          preprocess_ocr_transcription?: string | null
-          user_id?: string | null
-          alt_text_short?: string | null
-          alt_text_long?: string | null
-          audio_description?: string | null
-          tactile_description?: string | null
-          reading_order?: Json | null
-          accessibility_score?: number
-          scan_type?: string
-          shard_token_id?: number | null
-          nft_token_id?: number | null
-          redemption_status?: string
-          wallet_address?: string | null
-          redemption_date?: string | null
-          redemption_tx_hash?: string | null
-          shards_collected?: number
-          shards_required?: number
-          shipping_status?: string | null
-          tracking_number?: string | null
-          CONTRIBUTOR_ID?: string | null
-          CONTRIBUTED_AT?: string | null
-          DATA_LICENSE?: string
-          CONTRIBUTOR_NFT_MINTED?: boolean
-          LOCAL_TIMESTAMP?: string
-          OCR_DERIVED_TIMESTAMP?: string | null
-          NLP_DERIVED_TIMESTAMP?: string | null
-          LOCAL_GIS_ZONE?: string | null
-          OCR_DERIVED_GIS_ZONE?: string | null
-          NLP_DERIVED_GIS_ZONE?: string | null
-          NODE_COUNT?: number
-          NLP_NODE_CATEGORIZATION?: string | null
-          RAW_OCR_TRANSCRIPTION?: string | null
-          PREPROCESS_OCR_TRANSCRIPTION?: string | null
-          SOURCE_COLLECTION?: string | null
-          DOCUMENT_TITLE?: string | null
-          DOCUMENT_DESCRIPTION?: string | null
-          FILE_FORMAT?: string | null
-          FILE_SIZE_BYTES?: number
-          RESOLUTION_DPI?: number
-          COLOR_MODE?: string
-          CREATOR_AGENT?: string | null
-          RIGHTS_STATEMENT?: string | null
-          LANGUAGE_CODE?: string
-          FIXITY_CHECKSUM?: string | null
-          INGEST_DATE?: string
-          LAST_MODIFIED?: string
-          PROCESSING_STATUS?: string
-          CONFIDENCE_SCORE?: number
-          ENTITIES_EXTRACTED?: Json
-          RELATED_ASSETS?: Json
-          PRESERVATION_EVENTS?: Json
-          KEYWORDS_TAGS?: Json
-          ACCESS_RESTRICTIONS?: boolean
-          TAXONOMY?: Json | null
-          ITEM_ATTRIBUTES?: Json | null
-          SCENERY_ATTRIBUTES?: Json | null
-          ALT_TEXT_SHORT?: string | null
-          ALT_TEXT_LONG?: string | null
-          AUDIO_DESCRIPTION?: string | null
-          TACTILE_DESCRIPTION?: string | null
-          READING_ORDER?: Json | null
-          ACCESSIBILITY_SCORE?: number
-          SCAN_TYPE?: string
-          SHARD_TOKEN_ID?: number | null
-          NFT_TOKEN_ID?: number | null
-          REDEMPTION_STATUS?: string
+          EMAIL?: string | null
+          DISPLAY_NAME?: string | null
           WALLET_ADDRESS?: string | null
-          REDEMPTION_DATE?: string | null
-          REDEMPTION_TX_HASH?: string | null
-          SHARDS_COLLECTED?: number
-          SHARDS_REQUIRED?: number
-          SHIPPING_STATUS?: string | null
-          TRACKING_NUMBER?: string | null
+          CREATED_AT?: string
+          UPDATED_AT?: string
         }
       }
-      object_attributes: {
+      USER_PURCHASES: {
         Row: {
           id: string
-          asset_id: string
-          taxonomy_id: string | null
-          common_name: string | null
-          scientific_name: string | null
-          confidence_score: number | null
-          material: string[] | null
-          technique: string[] | null
-          maker_or_artist: string | null
-          maker_role: string | null
-          manufacturer: string | null
-          production_date: string | null
-          period_or_style: string | null
-          dimensions: Json | null
-          condition: string | null
-          inscriptions_or_marks: string[] | null
-          architectural_style: string[] | null
-          construction_date: string | null
-          architect_or_builder: string | null
-          site_type: string | null
-          gps_accuracy_meters: number | null
-          cultural_significance: string | null
-          provenance_notes: string | null
-          created_at: string
-          updated_at: string
+          USER_ID: string | null
+          PACKAGE_ID: string | null
+          PURCHASE_TYPE: string
+          ORIGINAL_ASSET_COUNT: number | null
+          PURCHASED_ASSET_COUNT: number | null
+          DUPLICATE_COUNT: number
+          PRICE_PAID_CENTS: number
+          TRANSACTION_HASH: string | null
+          PURCHASED_AT: string
+          METADATA: Json | null
         }
         Insert: {
           id?: string
-          asset_id: string
-          taxonomy_id?: string | null
-          common_name?: string | null
-          scientific_name?: string | null
-          confidence_score?: number | null
-          material?: string[] | null
-          technique?: string[] | null
-          maker_or_artist?: string | null
-          maker_role?: string | null
-          manufacturer?: string | null
-          production_date?: string | null
-          period_or_style?: string | null
-          dimensions?: Json | null
-          condition?: string | null
-          inscriptions_or_marks?: string[] | null
-          architectural_style?: string[] | null
-          construction_date?: string | null
-          architect_or_builder?: string | null
-          site_type?: string | null
-          gps_accuracy_meters?: number | null
-          cultural_significance?: string | null
-          provenance_notes?: string | null
-          created_at?: string
-          updated_at?: string
+          USER_ID?: string | null
+          PACKAGE_ID?: string | null
+          PURCHASE_TYPE: string
+          ORIGINAL_ASSET_COUNT?: number | null
+          PURCHASED_ASSET_COUNT?: number | null
+          DUPLICATE_COUNT?: number
+          PRICE_PAID_CENTS: number
+          TRANSACTION_HASH?: string | null
+          PURCHASED_AT?: string
+          METADATA?: Json | null
         }
         Update: {
           id?: string
-          asset_id?: string
-          taxonomy_id?: string | null
-          common_name?: string | null
-          scientific_name?: string | null
-          confidence_score?: number | null
-          material?: string[] | null
-          technique?: string[] | null
-          maker_or_artist?: string | null
-          maker_role?: string | null
-          manufacturer?: string | null
-          production_date?: string | null
-          period_or_style?: string | null
-          dimensions?: Json | null
-          condition?: string | null
-          inscriptions_or_marks?: string[] | null
-          architectural_style?: string[] | null
-          construction_date?: string | null
-          architect_or_builder?: string | null
-          site_type?: string | null
-          gps_accuracy_meters?: number | null
-          cultural_significance?: string | null
-          provenance_notes?: string | null
-          created_at?: string
-          updated_at?: string
+          USER_ID?: string | null
+          PACKAGE_ID?: string | null
+          PURCHASE_TYPE?: string
+          ORIGINAL_ASSET_COUNT?: number | null
+          PURCHASED_ASSET_COUNT?: number | null
+          DUPLICATE_COUNT?: number
+          PRICE_PAID_CENTS?: number
+          TRANSACTION_HASH?: string | null
+          PURCHASED_AT?: string
+          METADATA?: Json | null
         }
       }
-      package_assets: {
+      WEB3_TRANSACTIONS: {
         Row: {
           id: string
-          package_id: string | null
-          asset_id: string | null
-          added_at: string
+          USER_ID: string | null
+          ASSET_ID: string | null
+          TX_HASH: string
+          DETAILS: string | null
+          CREATED_AT: string
         }
         Insert: {
           id?: string
-          package_id?: string | null
-          asset_id?: string | null
-          added_at?: string
+          USER_ID?: string | null
+          ASSET_ID?: string | null
+          TX_HASH: string
+          DETAILS?: string | null
+          CREATED_AT?: string
         }
         Update: {
           id?: string
-          package_id?: string | null
-          asset_id?: string | null
-          added_at?: string
-        }
-      }
-      packages: {
-        Row: {
-          id: string
-          package_name: string
-          package_type: string
-          grouping_key: string
-          description: string | null
-          base_price_cents: number
-          price_per_asset_cents: number
-          total_assets: number
-          total_tokens: number
-          is_active: boolean
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id?: string
-          package_name: string
-          package_type: string
-          grouping_key: string
-          description?: string | null
-          base_price_cents: number
-          price_per_asset_cents?: number
-          total_assets?: number
-          total_tokens?: number
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          package_name?: string
-          package_type?: string
-          grouping_key?: string
-          description?: string | null
-          base_price_cents?: number
-          price_per_asset_cents?: number
-          total_assets?: number
-          total_tokens?: number
-          is_active?: boolean
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      taxonomy: {
-        Row: {
-          id: string
-          taxon_rank: string
-          name: string
-          parent_id: string | null
-          gbif_id: number | null
-          inaturalist_taxon_id: number | null
-          wikidata_qid: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          taxon_rank: string
-          name: string
-          parent_id?: string | null
-          gbif_id?: number | null
-          inaturalist_taxon_id?: number | null
-          wikidata_qid?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          taxon_rank?: string
-          name?: string
-          parent_id?: string | null
-          gbif_id?: number | null
-          inaturalist_taxon_id?: number | null
-          wikidata_qid?: string | null
-          created_at?: string
-        }
-      }
-      user_asset_access: {
-        Row: {
-          id: string
-          user_id: string | null
-          asset_id: string | null
-          source_purchase_id: string | null
-          granted_at: string
-        }
-        Insert: {
-          id?: string
-          user_id?: string | null
-          asset_id?: string | null
-          source_purchase_id?: string | null
-          granted_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string | null
-          asset_id?: string | null
-          source_purchase_id?: string | null
-          granted_at?: string
-        }
-      }
-      user_profiles: {
-        Row: {
-          id: string
-          email: string | null
-          display_name: string | null
-          wallet_address: string | null
-          created_at: string
-          updated_at: string
-        }
-        Insert: {
-          id: string
-          email?: string | null
-          display_name?: string | null
-          wallet_address?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-        Update: {
-          id?: string
-          email?: string | null
-          display_name?: string | null
-          wallet_address?: string | null
-          created_at?: string
-          updated_at?: string
-        }
-      }
-      user_purchases: {
-        Row: {
-          id: string
-          user_id: string | null
-          package_id: string | null
-          purchase_type: string
-          original_asset_count: number | null
-          purchased_asset_count: number | null
-          duplicate_count: number
-          price_paid_cents: number
-          transaction_hash: string | null
-          purchased_at: string
-          metadata: Json | null
-        }
-        Insert: {
-          id?: string
-          user_id?: string | null
-          package_id?: string | null
-          purchase_type: string
-          original_asset_count?: number | null
-          purchased_asset_count?: number | null
-          duplicate_count?: number
-          price_paid_cents: number
-          transaction_hash?: string | null
-          purchased_at?: string
-          metadata?: Json | null
-        }
-        Update: {
-          id?: string
-          user_id?: string | null
-          package_id?: string | null
-          purchase_type?: string
-          original_asset_count?: number | null
-          purchased_asset_count?: number | null
-          duplicate_count?: number
-          price_paid_cents?: number
-          transaction_hash?: string | null
-          purchased_at?: string
-          metadata?: Json | null
-        }
-      }
-      web3_transactions: {
-        Row: {
-          id: string
-          user_id: string | null
-          asset_id: string | null
-          tx_hash: string
-          details: string | null
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          user_id?: string | null
-          asset_id?: string | null
-          tx_hash: string
-          details?: string | null
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          user_id?: string | null
-          asset_id?: string | null
-          tx_hash?: string
-          details?: string | null
-          created_at?: string
+          USER_ID?: string | null
+          ASSET_ID?: string | null
+          TX_HASH?: string
+          DETAILS?: string | null
+          CREATED_AT?: string
         }
       }
     }
-    Views: {
+    VIEWS: {
       [_ in never]: never
     }
-    Functions: {
-      delete_user_account: {
-        Args: Record<string, never>
-        Returns: void
+    FUNCTIONS: {
+      DELETE_USER_ACCOUNT: {
+        ARGS: Record<string, never>
+        RETURNS: void
       }
     }
-    Enums: {
+    ENUMS: {
       [_ in never]: never
     }
-    CompositeTypes: {
+    CompositeTYPES: {
       [_ in never]: never
     }
   }

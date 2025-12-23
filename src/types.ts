@@ -146,6 +146,7 @@ export interface HistoricalDocumentMetadata {
   LANGUAGE_CODE: string;
   FIXITY_CHECKSUM: string; // SHA-256
   INGEST_DATE: string;
+  CREATED_AT: string;
   LAST_MODIFIED: string;
   PROCESSING_STATUS: AssetStatus;
   CONFIDENCE_SCORE: number;
