@@ -1,11 +1,11 @@
 {
   "id": "/",
-  "name": "GeoGraph Node",
+  "name": "GeoGraph OCR Node",
   "short_name": "GeoGraph",
   "description": "Advanced OCR-to-Graph platform for historical data extraction and GIS metadata generation.",
   "lang": "en",
   "dir": "ltr",
-  "start_url": "/?v=1.7.6",
+  "start_url": "/?v=1.8.1",
   "scope": "/",
   "display": "standalone",
   "background_color": "#020617",

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'geograph-v1.7.6';
+const CACHE_NAME = 'geograph-v1.8.1';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',

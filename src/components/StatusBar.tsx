@@ -52,6 +52,9 @@ export default function StatusBar({ user, syncOn, isOnline, localCount, isGlobal
                         <span>MASTER</span>
                     </button>
                 </div>
+
+                <div className="h-3 w-px bg-slate-800 hidden sm:block" />
+                <span className="text-slate-600 hidden md:inline">v1.8.1</span>
             </div>
 
             <div className="flex items-center gap-4">

@@ -21,7 +21,7 @@ import('./App')
         <ErrorBoundary>
           <ToastProvider>
             <ConnectionStatus />
-            <Onboarding onComplete={() => console.log('Onboarding completed')} />
+            <Onboarding onComplete={() => {}} />
             <App />
           </ToastProvider>
         </ErrorBoundary>

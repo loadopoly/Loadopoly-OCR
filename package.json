@@ -1,6 +1,7 @@
 {
   "name": "geograph-ocr-node",
   "version": "1.8.1",
+  "description": "Advanced OCR-to-Graph platform with GIS metadata and semantic NLP",
   "type": "module",
   "scripts": {
     "dev": "vite",
