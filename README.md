@@ -44,7 +44,9 @@ Get your credentials:
 
 ---
 
-## 🚀 What's New in v1.7.3
+## 🚀 What's New in v1.7.7
+- **Database Schema Hardening:** Standardized all Supabase column names to UPPERCASE to prevent case-sensitivity issues (e.g., `ORIGINAL_IMAGE_URL`, `USER_ID`).
+- **Enterprise Features:** Added `IS_ENTERPRISE` flag and accessibility metadata fields (`alt_text_short`, `reading_order`, etc.) to the core schema.
 - **Reliable Ingestion Pipeline:** Fixed "new row violates row-level security policy" errors by deferring cloud sync until processing is complete, ensuring compatibility with restricted RLS environments.
 - **Local-First Persistence:** Initial ingestion states are now saved to IndexedDB immediately, preventing data loss during processing.
 - **Improved Error Recovery:** Better handling of processing failures with automatic local fallback and detailed error reporting in the queue.
