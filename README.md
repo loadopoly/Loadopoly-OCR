@@ -44,7 +44,9 @@ Get your credentials:
 
 ---
 
-## 🚀 What's New in v1.7.7
+## 🚀 What's New in v1.7.8
+- **Database Stability:** Organized all SQL migration and fix scripts into a dedicated `sql/` directory for easier maintenance.
+- **RLS Policy Fixes:** Added `sql/FIX_TABLE_RLS.sql` to resolve "new row violates row-level security policy" errors during upload.
 - **Database Schema Hardening:** Standardized all Supabase column names to UPPERCASE to prevent case-sensitivity issues (e.g., `ORIGINAL_IMAGE_URL`, `USER_ID`).
 - **Enterprise Features:** Added `IS_ENTERPRISE` flag and accessibility metadata fields (`alt_text_short`, `reading_order`, etc.) to the core schema.
 - **Reliable Ingestion Pipeline:** Fixed "new row violates row-level security policy" errors by deferring cloud sync until processing is complete, ensuring compatibility with restricted RLS environments.
