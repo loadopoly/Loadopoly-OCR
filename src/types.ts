@@ -123,6 +123,7 @@ export interface ReadingOrderBlock {
 
 // Strictly typed SQL-like Schema for Historical Documents
 export interface HistoricalDocumentMetadata {
+  ID: string;
   ASSET_ID: string;
   LOCAL_TIMESTAMP: string;
   OCR_DERIVED_TIMESTAMP: string | null;

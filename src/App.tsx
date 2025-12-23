@@ -359,6 +359,7 @@ export default function App() {
         status: AssetStatus.PROCESSING,
         progress: 10,
         sqlRecord: {
+          ID: id,
           ASSET_ID: id,
           LOCAL_TIMESTAMP: ingestDate,
           OCR_DERIVED_TIMESTAMP: null,
@@ -382,6 +383,7 @@ export default function App() {
           LANGUAGE_CODE: "en-US",
           FIXITY_CHECKSUM: checksum,
           INGEST_DATE: ingestDate,
+          CREATED_AT: ingestDate,
           LAST_MODIFIED: ingestDate,
           PROCESSING_STATUS: AssetStatus.PROCESSING,
           CONFIDENCE_SCORE: 0,

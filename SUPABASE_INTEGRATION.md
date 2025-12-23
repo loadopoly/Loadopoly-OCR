@@ -15,7 +15,7 @@ Main table for storing OCR-processed documents and their metadata.
 - Supports multiple scan types: DOCUMENT, ITEM, SCENERY
 - Includes accessibility features (alt text, audio descriptions, reading order)
 - Web3 integration fields (shard tokens, NFT tokens, redemption)
-- Both lowercase and UPPERCASE field names for backward compatibility
+- Standardized UPPERCASE field names for PostgREST compatibility
 
 **Used in:**
 - [src/services/supabaseService.ts](src/services/supabaseService.ts) - `fetchGlobalCorpus()`, `fetchUserAssets()`, `contributeAssetToGlobalCorpus()`

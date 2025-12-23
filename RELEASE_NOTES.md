@@ -1,20 +1,18 @@
+# 🚀 GeoGraph Node: v1.8.0 Release Notes
+
+This major update standardizes the entire database schema and application codebase to use **UPPERCASE** column names, resolving long-standing case-sensitivity issues with Supabase/PostgREST.
+
+## 🏗️ Schema Standardization (v1.8.0)
+*   **Global UPPERCASE Migration:** All database columns in the `historical_documents_global` table have been converted to UPPERCASE. This eliminates `PGRST204` errors and ensures that queries are always interpreted correctly by the backend.
+*   **Strict Type Safety:** The `database.types.ts` file has been completely refactored to match the new schema. All interface keys now use UPPERCASE, providing compile-time validation for all database interactions.
+*   **Unified Data Mapping:** The application's internal data models now align perfectly with the database schema, removing the need for complex case-conversion logic in the service layer.
+
+## 🛠️ Bug Fixes & Improvements
+*   **Ingestion Pipeline:** Fixed a critical bug where `ID` and `CREATED_AT` were missing from initial asset records, causing build failures and runtime sync issues.
+*   **Auth Reliability:** Standardized authentication-related queries to use `USER_ID` (uppercase), ensuring that account deletion and private asset retrieval work reliably.
+*   **Build Optimization:** Cleaned up redundant type definitions and improved the overall stability of the TypeScript build process.
+
 # 🚀 GeoGraph Node: v1.7.3 Release Notes
-
-This release addresses critical ingestion reliability and database synchronization issues.
-
-## 🛠️ Ingestion Reliability (v1.7.3)
-*   **RLS Conflict Resolution:** Fixed "new row violates row-level security policy" errors that occurred during batch processing. The system now defers cloud synchronization until after local AI processing is complete, avoiding unauthorized `UPDATE` attempts on the global corpus.
-*   **Local-First Persistence:** Initial ingestion states are now saved to IndexedDB immediately. This ensures that even if a network error occurs or the browser is refreshed during processing, the asset record is preserved locally.
-*   **Atomic Sync:** Cloud contributions are now performed as a single `INSERT` operation once all metadata (OCR, GIS, Entities) has been generated, ensuring data consistency in the global repository.
-
-## 🚀 What's New in v1.7.2
-*   **Automatic Cloud Sync:** All assets (including failed ones) are now automatically synced to Supabase cloud storage upon import, regardless of authentication status.
-*   **Robust Data Mapping:** Improved handling of case-insensitive database columns (ASSET_ID vs asset_id) for better cloud-to-local synchronization.
-*   **Marketplace Restoration:** Fixed the data marketplace view and bundle purchase logic.
-*   **Developer Tools:** New "Debug Mode" in settings for verbose logging and detailed AI processing error reports.
-*   **Cloud Fallback:** Implemented smart fallback for global corpus fetching to ensure the "Master" view remains functional even with schema inconsistencies.
-
-# 🚀 GeoGraph Node: v1.7.1 Release Notes
 
 ## 🔒 Privacy & Security (v1.7.0+)
 *   **End-to-End Encryption:** Sensitive OCR data and document descriptions are now encrypted client-side using AES-GCM before being sent to the cloud. Only you can decrypt your data.
