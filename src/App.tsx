@@ -390,7 +390,7 @@ export default function App() {
           PRESERVATION_EVENTS: [{ eventType: "INGESTION", timestamp: ingestDate, agent: "SYSTEM_USER", outcome: "SUCCESS" }],
           KEYWORDS_TAGS: [],
           ACCESS_RESTRICTIONS: false,
-          scan_type: scanType,
+          SCAN_TYPE: scanType,
           CONTRIBUTOR_ID: null,
           CONTRIBUTED_AT: null,
           DATA_LICENSE: isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0', 
@@ -409,7 +409,7 @@ export default function App() {
         } catch (e) {}
       }
 
-      const scanType = (asset.sqlRecord?.scan_type as ScanType) || ScanType.DOCUMENT;
+      const scanType = (asset.sqlRecord?.SCAN_TYPE as ScanType) || ScanType.DOCUMENT;
       const analysis = await processImageWithGemini(file, location, scanType, debugMode);
       
       const updatedSqlRecord: HistoricalDocumentMetadata = {
@@ -438,10 +438,10 @@ export default function App() {
             TAXONOMY: analysis.taxonomy,
             ITEM_ATTRIBUTES: analysis.itemAttributes,
             SCENERY_ATTRIBUTES: analysis.sceneryAttributes,
-            alt_text_short: analysis.alt_text_short,
-            alt_text_long: analysis.alt_text_long,
-            reading_order: analysis.reading_order,
-            accessibility_score: analysis.accessibility_score,
+            ALT_TEXT_SHORT: analysis.alt_text_short,
+            ALT_TEXT_LONG: analysis.alt_text_long,
+            READING_ORDER: analysis.reading_order,
+            ACCESSIBILITY_SCORE: analysis.accessibility_score,
             IS_ENTERPRISE: true, // Processed assets move to enterprise corpus
             PRESERVATION_EVENTS: [
               ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
