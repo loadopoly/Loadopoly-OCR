@@ -2,6 +2,12 @@
 
 Follow these steps to configure your Supabase backend for Loadopoly OCR.
 
+## 📂 SQL Migration Scripts
+All database migration and fix scripts are located in the `sql/` directory.
+- `sql/FIX_TABLE_RLS.sql`: Resets Row Level Security policies to allow public uploads (Fixes "new row violates RLS policy").
+- `sql/FIX_ALL_COLUMNS_TO_UPPERCASE.sql`: Renames all columns to UPPERCASE to match the application schema.
+- `sql/ADD_MISSING_COLUMNS.sql`: Adds any missing columns required by the latest version.
+
 ## 1. Create a Storage Bucket
 1. Log in to your Supabase Dashboard.
 2. Go to **Storage**.
