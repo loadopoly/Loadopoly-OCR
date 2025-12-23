@@ -63,7 +63,7 @@ const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> =
 
   return {
     id: assetId,
-    imageUrl: row.original_image_url || row.ORIGINAL_IMAGE_URL || '', 
+    imageUrl: row.ORIGINAL_IMAGE_URL || row.original_image_url || '', 
     timestamp: row.LOCAL_TIMESTAMP || row.created_at,
     ocrText: ocrText,
     status: AssetStatus.MINTED,
@@ -218,8 +218,8 @@ export const contributeAssetToGlobalCorpus = async (
         CONTRIBUTOR_ID: finalContributorId,
         CONTRIBUTED_AT: new Date().toISOString(),
         DATA_LICENSE: licenseType,
-        original_image_url: publicUrl,
-        user_id: userId || null,
+        ORIGINAL_IMAGE_URL: publicUrl,
+        USER_ID: userId || null,
         IS_ENTERPRISE: sqlRecord.IS_ENTERPRISE || false
       } as any);
 
