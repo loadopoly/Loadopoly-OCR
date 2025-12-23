@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [1.8.0] - 2025-12-23
+
+### Changed
+- **Global Schema Standardization:** Migrated all database column names to UPPERCASE to resolve PostgREST case-sensitivity issues and ensure consistent query behavior.
+- **TypeScript Refactor:** Updated `database.types.ts` and domain models to strictly use UPPERCASE keys, improving type safety and reducing runtime errors.
+- **Supabase Service Optimization:** Refactored `supabaseService.ts` to use standardized UPPERCASE identifiers in all queries and data mappings.
+
+### Fixed
+- **Build Stability:** Resolved TypeScript errors in `App.tsx` related to missing `ID` and `CREATED_AT` fields in the initial asset creation logic.
+- **Auth Integration:** Fixed lowercase column references in the account deletion and user asset retrieval flows.
+
 ## [1.7.1] - 2025-12-20
 
 ### Fixed

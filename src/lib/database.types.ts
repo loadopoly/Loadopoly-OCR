@@ -12,15 +12,15 @@ export type Json =
   | number
   | boolean
   | null
-  | { [KEY: string]: Json | undefined }
+  | { [key: string]: Json | undefined }
   | Json[]
 
 export interface Database {
   public: {
-    TABLES: {
-      DATA_ASSETS: {
+    Tables: {
+      data_assets: {
         Row: {
-          id: string
+          ID: string
           ASSET_ID: string
           DOCUMENT_TITLE: string | null
           DOCUMENT_DESCRIPTION: string | null
@@ -36,7 +36,7 @@ export interface Database {
           UPDATED_AT: string
         }
         Insert: {
-          id?: string
+          ID?: string
           ASSET_ID: string
           DOCUMENT_TITLE?: string | null
           DOCUMENT_DESCRIPTION?: string | null
@@ -52,7 +52,7 @@ export interface Database {
           UPDATED_AT?: string
         }
         Update: {
-          id?: string
+          ID?: string
           ASSET_ID?: string
           DOCUMENT_TITLE?: string | null
           DOCUMENT_DESCRIPTION?: string | null
@@ -68,32 +68,32 @@ export interface Database {
           UPDATED_AT?: string
         }
       }
-      DATASET_SHARES: {
+      dataset_shares: {
         Row: {
-          id: string
+          ID: string
           DATASET_ID: string
           SHARED_WITH: string
           SHARED_AT: string
           PERMISSIONS: string
         }
         Insert: {
-          id?: string
+          ID?: string
           DATASET_ID: string
           SHARED_WITH: string
           SHARED_AT?: string
           PERMISSIONS?: string
         }
         Update: {
-          id?: string
+          ID?: string
           DATASET_ID?: string
           SHARED_WITH?: string
           SHARED_AT?: string
           PERMISSIONS?: string
         }
       }
-      HISTORICAL_DOCUMENTS_GLOBAL: {
+      historical_documents_global: {
         Row: {
-          id: string
+          ID: string
           CREATED_AT: string
           CONTRIBUTOR_ID: string | null
           CONTRIBUTED_AT: string | null
@@ -149,12 +149,13 @@ export interface Database {
           PRESERVATION_EVENTS: Json
           KEYWORDS_TAGS: Json
           ACCESS_RESTRICTIONS: boolean
+          IS_ENTERPRISE: boolean
           TAXONOMY: Json | null
           ITEM_ATTRIBUTES: Json | null
           SCENERY_ATTRIBUTES: Json | null
         }
         Insert: {
-          id?: string
+          ID?: string
           CREATED_AT?: string
           CONTRIBUTOR_ID?: string | null
           CONTRIBUTED_AT?: string | null
@@ -210,12 +211,13 @@ export interface Database {
           PRESERVATION_EVENTS?: Json
           KEYWORDS_TAGS?: Json
           ACCESS_RESTRICTIONS?: boolean
+          IS_ENTERPRISE?: boolean
           TAXONOMY?: Json | null
           ITEM_ATTRIBUTES?: Json | null
           SCENERY_ATTRIBUTES?: Json | null
         }
         Update: {
-          id?: string
+          ID?: string
           CREATED_AT?: string
           CONTRIBUTOR_ID?: string | null
           CONTRIBUTED_AT?: string | null
@@ -271,14 +273,15 @@ export interface Database {
           PRESERVATION_EVENTS?: Json
           KEYWORDS_TAGS?: Json
           ACCESS_RESTRICTIONS?: boolean
+          IS_ENTERPRISE?: boolean
           TAXONOMY?: Json | null
           ITEM_ATTRIBUTES?: Json | null
           SCENERY_ATTRIBUTES?: Json | null
         }
       }
-      OBJECT_ATTRIBUTES: {
+      object_attributes: {
         Row: {
-          id: string
+          ID: string
           ASSET_ID: string
           TAXONOMY_ID: string | null
           COMMON_NAME: string | null
@@ -305,7 +308,7 @@ export interface Database {
           UPDATED_AT: string
         }
         Insert: {
-          id?: string
+          ID?: string
           ASSET_ID: string
           TAXONOMY_ID?: string | null
           COMMON_NAME?: string | null
@@ -332,7 +335,7 @@ export interface Database {
           UPDATED_AT?: string
         }
         Update: {
-          id?: string
+          ID?: string
           ASSET_ID?: string
           TAXONOMY_ID?: string | null
           COMMON_NAME?: string | null
@@ -359,29 +362,29 @@ export interface Database {
           UPDATED_AT?: string
         }
       }
-      PACKAGE_ASSETS: {
+      package_assets: {
         Row: {
-          id: string
+          ID: string
           PACKAGE_ID: string | null
           ASSET_ID: string | null
           ADDED_AT: string
         }
         Insert: {
-          id?: string
+          ID?: string
           PACKAGE_ID?: string | null
           ASSET_ID?: string | null
           ADDED_AT?: string
         }
         Update: {
-          id?: string
+          ID?: string
           PACKAGE_ID?: string | null
           ASSET_ID?: string | null
           ADDED_AT?: string
         }
       }
-      PACKAGES: {
+      packages: {
         Row: {
-          id: string
+          ID: string
           PACKAGE_NAME: string
           PACKAGE_TYPE: string
           GROUPING_KEY: string
@@ -395,7 +398,7 @@ export interface Database {
           UPDATED_AT: string
         }
         Insert: {
-          id?: string
+          ID?: string
           PACKAGE_NAME: string
           PACKAGE_TYPE: string
           GROUPING_KEY: string
@@ -409,7 +412,7 @@ export interface Database {
           UPDATED_AT?: string
         }
         Update: {
-          id?: string
+          ID?: string
           PACKAGE_NAME?: string
           PACKAGE_TYPE?: string
           GROUPING_KEY?: string
@@ -423,9 +426,9 @@ export interface Database {
           UPDATED_AT?: string
         }
       }
-      TAXONOMY: {
+      taxonomy: {
         Row: {
-          id: string
+          ID: string
           TAXON_RANK: string
           NAME: string
           PARENT_ID: string | null
@@ -435,7 +438,7 @@ export interface Database {
           CREATED_AT: string
         }
         Insert: {
-          id?: string
+          ID?: string
           TAXON_RANK: string
           NAME: string
           PARENT_ID?: string | null
@@ -445,7 +448,7 @@ export interface Database {
           CREATED_AT?: string
         }
         Update: {
-          id?: string
+          ID?: string
           TAXON_RANK?: string
           NAME?: string
           PARENT_ID?: string | null
@@ -455,32 +458,32 @@ export interface Database {
           CREATED_AT?: string
         }
       }
-      USER_ASSET_ACCESS: {
+      user_asset_access: {
         Row: {
-          id: string
+          ID: string
           USER_ID: string | null
           ASSET_ID: string | null
           SOURCE_PURCHASE_ID: string | null
           GRANTED_AT: string
         }
         Insert: {
-          id?: string
+          ID?: string
           USER_ID?: string | null
           ASSET_ID?: string | null
           SOURCE_PURCHASE_ID?: string | null
           GRANTED_AT?: string
         }
         Update: {
-          id?: string
+          ID?: string
           USER_ID?: string | null
           ASSET_ID?: string | null
           SOURCE_PURCHASE_ID?: string | null
           GRANTED_AT?: string
         }
       }
-      USER_PROFILES: {
+      user_profiles: {
         Row: {
-          id: string
+          ID: string
           EMAIL: string | null
           DISPLAY_NAME: string | null
           WALLET_ADDRESS: string | null
@@ -488,7 +491,7 @@ export interface Database {
           UPDATED_AT: string
         }
         Insert: {
-          id: string
+          ID: string
           EMAIL?: string | null
           DISPLAY_NAME?: string | null
           WALLET_ADDRESS?: string | null
@@ -496,7 +499,7 @@ export interface Database {
           UPDATED_AT?: string
         }
         Update: {
-          id?: string
+          ID?: string
           EMAIL?: string | null
           DISPLAY_NAME?: string | null
           WALLET_ADDRESS?: string | null
@@ -504,9 +507,9 @@ export interface Database {
           UPDATED_AT?: string
         }
       }
-      USER_PURCHASES: {
+      user_purchases: {
         Row: {
-          id: string
+          ID: string
           USER_ID: string | null
           PACKAGE_ID: string | null
           PURCHASE_TYPE: string
@@ -519,7 +522,7 @@ export interface Database {
           METADATA: Json | null
         }
         Insert: {
-          id?: string
+          ID?: string
           USER_ID?: string | null
           PACKAGE_ID?: string | null
           PURCHASE_TYPE: string
@@ -532,7 +535,7 @@ export interface Database {
           METADATA?: Json | null
         }
         Update: {
-          id?: string
+          ID?: string
           USER_ID?: string | null
           PACKAGE_ID?: string | null
           PURCHASE_TYPE?: string
@@ -545,9 +548,9 @@ export interface Database {
           METADATA?: Json | null
         }
       }
-      WEB3_TRANSACTIONS: {
+      web3_transactions: {
         Row: {
-          id: string
+          ID: string
           USER_ID: string | null
           ASSET_ID: string | null
           TX_HASH: string
@@ -555,7 +558,7 @@ export interface Database {
           CREATED_AT: string
         }
         Insert: {
-          id?: string
+          ID?: string
           USER_ID?: string | null
           ASSET_ID?: string | null
           TX_HASH: string
@@ -563,7 +566,7 @@ export interface Database {
           CREATED_AT?: string
         }
         Update: {
-          id?: string
+          ID?: string
           USER_ID?: string | null
           ASSET_ID?: string | null
           TX_HASH?: string
@@ -572,19 +575,19 @@ export interface Database {
         }
       }
     }
-    VIEWS: {
+    Views: {
       [_ in never]: never
     }
-    FUNCTIONS: {
-      DELETE_USER_ACCOUNT: {
-        ARGS: Record<string, never>
-        RETURNS: void
+    Functions: {
+      delete_user_account: {
+        Args: Record<string, never>
+        Returns: void
       }
     }
-    ENUMS: {
+    Enums: {
       [_ in never]: never
     }
-    CompositeTYPES: {
+    CompositeTypes: {
       [_ in never]: never
     }
   }

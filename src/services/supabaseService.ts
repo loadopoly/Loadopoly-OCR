@@ -11,7 +11,7 @@ export { supabase, isSupabaseConfigured, testSupabaseConnection };
  * Helper to map a Supabase row to a DigitalAsset, handling case inconsistencies.
  */
 const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> => {
-  const assetId = row.ASSET_ID || row.id;
+  const assetId = row.ASSET_ID || row.ID;
   const docTitle = row.DOCUMENT_TITLE || 'Untitled Document';
   const dataLicense = row.DATA_LICENSE || 'GEOGRAPH_CORPUS_1.0';
   
