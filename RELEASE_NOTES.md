@@ -1,3 +1,19 @@
+# 🚀 GeoGraph Node: v1.9.0 Release Notes
+
+This major update introduces **Curator Mode**, a powerful suite of manual management tools that allow users to refine AI-extracted data and create custom collections.
+
+## 🎨 Curator Mode & Manual Management
+*   **Dedicated Curator View:** A new sidebar tab for high-level asset management and data refinement.
+*   **Manual Bundling:** Multi-select assets to create persistent, user-defined bundles. These bundles are excluded from automatic clustering to preserve user intent.
+*   **Annotation Editor:** Directly edit OCR text, titles, and descriptions. Manually edited records are flagged with `IS_USER_ANNOTATED` for data provenance.
+*   **Deterministic AI:** Set a fixed seed for Gemini 2.5 Flash, ensuring that multiple photos of the same card/document yield consistent metadata.
+
+## 🛠️ UI & Reliability Improvements
+*   **AR Scanner Fix:** Moved the "Process" button to the top-right in AR mode to ensure it never blocks the camera shutter.
+*   **Master View Processing:** Enabled the "Contribute" feature in the Master view, allowing users to process global assets directly.
+*   **Stuck Asset Recovery:** Added "Retry" buttons to the GIS Context dashboard for assets that hang in a "Processing..." state.
+*   **Schema Migration:** Added `sql/ADD_CURATOR_COLUMNS.sql` to support the new manual curation flags in Supabase.
+
 # 🚀 GeoGraph Node: v1.8.1 Release Notes
 
 This patch fixes a critical database synchronization error where short random IDs were rejected by Supabase's UUID validation.

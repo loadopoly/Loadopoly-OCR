@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.8.1-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-1.9.0-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -61,7 +61,15 @@ For mass usage, ensure your Supabase tables have RLS enabled. The project includ
 
 ---
 
-## 🚀 What's New in v1.8.1
+## 🚀 What's New in v1.9.0
+- **Curator Mode:** Introduced a dedicated "Curator" view for manual asset management, allowing users to override AI annotations and create custom bundles.
+- **Manual Bundling:** Users can now multi-select assets and group them into persistent "User Defined Bundles" that bypass automatic clustering logic.
+- **Deterministic AI Extraction:** Implemented fixed seeding for Gemini 2.5 Flash to ensure consistent metadata extraction across multiple photos of the same object.
+- **AR UI Optimization:** Relocated the "Process Session" bubble in the AR Scanner to prevent overlap with the shutter button on mobile devices.
+- **Global Processing & Recovery:** Enabled "Contribute" (processing) in the Master view and added "Retry" logic for assets stuck in a processing state.
+- **Schema Expansion:** Added `IS_USER_ANNOTATED` and `USER_BUNDLE_ID` columns to the Supabase schema to support manual curation and persistent user collections.
+
+### Previous (v1.8.1)
 - **Production Hardening:** Standardized project metadata and environment variables.
 - **Security Enhancements:** Improved RLS policies for owner-based data protection.
 - **Cleanup:** Removed debug logs and optimized build configuration.

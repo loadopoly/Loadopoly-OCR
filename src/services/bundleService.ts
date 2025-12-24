@@ -4,9 +4,13 @@ export const createBundles = (assets: DigitalAsset[]): (DigitalAsset | ImageBund
   const bundles: Record<string, DigitalAsset[]> = {};
   const singles: DigitalAsset[] = [];
 
-  assets.forEach(asset => {
+  // Filter out assets that are already in a user-defined bundle
+  const autoBundleAssets = assets.filter(a => !a.sqlRecord?.USER_BUNDLE_ID);
+  const userBundledAssets = assets.filter(a => !!a.sqlRecord?.USER_BUNDLE_ID);
+
+  autoBundleAssets.forEach(asset => {
     try {
-        const key = generateBundleKey(asset, assets);
+        const key = generateBundleKey(asset, autoBundleAssets);
         // Only bundle if we have a valid key and decent confidence
         if (key && asset.sqlRecord?.CONFIDENCE_SCORE && asset.sqlRecord.CONFIDENCE_SCORE > 0.6) {
             if (!bundles[key]) bundles[key] = [];
@@ -36,6 +40,21 @@ export const createBundles = (assets: DigitalAsset[]): (DigitalAsset | ImageBund
         // Fallback: treat all items in failed bundle as singles
         bundledItems.push(...group);
     }
+  });
+
+  // Group user-defined bundles
+  const userBundlesMap: Record<string, DigitalAsset[]> = {};
+  userBundledAssets.forEach(asset => {
+    const bid = asset.sqlRecord!.USER_BUNDLE_ID!;
+    if (!userBundlesMap[bid]) userBundlesMap[bid] = [];
+    userBundlesMap[bid].push(asset);
+  });
+
+  Object.entries(userBundlesMap).forEach(([bid, group]) => {
+    const bundle = createBundleFromGroup(group);
+    bundle.bundleId = bid;
+    bundle.isUserDefined = true;
+    bundledItems.push(bundle);
   });
 
   return [...bundledItems, ...singles];
@@ -131,6 +150,17 @@ const createBundleFromGroup = (group: DigitalAsset[]): ImageBundle => {
     combinedGraph: { nodes: Array.from(allNodes.values()), links: allLinks },
     combinedRecord: combinedRecord,
     status: AssetStatus.MINTED
+  };
+};
+
+export const createUserBundle = (assets: DigitalAsset[], title: string): ImageBundle => {
+  if (!assets || assets.length === 0) throw new Error("Cannot create empty bundle");
+  
+  const bundle = createBundleFromGroup(assets);
+  return {
+    ...bundle,
+    title: title || bundle.title,
+    isUserDefined: true
   };
 };
 

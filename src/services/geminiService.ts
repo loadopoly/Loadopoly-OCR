@@ -338,7 +338,9 @@ export const processImageWithGemini = async (
       ],
       config: {
         responseMimeType: "application/json",
-        responseSchema: schema
+        responseSchema: schema,
+        // @ts-ignore - seed is supported in the latest Gemini API for determinism
+        seed: 42
       }
     });
 

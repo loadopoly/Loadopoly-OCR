@@ -157,6 +157,8 @@ export interface HistoricalDocumentMetadata {
   KEYWORDS_TAGS: string[];
   ACCESS_RESTRICTIONS: boolean;
   SCAN_TYPE: string;
+  IS_USER_ANNOTATED?: boolean; // Flag for user-modified data
+  USER_BUNDLE_ID?: string | null; // Link to manual bundle
   
   // Rich Metadata based on Scan Type
   TAXONOMY?: TaxonomyData;
@@ -204,11 +206,13 @@ export interface ImageBundle {
   title: string;
   primaryImageUrl: string;
   imageUrls: string[];
+  assetIds?: string[]; // List of assets in this bundle
   timeRange: { earliest: string | null; latest: string | null };
   combinedTokens: number;
   combinedGraph?: GraphData;
   combinedRecord?: HistoricalDocumentMetadata;
   status: AssetStatus;
+  isUserDefined?: boolean; // Flag for manually created bundles
 }
 
 export interface BatchItem {

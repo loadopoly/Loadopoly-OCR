@@ -65,6 +65,7 @@ import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import PurchaseModal from './components/PurchaseModal';
 import SmartSuggestions from './components/SmartSuggestions';
 import StatusBar from './components/StatusBar';
+import AnnotationEditor from './components/AnnotationEditor';
 import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/KeyboardShortcuts';
 import { announce } from './lib/accessibility';
 
@@ -147,6 +148,8 @@ export default function App() {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [arSessionQueue, setArSessionQueue] = useState<File[]>([]);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [editingAsset, setEditingAsset] = useState<DigitalAsset | null>(null);
   const [ownedAssetIds, setOwnedAssetIds] = useState<Set<string>>(new Set());
   const [purchaseModalData, setPurchaseModalData] = useState<{title: string, assets: DigitalAsset[]} | null>(null);
   const [debugMode, setDebugMode] = useState(localStorage.getItem('geograph-debug-mode') === 'true');
@@ -156,6 +159,8 @@ export default function App() {
   const [syncOn, setSyncOn] = useState(false);
   const [web3Enabled, setWeb3Enabled] = useState(false);
   const [scannerConnected, setScannerConnected] = useState(false);
+  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
+  const [editingAsset, setEditingAsset] = useState<DigitalAsset | null>(null);
 
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
 
@@ -310,17 +315,20 @@ export default function App() {
   }, [assets]);
 
   const handleAssetUpdate = async (updatedAsset: DigitalAsset) => {
-    if (!isGlobalView) {
+    if (isGlobalView) {
+        setGlobalAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
+    } else {
         setLocalAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
-        if (user?.id) {
-          // Authenticated users: update in Supabase
-          const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-          contributeAssetToGlobalCorpus(updatedAsset, user.id, license as any, true)
-            .catch(err => console.error("Failed to update asset in Supabase", err));
-        } else {
-          // Unauthenticated users: save to IndexedDB only
-          await saveAsset(updatedAsset);
-        }
+    }
+    
+    if (user?.id || isGlobalView) {
+      // Authenticated users or global view: update in Supabase
+      const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+      contributeAssetToGlobalCorpus(updatedAsset, user?.id, license as any, true)
+        .catch(err => console.error("Failed to update asset in Supabase", err));
+    } else {
+      // Unauthenticated users: save to IndexedDB only
+      await saveAsset(updatedAsset);
     }
   };
 
@@ -478,6 +486,39 @@ export default function App() {
       return resultAsset;
   };
 
+  const resumeAsset = async (asset: DigitalAsset) => {
+    if (isProcessing) return;
+    
+    let fileToProcess: File | Blob | null = asset.imageBlob || null;
+    
+    if (!fileToProcess && asset.imageUrl.startsWith('http')) {
+        try {
+            const response = await fetch(asset.imageUrl);
+            fileToProcess = await response.blob();
+        } catch (e) {
+            console.error("Failed to fetch image for re-processing", e);
+            return;
+        }
+    }
+    
+    if (!fileToProcess) {
+        alert("Could not find image data to re-process.");
+        return;
+    }
+    
+    setIsProcessing(true);
+    try {
+        const file = fileToProcess instanceof File ? fileToProcess : new File([fileToProcess], asset.sqlRecord?.DOCUMENT_TITLE || 'reprocess.jpg', { type: fileToProcess.type });
+        const processedAsset = await processAssetPipeline(asset, file);
+        setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+        if (!user) await saveAsset(processedAsset);
+    } catch (err) {
+        console.error("Resuming processing failed:", err);
+    } finally {
+        setIsProcessing(false);
+    }
+  };
+
   const ingestFile = async (file: File, source: string = "Upload") => {
     setIsProcessing(true);
     try {
@@ -540,6 +581,54 @@ export default function App() {
       setBatchQueue(prev => [...prev, ...newQueueItems]);
       setActiveTab('batch');
       setTimeout(() => processNextBatchItem(), 100);
+  };
+
+  const handleManualBundle = async () => {
+    if (selectedAssetIds.size < 2) {
+      alert("Please select at least 2 assets to bundle.");
+      return;
+    }
+
+    const bundleTitle = prompt("Enter a title for this manual bundle:", "Manual Collection");
+    if (!bundleTitle) return;
+
+    const bundleId = uuidv4();
+    const selectedAssets = assets.filter(a => selectedAssetIds.has(a.id));
+    
+    // Update all selected assets with the new bundle ID
+    const updatedAssets = selectedAssets.map(asset => ({
+      ...asset,
+      sqlRecord: {
+        ...asset.sqlRecord!,
+        USER_BUNDLE_ID: bundleId,
+        DOCUMENT_TITLE: asset.sqlRecord?.DOCUMENT_TITLE || bundleTitle, // Keep original title if exists
+        PRESERVATION_EVENTS: [
+          ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
+          { eventType: "MANUAL_BUNDLING", timestamp: new Date().toISOString(), agent: user?.email || "User", outcome: "SUCCESS" }
+        ]
+      }
+    }));
+
+    // Save locally
+    for (const asset of updatedAssets) {
+      await saveAsset(asset);
+      // Update state
+      if (isGlobalView) {
+        setGlobalAssets(prev => prev.map(a => a.id === asset.id ? asset : a));
+      } else {
+        setLocalAssets(prev => prev.map(a => a.id === asset.id ? asset : a));
+      }
+    }
+
+    // Sync to Supabase
+    const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+    for (const asset of updatedAssets) {
+      contributeAssetToGlobalCorpus(asset, user?.id, license as any, true).catch(e => console.error("Failed to sync manual bundle", e));
+    }
+
+    setSelectedAssetIds(new Set());
+    announce(`Created manual bundle: ${bundleTitle}`);
+    setActiveTab('assets');
   };
 
   const processNextBatchItem = async () => {
@@ -671,6 +760,7 @@ export default function App() {
           <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => switchTab('batch')} />
           <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => switchTab('ar')} />
           <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => switchTab('assets')} />
+          <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => switchTab('curator')} />
           <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => switchTab('graph')} />
           <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => switchTab('semantic')} />
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => switchTab('database')} />
@@ -737,6 +827,7 @@ export default function App() {
               <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => { switchTab('batch'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => { switchTab('ar'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => { switchTab('assets'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => { switchTab('curator'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => { switchTab('graph'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => { switchTab('semantic'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsMobileMenuOpen(false); }} />
@@ -801,13 +892,13 @@ export default function App() {
                 </div>
             </div>
           <div className="flex items-center gap-2">
-             {!isGlobalView && activeTab !== 'batch' && activeTab !== 'ar' && (
+             {activeTab !== 'batch' && activeTab !== 'ar' && (
                 <>
-                  <CameraCapture onCapture={(file) => ingestFile(file, "Mobile Camera")} />
-                  <label className={`flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <CameraCapture onCapture={(file) => ingestFile(file, isGlobalView ? "Global Contribution" : "Mobile Camera")} />
+                  <label className={`flex items-center gap-2 px-4 py-2 ${isGlobalView ? 'bg-indigo-900/40 border-indigo-500/50 hover:bg-indigo-900/60' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'} border text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                       {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Upload size={18} />}
-                      <span>Upload</span>
-                      <input type="file" className="hidden" accept="image/*, application/pdf" onChange={(e) => e.target.files?.[0] && ingestFile(e.target.files[0], "Direct Upload")} disabled={isProcessing} />
+                      <span>{isGlobalView ? 'Contribute' : 'Upload'}</span>
+                      <input type="file" className="hidden" accept="image/*, application/pdf" onChange={(e) => e.target.files?.[0] && ingestFile(e.target.files[0], isGlobalView ? "Global Contribution" : "Direct Upload")} disabled={isProcessing} />
                   </label>
                 </>
              )}
@@ -865,11 +956,22 @@ export default function App() {
                     <h3 className="text-white font-medium mb-4 flex items-center gap-2"><MapIcon size={18} className="text-emerald-500"/> GIS Context</h3>
                     <div className="space-y-4">
                         {assets.slice(0, 3).map(asset => (
-                            <div key={asset.id} className="flex items-start gap-4 p-3 rounded bg-slate-950/50 border border-slate-800">
+                            <div key={asset.id} className="flex items-start gap-4 p-3 rounded bg-slate-950/50 border border-slate-800 group relative">
                                 <img src={asset.imageUrl} className="w-16 h-16 object-cover rounded" alt="thumb" />
-                                <div>
-                                    <h4 className="text-sm font-bold text-slate-200">{asset.gisMetadata?.zoneType || 'Processing...'}</h4>
-                                    <p className="text-xs text-slate-400 mt-1 line-clamp-2">{asset.processingAnalysis}</p>
+                                <div className="flex-1">
+                                    <div className="flex justify-between items-start">
+                                        <h4 className="text-sm font-bold text-slate-200">{asset.gisMetadata?.zoneType || 'Processing...'}</h4>
+                                        {(!asset.gisMetadata?.zoneType || asset.status === AssetStatus.PROCESSING) && (
+                                            <button 
+                                                onClick={() => resumeAsset(asset)}
+                                                disabled={isProcessing}
+                                                className="text-[10px] bg-primary-600 hover:bg-primary-500 text-white px-2 py-1 rounded font-bold transition-all disabled:opacity-50"
+                                            >
+                                                {isProcessing ? '...' : 'Retry'}
+                                            </button>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-1 line-clamp-2">{asset.processingAnalysis || 'Waiting for AI analysis...'}</p>
                                 </div>
                             </div>
                         ))}
@@ -877,6 +979,102 @@ export default function App() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === 'curator' && (
+            <div className="space-y-6 max-w-6xl mx-auto h-full flex flex-col">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-2xl font-bold text-white">Curator Mode</h3>
+                  <p className="text-sm text-slate-400">Manually manage bundles and refine AI-extracted annotations.</p>
+                </div>
+                <div className="flex gap-2">
+                  {selectedAssetIds.size > 0 && (
+                    <button 
+                      onClick={handleManualBundle}
+                      className="flex items-center gap-2 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-bold transition-all"
+                    >
+                      <Package size={18} />
+                      Bundle Selected ({selectedAssetIds.size})
+                    </button>
+                  )}
+                  <button 
+                    onClick={() => setSelectedAssetIds(new Set())}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium"
+                  >
+                    Clear Selection
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
+                <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+                  <h4 className="text-xs font-bold text-slate-400 uppercase">Asset Curation Queue</h4>
+                  <div className="flex items-center gap-4">
+                    <span className="text-[10px] text-slate-500 font-mono">{assets.length} TOTAL ASSETS</span>
+                  </div>
+                </div>
+                <div className="flex-1 overflow-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-950 sticky top-0 z-10">
+                      <tr>
+                        <th className="px-4 py-3 border-b border-slate-800 w-10"></th>
+                        {['Preview', 'Title', 'Collection', 'Status', 'Annotated', 'Action'].map(h => (
+                          <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800">
+                      {assets.map(asset => (
+                        <tr 
+                          key={asset.id} 
+                          className={`hover:bg-slate-800/50 transition-colors text-xs font-mono ${selectedAssetIds.has(asset.id) ? 'bg-primary-900/10' : ''}`}
+                        >
+                          <td className="px-4 py-3 border-b border-slate-800">
+                            <input 
+                              type="checkbox" 
+                              checked={selectedAssetIds.has(asset.id)}
+                              onChange={() => {
+                                const next = new Set(selectedAssetIds);
+                                if (next.has(asset.id)) next.delete(asset.id);
+                                else next.add(asset.id);
+                                setSelectedAssetIds(next);
+                              }}
+                              className="rounded border-slate-700 bg-slate-800 text-primary-600 focus:ring-primary-500"
+                            />
+                          </td>
+                          <td className="px-4 py-3 border-r border-slate-800">
+                            <img src={asset.imageUrl} alt="Preview" className="w-12 h-12 object-cover rounded border border-slate-700" />
+                          </td>
+                          <td className="px-4 py-3 text-white border-r border-slate-800 font-bold">{asset.sqlRecord?.DOCUMENT_TITLE || 'Untitled'}</td>
+                          <td className="px-4 py-3 text-blue-400 border-r border-slate-800">{asset.sqlRecord?.SOURCE_COLLECTION || 'Unsorted'}</td>
+                          <td className="px-4 py-3 border-r border-slate-800">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${asset.status === AssetStatus.MINTED ? 'bg-green-500/20 text-green-500' : 'bg-amber-500/20 text-amber-500'}`}>
+                              {asset.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 border-r border-slate-800 text-center">
+                            {asset.sqlRecord?.IS_USER_ANNOTATED ? (
+                              <CheckCircle size={16} className="text-green-500 mx-auto" />
+                            ) : (
+                              <span className="text-slate-600">-</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button 
+                              onClick={() => setEditingAsset(asset)}
+                              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-bold border border-slate-700"
+                            >
+                              EDIT ANNOTATIONS
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           )}
 
@@ -975,28 +1173,17 @@ export default function App() {
 
           {activeTab === 'batch' && (
              <div className="max-w-6xl mx-auto h-full flex flex-col">
-                {isGlobalView ? (
+                {isGlobalView && !isAdmin ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
-                        {isAdmin ? (
-                            <div className="w-full max-w-4xl p-6">
-                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2"><Radio className="text-red-500 animate-pulse" /> Admin Broadcast Console</h3>
-                                    {!selectedScanType ? <SmartUploadSelector onTypeSelected={setSelectedScanType} /> : (
-                                        <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
-                                            <h4 className="text-white font-bold mb-2">Broadcasting Type: {SCAN_TYPE_CONFIG[selectedScanType].label}</h4>
-                                            <BatchImporter onFilesSelected={(files) => handleBatchFiles(files)} isProcessing={isProcessing} />
-                                            <button onClick={() => setSelectedScanType(null)} className="text-xs text-slate-500 underline mt-2">Change Type</button>
-                                        </div>
-                                    )}
-                                </div>
+                        <div className="text-center bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-2xl">
+                            <Globe size={48} className="mb-4 text-indigo-500 mx-auto animate-pulse" />
+                            <h3 className="text-xl font-bold text-white mb-2">Global Contribution Mode</h3>
+                            <p className="text-sm text-slate-400 max-w-xs mx-auto mb-6">You are currently in Master view. Any files processed here will be contributed to the global knowledge corpus.</p>
+                            <div className="flex gap-3 justify-center">
+                                <button onClick={() => setIsGlobalView(false)} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-white text-sm font-bold transition-all">Switch to Local</button>
+                                <button onClick={() => setIsAdmin(true)} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-white text-sm font-bold shadow-lg shadow-indigo-900/20 transition-all">Enable Contribution</button>
                             </div>
-                        ) : (
-                            <div className="text-center">
-                                <Lock size={48} className="mb-4 opacity-50 mx-auto" />
-                                <h3 className="text-xl font-bold text-white mb-2">Ingestion Locked</h3>
-                                <button onClick={() => setIsGlobalView(false)} className="mt-4 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Return to Local</button>
-                            </div>
-                        )}
+                        </div>
                     </div>
                 ) : !selectedScanType ? <SmartUploadSelector onTypeSelected={setSelectedScanType} /> : (
                   <div className="flex-1 flex flex-col">
@@ -1004,7 +1191,11 @@ export default function App() {
                         <div className="flex justify-between items-start mb-4">
                           <div>
                               <button onClick={() => setSelectedScanType(null)} className="mb-2 text-slate-400 hover:text-white flex items-center gap-2 text-sm">← Selection</button>
-                              <h3 className="text-lg font-bold text-white flex items-center gap-2"><Zap className="text-amber-500" /> Batch Processor: <span className="text-primary-400">{SCAN_TYPE_CONFIG[selectedScanType].label}</span></h3>
+                              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                                {isAdmin && isGlobalView ? <Radio className="text-red-500 animate-pulse" /> : <Zap className="text-amber-500" />}
+                                {isAdmin && isGlobalView ? ' Admin Broadcast Console' : ' Batch Processor'}: 
+                                <span className="text-primary-400 ml-2">{SCAN_TYPE_CONFIG[selectedScanType].label}</span>
+                              </h3>
                           </div>
                           <div className="text-right">
                               <p className="text-2xl font-mono text-white">{batchQueue.filter(i => i.status === 'COMPLETED').length} <span className="text-sm text-slate-500">/ {batchQueue.length}</span></p>
@@ -1066,12 +1257,64 @@ export default function App() {
              <div className="h-full overflow-y-auto">
                  <div className="flex justify-between items-center mb-6">
                      <h3 className="text-lg font-bold text-white">Exploratory Analysis & Bundles</h3>
+                     <div className="flex gap-3">
+                        {selectedAssetIds.size > 0 && (
+                            <button 
+                                onClick={() => {
+                                    const selectedAssets = assets.filter(a => selectedAssetIds.has(a.id));
+                                    const title = prompt("Enter bundle title:", "Manual Collection");
+                                    if (title) {
+                                        const newBundle = createUserBundle(selectedAssets, title);
+                                        // In a real app, we'd persist this. For now, we'll just clear selection
+                                        // and maybe show a toast. The bundleService createBundles will 
+                                        // eventually need to handle persistent manual bundles.
+                                        alert(`Created manual bundle: ${title}`);
+                                        setSelectedAssetIds(new Set());
+                                    }
+                                }}
+                                className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-bold rounded-lg shadow-lg flex items-center gap-2 animate-in zoom-in"
+                            >
+                                <Package size={18} />
+                                Bundle Selected ({selectedAssetIds.size})
+                            </button>
+                        )}
+                        <button 
+                            onClick={() => setSelectedAssetIds(new Set())}
+                            className={`px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-bold rounded-lg border border-slate-700 transition-all ${selectedAssetIds.size === 0 ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+                        >
+                            Clear Selection
+                        </button>
+                     </div>
                  </div>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
                      {displayItems.map(item => ('bundleId' in item) ? <BundleCard key={item.bundleId} bundle={item as ImageBundle} onAssetUpdated={handleAssetUpdate} /> : (
-                        <div key={item.id} className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden hover:shadow-lg transition-all group">
+                        <div 
+                            key={item.id} 
+                            className={`bg-slate-900 border rounded-xl overflow-hidden hover:shadow-lg transition-all group relative ${selectedAssetIds.has(item.id) ? 'border-primary-500 ring-2 ring-primary-500/20' : 'border-slate-800'}`}
+                        >
+                            <div className="absolute top-2 left-2 z-10">
+                                <input 
+                                    type="checkbox" 
+                                    checked={selectedAssetIds.has(item.id)}
+                                    onChange={() => {
+                                        const newSet = new Set(selectedAssetIds);
+                                        if (newSet.has(item.id)) newSet.delete(item.id);
+                                        else newSet.add(item.id);
+                                        setSelectedAssetIds(newSet);
+                                    }}
+                                    className="w-5 h-5 rounded border-slate-700 bg-slate-900 text-primary-500 focus:ring-primary-500"
+                                />
+                            </div>
                             <div className="relative h-48 bg-slate-950 overflow-hidden">
                                 <img src={item.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" />
+                                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
+                                    <button 
+                                        onClick={() => setEditingAsset(item)}
+                                        className="w-full py-2 bg-white/10 hover:bg-white/20 backdrop-blur-md text-white text-xs font-bold rounded border border-white/20 flex items-center justify-center gap-2"
+                                    >
+                                        <Settings size={14} /> Edit Annotations
+                                    </button>
+                                </div>
                             </div>
                             <div className="p-4">
                                 <h4 className="font-bold text-white text-sm mb-1 truncate">{item.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
@@ -1150,19 +1393,9 @@ export default function App() {
             <div className="h-full rounded-xl overflow-hidden border border-slate-800 bg-black relative">
               <ARScene 
                 onCapture={(file) => setArSessionQueue(prev => [...prev, file])} 
+                onFinishSession={() => switchTab('batch')}
                 sessionCount={arSessionQueue.length}
               />
-              {arSessionQueue.length > 0 && (
-                <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20">
-                  <button 
-                    onClick={() => switchTab('batch')}
-                    className="px-6 py-3 bg-primary-600 hover:bg-primary-500 text-white rounded-full font-bold shadow-xl flex items-center gap-2 animate-bounce"
-                  >
-                    <CheckCircle size={20} />
-                    Process {arSessionQueue.length} Captures
-                  </button>
-                </div>
-              )}
             </div>
           )}
 
@@ -1252,13 +1485,10 @@ export default function App() {
                             <td className="px-4 py-3 text-red-400 border-r border-slate-800 max-w-[200px] truncate">{asset.errorMessage || 'Manual Review Required'}</td>
                             <td className="px-4 py-3 text-center">
                               <button 
-                                onClick={() => {
-                                  // Logic to re-process or manually edit
-                                  alert("Manual processing interface would open here.");
-                                }}
+                                onClick={() => setEditingAsset(asset)}
                                 className="px-3 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded text-[10px] font-bold"
                               >
-                                PROCESS
+                                REVIEW & FIX
                               </button>
                             </td>
                           </tr>
@@ -1316,6 +1546,17 @@ export default function App() {
           isOpen={isShortcutsOpen} 
           onClose={() => setIsShortcutsOpen(false)} 
         />
+
+        {editingAsset && (
+            <AnnotationEditor 
+                asset={editingAsset}
+                onClose={() => setEditingAsset(null)}
+                onSave={(updatedAsset) => {
+                    handleAssetUpdate(updatedAsset);
+                    announce('Annotations saved and synced.');
+                }}
+            />
+        )}
 
         <StatusBar 
           user={user}
