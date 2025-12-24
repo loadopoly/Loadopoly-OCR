@@ -951,7 +951,24 @@ export default function App() {
                     {assets[0].graphData && <GraphVisualizer data={assets[0].graphData} height={300} width={500} />}
                   </div>
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
-                    <h3 className="text-white font-medium mb-4 flex items-center gap-2"><MapIcon size={18} className="text-emerald-500"/> GIS Context</h3>
+                    <div className="flex justify-between items-center mb-4">
+                        <h3 className="text-white font-medium flex items-center gap-2"><MapIcon size={18} className="text-emerald-500"/> GIS Context</h3>
+                        {assets.some(a => !a.processingAnalysis || a.status === AssetStatus.PROCESSING) && (
+                            <button 
+                                onClick={async () => {
+                                    const pending = assets.filter(a => !a.processingAnalysis || a.status === AssetStatus.PROCESSING).slice(0, 5);
+                                    for (const asset of pending) {
+                                        await resumeAsset(asset);
+                                    }
+                                }}
+                                disabled={isProcessing}
+                                className="text-[10px] bg-emerald-600 hover:bg-emerald-500 text-white px-2 py-1 rounded font-bold transition-all disabled:opacity-50 flex items-center gap-1"
+                            >
+                                <RefreshCw size={10} className={isProcessing ? 'animate-spin' : ''} />
+                                Process All
+                            </button>
+                        )}
+                    </div>
                     <div className="space-y-4">
                         {assets.slice(0, 3).map(asset => (
                             <div key={asset.id} className="flex items-start gap-4 p-3 rounded bg-slate-950/50 border border-slate-800 group relative">
@@ -959,15 +976,43 @@ export default function App() {
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start">
                                         <h4 className="text-sm font-bold text-slate-200">{asset.gisMetadata?.zoneType || 'Processing...'}</h4>
-                                        {(!asset.gisMetadata?.zoneType || asset.status === AssetStatus.PROCESSING) && (
-                                            <button 
-                                                onClick={() => resumeAsset(asset)}
-                                                disabled={isProcessing}
-                                                className="text-[10px] bg-primary-600 hover:bg-primary-500 text-white px-2 py-1 rounded font-bold transition-all disabled:opacity-50"
-                                            >
-                                                {isProcessing ? '...' : 'Retry'}
-                                            </button>
-                                        )}
+                                        <div className="flex gap-1">
+                                            {asset.gisMetadata?.zoneType && (
+                                                <button 
+                                                    onClick={async () => {
+                                                        const resetAsset = {
+                                                            ...asset,
+                                                            status: AssetStatus.PENDING,
+                                                            processingAnalysis: '',
+                                                            gisMetadata: undefined,
+                                                            sqlRecord: {
+                                                                ...asset.sqlRecord!,
+                                                                PROCESSING_STATUS: AssetStatus.PENDING,
+                                                                LOCAL_GIS_ZONE: 'Unknown',
+                                                                OCR_DERIVED_GIS_ZONE: null,
+                                                                NLP_DERIVED_GIS_ZONE: null
+                                                            }
+                                                        };
+                                                        handleAssetUpdate(resetAsset);
+                                                        await resumeAsset(resetAsset);
+                                                    } }
+                                                    disabled={isProcessing}
+                                                    className="text-[10px] bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded font-bold transition-all disabled:opacity-50"
+                                                    title="Reset and Re-process"
+                                                >
+                                                    Reset
+                                                </button>
+                                            )}
+                                            {(!asset.processingAnalysis || asset.status === AssetStatus.PROCESSING) && (
+                                                <button 
+                                                    onClick={() => resumeAsset(asset)}
+                                                    disabled={isProcessing}
+                                                    className="text-[10px] bg-primary-600 hover:bg-primary-500 text-white px-2 py-1 rounded font-bold transition-all disabled:opacity-50"
+                                                >
+                                                    {isProcessing ? '...' : 'Retry'}
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                     <p className="text-xs text-slate-400 mt-1 line-clamp-2">{asset.processingAnalysis || 'Waiting for AI analysis...'}</p>
                                 </div>
