@@ -117,9 +117,9 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount }: AR
           {sessionCount > 0 && onFinishSession && (
               <button 
                 onClick={onFinishSession}
-                className="bg-white/90 hover:bg-white text-primary-700 px-4 py-2 rounded-full font-bold text-sm shadow-xl flex items-center gap-2 animate-in slide-in-from-right-10 transition-transform active:scale-95"
+                className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-3 rounded-full font-bold text-sm shadow-xl flex items-center gap-2 animate-in slide-in-from-right-10 transition-transform active:scale-95"
               >
-                 <span>Process Session</span>
+                 <span>Process {sessionCount} Captures</span>
                  <ArrowRight size={16} />
               </button>
           )}

@@ -66,8 +66,15 @@ const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> =
     imageUrl: row.ORIGINAL_IMAGE_URL || '', 
     timestamp: row.LOCAL_TIMESTAMP || row.CREATED_AT,
     ocrText: ocrText,
-    status: AssetStatus.MINTED,
+    status: (row.PROCESSING_STATUS as AssetStatus) || AssetStatus.MINTED,
     graphData: { nodes, links },
+    gisMetadata: row.LOCAL_GIS_ZONE ? {
+      zoneType: row.LOCAL_GIS_ZONE,
+      estimatedElevation: row.ESTIMATED_ELEVATION || '',
+      nearbyLandmarks: Array.isArray(row.NEARBY_LANDMARKS) ? row.NEARBY_LANDMARKS : [],
+      environmentalContext: row.ENVIRONMENTAL_CONTEXT || '',
+      coordinateSystem: row.COORDINATE_SYSTEM || 'WGS84'
+    } : undefined,
     sqlRecord: {
       ...row,
       ASSET_ID: assetId,

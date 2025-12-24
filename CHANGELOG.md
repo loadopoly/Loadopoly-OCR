@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [1.9.0] - 2025-12-24
+
+### Added
+- **Curator Mode:** New dedicated view for manual asset curation and annotation editing.
+- **Manual Bundling:** Support for user-defined bundles that override automatic clustering logic.
+- **Annotation Editor:** Component for manual metadata refinement with `IS_USER_ANNOTATED` tracking.
+- **Deterministic AI:** Fixed seed (42) for Gemini 2.5 Flash to ensure consistent extractions.
+- **Retry Logic:** Manual "Retry" button for assets stuck in the processing state.
+- **Schema Migration:** `sql/ADD_CURATOR_COLUMNS.sql` for manual curation support.
+
+### Changed
+- **AR UI:** Relocated processing buttons in `ARScene` to prevent shutter obstruction.
+- **Master View:** Enabled "Contribute" (processing) functionality for the global corpus.
+- **Bundle Service:** Refactored to respect `USER_BUNDLE_ID` and exclude manually bundled assets from auto-clustering.
+
 ## [1.8.1] - 2025-12-23
 
 ### Fixed
