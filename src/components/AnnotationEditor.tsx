@@ -33,7 +33,7 @@ export default function AnnotationEditor({ asset, onSave, onClose }: AnnotationE
               eventType: "USER_ANNOTATION", 
               timestamp: new Date().toISOString(), 
               agent: "HUMAN_USER", 
-              outcome: "SUCCESS" 
+              outcome: "SUCCESS" as const
             }
           ]
         }
