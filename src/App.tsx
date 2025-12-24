@@ -46,7 +46,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG, GraphData, GraphNode } from './types';
 import { processImageWithGemini } from './services/geminiService';
-import { createBundles } from './services/bundleService';
+import { createBundles, createUserBundle } from './services/bundleService';
 import { initSync, isSyncEnabled } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
 import { redeemPhygitalCertificate } from './services/web3Service';
@@ -159,8 +159,6 @@ export default function App() {
   const [syncOn, setSyncOn] = useState(false);
   const [web3Enabled, setWeb3Enabled] = useState(false);
   const [scannerConnected, setScannerConnected] = useState(false);
-  const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
-  const [editingAsset, setEditingAsset] = useState<DigitalAsset | null>(null);
 
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
 
@@ -398,7 +396,7 @@ export default function App() {
           CONFIDENCE_SCORE: 0,
           ENTITIES_EXTRACTED: [],
           RELATED_ASSETS: [],
-          PRESERVATION_EVENTS: [{ eventType: "INGESTION", timestamp: ingestDate, agent: "SYSTEM_USER", outcome: "SUCCESS" }],
+          PRESERVATION_EVENTS: [{ eventType: "INGESTION", timestamp: ingestDate, agent: "SYSTEM_USER", outcome: "SUCCESS" as const }],
           KEYWORDS_TAGS: [],
           ACCESS_RESTRICTIONS: false,
           SCAN_TYPE: scanType,
@@ -456,7 +454,7 @@ export default function App() {
             IS_ENTERPRISE: true, // Processed assets move to enterprise corpus
             PRESERVATION_EVENTS: [
               ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
-              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" }
+              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" as const }
             ]
       };
 
@@ -553,7 +551,7 @@ export default function App() {
             IS_ENTERPRISE: false, // Keep in global corpus for super-user
             PRESERVATION_EVENTS: [
               ...(newAsset.sqlRecord?.PRESERVATION_EVENTS || []),
-              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "FAILURE" }
+              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "FAILURE" as const }
             ]
           }
         };
@@ -604,7 +602,7 @@ export default function App() {
         DOCUMENT_TITLE: asset.sqlRecord?.DOCUMENT_TITLE || bundleTitle, // Keep original title if exists
         PRESERVATION_EVENTS: [
           ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
-          { eventType: "MANUAL_BUNDLING", timestamp: new Date().toISOString(), agent: user?.email || "User", outcome: "SUCCESS" }
+          { eventType: "MANUAL_BUNDLING", timestamp: new Date().toISOString(), agent: user?.email || "User", outcome: "SUCCESS" as const }
         ]
       }
     }));
@@ -670,7 +668,7 @@ export default function App() {
                       IS_ENTERPRISE: false,
                       PRESERVATION_EVENTS: [
                         ...(newAsset.sqlRecord?.PRESERVATION_EVENTS || []),
-                        { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "FAILURE" }
+                        { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "FAILURE" as const }
                       ]
                     }
                   };
@@ -1260,18 +1258,7 @@ export default function App() {
                      <div className="flex gap-3">
                         {selectedAssetIds.size > 0 && (
                             <button 
-                                onClick={() => {
-                                    const selectedAssets = assets.filter(a => selectedAssetIds.has(a.id));
-                                    const title = prompt("Enter bundle title:", "Manual Collection");
-                                    if (title) {
-                                        const newBundle = createUserBundle(selectedAssets, title);
-                                        // In a real app, we'd persist this. For now, we'll just clear selection
-                                        // and maybe show a toast. The bundleService createBundles will 
-                                        // eventually need to handle persistent manual bundles.
-                                        alert(`Created manual bundle: ${title}`);
-                                        setSelectedAssetIds(new Set());
-                                    }
-                                }}
+                                onClick={handleManualBundle}
                                 className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-sm font-bold rounded-lg shadow-lg flex items-center gap-2 animate-in zoom-in"
                             >
                                 <Package size={18} />
