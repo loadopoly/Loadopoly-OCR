@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Zap, ScanLine, MapPin, ArrowRight, Layers } from 'lucide-react';
+import { Camera, Zap, ScanLine, MapPin, ArrowRight, Layers, WifiOff } from 'lucide-react';
 
 interface ARSceneProps {
   onCapture: (file: File) => void;
   onFinishSession?: () => void;
   sessionCount: number;
+  isOnline?: boolean;
 }
 
-export default function ARScene({ onCapture, onFinishSession, sessionCount }: ARSceneProps) {
+export default function ARScene({ onCapture, onFinishSession, sessionCount, isOnline = true }: ARSceneProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [flash, setFlash] = useState(false);
   const [scanning, setScanning] = useState(true);
@@ -103,8 +104,13 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount }: AR
             <ScanLine className="animate-pulse text-emerald-400" /> AR Scanner Active
          </p>
          <p className="text-sm text-slate-300 mt-1">
-             Analyzing environment for nodes... Tap shutter to capture.
+             {isOnline ? 'Analyzing environment for nodes... Tap shutter to capture.' : 'Offline Mode: Captures will be processed when online.'}
          </p>
+         {!isOnline && (
+             <div className="mt-2 inline-flex items-center gap-1.5 px-3 py-1 bg-red-500/20 border border-red-500/30 rounded-full text-red-400 text-[10px] font-bold uppercase tracking-wider">
+                 <WifiOff size={10} /> Offline Capture Enabled
+             </div>
+         )}
       </div>
 
       {/* Session Counter & Process Button */}
