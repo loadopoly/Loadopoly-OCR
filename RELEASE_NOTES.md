@@ -1,20 +1,18 @@
+# 🚀 GeoGraph Node: v1.9.1 Release Notes
+
+This update introduces **Full Offline Support**, enabling data collection in remote environments without internet connectivity.
+
+## 📶 Offline Capabilities
+*   **Robust Service Worker:** Updated caching strategy to include all external dependencies (React, Lucide, Gemini SDK), ensuring the app loads reliably offline.
+*   **Offline Ingestion:** Assets captured via the AR Scanner or Camera while offline are now saved locally to IndexedDB with a `PENDING` status.
+*   **Auto-Resume Pipeline:** The AI processing pipeline automatically detects when the device is back online and resumes processing for all pending assets.
+*   **Offline UI Indicators:** New visual badges and status messages in the AR Scanner and Camera interfaces provide clear feedback on connection status.
+
+## 🛠️ Reliability Improvements
+*   **Auth Fallback:** Improved application startup logic to gracefully handle authentication failures when the Supabase backend is unreachable.
+*   **PWA Hardening:** Optimized the manifest and service worker for better "Add to Home Screen" performance on mobile devices.
+
 # 🚀 GeoGraph Node: v1.9.0 Release Notes
-
-This major update introduces **Curator Mode**, a powerful suite of manual management tools that allow users to refine AI-extracted data and create custom collections.
-
-## 🎨 Curator Mode & Manual Management
-*   **Dedicated Curator View:** A new sidebar tab for high-level asset management and data refinement.
-*   **Manual Bundling:** Multi-select assets to create persistent, user-defined bundles. These bundles are excluded from automatic clustering to preserve user intent.
-*   **Annotation Editor:** Directly edit OCR text, titles, and descriptions. Manually edited records are flagged with `IS_USER_ANNOTATED` for data provenance.
-*   **Deterministic AI:** Set a fixed seed for Gemini 2.5 Flash, ensuring that multiple photos of the same card/document yield consistent metadata.
-
-## 🛠️ UI & Reliability Improvements
-*   **AR Scanner Fix:** Moved the "Process" button to the top-right in AR mode to ensure it never blocks the camera shutter.
-*   **Master View Processing:** Enabled the "Contribute" feature in the Master view, allowing users to process global assets directly.
-*   **Stuck Asset Recovery:** Added "Retry" buttons to the GIS Context dashboard for assets that hang in a "Processing..." state.
-*   **Schema Migration:** Added `sql/ADD_CURATOR_COLUMNS.sql` to support the new manual curation flags in Supabase.
-
-# 🚀 GeoGraph Node: v1.8.1 Release Notes
 
 This patch fixes a critical database synchronization error where short random IDs were rejected by Supabase's UUID validation.
 

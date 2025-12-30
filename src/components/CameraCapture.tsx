@@ -1,12 +1,13 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, X, Circle, RefreshCw, Smartphone } from 'lucide-react';
+import { Camera, X, Circle, RefreshCw, Smartphone, WifiOff } from 'lucide-react';
 import { announce } from '../lib/accessibility';
 
 interface CameraCaptureProps {
   onCapture: (file: File) => void;
+  isOnline?: boolean;
 }
 
-export default function CameraCapture({ onCapture }: CameraCaptureProps) {
+export default function CameraCapture({ onCapture, isOnline = true }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
@@ -129,8 +130,15 @@ export default function CameraCapture({ onCapture }: CameraCaptureProps) {
     <div className="fixed inset-0 z-50 bg-black flex flex-col" role="dialog" aria-modal="true" aria-label="Camera Interface">
       {/* Header */}
       <div className="p-4 flex justify-between items-center bg-black/50 absolute top-0 left-0 right-0 z-10">
-         <div className="text-white font-bold flex items-center gap-2">
-             <Smartphone size={20} aria-hidden="true" /> Camera Mode
+         <div className="flex flex-col">
+             <div className="text-white font-bold flex items-center gap-2">
+                 <Smartphone size={20} aria-hidden="true" /> Camera Mode
+             </div>
+             {!isOnline && (
+                 <div className="flex items-center gap-1 text-red-400 text-[10px] font-bold uppercase mt-0.5">
+                     <WifiOff size={10} /> Offline Mode
+                 </div>
+             )}
          </div>
          <button onClick={stopCamera} aria-label="Close camera" className="p-2 bg-white/10 rounded-full text-white hover:bg-white/20">
              <X size={24} aria-hidden="true" />

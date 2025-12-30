@@ -276,6 +276,9 @@ export default function App() {
           });
         }
       }
+    }).catch(err => {
+      console.error("Auth check failed (likely offline):", err);
+      loadAssets().then(setLocalAssets);
     });
 
     return () => {
@@ -356,6 +359,7 @@ export default function App() {
       const ingestDate = new Date().toISOString();
       const id = uuidv4();
       const scanType = (file as any).scanType || ScanType.DOCUMENT;
+      const initialStatus = isOnline ? AssetStatus.PROCESSING : AssetStatus.PENDING;
 
       return {
         id,
@@ -363,8 +367,8 @@ export default function App() {
         imageBlob: file,
         timestamp: ingestDate,
         ocrText: "",
-        status: AssetStatus.PROCESSING,
-        progress: 10,
+        status: initialStatus,
+        progress: isOnline ? 10 : 0,
         sqlRecord: {
           ID: id,
           ASSET_ID: id,
@@ -392,7 +396,7 @@ export default function App() {
           INGEST_DATE: ingestDate,
           CREATED_AT: ingestDate,
           LAST_MODIFIED: ingestDate,
-          PROCESSING_STATUS: AssetStatus.PROCESSING,
+          PROCESSING_STATUS: initialStatus,
           CONFIDENCE_SCORE: 0,
           ENTITIES_EXTRACTED: [],
           RELATED_ASSETS: [],
@@ -517,6 +521,20 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    if (isOnline && localAssets.length > 0) {
+      const pendingAssets = localAssets.filter(a => a.status === AssetStatus.PENDING);
+      if (pendingAssets.length > 0) {
+        const processSequentially = async () => {
+          for (const asset of pendingAssets) {
+            await resumeAsset(asset);
+          }
+        };
+        processSequentially();
+      }
+    }
+  }, [isOnline, localAssets.length]);
+
   const ingestFile = async (file: File, source: string = "Upload") => {
     setIsProcessing(true);
     try {
@@ -534,6 +552,12 @@ export default function App() {
 
       if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
       
+      if (!isOnline) {
+        announce("Offline: Asset saved locally. Processing will resume when online.");
+        setIsProcessing(false);
+        return;
+      }
+
       try {
         const processedAsset = await processAssetPipeline(newAsset, file);
         setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
@@ -649,6 +673,11 @@ export default function App() {
                 // SKIPPED: We skip initial Supabase upload to avoid RLS update errors (no UPDATE policy).
                 // The asset will be uploaded once processing is complete.
                 await saveAsset(newAsset);
+
+                if (!isOnline) {
+                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+                  return;
+                }
 
                 try {
                   const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
@@ -892,7 +921,10 @@ export default function App() {
           <div className="flex items-center gap-2">
              {activeTab !== 'batch' && activeTab !== 'ar' && (
                 <>
-                  <CameraCapture onCapture={(file) => ingestFile(file, isGlobalView ? "Global Contribution" : "Mobile Camera")} />
+                  <CameraCapture 
+                    onCapture={(file) => ingestFile(file, isGlobalView ? "Global Contribution" : "Mobile Camera")} 
+                    isOnline={isOnline}
+                  />
                   <label className={`flex items-center gap-2 px-4 py-2 ${isGlobalView ? 'bg-indigo-900/40 border-indigo-500/50 hover:bg-indigo-900/60' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'} border text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                       {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Upload size={18} />}
                       <span>{isGlobalView ? 'Contribute' : 'Upload'}</span>
@@ -1427,6 +1459,7 @@ export default function App() {
                 onCapture={(file) => setArSessionQueue(prev => [...prev, file])} 
                 onFinishSession={() => switchTab('batch')}
                 sessionCount={arSessionQueue.length}
+                isOnline={isOnline}
               />
             </div>
           )}
