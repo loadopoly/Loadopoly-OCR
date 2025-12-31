@@ -31,6 +31,8 @@ import {
   FolderOpen,
   ArrowLeft,
   ShoppingBag,
+  MessageSquare,
+  Users,
   Scan,
   Plus,
   Settings,
@@ -44,7 +46,21 @@ import {
   CloudDownload
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
-import { AssetStatus, DigitalAsset, LocationData, HistoricalDocumentMetadata, BatchItem, ImageBundle, ScanType, SCAN_TYPE_CONFIG, GraphData, GraphNode } from './types';
+import { 
+  AssetStatus, 
+  DigitalAsset, 
+  LocationData, 
+  HistoricalDocumentMetadata, 
+  BatchItem, 
+  ImageBundle, 
+  ScanType, 
+  SCAN_TYPE_CONFIG, 
+  GraphData, 
+  GraphNode,
+  UserMessage,
+  Community,
+  CommunityAdmissionRequest
+} from './types';
 import { processImageWithGemini } from './services/geminiService';
 import { createBundles, createUserBundle } from './services/bundleService';
 import { initSync, isSyncEnabled } from './lib/syncEngine';
@@ -64,6 +80,8 @@ import SmartUploadSelector from './components/SmartUploadSelector';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import PurchaseModal from './components/PurchaseModal';
 import SmartSuggestions from './components/SmartSuggestions';
+import Communities from './components/Communities';
+import Messages from './components/Messages';
 import StatusBar from './components/StatusBar';
 import AnnotationEditor from './components/AnnotationEditor';
 import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/KeyboardShortcuts';
@@ -130,7 +148,14 @@ export default function App() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isEnterprise, setIsEnterprise] = useState(false);
   const [isGlobalView, setIsGlobalView] = useState(false);
-  const assets = isGlobalView ? globalAssets : localAssets;
+  const [selectedCommunityId, setSelectedCommunityId] = useState<string | null>(null);
+  const assets = useMemo(() => {
+    let base = isGlobalView ? globalAssets : localAssets;
+    if (selectedCommunityId) {
+      return base.filter(a => a.sqlRecord?.COMMUNITY_ID === selectedCommunityId);
+    }
+    return base;
+  }, [isGlobalView, globalAssets, localAssets, selectedCommunityId]);
   const [displayItems, setDisplayItems] = useState<(DigitalAsset | ImageBundle)[]>([]);
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -148,6 +173,18 @@ export default function App() {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [arSessionQueue, setArSessionQueue] = useState<File[]>([]);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
+  const [showProcessingPanel, setShowProcessingPanel] = useState(false);
+  const [messages, setMessages] = useState<UserMessage[]>([
+    { id: '1', senderId: 'system', receiverId: 'me', content: 'Welcome to GeoGraph Social! You can now message other curators and share data.', timestamp: new Date().toISOString(), isRead: false },
+    { id: '2', senderId: 'user_882', receiverId: 'me', content: 'Hey, I saw your collection of 19th century maps. Would you be interested in a trade?', timestamp: new Date(Date.now() - 3600000).toISOString(), isRead: false }
+  ]);
+  const [communities, setCommunities] = useState<Community[]>([
+    { id: 'c1', name: 'Global Cartographers', description: 'A community for sharing and verifying historical maps from around the world.', adminIds: ['admin1'], memberIds: ['admin1', 'me'], isPrivate: false, createdAt: new Date().toISOString(), shardDispersionConfig: { adminPercentage: 10, memberPercentage: 90 } },
+    { id: 'c2', name: 'Urban Archeology', description: 'Documenting the hidden history of modern cities through visual artifacts.', adminIds: ['me'], memberIds: ['me'], isPrivate: true, createdAt: new Date().toISOString(), shardDispersionConfig: { adminPercentage: 20, memberPercentage: 80 } }
+  ]);
+  const [admissionRequests, setAdmissionRequests] = useState<CommunityAdmissionRequest[]>([
+    { id: 'r1', communityId: 'c2', userId: 'user_441', status: 'PENDING', timestamp: new Date().toISOString() }
+  ]);
   const [selectedAssetIds, setSelectedAssetIds] = useState<Set<string>>(new Set());
   const [editingAsset, setEditingAsset] = useState<DigitalAsset | null>(null);
   const [ownedAssetIds, setOwnedAssetIds] = useState<Set<string>>(new Set());
@@ -651,6 +688,84 @@ export default function App() {
       alert("Finished processing all pending assets.");
   };
 
+  const handleSendMessage = (receiverId: string, content: string, giftId?: string, isBundle?: boolean) => {
+    const newMessage: UserMessage = {
+      id: uuidv4(),
+      senderId: user?.id || 'me',
+      receiverId,
+      content,
+      timestamp: new Date().toISOString(),
+      giftAssetId: !isBundle ? giftId : undefined,
+      giftBundleId: isBundle ? giftId : undefined,
+      isRead: false
+    };
+    setMessages(prev => [...prev, newMessage]);
+    announce('Message sent.');
+  };
+
+  const handleJoinCommunity = (communityId: string) => {
+    const community = communities.find(c => c.id === communityId);
+    if (!community) return;
+
+    if (community.isPrivate) {
+      const request: CommunityAdmissionRequest = {
+        id: uuidv4(),
+        communityId,
+        userId: user?.id || 'me',
+        status: 'PENDING',
+        timestamp: new Date().toISOString()
+      };
+      setAdmissionRequests(prev => [...prev, request]);
+      alert('Join request sent to community admins.');
+    } else {
+      setCommunities(prev => prev.map(c => 
+        c.id === communityId ? { ...c, memberIds: [...c.memberIds, user?.id || 'me'] } : c
+      ));
+      announce(`Joined ${community.name}.`);
+    }
+  };
+
+  const handleCreateCommunity = (communityData: Partial<Community>) => {
+    const newCommunity: Community = {
+      id: uuidv4(),
+      name: communityData.name || 'New Community',
+      description: communityData.description || '',
+      adminIds: [user?.id || 'me'],
+      memberIds: [user?.id || 'me'],
+      isPrivate: communityData.isPrivate || false,
+      createdAt: new Date().toISOString(),
+      shardDispersionConfig: communityData.shardDispersionConfig || { adminPercentage: 10, memberPercentage: 90 }
+    };
+    setCommunities(prev => [...prev, newCommunity]);
+    announce(`Community ${newCommunity.name} created.`);
+  };
+
+  const handleApproveRequest = (requestId: string) => {
+    const request = admissionRequests.find(r => r.id === requestId);
+    if (!request) return;
+
+    setCommunities(prev => prev.map(c => 
+      c.id === request.communityId ? { ...c, memberIds: [...c.memberIds, request.userId] } : c
+    ));
+    setAdmissionRequests(prev => prev.filter(r => r.id !== requestId));
+    announce('Request approved.');
+  };
+
+  const handleClaimGift = (messageId: string) => {
+    const msg = messages.find(m => m.id === messageId);
+    if (!msg) return;
+    
+    if (msg.giftAssetId) {
+      setOwnedAssetIds(prev => new Set([...prev, msg.giftAssetId!]));
+      announce('Digital asset claimed successfully.');
+    } else if (msg.giftBundleId) {
+      // In a real app, we'd fetch the bundle assets and add them to owned
+      announce('Data bundle claimed successfully.');
+    }
+    
+    setMessages(prev => prev.map(m => m.id === messageId ? { ...m, isRead: true } : m));
+  };
+
   const handleManualBundle = async () => {
     if (selectedAssetIds.size < 2) {
       alert("Please select at least 2 assets to bundle.");
@@ -837,6 +952,8 @@ export default function App() {
           <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => switchTab('graph')} />
           <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => switchTab('semantic')} />
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => switchTab('database')} />
+          <SidebarItem icon={Users} label="Communities" active={activeTab === 'communities'} onClick={() => switchTab('communities')} />
+          <SidebarItem icon={MessageSquare} label="Messages" active={activeTab === 'messages'} onClick={() => switchTab('messages')} />
           <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => switchTab('market')} />
           {isAdmin && <SidebarItem icon={ShieldCheck} label="Review Queue" active={activeTab === 'review'} onClick={() => switchTab('review')} />}
           <div className="pt-4 mt-4 border-t border-slate-800">
@@ -904,6 +1021,8 @@ export default function App() {
               <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => { switchTab('graph'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => { switchTab('semantic'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={Users} label="Communities" active={activeTab === 'communities'} onClick={() => { switchTab('communities'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={MessageSquare} label="Messages" active={activeTab === 'messages'} onClick={() => { switchTab('messages'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { switchTab('market'); setIsMobileMenuOpen(false); }} />
               <div className="pt-4 mt-4 border-t border-slate-800">
                 <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsMobileMenuOpen(false); }} />
@@ -965,6 +1084,15 @@ export default function App() {
                 </div>
             </div>
           <div className="flex items-center gap-2">
+             {assets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length > 0 && (
+                <button 
+                    onClick={() => setShowProcessingPanel(!showProcessingPanel)}
+                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${showProcessingPanel ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}`}
+                >
+                    <div className={`w-2 h-2 rounded-full bg-amber-500 ${isProcessing ? 'animate-pulse' : ''}`}></div>
+                    <span className="text-xs font-bold">{assets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length} PENDING</span>
+                </button>
+             )}
              {activeTab !== 'batch' && activeTab !== 'ar' && (
                 <>
                   <CameraCapture 
@@ -1524,6 +1652,31 @@ export default function App() {
             </div>
           )}
 
+          {activeTab === 'communities' && (
+            <Communities 
+              user={user}
+              communities={communities}
+              admissionRequests={admissionRequests}
+              selectedCommunityId={selectedCommunityId}
+              onJoin={handleJoinCommunity}
+              onCreate={handleCreateCommunity}
+              onApprove={handleApproveRequest}
+              onReject={(id) => setAdmissionRequests(prev => prev.filter(r => r.id !== id))}
+              onSelect={setSelectedCommunityId}
+            />
+          )}
+
+          {activeTab === 'messages' && (
+            <Messages 
+              user={user}
+              messages={messages}
+              assets={localAssets}
+              bundles={displayItems.filter((i): i is ImageBundle => 'bundleId' in i)}
+              onSendMessage={handleSendMessage}
+              onClaimGift={handleClaimGift}
+            />
+          )}
+
           {activeTab === 'market' && (
             <div className="h-full flex flex-col gap-6">
               <div className="flex items-center justify-between">
@@ -1681,6 +1834,53 @@ export default function App() {
                     announce('Annotations saved and synced.');
                 }}
             />
+        )}
+
+        {showProcessingPanel && (
+            <div className="absolute top-16 right-8 w-80 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-40 flex flex-col max-h-[calc(100vh-120px)] animate-in slide-in-from-top-4 duration-200">
+                <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Zap size={14} className="text-amber-500" />
+                        Processing Queue
+                    </h3>
+                    <button onClick={() => setShowProcessingPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
+                </div>
+                <div className="flex-1 overflow-auto p-2 space-y-2 custom-scrollbar">
+                    {assets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length === 0 ? (
+                        <div className="p-8 text-center text-slate-500 text-xs">No active processing tasks.</div>
+                    ) : (
+                        assets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).map(asset => (
+                            <div key={asset.id} className="p-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center gap-3">
+                                <img src={asset.imageUrl} className="w-10 h-10 object-cover rounded border border-slate-700" alt="thumb" />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <span className="text-[10px] font-mono text-slate-400 truncate">{asset.id.slice(0,8)}</span>
+                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${asset.status === AssetStatus.PROCESSING ? 'bg-amber-500/20 text-amber-500' : 'bg-slate-800 text-slate-400'}`}>
+                                            {asset.status}
+                                        </span>
+                                    </div>
+                                    <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                        <div 
+                                            className={`h-full transition-all duration-500 ${asset.status === AssetStatus.PROCESSING ? 'bg-amber-500 animate-pulse' : 'bg-slate-600'}`}
+                                            style={{ width: `${asset.progress || 0}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+                <div className="p-3 border-t border-slate-800 bg-slate-950/50 rounded-b-xl">
+                    <button 
+                        onClick={handleProcessAllPending}
+                        disabled={isProcessing || assets.filter(a => a.status === AssetStatus.PENDING).length === 0}
+                        className="w-full py-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2"
+                    >
+                        <Zap size={14} />
+                        PROCESS ALL PENDING
+                    </button>
+                </div>
+            </div>
         )}
 
         <StatusBar 
