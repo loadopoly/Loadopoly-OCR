@@ -574,6 +574,276 @@ export interface Database {
           CREATED_AT?: string
         }
       }
+      // GARD Tokenomics Tables
+      royalty_transactions: {
+        Row: {
+          ID: string
+          ASSET_ID: string
+          TOKEN_ID: string
+          TRANSACTION_TYPE: string
+          SALE_PRICE: string
+          ROYALTY_AMOUNT: string
+          COMMUNITY_SHARE: string
+          HOLDER_SHARE: string
+          MAINTENANCE_SHARE: string
+          SELLER_WALLET: string
+          BUYER_WALLET: string
+          TX_HASH: string | null
+          BLOCK_NUMBER: number | null
+          CHAIN_ID: number
+          CREATED_AT: string
+        }
+        Insert: {
+          ID?: string
+          ASSET_ID: string
+          TOKEN_ID: string
+          TRANSACTION_TYPE: string
+          SALE_PRICE: string
+          ROYALTY_AMOUNT: string
+          COMMUNITY_SHARE: string
+          HOLDER_SHARE: string
+          MAINTENANCE_SHARE: string
+          SELLER_WALLET: string
+          BUYER_WALLET: string
+          TX_HASH?: string | null
+          BLOCK_NUMBER?: number | null
+          CHAIN_ID?: number
+          CREATED_AT?: string
+        }
+        Update: {
+          ID?: string
+          ASSET_ID?: string
+          TOKEN_ID?: string
+          TRANSACTION_TYPE?: string
+          SALE_PRICE?: string
+          ROYALTY_AMOUNT?: string
+          COMMUNITY_SHARE?: string
+          HOLDER_SHARE?: string
+          MAINTENANCE_SHARE?: string
+          SELLER_WALLET?: string
+          BUYER_WALLET?: string
+          TX_HASH?: string | null
+          BLOCK_NUMBER?: number | null
+          CHAIN_ID?: number
+          CREATED_AT?: string
+        }
+      }
+      shard_holdings: {
+        Row: {
+          ID: string
+          USER_ID: string
+          ASSET_ID: string
+          TOKEN_ID: string
+          SHARD_COUNT: number
+          ACQUISITION_PRICE: string | null
+          ACQUISITION_DATE: string
+          CURRENT_VALUE: string | null
+          UNREALIZED_GAIN: string | null
+        }
+        Insert: {
+          ID?: string
+          USER_ID: string
+          ASSET_ID: string
+          TOKEN_ID: string
+          SHARD_COUNT: number
+          ACQUISITION_PRICE?: string | null
+          ACQUISITION_DATE?: string
+          CURRENT_VALUE?: string | null
+          UNREALIZED_GAIN?: string | null
+        }
+        Update: {
+          ID?: string
+          USER_ID?: string
+          ASSET_ID?: string
+          TOKEN_ID?: string
+          SHARD_COUNT?: number
+          ACQUISITION_PRICE?: string | null
+          ACQUISITION_DATE?: string
+          CURRENT_VALUE?: string | null
+          UNREALIZED_GAIN?: string | null
+        }
+      }
+      community_fund: {
+        Row: {
+          ID: string
+          COMMUNITY_ID: string | null
+          BALANCE: string
+          TOTAL_CONTRIBUTED: string
+          TOTAL_WITHDRAWN: string
+          LAST_CONTRIBUTION_AT: string | null
+          LAST_WITHDRAWAL_AT: string | null
+          CREATED_AT: string
+        }
+        Insert: {
+          ID?: string
+          COMMUNITY_ID?: string | null
+          BALANCE?: string
+          TOTAL_CONTRIBUTED?: string
+          TOTAL_WITHDRAWN?: string
+          LAST_CONTRIBUTION_AT?: string | null
+          LAST_WITHDRAWAL_AT?: string | null
+          CREATED_AT?: string
+        }
+        Update: {
+          ID?: string
+          COMMUNITY_ID?: string | null
+          BALANCE?: string
+          TOTAL_CONTRIBUTED?: string
+          TOTAL_WITHDRAWN?: string
+          LAST_CONTRIBUTION_AT?: string | null
+          LAST_WITHDRAWAL_AT?: string | null
+          CREATED_AT?: string
+        }
+      }
+      social_return_projects: {
+        Row: {
+          ID: string
+          TITLE: string
+          DESCRIPTION: string
+          REQUESTED_AMOUNT: string
+          APPROVED_AMOUNT: string | null
+          STATUS: string
+          VOTES_FOR: number
+          VOTES_AGAINST: number
+          VOTING_DEADLINE: string
+          PROPOSER_ID: string
+          COMMUNITY_ID: string | null
+          CREATED_AT: string
+          FUNDED_AT: string | null
+          COMPLETED_AT: string | null
+        }
+        Insert: {
+          ID?: string
+          TITLE: string
+          DESCRIPTION: string
+          REQUESTED_AMOUNT: string
+          APPROVED_AMOUNT?: string | null
+          STATUS?: string
+          VOTES_FOR?: number
+          VOTES_AGAINST?: number
+          VOTING_DEADLINE: string
+          PROPOSER_ID: string
+          COMMUNITY_ID?: string | null
+          CREATED_AT?: string
+          FUNDED_AT?: string | null
+          COMPLETED_AT?: string | null
+        }
+        Update: {
+          ID?: string
+          TITLE?: string
+          DESCRIPTION?: string
+          REQUESTED_AMOUNT?: string
+          APPROVED_AMOUNT?: string | null
+          STATUS?: string
+          VOTES_FOR?: number
+          VOTES_AGAINST?: number
+          VOTING_DEADLINE?: string
+          PROPOSER_ID?: string
+          COMMUNITY_ID?: string | null
+          CREATED_AT?: string
+          FUNDED_AT?: string | null
+          COMPLETED_AT?: string | null
+        }
+      }
+      governance_votes: {
+        Row: {
+          ID: string
+          PROJECT_ID: string
+          VOTER_ID: string
+          VOTE_WEIGHT: string
+          VOTE_DIRECTION: boolean
+          VOTED_AT: string
+        }
+        Insert: {
+          ID?: string
+          PROJECT_ID: string
+          VOTER_ID: string
+          VOTE_WEIGHT: string
+          VOTE_DIRECTION: boolean
+          VOTED_AT?: string
+        }
+        Update: {
+          ID?: string
+          PROJECT_ID?: string
+          VOTER_ID?: string
+          VOTE_WEIGHT?: string
+          VOTE_DIRECTION?: boolean
+          VOTED_AT?: string
+        }
+      }
+      gard_tokenized_assets: {
+        Row: {
+          ASSET_ID: string
+          NFT_TOKEN_ID: string
+          SHARD_COUNT: number
+          SHARD_PRICE_BASE: string
+          ROYALTY_RATE: string
+          CONTRIBUTOR_WALLET: string
+          AI_QUALITY_SCORE: string | null
+          GIS_PRECISION_SCORE: string | null
+          HISTORICAL_SIGNIFICANCE: string | null
+          IS_GENESIS_ASSET: boolean
+          RETAIL_DEMAND_DRIVEN: boolean
+          TOKENIZED_AT: string
+          LAST_TRADED_AT: string | null
+        }
+        Insert: {
+          ASSET_ID: string
+          NFT_TOKEN_ID: string
+          SHARD_COUNT?: number
+          SHARD_PRICE_BASE: string
+          ROYALTY_RATE?: string
+          CONTRIBUTOR_WALLET: string
+          AI_QUALITY_SCORE?: string | null
+          GIS_PRECISION_SCORE?: string | null
+          HISTORICAL_SIGNIFICANCE?: string | null
+          IS_GENESIS_ASSET?: boolean
+          RETAIL_DEMAND_DRIVEN?: boolean
+          TOKENIZED_AT?: string
+          LAST_TRADED_AT?: string | null
+        }
+        Update: {
+          ASSET_ID?: string
+          NFT_TOKEN_ID?: string
+          SHARD_COUNT?: number
+          SHARD_PRICE_BASE?: string
+          ROYALTY_RATE?: string
+          CONTRIBUTOR_WALLET?: string
+          AI_QUALITY_SCORE?: string | null
+          GIS_PRECISION_SCORE?: string | null
+          HISTORICAL_SIGNIFICANCE?: string | null
+          IS_GENESIS_ASSET?: boolean
+          RETAIL_DEMAND_DRIVEN?: boolean
+          TOKENIZED_AT?: string
+          LAST_TRADED_AT?: string | null
+        }
+      }
+      pending_rewards: {
+        Row: {
+          ID: string
+          USER_ID: string
+          PENDING_AMOUNT: string
+          LAST_CLAIM_AT: string | null
+          TOTAL_CLAIMED: string
+          CREATED_AT: string
+        }
+        Insert: {
+          ID?: string
+          USER_ID: string
+          PENDING_AMOUNT?: string
+          LAST_CLAIM_AT?: string | null
+          TOTAL_CLAIMED?: string
+          CREATED_AT?: string
+        }
+        Update: {
+          ID?: string
+          USER_ID?: string
+          PENDING_AMOUNT?: string
+          LAST_CLAIM_AT?: string | null
+          TOTAL_CLAIMED?: string
+          CREATED_AT?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -581,6 +851,40 @@ export interface Database {
     Functions: {
       delete_user_account: {
         Args: Record<string, never>
+        Returns: void
+      }
+      // GARD Functions
+      calculate_vote_weight: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      record_royalty_transaction: {
+        Args: {
+          p_asset_id: string
+          p_token_id: string
+          p_transaction_type: string
+          p_sale_price: number
+          p_seller_wallet: string
+          p_buyer_wallet: string
+          p_tx_hash?: string | null
+          p_block_number?: number | null
+        }
+        Returns: string
+      }
+      distribute_holder_rewards: {
+        Args: { p_asset_id: string; p_holder_share: number }
+        Returns: void
+      }
+      claim_rewards: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
+      cast_governance_vote: {
+        Args: {
+          p_project_id: string
+          p_voter_id: string
+          p_vote_direction: boolean
+        }
         Returns: void
       }
     }
@@ -621,3 +925,32 @@ export type TaxonomyUpdate = Database['public']['Tables']['taxonomy']['Update']
 export type ObjectAttributes = Database['public']['Tables']['object_attributes']['Row']
 export type ObjectAttributesInsert = Database['public']['Tables']['object_attributes']['Insert']
 export type ObjectAttributesUpdate = Database['public']['Tables']['object_attributes']['Update']
+
+// GARD Helper Types
+export type RoyaltyTransactionRow = Database['public']['Tables']['royalty_transactions']['Row']
+export type RoyaltyTransactionInsert = Database['public']['Tables']['royalty_transactions']['Insert']
+export type RoyaltyTransactionUpdate = Database['public']['Tables']['royalty_transactions']['Update']
+
+export type ShardHoldingRow = Database['public']['Tables']['shard_holdings']['Row']
+export type ShardHoldingInsert = Database['public']['Tables']['shard_holdings']['Insert']
+export type ShardHoldingUpdate = Database['public']['Tables']['shard_holdings']['Update']
+
+export type CommunityFundRow = Database['public']['Tables']['community_fund']['Row']
+export type CommunityFundInsert = Database['public']['Tables']['community_fund']['Insert']
+export type CommunityFundUpdate = Database['public']['Tables']['community_fund']['Update']
+
+export type SocialReturnProjectRow = Database['public']['Tables']['social_return_projects']['Row']
+export type SocialReturnProjectInsert = Database['public']['Tables']['social_return_projects']['Insert']
+export type SocialReturnProjectUpdate = Database['public']['Tables']['social_return_projects']['Update']
+
+export type GovernanceVoteRow = Database['public']['Tables']['governance_votes']['Row']
+export type GovernanceVoteInsert = Database['public']['Tables']['governance_votes']['Insert']
+export type GovernanceVoteUpdate = Database['public']['Tables']['governance_votes']['Update']
+
+export type GARDTokenizedAssetRow = Database['public']['Tables']['gard_tokenized_assets']['Row']
+export type GARDTokenizedAssetInsert = Database['public']['Tables']['gard_tokenized_assets']['Insert']
+export type GARDTokenizedAssetUpdate = Database['public']['Tables']['gard_tokenized_assets']['Update']
+
+export type PendingRewardsRow = Database['public']['Tables']['pending_rewards']['Row']
+export type PendingRewardsInsert = Database['public']['Tables']['pending_rewards']['Insert']
+export type PendingRewardsUpdate = Database['public']['Tables']['pending_rewards']['Update']

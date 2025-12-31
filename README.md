@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.9.3-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-1.9.4-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -60,6 +60,32 @@ For mass usage, ensure your Supabase tables have RLS enabled. The project includ
 3. **PWA:** The app is a full PWA. Ensure you serve it over HTTPS for service worker support.
 
 ---
+
+## 🚀 What's New in v1.9.4
+
+### 🌱 GARD Tokenomics Integration (SocialReturnSystem)
+- **Fractional Shard Ownership:** Each tokenized data asset is divided into 1,000 tradeable shards, enabling micro-investments in high-quality datasets.
+- **10% Royalty Recycling:** Every transaction triggers automatic royalty distribution:
+  - 50% to Community Fund (social return projects)
+  - 30% to Shard Holders (proportional rewards)
+  - 20% to Platform Maintenance
+- **DAO Governance Voting:** Shard holders vote on community proposals with weight proportional to their holdings.
+- **Social Returns Dashboard:** Track royalty distributions, system sustainability metrics, and community fund allocations.
+- **Self-Sustaining Economics:** Real-time sustainability meter showing system health via the GARD formula: G_t ≥ N_t.
+- **Genesis Asset Multipliers:** Early contributors receive 1.5x rewards on genesis period assets.
+
+### New Components
+- **Social Returns Tab:** Access via the "Sprout" icon in sidebar navigation
+- **Royalty Dashboard:** Real-time stats, sustainability indicator, recent transactions
+- **Shard Portfolio:** View holdings, track unrealized gains, claim pending rewards
+- **Governance Voting:** Browse active proposals, cast votes, view voting history
+
+### Smart Contract
+- New `GARDDataShard.sol` ERC1155 contract with EIP-2981 royalty standard
+- Automated on-chain royalty distribution on Polygon network
+
+### Database Schema
+- Run `sql/GARD_SCHEMA.sql` to add GARD tables and functions to your Supabase instance
 
 ## 🚀 What's New in v1.9.3
 - **Communities & Social Layer:** Introduced a comprehensive community system allowing users to create, join, and manage private or public groups.

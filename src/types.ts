@@ -259,3 +259,139 @@ export interface CommunityAdmissionRequest {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   timestamp: string;
 }
+
+// ============================================
+// GARD (SocialReturnSystem) Types
+// ============================================
+
+export interface GARDDataAsset {
+  ASSET_ID: string;
+  NFT_TOKEN_ID: string;
+  SHARD_COUNT: number;
+  SHARD_PRICE_BASE: number;
+  ROYALTY_RATE: number;
+  CONTRIBUTOR_WALLET: string;
+  
+  // Value attribution scores
+  AI_QUALITY_SCORE: number;
+  GIS_PRECISION_SCORE: number;
+  HISTORICAL_SIGNIFICANCE: number;
+  
+  // Asset classification
+  IS_GENESIS_ASSET: boolean;
+  RETAIL_DEMAND_DRIVEN: boolean;
+  
+  // Timestamps
+  TOKENIZED_AT: string;
+  LAST_TRADED_AT?: string;
+}
+
+export interface RoyaltyTransaction {
+  id: string;
+  assetId: string;
+  tokenId: string;
+  transactionType: 'SALE' | 'LICENSE' | 'GIFT';
+  salePrice: number;
+  royaltyAmount: number;
+  
+  // Distribution breakdown
+  communityShare: number;
+  holderShare: number;
+  maintenanceShare: number;
+  
+  // Participants
+  sellerWallet: string;
+  buyerWallet: string;
+  
+  // Blockchain reference
+  txHash?: string;
+  blockNumber?: number;
+  chainId: number;
+  
+  timestamp: string;
+}
+
+export interface ShardHolding {
+  id: string;
+  userId: string;
+  assetId: string;
+  tokenId: string;
+  shardCount: number;
+  acquisitionPrice: number;
+  acquisitionDate: string;
+  
+  // Derived values
+  currentValue: number;
+  unrealizedGain: number;
+}
+
+export interface CommunityFund {
+  id: string;
+  communityId?: string;
+  balance: number;
+  lastDepositAt?: string;
+  lastWithdrawalAt?: string;
+  totalContributed: number;
+  totalWithdrawn: number;
+}
+
+export interface SocialReturnProject {
+  id: string;
+  title: string;
+  description: string;
+  requestedAmount: number;
+  approvedAmount?: number;
+  status: 'PROPOSED' | 'VOTING' | 'APPROVED' | 'FUNDED' | 'COMPLETED' | 'REJECTED';
+  
+  // Voting
+  votesFor: number;
+  votesAgainst: number;
+  votingDeadline?: string;
+  
+  // References
+  proposerId: string;
+  communityId?: string;
+  
+  // Timestamps
+  createdAt: string;
+  fundedAt?: string;
+  completedAt?: string;
+}
+
+export interface GovernanceVote {
+  id: string;
+  projectId: string;
+  voterId: string;
+  voteWeight: number;
+  voteDirection: boolean; // true = for, false = against
+  votedAt: string;
+}
+
+export interface RoyaltyDistribution {
+  communityFund: number;
+  shardHolderRewards: number;
+  systemMaintenance: number;
+}
+
+export interface GARDSystemStats {
+  totalRoyaltiesGenerated: number;
+  communityFundBalance: number;
+  holderRewardsPool: number;
+  pendingUserRewards: number;
+  transactionCount: number;
+  activeShardHolders: number;
+  selfSustainabilityRatio: number;
+  totalAssetsTokenized: number;
+}
+
+// GARD Configuration Constants
+export const GARD_CONFIG = {
+  ROYALTY_RATE: 0.10,           // 10%
+  LTV_RATIO: 0.70,              // 70% DeFi loan-to-value
+  COMMUNITY_ALLOCATION: 0.50,   // 50%
+  HOLDER_ALLOCATION: 0.30,      // 30%
+  MAINTENANCE_ALLOCATION: 0.20, // 20%
+  SHARDS_PER_ASSET: 1000,
+  GENESIS_MULTIPLIER: 1.5,
+  POLYGON_CHAIN_ID: 137,
+} as const;
