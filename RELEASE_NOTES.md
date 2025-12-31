@@ -1,3 +1,95 @@
+# 🚀 GeoGraph Node: v1.9.4 Release Notes
+
+This major update introduces the **GARD (SocialReturnSystem) Tokenomics Framework**, transforming GeoGraph from a document digitization tool into a **self-sustaining data economy** with measurable social returns.
+
+## 🌱 GARD Tokenomics Integration
+
+### Fractional Shard Ownership
+- **1,000 Shards per Asset:** Each tokenized data asset is divided into 1,000 tradeable shards
+- **Micro-Investments:** Enables fractional ownership of high-quality datasets
+- **Portfolio Tracking:** View holdings, acquisition prices, unrealized gains, and current values
+
+### 10% Royalty Recycling
+Every transaction (sale, license, gift) triggers automatic royalty distribution:
+- **50% Community Fund:** Allocated to DAO-governed social return projects
+- **30% Shard Holders:** Proportional rewards based on holdings
+- **20% Platform Maintenance:** Ensures operational sustainability
+
+### DAO Governance
+- **Weighted Voting:** Vote weight = (user_shards / total_shards) × 100
+- **Proposal System:** Submit social return project proposals for community funding
+- **Voting Periods:** 7-day default voting windows with real-time progress tracking
+
+### Self-Sustainability Metrics
+- **GARD Formula:** G_t = R_t + L_collateral,t + ROA_t
+- **Sustainability Indicator:** Real-time meter showing G_t ≥ N_t compliance
+- **70% LTV:** Loan-to-value ratio for asset-backed liquidity
+
+## 🎯 New Features
+
+### Social Returns Tab
+Access via the **Sprout (🌱) icon** in the sidebar:
+1. **Royalty Dashboard:** System stats, sustainability meter, transaction history
+2. **Shard Portfolio:** View holdings, track gains, claim pending rewards
+3. **Governance Voting:** Browse proposals, cast votes, view results
+
+### Smart Contract
+- **GARDDataShard.sol:** ERC1155 contract with EIP-2981 royalty standard
+- **On-Chain Enforcement:** Royalty distribution on Polygon (Chain ID: 137)
+- **Genesis Multiplier:** 1.5x rewards for early contributors
+
+### Database Schema
+Run `sql/GARD_SCHEMA.sql` to add:
+- `royalty_transactions` - Transaction history
+- `shard_holdings` - User portfolios
+- `community_fund` - Fund balances
+- `social_return_projects` - DAO proposals
+- `governance_votes` - Voting records
+- `gard_tokenized_assets` - Asset metadata
+- `pending_rewards` - Unclaimed rewards
+
+## 📦 New Code Structure
+```
+src/
+├── services/gard/
+│   ├── royaltyEngine.ts     # Core calculations
+│   ├── communityFund.ts     # Fund management
+│   ├── shardMarket.ts       # Trading & portfolios
+│   └── index.ts             # Exports
+├── hooks/
+│   ├── useGARDRoyalties.ts  # Stats & transactions
+│   ├── useShardPortfolio.ts # Holdings management
+│   └── useGovernanceVoting.ts # DAO interface
+├── components/gard/
+│   ├── RoyaltyDashboard.tsx # Stats visualization
+│   ├── ShardPortfolio.tsx   # Portfolio UI
+│   ├── GovernanceVoting.tsx # Voting interface
+│   └── index.ts             # Exports
+contracts/
+└── GARDDataShard.sol        # ERC1155 contract
+sql/
+└── GARD_SCHEMA.sql          # Database setup
+```
+
+---
+
+# 🚀 GeoGraph Node: v1.9.3 Release Notes
+
+This update introduces **Communities**, **Messaging**, **Data Gifting**, and a **Processing Visibility Panel**.
+
+## 🏘️ Communities & Social Layer
+- **Community System:** Create and join public or private communities with admission request management.
+- **Community Data Baselines:** Filter Knowledge Graph and Semantic View by community data for collaborative research.
+
+## 💬 Messaging & Data Gifting
+- **User-to-User Messaging:** Secure real-time chat interface for curator communication.
+- **Data Gifting:** Send Digital Assets and Data Bundles as gifts within messages.
+
+## 👁️ Processing Visibility
+- **Processing Panel:** Global, persistent UI component for monitoring background AI tasks (Zap icon).
+
+---
+
 # 🚀 GeoGraph Node: v1.9.2 Release Notes
 
 This update introduces **Intelligent Data Aggregation** and a streamlined **Quick Processing** workflow.

@@ -43,7 +43,8 @@ import {
   Lock,
   Radio,
   List,
-  CloudDownload
+  CloudDownload,
+  Sprout
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { 
@@ -84,6 +85,7 @@ import Communities from './components/Communities';
 import Messages from './components/Messages';
 import StatusBar from './components/StatusBar';
 import AnnotationEditor from './components/AnnotationEditor';
+import { RoyaltyDashboard, ShardPortfolio, GovernanceVoting } from './components/gard';
 import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/KeyboardShortcuts';
 import { announce } from './lib/accessibility';
 
@@ -955,6 +957,7 @@ export default function App() {
           <SidebarItem icon={Users} label="Communities" active={activeTab === 'communities'} onClick={() => switchTab('communities')} />
           <SidebarItem icon={MessageSquare} label="Messages" active={activeTab === 'messages'} onClick={() => switchTab('messages')} />
           <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => switchTab('market')} />
+          <SidebarItem icon={Sprout} label="Social Returns" active={activeTab === 'gard'} onClick={() => switchTab('gard')} />
           {isAdmin && <SidebarItem icon={ShieldCheck} label="Review Queue" active={activeTab === 'review'} onClick={() => switchTab('review')} />}
           <div className="pt-4 mt-4 border-t border-slate-800">
              <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => switchTab('settings')} />
@@ -1024,6 +1027,7 @@ export default function App() {
               <SidebarItem icon={Users} label="Communities" active={activeTab === 'communities'} onClick={() => { switchTab('communities'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={MessageSquare} label="Messages" active={activeTab === 'messages'} onClick={() => { switchTab('messages'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { switchTab('market'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={Sprout} label="Social Returns" active={activeTab === 'gard'} onClick={() => { switchTab('gard'); setIsMobileMenuOpen(false); }} />
               <div className="pt-4 mt-4 border-t border-slate-800">
                 <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsMobileMenuOpen(false); }} />
               </div>
@@ -1715,6 +1719,28 @@ export default function App() {
                       ))}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'gard' && (
+            <div className="h-full flex flex-col gap-6 overflow-auto pr-2 custom-scrollbar">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white">Social Returns (GARD)</h3>
+                  <p className="text-sm text-slate-400">Track royalties, manage shards, and fund community projects.</p>
+                </div>
+                <div className="flex items-center gap-2 px-3 py-1 bg-green-500/10 border border-green-500/20 rounded-full text-green-400 text-xs font-bold">
+                  <Sprout size={14} />
+                  TOKENOMICS ACTIVE
+                </div>
+              </div>
+
+              <RoyaltyDashboard />
+              
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <ShardPortfolio userId={user?.id || ''} />
+                <GovernanceVoting userId={user?.id || ''} />
               </div>
             </div>
           )}

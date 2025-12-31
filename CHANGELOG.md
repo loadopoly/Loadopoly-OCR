@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
+
+## [1.9.4] - 2025-01-01
+
+### Added
+- **GARD Tokenomics System:** Complete integration of the SocialReturnSystem (GARD) framework for self-sustaining data economy.
+- **Fractional Shard Ownership:** Each tokenized asset divided into 1,000 tradeable shards with full portfolio tracking.
+- **10% Royalty Recycling:** Automatic distribution (50% Community, 30% Holders, 20% Maintenance) on all transactions.
+- **DAO Governance Voting:** Weighted voting on community fund proposals based on shard holdings.
+- **Social Returns Dashboard:** Real-time sustainability metrics, transaction history, and community fund tracking.
+- **GARDDataShard Contract:** ERC1155 smart contract with EIP-2981 royalty standard for on-chain enforcement.
+- **GARD Database Schema:** New tables (royalty_transactions, shard_holdings, community_fund, social_return_projects, governance_votes, gard_tokenized_assets, pending_rewards) and PostgreSQL functions.
+
+### New Components
+- `RoyaltyDashboard.tsx`: Stats grid, sustainability meter, transaction table
+- `ShardPortfolio.tsx`: Holdings table, rewards claiming, unrealized gains
+- `GovernanceVoting.tsx`: Proposal list, voting interface, progress visualization
+
+### New Services
+- `royaltyEngine.ts`: Core GARD calculations (royalty distribution, liquidity generation, sustainability)
+- `communityFund.ts`: Fund management, proposal submission, voting
+- `shardMarket.ts`: Portfolio tracking, shard trading, reward claiming
+
+### New Hooks
+- `useGARDRoyalties`: Fetch system stats and transaction history
+- `useShardPortfolio`: Manage user holdings and rewards
+- `useGovernanceVoting`: DAO voting interface
+
+### Changed
+- **App Navigation:** Added "Social Returns" tab with Sprout icon in sidebar
+- **Database Types:** Extended with GARD table definitions and helper types
+- **Types:** Added GARD interfaces and GARD_CONFIG constants
+
 ## [1.9.3] - 2025-12-31
 
 ### Added
