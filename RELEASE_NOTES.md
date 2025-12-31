@@ -1,3 +1,19 @@
+# 🚀 GeoGraph Node: v1.9.2 Release Notes
+
+This update introduces **Intelligent Data Aggregation** and a streamlined **Quick Processing** workflow.
+
+## 🧠 Intelligent Data Aggregation
+*   **Visual Associative Tagging:** The Gemini 2.5 Flash model now generates a unique `ASSOCIATIVE_ITEM_TAG` for physical objects. This allows the system to recognize the same item across different photos, angles, and sequences.
+*   **Automatic Bundling:** Assets sharing the same associative tag are automatically grouped into data bundles, creating a more organized and searchable database.
+
+## ⚡ Streamlined Ingestion
+*   **Quick Processing UI:** Replaced the multi-step upload process with a single "Upload Documents" button. The AI now automatically categorizes items, eliminating the need for manual scan type selection.
+*   **Process All Pending:** Added a "Process All Pending" button to both Quick Processing and Structured DB views, allowing for efficient batch processing of large datasets.
+
+## 🛠️ UX Refinements
+*   **AR Scanner Workflow:** Improved the AR Scanner's "Process Captures" confirmation. If a user cancels, they are now returned to the scanner view instead of losing their session queue.
+*   **Type Safety:** Expanded the `DigitalAsset` and `SQLRecord` types to support the new aggregation metadata.
+
 # 🚀 GeoGraph Node: v1.9.1 Release Notes
 
 This update introduces **Full Offline Support**, enabling data collection in remote environments without internet connectivity.

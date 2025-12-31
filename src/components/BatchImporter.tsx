@@ -123,46 +123,31 @@ export default function BatchImporter({ onFilesSelected, isProcessing }: BatchIm
         </div>
       )}
 
-      <div className="grid grid-cols-2 gap-4">
-        {/* Single/Multiple Files */}
+      <div className="w-full">
+        {/* Single Upload Button for Files & Folders */}
         <label 
-            className="flex flex-col items-center justify-center gap-3 px-6 py-8 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl border-2 border-dashed border-slate-600 cursor-pointer transition-all group"
+            className="flex flex-col items-center justify-center gap-4 px-6 py-12 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl border-2 border-dashed border-primary-500/50 hover:border-primary-500 cursor-pointer transition-all group"
             role="button"
-            aria-label="Pick files from device"
+            aria-label="Upload documents or folders"
             tabIndex={0}
             onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') fileInputRef.current?.click(); }}
         >
-          <Upload size={32} className="text-primary-400 group-hover:text-primary-300 group-hover:scale-110 transition-all" aria-hidden="true" />
-          <span className="text-sm font-medium text-slate-300">Pick Files</span>
+          <div className="p-4 bg-primary-500/10 rounded-full group-hover:scale-110 transition-transform">
+            <Upload size={40} className="text-primary-400 group-hover:text-primary-300" aria-hidden="true" />
+          </div>
+          <div className="text-center">
+            <span className="text-lg font-bold text-white block">Upload Documents</span>
+            <span className="text-sm text-slate-400">Select files or an entire folder for LLM categorization</span>
+          </div>
           <input
             ref={fileInputRef}
             type="file"
             multiple
-            accept="image/*,.heic,.heif,application/pdf"
-            onChange={(e) => handleFiles(e.target.files)}
-            className="hidden"
-            tabIndex={-1}
-          />
-        </label>
-
-        {/* ENTIRE FOLDER IMPORT */}
-        <label 
-            className="flex flex-col items-center justify-center gap-3 px-6 py-8 bg-slate-800/50 hover:bg-slate-700/50 rounded-xl border-2 border-dashed border-emerald-600/50 hover:border-emerald-500 cursor-pointer transition-all group"
-            role="button"
-            aria-label="Import entire folder recursively"
-            tabIndex={0}
-            onKeyDown={(e) => { if(e.key === 'Enter' || e.key === ' ') folderInputRef.current?.click(); }}
-        >
-          <FolderOpen size={32} className="text-emerald-400 group-hover:text-emerald-300 group-hover:scale-110 transition-all" aria-hidden="true" />
-          <span className="text-sm font-medium text-center text-slate-300">Import Folder<br /><span className="text-xs text-slate-500">(Recursive)</span></span>
-          <input
-            ref={folderInputRef}
-            type="file"
             // @ts-ignore
             webkitdirectory=""
             // @ts-ignore
             directory=""
-            multiple
+            accept="image/*,.heic,.heif,application/pdf"
             onChange={(e) => handleFiles(e.target.files)}
             className="hidden"
             tabIndex={-1}

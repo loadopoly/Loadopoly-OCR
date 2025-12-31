@@ -157,6 +157,7 @@ export interface HistoricalDocumentMetadata {
   KEYWORDS_TAGS: string[];
   ACCESS_RESTRICTIONS: boolean;
   SCAN_TYPE: string;
+  ASSOCIATIVE_ITEM_TAG?: string | null;
   IS_USER_ANNOTATED?: boolean; // Flag for user-modified data
   USER_BUNDLE_ID?: string | null; // Link to manual bundle
   

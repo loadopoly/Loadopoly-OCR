@@ -64,6 +64,7 @@ interface ProcessResponse {
   confidenceScore: number;
   keywordsTags: string[];
   accessRestrictions: boolean;
+  associativeItemTag: string | null;
   
   // Suggested Collection Name (replaces Batch Ingest)
   suggestedCollection: string;
@@ -152,6 +153,7 @@ export const processImageWithGemini = async (
     2. **Metadata**: Timestamps, GIS Zones, Provenance.
     3. **Graph**: Identify ALL Nodes (names/entities), Categorize topic, Title, Description.
     4. **Safety**: Flag restrictions.
+    5. **Aggregation**: If this is a physical item, generate a unique "associativeItemTag" based on its visual characteristics (e.g., "vintage-rolex-submariner-1960s"). This tag should be consistent across different angles of the same item.
   `;
 
   const schema: Schema = {
@@ -205,6 +207,7 @@ export const processImageWithGemini = async (
       // Classification
       nlpNodeCategorization: { type: Type.STRING },
       suggestedCollection: { type: Type.STRING, description: "Proposed name for the collection this item belongs to" },
+      associativeItemTag: { type: Type.STRING, nullable: true, description: "A unique tag for the physical object. If multiple photos are of the same item, this tag MUST be identical." },
       keywordsTags: { type: Type.ARRAY, items: { type: Type.STRING } },
       accessRestrictions: { type: Type.BOOLEAN },
       confidenceScore: { type: Type.NUMBER, description: "0.0 to 1.0 confidence in extraction" },

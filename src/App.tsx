@@ -143,7 +143,7 @@ export default function App() {
   const [graphViewMode, setGraphViewMode] = useState<'SINGLE' | 'GLOBAL'>('SINGLE');
   const [graphFilters, setGraphFilters] = useState({ era: 'all', category: 'all', contested: false });
   const [batchQueue, setBatchQueue] = useState<BatchItem[]>([]);
-  const [selectedScanType, setSelectedScanType] = useState<ScanType | null>(null);
+  const [selectedScanType, setSelectedScanType] = useState<ScanType | null>(ScanType.DOCUMENT);
   const [isPublicBroadcast, setIsPublicBroadcast] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [arSessionQueue, setArSessionQueue] = useState<File[]>([]);
@@ -348,7 +348,8 @@ export default function App() {
               handleBatchFiles(arSessionQueue);
               setArSessionQueue([]);
           } else {
-              setArSessionQueue([]);
+              // If user cancels, stay on AR tab and keep the queue
+              return;
           }
       }
       setActiveTab(newTab);
@@ -439,6 +440,7 @@ export default function App() {
             DOCUMENT_TITLE: analysis.documentTitle,
             DOCUMENT_DESCRIPTION: analysis.documentDescription,
             SOURCE_COLLECTION: analysis.suggestedCollection || asset.sqlRecord!.SOURCE_COLLECTION || "Unsorted",
+            ASSOCIATIVE_ITEM_TAG: analysis.associativeItemTag,
             CREATOR_AGENT: analysis.creatorAgent,
             RIGHTS_STATEMENT: analysis.rightsStatement,
             LANGUAGE_CODE: analysis.languageCode,
@@ -475,13 +477,33 @@ export default function App() {
             sqlRecord: updatedSqlRecord
       };
 
+      // Data Aggregation: Check for existing assets with the same associative tag
+      if (analysis.associativeItemTag) {
+          const existingWithTag = localAssets.find(a => a.sqlRecord?.ASSOCIATIVE_ITEM_TAG === analysis.associativeItemTag && a.id !== asset.id);
+          if (existingWithTag) {
+              const bundleId = existingWithTag.sqlRecord?.USER_BUNDLE_ID || uuidv4();
+              resultAsset.sqlRecord!.USER_BUNDLE_ID = bundleId;
+              
+              // If the existing one didn't have a bundle ID, update it
+              if (!existingWithTag.sqlRecord?.USER_BUNDLE_ID) {
+                  setLocalAssets(prev => prev.map(a => 
+                      a.id === existingWithTag.id ? { ...a, sqlRecord: { ...a.sqlRecord!, USER_BUNDLE_ID: bundleId } } : a
+                  ));
+              }
+          }
+      }
+
       // Auto-store to Supabase (Automatic Cloud Sync)
       const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
       contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true).then(syncResult => {
         if (syncResult.success && syncResult.publicUrl) {
-          // Update local state with the permanent cloud URL
+          // Update state with the permanent cloud URL
           const updatedAsset = { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl };
-          setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
+          if (isGlobalView) {
+            setGlobalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
+          } else {
+            setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
+          }
         }
       }).catch(err => console.error("Auto-sync to Supabase failed", err));
 
@@ -603,6 +625,30 @@ export default function App() {
       setBatchQueue(prev => [...prev, ...newQueueItems]);
       setActiveTab('batch');
       setTimeout(() => processNextBatchItem(), 100);
+  };
+
+  const handleProcessAllPending = async () => {
+      const pendingAssets = (isGlobalView ? globalAssets : localAssets).filter(a => a.status === AssetStatus.PENDING);
+      if (pendingAssets.length === 0) {
+          alert("No pending assets to process.");
+          return;
+      }
+      
+      if (!window.confirm(`Process ${pendingAssets.length} pending assets?`)) return;
+      
+      setIsProcessing(true);
+      for (const asset of pendingAssets) {
+          try {
+              if (asset.imageBlob) {
+                  const file = new File([asset.imageBlob], `reprocess_${asset.id}.jpg`, { type: 'image/jpeg' });
+                  await processAssetPipeline(asset, file);
+              }
+          } catch (err) {
+              console.error(`Failed to process asset ${asset.id}:`, err);
+          }
+      }
+      setIsProcessing(false);
+      alert("Finished processing all pending assets.");
   };
 
   const handleManualBundle = async () => {
@@ -1167,6 +1213,13 @@ export default function App() {
                       </p>
                    </div>
                    <div className="flex flex-wrap gap-4">
+                       <button 
+                          onClick={handleProcessAllPending}
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg flex items-center gap-2 transition-all"
+                       >
+                          <Zap size={14} />
+                          PROCESS ALL PENDING
+                       </button>
                        <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
                             <button onClick={() => { setDbViewMode('DRILLDOWN'); setSelectedGroupKey(null); }} className={`px-3 py-1.5 text-xs font-medium rounded flex items-center gap-2 transition-colors ${dbViewMode === 'DRILLDOWN' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}><List size={14} /> Table</button>
                             <button onClick={() => setDbViewMode('GROUPS')} className={`px-3 py-1.5 text-xs font-medium rounded flex items-center gap-2 transition-colors ${dbViewMode === 'GROUPS' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}><FolderOpen size={14} /> Clusters</button>
@@ -1260,16 +1313,14 @@ export default function App() {
                             </div>
                         </div>
                     </div>
-                ) : !selectedScanType ? <SmartUploadSelector onTypeSelected={setSelectedScanType} /> : (
+                ) : (
                   <div className="flex-1 flex flex-col">
                     <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6">
                         <div className="flex justify-between items-start mb-4">
                           <div>
-                              <button onClick={() => setSelectedScanType(null)} className="mb-2 text-slate-400 hover:text-white flex items-center gap-2 text-sm">← Selection</button>
                               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                                 {isAdmin && isGlobalView ? <Radio className="text-red-500 animate-pulse" /> : <Zap className="text-amber-500" />}
-                                {isAdmin && isGlobalView ? ' Admin Broadcast Console' : ' Batch Processor'}: 
-                                <span className="text-primary-400 ml-2">{SCAN_TYPE_CONFIG[selectedScanType].label}</span>
+                                {isAdmin && isGlobalView ? ' Admin Broadcast Console' : ' Quick Processing'}
                               </h3>
                           </div>
                           <div className="text-right">
@@ -1282,7 +1333,16 @@ export default function App() {
                         </div>
                     </div>
                     <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
-                        <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center"><h4 className="text-xs font-bold text-slate-400 uppercase">Processing Queue</h4></div>
+                        <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase">Processing Queue</h4>
+                            <button 
+                                onClick={handleProcessAllPending}
+                                className="px-3 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 text-[10px] font-bold rounded border border-emerald-500/30 transition-all flex items-center gap-1.5"
+                            >
+                                <Zap size={10} />
+                                PROCESS ALL PENDING
+                            </button>
+                        </div>
                         <div className="flex-1 overflow-auto">
                             <table className="w-full text-left border-collapse">
                                 <thead className="bg-slate-950 sticky top-0">

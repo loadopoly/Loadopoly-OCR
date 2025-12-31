@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.9.1-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-1.9.2-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -61,13 +61,13 @@ For mass usage, ensure your Supabase tables have RLS enabled. The project includ
 
 ---
 
-## 🚀 What's New in v1.9.1
-- **Full Offline Support:** Implemented a robust offline mode using Service Workers and IndexedDB. Users can now capture data in the field without an internet connection.
-- **Auto-Resume Pipeline:** Assets captured offline are automatically queued and processed by the AI pipeline as soon as the device regains connectivity.
-- **Enhanced PWA Caching:** Updated the service worker to cache all external dependencies (React, Lucide, Gemini SDK) for reliable offline startup.
-- **Offline UI Indicators:** Added visual feedback in the AR Scanner and Camera interfaces to inform users when they are operating in offline mode.
+## 🚀 What's New in v1.9.2
+- **Intelligent Data Aggregation:** Implemented LLM-based visual tagging (`ASSOCIATIVE_ITEM_TAG`) to automatically group multiple photos of the same physical item into cohesive data bundles.
+- **Streamlined Quick Processing:** Simplified the ingestion workflow with a single "Upload Documents" button and automatic AI-driven categorization, removing the need for manual scan type selection.
+- **Mass Processing Controls:** Added "Process All Pending" functionality to both Quick Processing and Structured DB views, enabling one-click processing for large local or master datasets.
+- **AR Scanner UX Refinement:** Improved the AR Scanner workflow to allow users to return to the photograph action if they cancel the processing confirmation, preventing accidental session loss.
 
-### Previous (v1.9.0)
+### Previous (v1.9.1)
 - **Curator Mode:** Introduced a dedicated "Curator" view for manual asset management, allowing users to override AI annotations and create custom bundles.
 - **Manual Bundling:** Users can now multi-select assets and group them into persistent "User Defined Bundles" that bypass automatic clustering logic.
 - **Deterministic AI Extraction:** Implemented fixed seeding for Gemini 2.5 Flash to ensure consistent metadata extraction across multiple photos of the same object.
