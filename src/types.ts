@@ -160,6 +160,7 @@ export interface HistoricalDocumentMetadata {
   ASSOCIATIVE_ITEM_TAG?: string | null;
   IS_USER_ANNOTATED?: boolean; // Flag for user-modified data
   USER_BUNDLE_ID?: string | null; // Link to manual bundle
+  COMMUNITY_ID?: string | null; // Link to community
   
   // Rich Metadata based on Scan Type
   TAXONOMY?: TaxonomyData;
@@ -224,4 +225,37 @@ export interface BatchItem {
   errorMsg?: string;
   assetId?: string; // Link to the created asset
   scanType?: ScanType;
+}
+
+export interface UserMessage {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  content: string;
+  timestamp: string;
+  giftAssetId?: string;
+  giftBundleId?: string;
+  isRead: boolean;
+}
+
+export interface Community {
+  id: string;
+  name: string;
+  description: string;
+  adminIds: string[];
+  memberIds: string[];
+  isPrivate: boolean;
+  createdAt: string;
+  shardDispersionConfig: {
+    adminPercentage: number;
+    memberPercentage: number;
+  };
+}
+
+export interface CommunityAdmissionRequest {
+  id: string;
+  communityId: string;
+  userId: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  timestamp: string;
 }

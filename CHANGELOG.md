@@ -2,7 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
+## [1.9.3] - 2025-12-31
 
+### Added
+- **Communities System:** Support for creating and joining communities with admission request management.
+- **Community Filtering:** Global state integration to filter assets, graphs, and semantic views by community ID.
+- **Messaging System:** Real-time chat interface for user-to-user communication.
+- **Data Gifting:** Ability to send and claim digital assets and bundles within messages.
+- **Processing Panel:** Persistent UI component for monitoring background processing tasks.
+
+### Changed
+- **App State:** Integrated `selectedCommunityId` into the global asset memoization.
+- **UI:** Added "Communities" and "Messages" tabs to the main navigation.
 ## [1.9.0] - 2025-12-24
 
 ### Added

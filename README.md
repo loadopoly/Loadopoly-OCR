@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.9.2-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-1.9.3-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -60,6 +60,13 @@ For mass usage, ensure your Supabase tables have RLS enabled. The project includ
 3. **PWA:** The app is a full PWA. Ensure you serve it over HTTPS for service worker support.
 
 ---
+
+## 🚀 What's New in v1.9.3
+- **Communities & Social Layer:** Introduced a comprehensive community system allowing users to create, join, and manage private or public groups.
+- **Community Data Baselines:** The Knowledge Graph and Semantic View can now be filtered by specific community data, enabling collaborative research and private data sharing.
+- **User-to-User Messaging:** Integrated a secure messaging system for curators to communicate, trade insights, and coordinate data collection.
+- **Data Gifting:** Users can now send Digital Assets and Data Bundles as "Gifts" directly within the messaging interface, facilitating peer-to-peer data exchange.
+- **Processing Visibility Panel:** Added a global, persistent processing queue panel (accessible via the Zap icon) for real-time monitoring of background AI tasks.
 
 ## 🚀 What's New in v1.9.2
 - **Intelligent Data Aggregation:** Implemented LLM-based visual tagging (`ASSOCIATIVE_ITEM_TAG`) to automatically group multiple photos of the same physical item into cohesive data bundles.
