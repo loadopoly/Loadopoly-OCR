@@ -68,6 +68,12 @@ const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> =
     ocrText: ocrText,
     status: (row.PROCESSING_STATUS as AssetStatus) || AssetStatus.MINTED,
     graphData: { nodes, links },
+    tokenization: {
+      tokenCount: row.TOKEN_COUNT || 0,
+      vocabularySize: 0,
+      topTokens: [],
+      embeddingVectorPreview: []
+    },
     gisMetadata: row.LOCAL_GIS_ZONE ? {
       zoneType: row.LOCAL_GIS_ZONE,
       estimatedElevation: row.ESTIMATED_ELEVATION || '',
