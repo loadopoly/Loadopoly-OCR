@@ -151,6 +151,7 @@ export interface HistoricalDocumentMetadata {
   LAST_MODIFIED: string;
   PROCESSING_STATUS: AssetStatus;
   CONFIDENCE_SCORE: number;
+  TOKEN_COUNT?: number; // Added for token attribution
   ENTITIES_EXTRACTED: string[]; // List of named entities
   RELATED_ASSETS: string[];
   PRESERVATION_EVENTS: PreservationEvent[];

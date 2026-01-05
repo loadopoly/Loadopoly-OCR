@@ -200,6 +200,9 @@ export default function App() {
   const [scannerConnected, setScannerConnected] = useState(false);
 
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
+  const pendingLocalCount = localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
+  const pendingGlobalCount = globalAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
+  const totalPendingCount = pendingLocalCount + pendingGlobalCount;
 
   useEffect(() => {
     const handleShortcuts = (e: KeyboardEvent) => {
@@ -486,6 +489,7 @@ export default function App() {
             LAST_MODIFIED: new Date().toISOString(),
             PROCESSING_STATUS: AssetStatus.MINTED,
             CONFIDENCE_SCORE: analysis.confidenceScore,
+            TOKEN_COUNT: analysis.tokenization.tokenCount,
             ENTITIES_EXTRACTED: analysis.graphData?.nodes ? analysis.graphData.nodes.map(n => n.label) : [],
             KEYWORDS_TAGS: analysis.keywordsTags || [],
             ACCESS_RESTRICTIONS: analysis.accessRestrictions,
@@ -667,7 +671,17 @@ export default function App() {
   };
 
   const handleProcessAllPending = async () => {
-      const pendingAssets = (isGlobalView ? globalAssets : localAssets).filter(a => a.status === AssetStatus.PENDING);
+      let pendingAssets = (isGlobalView ? globalAssets : localAssets).filter(a => a.status === AssetStatus.PENDING);
+      
+      // If in global view and no global pending, but there are local pending, offer to process local
+      if (isGlobalView && pendingAssets.length === 0 && pendingLocalCount > 0) {
+          if (window.confirm(`No pending global assets, but there are ${pendingLocalCount} pending local assets. Process them now?`)) {
+              pendingAssets = localAssets.filter(a => a.status === AssetStatus.PENDING);
+          } else {
+              return;
+          }
+      }
+
       if (pendingAssets.length === 0) {
           alert("No pending assets to process.");
           return;
@@ -1088,13 +1102,13 @@ export default function App() {
                 </div>
             </div>
           <div className="flex items-center gap-2">
-             {assets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length > 0 && (
+             {totalPendingCount > 0 && (
                 <button 
                     onClick={() => setShowProcessingPanel(!showProcessingPanel)}
                     className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${showProcessingPanel ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}`}
                 >
                     <div className={`w-2 h-2 rounded-full bg-amber-500 ${isProcessing ? 'animate-pulse' : ''}`}></div>
-                    <span className="text-xs font-bold">{assets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length} PENDING</span>
+                    <span className="text-xs font-bold">{totalPendingCount} PENDING</span>
                 </button>
              )}
              {activeTab !== 'batch' && activeTab !== 'ar' && (
@@ -1872,10 +1886,12 @@ export default function App() {
                     <button onClick={() => setShowProcessingPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
                 </div>
                 <div className="flex-1 overflow-auto p-2 space-y-2 custom-scrollbar">
-                    {assets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length === 0 ? (
+                    {totalPendingCount === 0 ? (
                         <div className="p-8 text-center text-slate-500 text-xs">No active processing tasks.</div>
                     ) : (
-                        assets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).map(asset => (
+                        [...localAssets, ...globalAssets]
+                            .filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING)
+                            .map(asset => (
                             <div key={asset.id} className="p-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center gap-3">
                                 <img src={asset.imageUrl} className="w-10 h-10 object-cover rounded border border-slate-700" alt="thumb" />
                                 <div className="flex-1 min-w-0">
@@ -1899,7 +1915,7 @@ export default function App() {
                 <div className="p-3 border-t border-slate-800 bg-slate-950/50 rounded-b-xl">
                     <button 
                         onClick={handleProcessAllPending}
-                        disabled={isProcessing || assets.filter(a => a.status === AssetStatus.PENDING).length === 0}
+                        disabled={isProcessing || totalPendingCount === 0}
                         className="w-full py-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2"
                     >
                         <Zap size={14} />

@@ -66,33 +66,47 @@ const extractYear = (ts: string | null | undefined): number => {
   return match ? parseInt(match[0]) : 9999;
 };
 
-const normalizeTitle = (t: string) => t.replace(/[^a-z0-9]/gi, '').slice(0, 30).toLowerCase();
+const normalizeTitle = (t: string) => {
+  // Remove numbers and special chars to group "Aircraft 1" and "Aircraft 2"
+  return t.replace(/[^a-z]/gi, '').slice(0, 20).toLowerCase();
+};
 
 const generateBundleKey = (asset: DigitalAsset, allAssets: DigitalAsset[]): string | null => {
   const rec = asset.sqlRecord;
   if (!rec) return null;
 
-  // Strategy 1: Exact location match (GPS ±10m) + same year bucket
+  // Strategy 1: Exact location match (GPS ±10m)
   if (asset.location) {
     const matches = allAssets.filter(a =>
       a.location &&
       Math.abs(a.location.latitude - asset.location!.latitude) < 0.0001 &&
       Math.abs(a.location.longitude - asset.location!.longitude) < 0.0001
     );
-    // If we have multiple items at this location, use location as key
     if (matches.length > 1) {
-        return `gps_${asset.location.latitude.toFixed(5)}_${asset.location.longitude.toFixed(5)}`;
+        return `gps_${asset.location.latitude.toFixed(4)}_${asset.location.longitude.toFixed(4)}`;
     }
   }
 
-  // Strategy 2: Title similarity + year cluster
+  // Strategy 2: Shared Entities (High confidence clustering)
+  const entities = rec.ENTITIES_EXTRACTED || [];
+  if (entities.length >= 2) {
+      // Use the top 2 entities as a cluster key
+      const topEntities = [...entities].sort().slice(0, 2).map(e => e.replace(/[^a-z0-9]/gi, '').toLowerCase());
+      return `entities_${topEntities.join('_')}`;
+  }
+
+  // Strategy 3: Title similarity (Fuzzy)
   const title = rec.DOCUMENT_TITLE || "Untitled";
-  if (title.length < 5) return null; // Too short to cluster
+  if (title.length < 3) return null;
   
   const year = extractYear(rec.NLP_DERIVED_TIMESTAMP);
-  const decade = Math.floor(year / 10) * 10;
+  // Use a larger window for years (25 years) to group related historical items
+  const era = Math.floor(year / 25) * 25;
   
-  return `title_${normalizeTitle(title).substring(0, 15)}_${decade}`;
+  const normalized = normalizeTitle(title);
+  if (normalized.length < 3) return null;
+
+  return `title_${normalized.substring(0, 10)}_${era}`;
 };
 
 const createBundleFromGroup = (group: DigitalAsset[]): ImageBundle => {
