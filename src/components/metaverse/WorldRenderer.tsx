@@ -1,9 +1,9 @@
 /**
  * WorldRenderer Component
  * 
- * Interactive 3D visualization of the knowledge graph.
- * Features force-directed layout, deep exploration capabilities,
- * and engaging animations to help users discover connections.
+ * Interactive 3D visualization of the knowledge graph with narrative exploration.
+ * Features force-directed layout, slow contemplative movement, photo corpus display,
+ * and a "choose your own adventure" guided story experience.
  */
 
 import React, { useRef, useMemo, useState, useEffect, useCallback } from 'react';
@@ -21,9 +21,13 @@ import {
   ChevronLeft,
   ChevronRight,
   Play,
-  Pause
+  Pause,
+  BookOpen,
+  Map as MapIcon,
+  Image as ImageIcon
 } from 'lucide-react';
 import { KnowledgeExplorer } from './KnowledgeExplorer';
+import { StoryNarrator } from './StoryNarrator';
 
 // ============================================
 // Types
@@ -285,8 +289,8 @@ function InteractiveCanvas({
     const centerX = canvas.width / 2;
     const centerY = canvas.height / 2;
     
-    // Isometric projection with subtle rotation
-    const time = animationTime.current * 0.0005;
+    // Slow, contemplative rotation - takes ~5 minutes for a full rotation
+    const time = animationTime.current * 0.00002;
     const rotX = pos[0] * Math.cos(time) - pos[2] * Math.sin(time);
     const rotZ = pos[0] * Math.sin(time) + pos[2] * Math.cos(time);
     
@@ -632,8 +636,11 @@ export default function WorldRenderer({
   const [isSimulating, setIsSimulating] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [showLinks, setShowLinks] = useState(true);
-  const [showExplorer, setShowExplorer] = useState(true);
   const [filterType, setFilterType] = useState<string | null>(null);
+  
+  // Panel state - Story Narrator vs Knowledge Explorer
+  const [activePanel, setActivePanel] = useState<'story' | 'explorer' | null>('story');
+  const [isPanelExpanded, setIsPanelExpanded] = useState(false);
   
   // Force simulation state
   const [worldData, setWorldData] = useState<{ nodes: WorldNode[]; links: WorldLink[] }>({ nodes: [], links: [] });
@@ -768,7 +775,7 @@ export default function WorldRenderer({
       onWheel={handleWheel}
     >
       {/* Main Canvas Area */}
-      <div className={`relative flex-1 transition-all duration-300 ${showExplorer ? 'mr-80' : ''}`}>
+      <div className={`relative flex-1 transition-all duration-300 ${activePanel ? (isPanelExpanded ? 'mr-[480px]' : 'mr-96') : ''}`}>
         <InteractiveCanvas
           nodes={filteredData.nodes}
           links={filteredData.links}
@@ -927,16 +934,30 @@ export default function WorldRenderer({
           >
             <RotateCcw size={18} />
           </button>
+          
+          {/* Panel toggle buttons */}
+          <div className="h-px bg-slate-700 my-1" />
           <button
-            onClick={() => setShowExplorer(!showExplorer)}
+            onClick={() => setActivePanel(activePanel === 'story' ? null : 'story')}
             className={`p-2 rounded-lg border transition-colors ${
-              showExplorer 
-                ? 'bg-primary-600/20 border-primary-600/50 text-primary-400' 
-                : 'bg-slate-800/80 border-slate-700 text-white hover:bg-slate-700'
+              activePanel === 'story'
+                ? 'bg-amber-600/20 border-amber-600/50 text-amber-400' 
+                : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
             }`}
-            title="Toggle Explorer Panel"
+            title="Story Narrator"
           >
-            {showExplorer ? <ChevronRight size={18} /> : <ChevronLeft size={18} />}
+            <BookOpen size={18} />
+          </button>
+          <button
+            onClick={() => setActivePanel(activePanel === 'explorer' ? null : 'explorer')}
+            className={`p-2 rounded-lg border transition-colors ${
+              activePanel === 'explorer' 
+                ? 'bg-primary-600/20 border-primary-600/50 text-primary-400' 
+                : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-white'
+            }`}
+            title="Knowledge Explorer"
+          >
+            <MapIcon size={18} />
           </button>
         </div>
 
@@ -972,6 +993,43 @@ export default function WorldRenderer({
           </div>
         )}
 
+        {/* Corpus Photo Preview - floating thumbnails */}
+        {assets.length > 0 && (
+          <div className="absolute top-20 left-4 bg-slate-900/90 backdrop-blur-sm rounded-lg p-3 border border-slate-700 max-w-[200px]">
+            <div className="flex items-center gap-2 text-xs text-primary-400 mb-2">
+              <ImageIcon size={14} />
+              <span>Your Corpus</span>
+              <span className="ml-auto text-slate-500">{assets.length}</span>
+            </div>
+            <div className="grid grid-cols-3 gap-1">
+              {assets.slice(0, 6).map((asset) => (
+                <button
+                  key={asset.id}
+                  onClick={() => onAssetView?.(asset.id)}
+                  className="aspect-square rounded overflow-hidden bg-slate-800 hover:ring-2 hover:ring-primary-500 transition-all"
+                >
+                  {asset.imageUrl ? (
+                    <img 
+                      src={asset.imageUrl} 
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-600">
+                      <ImageIcon size={16} />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+            {assets.length > 6 && (
+              <div className="text-xs text-slate-500 text-center mt-2">
+                +{assets.length - 6} more in collection
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Navigation hint */}
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-xs text-slate-500 bg-slate-900/50 px-3 py-1.5 rounded-full flex items-center gap-2">
           <Compass size={12} />
@@ -979,20 +1037,34 @@ export default function WorldRenderer({
           <span className="text-slate-600">•</span>
           <span>Scroll to zoom</span>
           <span className="text-slate-600">•</span>
-          <span>Click nodes to explore</span>
+          <span>Click nodes to start your story</span>
         </div>
       </div>
 
-      {/* Knowledge Explorer Panel */}
-      {showExplorer && (
-        <div className="absolute top-0 right-0 w-80 h-full border-l border-slate-700">
-          <KnowledgeExplorer
-            graphData={graphData}
-            assets={assets}
-            selectedNode={selectedNode}
-            onNodeSelect={handleExplorerNodeSelect}
-            onAssetView={onAssetView}
-          />
+      {/* Side Panel - Story Narrator or Knowledge Explorer */}
+      {activePanel && (
+        <div className={`absolute top-0 right-0 h-full border-l border-slate-700 transition-all duration-300 ${
+          isPanelExpanded ? 'w-[480px]' : 'w-96'
+        }`}>
+          {activePanel === 'story' ? (
+            <StoryNarrator
+              graphData={graphData}
+              assets={assets}
+              selectedNode={selectedNode}
+              onNodeSelect={handleExplorerNodeSelect}
+              onAssetView={onAssetView}
+              isExpanded={isPanelExpanded}
+              onToggleExpand={() => setIsPanelExpanded(!isPanelExpanded)}
+            />
+          ) : (
+            <KnowledgeExplorer
+              graphData={graphData}
+              assets={assets}
+              selectedNode={selectedNode}
+              onNodeSelect={handleExplorerNodeSelect}
+              onAssetView={onAssetView}
+            />
+          )}
         </div>
       )}
     </div>
