@@ -196,7 +196,7 @@ class AvatarService {
       USER_ID: userId,
       SESSION_ID: this.sessionId,
       SECTOR: sector,
-      POSITION: position,
+      WORLD_POSITION: position,
       STATUS: 'ACTIVE',
     });
 
@@ -224,7 +224,7 @@ class AvatarService {
     if (!db) return;
 
     const updates: Record<string, unknown> = {
-      POSITION: position,
+      WORLD_POSITION: position,
       HEARTBEAT_AT: new Date().toISOString(),
     };
 
@@ -257,7 +257,7 @@ class AvatarService {
       userId: row.user_id as string,
       sessionId: row.session_id as string,
       sector: sector,
-      position: (row.position as [number, number, number]) || [0, 0, 0],
+      position: (row.world_position as [number, number, number]) || [0, 0, 0],
       status: (row.status as 'ACTIVE' | 'IDLE' | 'AWAY') || 'ACTIVE',
       displayName: row.display_name as string | undefined,
       avatarColor: row.avatar_color as string | undefined,

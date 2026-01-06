@@ -907,7 +907,7 @@ export interface Database {
           USER_ID: string
           SESSION_ID: string
           SECTOR: string
-          POSITION: [number, number, number]
+          WORLD_POSITION: [number, number, number]
           STATUS: string
           HEARTBEAT_AT: string
           CONNECTED_AT: string
@@ -917,7 +917,7 @@ export interface Database {
           USER_ID: string
           SESSION_ID: string
           SECTOR?: string
-          POSITION?: [number, number, number]
+          WORLD_POSITION?: [number, number, number]
           STATUS?: string
           HEARTBEAT_AT?: string
           CONNECTED_AT?: string
@@ -927,7 +927,7 @@ export interface Database {
           USER_ID?: string
           SESSION_ID?: string
           SECTOR?: string
-          POSITION?: [number, number, number]
+          WORLD_POSITION?: [number, number, number]
           STATUS?: string
           HEARTBEAT_AT?: string
           CONNECTED_AT?: string
@@ -1089,7 +1089,7 @@ export interface Database {
           display_name: string
           avatar_model: string
           avatar_color: string
-          position: [number, number, number]
+          world_position: [number, number, number]
           status: string
         }[]
       }
