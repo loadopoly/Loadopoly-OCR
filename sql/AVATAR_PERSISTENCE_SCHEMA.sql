@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS presence_sessions (
     USER_ID UUID REFERENCES auth.users(id) ON DELETE CASCADE,
     SESSION_ID TEXT NOT NULL UNIQUE,
     SECTOR TEXT DEFAULT 'ORIGIN',
-    POSITION FLOAT[3] DEFAULT '{0, 0, 0}',
+    WORLD_POSITION FLOAT[3] DEFAULT '{0, 0, 0}',
     STATUS TEXT CHECK (STATUS IN ('ACTIVE', 'IDLE', 'AWAY')) DEFAULT 'ACTIVE',
     HEARTBEAT_AT TIMESTAMPTZ DEFAULT NOW(),
     CREATED_AT TIMESTAMPTZ DEFAULT NOW()
@@ -175,7 +175,7 @@ BEGIN
     SET 
         HEARTBEAT_AT = NOW(),
         SECTOR = COALESCE(p_sector, SECTOR),
-        POSITION = COALESCE(p_position, POSITION),
+        WORLD_POSITION = COALESCE(p_position, WORLD_POSITION),
         STATUS = COALESCE(p_status, STATUS)
     WHERE SESSION_ID = p_session_id AND USER_ID = auth.uid();
 END;
@@ -221,7 +221,7 @@ RETURNS TABLE (
     session_id TEXT,
     display_name TEXT,
     avatar_color TEXT,
-    position FLOAT[3],
+    world_position FLOAT[3],
     status TEXT
 ) AS $$
 BEGIN
@@ -231,7 +231,7 @@ BEGIN
         ps.SESSION_ID,
         ua.DISPLAY_NAME,
         ua.AVATAR_COLOR,
-        ps.POSITION,
+        ps.WORLD_POSITION,
         ps.STATUS
     FROM presence_sessions ps
     LEFT JOIN user_avatars ua ON ps.USER_ID = ua.USER_ID
