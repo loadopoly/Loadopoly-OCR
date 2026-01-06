@@ -1,3 +1,89 @@
+# 🚀 GeoGraph Node: v2.2.0 Release Notes
+
+This release transforms the Knowledge World into an immersive **narrative exploration experience**, guiding users through their corpus like a "choose your own adventure" story.
+
+## 📖 Story Navigator
+
+### Narrative Engine
+The new `narrativeService.ts` generates contextual stories as you explore:
+- **Procedural Chapters:** Each node becomes a story chapter with dynamic narrative
+- **Mood System:** Chapters adopt moods (mysterious, revelatory, contemplative, exciting, melancholic)
+- **Thematic Templates:** Rich narrative templates for openings, connections, and transitions
+- **Journey Tracking:** Your exploration path creates a unique story
+
+### Interactive Story Experience
+- **Typewriter Animation:** Text reveals gradually for immersive reading
+- **Branching Choices:** 1-3 paths per chapter with difficulty indicators
+- **Teasers & Consequences:** Hints about what awaits down each path
+- **Skip & Reset:** Control your pace through the narrative
+
+### Corpus Photo Integration
+- **Floating Thumbnails:** Preview grid of your captured photos in World view
+- **Chapter Artifacts:** Related photos displayed inline with narratives
+- **Photo Gallery:** Navigate multiple views of bundled assets
+
+## 🐢 Contemplative World Movement
+- World rotation slowed from ~10s to ~5 minutes per revolution
+- Encourages thoughtful exploration over rapid scanning
+
+## 🎛️ Panel System
+- **Story Navigator (📖):** Narrative exploration mode
+- **Knowledge Explorer (🗺️):** Deep graph analysis mode
+- **Expandable:** 384px default, 480px expanded width
+
+## 📦 New Files
+```
+src/
+├── services/narrativeService.ts  # NarrativeEngine class
+├── components/metaverse/
+│   └── StoryNarrator.tsx         # Story panel UI
+```
+
+## 🎨 CSS Additions
+- `animate-fadeIn` - Smooth content transitions
+- `animate-slideInRight` - Panel animations
+- `animate-pulse-glow` - Selection effects
+
+---
+
+# 🚀 GeoGraph Node: v2.1.0 Release Notes
+
+This update introduces **Semantic Deduplication** to prevent data dilution and a completely redesigned **Interactive Knowledge Explorer**.
+
+## 🔄 Semantic Deduplication
+Multiple photos of the same subject are automatically detected and bundled:
+- Jaccard similarity for entity/keyword overlap
+- Levenshtein distance for title comparison
+- GPS proximity matching (~100m threshold)
+- GIS zone correlation
+- Union-Find clustering at 55% similarity threshold
+
+## 🌐 Knowledge Explorer Redesign
+- Force-directed physics layout
+- Discovery paths and thematic clusters
+- Animated particles on connections
+- Exploration history with backtracking
+
+---
+
+# 🚀 GeoGraph Node: v2.0.0 Release Notes
+
+This major release introduces the **Metaverse Foundation** with 3D world navigation and avatar persistence.
+
+## 🌐 3D World Navigation
+- Avatar persistence with XP progression
+- Real-time presence for multi-user exploration
+- Sector-based world partitioning
+- Three.js ready with canvas fallback
+
+## ⚡ Database Optimizations
+- BRIN indexes for time-series queries
+- GIN indexes for JSONB searches
+- Partial indexes for workflow queues
+- Monitoring views for performance tracking
+
+---
+
 # 🚀 GeoGraph Node: v1.9.4 Release Notes
 
 This major update introduces the **GARD (SocialReturnSystem) Tokenomics Framework**, transforming GeoGraph from a document digitization tool into a **self-sustaining data economy** with measurable social returns.
