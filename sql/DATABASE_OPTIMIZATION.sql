@@ -7,6 +7,14 @@
 -- - Partial indexes for processing queues
 -- - Partitioning preparation
 -- Version: 2.0.0
+--
+-- DEPENDENCIES:
+-- - historical_documents_global (core table - required)
+-- - royalty_transactions (from GARD_SCHEMA.sql)
+-- - realtime_events, presence_sessions (from AVATAR_PERSISTENCE_SCHEMA.sql)
+--
+-- Run the dependency schemas BEFORE this optimization schema.
+-- ============================================
 
 -- ============================================
 -- BRIN Indexes (Block Range Index)
@@ -23,15 +31,25 @@ CREATE INDEX IF NOT EXISTS idx_documents_created_at_brin
 ON historical_documents_global USING BRIN (CREATED_AT)
 WITH (pages_per_range = 128);
 
--- BRIN index on royalty transactions
-CREATE INDEX IF NOT EXISTS idx_royalty_created_at_brin 
-ON royalty_transactions USING BRIN (CREATED_AT)
-WITH (pages_per_range = 128);
+-- BRIN index on royalty transactions (only if table exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_tables WHERE tablename = 'royalty_transactions') THEN
+        CREATE INDEX IF NOT EXISTS idx_royalty_created_at_brin 
+        ON royalty_transactions USING BRIN (CREATED_AT)
+        WITH (pages_per_range = 128);
+    END IF;
+END $$;
 
--- BRIN index on realtime events
-CREATE INDEX IF NOT EXISTS idx_events_created_at_brin 
-ON realtime_events USING BRIN (CREATED_AT)
-WITH (pages_per_range = 128);
+-- BRIN index on realtime events (only if table exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_tables WHERE tablename = 'realtime_events') THEN
+        CREATE INDEX IF NOT EXISTS idx_events_created_at_brin 
+        ON realtime_events USING BRIN (CREATED_AT)
+        WITH (pages_per_range = 128);
+    END IF;
+END $$;
 
 -- ============================================
 -- GIN Indexes for JSONB Searches
@@ -202,15 +220,27 @@ ALTER TABLE historical_documents_global SET (
     autovacuum_vacuum_cost_delay = 10
 );
 
-ALTER TABLE presence_sessions SET (
-    autovacuum_vacuum_scale_factor = 0.01,
-    autovacuum_analyze_scale_factor = 0.01
-);
+-- Autovacuum for presence_sessions (only if table exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_tables WHERE tablename = 'presence_sessions') THEN
+        ALTER TABLE presence_sessions SET (
+            autovacuum_vacuum_scale_factor = 0.01,
+            autovacuum_analyze_scale_factor = 0.01
+        );
+    END IF;
+END $$;
 
-ALTER TABLE realtime_events SET (
-    autovacuum_vacuum_scale_factor = 0.02,
-    autovacuum_analyze_scale_factor = 0.01
-);
+-- Autovacuum for realtime_events (only if table exists)
+DO $$
+BEGIN
+    IF EXISTS (SELECT FROM pg_tables WHERE tablename = 'realtime_events') THEN
+        ALTER TABLE realtime_events SET (
+            autovacuum_vacuum_scale_factor = 0.02,
+            autovacuum_analyze_scale_factor = 0.01
+        );
+    END IF;
+END $$;
 
 -- ============================================
 -- Partitioning Preparation
