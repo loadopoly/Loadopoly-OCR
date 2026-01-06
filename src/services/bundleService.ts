@@ -1,4 +1,6 @@
 import { DigitalAsset, ImageBundle, HistoricalDocumentMetadata, AssetStatus } from '../types';
+import { findDuplicateClusters, consolidateMetadata, ConsolidatedMetadata } from './deduplicationService';
+import { logger } from '../lib/logger';
 
 export const createBundles = (assets: DigitalAsset[]): (DigitalAsset | ImageBundle)[] => {
   const bundles: Record<string, DigitalAsset[]> = {};
@@ -8,9 +10,35 @@ export const createBundles = (assets: DigitalAsset[]): (DigitalAsset | ImageBund
   const autoBundleAssets = assets.filter(a => !a.sqlRecord?.USER_BUNDLE_ID);
   const userBundledAssets = assets.filter(a => !!a.sqlRecord?.USER_BUNDLE_ID);
 
-  autoBundleAssets.forEach(asset => {
+  // PHASE 1: Semantic deduplication - find similar assets that should be bundled
+  const deduplicationResult = findDuplicateClusters(autoBundleAssets, 0.55);
+  
+  logger.info('Deduplication analysis complete', {
+    module: 'BundleService',
+    clusters: deduplicationResult.clusters.length,
+    duplicatesFound: deduplicationResult.totalDuplicatesFound,
+    uniqueAssets: deduplicationResult.uniqueAssets.length,
+  });
+
+  // Create bundles from deduplication clusters
+  const dedupBundles: ImageBundle[] = [];
+  deduplicationResult.clusters.forEach(cluster => {
     try {
-        const key = generateBundleKey(asset, autoBundleAssets);
+      const allAssets = [cluster.primaryAsset, ...cluster.duplicates];
+      const bundle = createBundleFromGroup(allAssets, cluster.consolidatedMetadata);
+      bundle.bundleId = `DEDUP_${cluster.primaryAsset.id}`;
+      dedupBundles.push(bundle);
+    } catch (e) {
+      logger.error('Failed to create dedup bundle', e, { module: 'BundleService' });
+      // Fallback: add as singles
+      singles.push(cluster.primaryAsset, ...cluster.duplicates);
+    }
+  });
+
+  // PHASE 2: Traditional bundling for remaining unique assets
+  deduplicationResult.uniqueAssets.forEach(asset => {
+    try {
+        const key = generateBundleKey(asset, deduplicationResult.uniqueAssets);
         // Only bundle if we have a valid key and decent confidence
         if (key && asset.sqlRecord?.CONFIDENCE_SCORE && asset.sqlRecord.CONFIDENCE_SCORE > 0.6) {
             if (!bundles[key]) bundles[key] = [];
@@ -25,7 +53,7 @@ export const createBundles = (assets: DigitalAsset[]): (DigitalAsset | ImageBund
   });
 
   // Explicitly type the array to handle the union of DigitalAsset and ImageBundle
-  const bundledItems: (DigitalAsset | ImageBundle)[] = [];
+  const bundledItems: (DigitalAsset | ImageBundle)[] = [...dedupBundles];
   
   Object.values(bundles).forEach(group => {
     try {
@@ -109,7 +137,7 @@ const generateBundleKey = (asset: DigitalAsset, allAssets: DigitalAsset[]): stri
   return `title_${normalized.substring(0, 10)}_${era}`;
 };
 
-const createBundleFromGroup = (group: DigitalAsset[]): ImageBundle => {
+const createBundleFromGroup = (group: DigitalAsset[], preComputedMetadata?: ConsolidatedMetadata): ImageBundle => {
   if (!group || group.length === 0) throw new Error("Empty group passed to bundle creator");
 
   const sorted = group.sort((a, b) => 
@@ -152,13 +180,21 @@ const createBundleFromGroup = (group: DigitalAsset[]): ImageBundle => {
   const validRecords = group.map(a => a.sqlRecord!).filter(r => !!r);
   if (validRecords.length === 0) throw new Error("No valid SQL records in group");
   
-  const combinedRecord = mergeRecords(validRecords);
+  // Use pre-computed consolidated metadata if available (from deduplication)
+  const combinedRecord = preComputedMetadata 
+    ? mergeRecordsWithConsolidated(validRecords, preComputedMetadata)
+    : mergeRecords(validRecords);
+
+  // Use consolidated title if available, otherwise fall back to first asset
+  const title = preComputedMetadata?.title || 
+    `${sorted[0].sqlRecord?.DOCUMENT_TITLE?.split(' – ')[0] || 'Untitled Collection'}`;
 
   return {
     bundleId: `BUNDLE_${sorted[0].id}`,
-    title: `${sorted[0].sqlRecord?.DOCUMENT_TITLE.split(' – ')[0] || 'Untitled Collection'}`,
+    title,
     primaryImageUrl: sorted[0].imageUrl,
     imageUrls: group.map(a => a.imageUrl),
+    assetIds: group.map(a => a.id),
     timeRange,
     combinedTokens: group.reduce((sum, a) => sum + (a.tokenization?.tokenCount || 0), 0),
     combinedGraph: { nodes: Array.from(allNodes.values()), links: allLinks },
@@ -194,5 +230,47 @@ const mergeRecords = (records: HistoricalDocumentMetadata[]): HistoricalDocument
     NODE_COUNT: records.reduce((s, r) => s + r.NODE_COUNT, 0),
     FILE_SIZE_BYTES: records.reduce((s, r) => s + r.FILE_SIZE_BYTES, 0),
     SOURCE_COLLECTION: best.SOURCE_COLLECTION + " (Bundled)"
+  };
+};
+
+/**
+ * Merge records using pre-computed consolidated metadata from deduplication
+ * This provides better quality metadata by combining insights from all duplicates
+ */
+const mergeRecordsWithConsolidated = (
+  records: HistoricalDocumentMetadata[], 
+  consolidated: ConsolidatedMetadata
+): HistoricalDocumentMetadata => {
+  if (records.length === 0) throw new Error("Cannot bundle empty records");
+
+  // Use the record with highest confidence as the base
+  const best = records.reduce((prev, current) => 
+    (prev.CONFIDENCE_SCORE || 0) > (current.CONFIDENCE_SCORE || 0) ? prev : current
+  );
+
+  // Merge all entities from all records (deduplicated)
+  const allEntities = new Set<string>();
+  records.forEach(r => {
+    (r.ENTITIES_EXTRACTED || []).forEach(e => allEntities.add(e));
+  });
+
+  // Merge all keywords from all records (deduplicated)
+  const allKeywords = new Set<string>();
+  records.forEach(r => {
+    (r.KEYWORDS_TAGS || []).forEach(k => allKeywords.add(k.toLowerCase()));
+  });
+
+  return {
+    ...best,
+    ASSET_ID: `BUNDLE_${best.ASSET_ID}`,
+    DOCUMENT_TITLE: consolidated.title,
+    DOCUMENT_DESCRIPTION: consolidated.description,
+    NLP_NODE_CATEGORIZATION: consolidated.category,
+    ENTITIES_EXTRACTED: Array.from(allEntities),
+    KEYWORDS_TAGS: Array.from(allKeywords),
+    NODE_COUNT: records.reduce((s, r) => s + r.NODE_COUNT, 0),
+    FILE_SIZE_BYTES: records.reduce((s, r) => s + r.FILE_SIZE_BYTES, 0),
+    SOURCE_COLLECTION: best.SOURCE_COLLECTION + " (Consolidated)",
+    CONFIDENCE_SCORE: consolidated.confidence,
   };
 };

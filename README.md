@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-2.0.0-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-2.1.0-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -58,6 +58,55 @@ For mass usage, ensure your Supabase tables have RLS enabled. The project includ
 1. **Vercel:** The project is optimized for Vercel. Connect your GitHub repo and it will auto-deploy.
 2. **Environment Variables:** Add all `VITE_` variables in the Vercel dashboard.
 3. **PWA:** The app is a full PWA. Ensure you serve it over HTTPS for service worker support.
+
+---
+
+## 🚀 What's New in v2.1.0
+
+### 🔄 Smart Deduplication & Data Consolidation
+Multiple photos of the same subject are now automatically detected and bundled together, preventing data dilution and improving training corpus quality.
+
+**Semantic Similarity Detection:**
+- **Title Similarity:** Levenshtein distance matching for fuzzy title comparison
+- **Entity Overlap:** Jaccard similarity for shared entities (e.g., same person, location)
+- **Keyword Matching:** Common keywords indicate related content
+- **GPS Proximity:** Photos taken within ~100m are likely the same subject
+- **GIS Zone Correlation:** Same geographic zone adds confidence
+
+**Consolidated Metadata:**
+When duplicates are detected (similarity > 55%), metadata is intelligently merged:
+- Best quality description preserved with unique details from variants
+- All entities combined (deduplicated)
+- All keywords merged
+- Most common category selected
+- Title shows view count: "Bronze Bust by Antonio T. (3 views)"
+
+### 🌐 Interactive Knowledge Explorer
+The 3D World view has been completely redesigned for deep exploration:
+
+**Force-Directed Layout:**
+- Nodes organically arrange based on actual connections
+- Related concepts cluster together naturally
+- Physics simulation creates intuitive spatial relationships
+
+**Deep Exploration Sidebar:**
+- **Direct Connections:** See all nodes linked to selected node with relationship types
+- **Discovery Paths:** Follow routes through the graph to find unexpected connections
+- **Thematic Clusters:** Groups of related nodes by type (Person Network, Location Network, etc.)
+- **Exploration History:** Backtrack through your journey
+
+**Visual Engagement:**
+- Animated particles flow along highlighted connections
+- Glow effects on hover/selection
+- Slow world rotation for spatial awareness
+- Connection highlighting shows relationships at a glance
+- Type filter pills to focus on specific entity types
+
+**New Controls:**
+- Working zoom in/out/reset
+- Toggle labels visibility
+- Toggle link visibility
+- Collapse/expand explorer sidebar
 
 ---
 
