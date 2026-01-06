@@ -396,3 +396,106 @@ export const GARD_CONFIG = {
   GENESIS_MULTIPLIER: 1.5,
   POLYGON_CHAIN_ID: 137,
 } as const;
+
+// ============================================
+// Avatar & Metaverse Types
+// ============================================
+
+export interface AvatarBadge {
+  id: string;
+  name: string;
+  description: string;
+  tier: 'BRONZE' | 'SILVER' | 'GOLD' | 'PLATINUM' | 'DIAMOND';
+  earnedAt: string;
+  category: 'CONTRIBUTION' | 'EXPLORATION' | 'COLLABORATION' | 'GOVERNANCE';
+}
+
+export interface UserAvatar {
+  id: string;
+  userId: string;
+  displayName: string;
+  avatarModel: string;
+  avatarColor: string;
+  lastPosition: [number, number, number];
+  lastRotation: [number, number, number, number];
+  lastSector: string;
+  contributionLevel: number;
+  totalNodesCreated: number;
+  totalShardsEarned: number;
+  explorationPoints: number;
+  badges: AvatarBadge[];
+  lastSeen: string;
+}
+
+export interface PresenceSession {
+  userId: string;
+  sessionId: string;
+  sector: string;
+  position: [number, number, number];
+  status: 'ACTIVE' | 'IDLE' | 'AWAY';
+  displayName?: string;
+  avatarColor?: string;
+}
+
+export interface WorldSector {
+  id: string;
+  sectorCode: string;
+  center: [number, number, number];
+  radius: number;
+  aestheticTheme: AestheticTheme;
+  zoneType: WorldZoneType;
+  nodeCount: number;
+  assetCount: number;
+}
+
+export type WorldZoneType = 
+  | 'URBAN_CORE'
+  | 'KNOWLEDGE_DISTRICT'
+  | 'DATA_SUBURBS'
+  | 'FRONTIER_ZONE'
+  | 'ARCHIVE_RUINS'
+  | 'INSTITUTIONAL_HQ'
+  | 'MARKETPLACE'
+  | 'COMMUNITY_PLAZA';
+
+export type AestheticTheme =
+  | 'VICTORIAN_LIBRARY'
+  | 'BRUTALIST_ARCHIVE'
+  | 'DIGITAL_NEON'
+  | 'ORGANIC_GROWTH'
+  | 'INDUSTRIAL_HERITAGE'
+  | 'ACADEMIC_QUADRANGLE'
+  | 'SACRED_GEOMETRY'
+  | 'CYBERPUNK_FRONTIER';
+
+export interface ArchivePartnership {
+  id: string;
+  partnerName: string;
+  partnerType: 'LIBRARY' | 'MUSEUM' | 'UNIVERSITY' | 'GOVERNMENT' | 'PRIVATE';
+  aestheticTheme: AestheticTheme;
+  districtSectorCode?: string;
+  assetCount: number;
+  signedAt: string;
+  isActive: boolean;
+  logoUrl?: string;
+  description?: string;
+  websiteUrl?: string;
+}
+
+// Metaverse Configuration
+export const METAVERSE_CONFIG = {
+  // Spatial settings
+  DEFAULT_SECTOR: 'ORIGIN',
+  SECTOR_RADIUS: 100,
+  MAX_RENDER_DISTANCE: 500,
+  
+  // Presence settings
+  HEARTBEAT_INTERVAL_MS: 30000,
+  IDLE_TIMEOUT_MS: 120000,
+  PRESENCE_EXPIRY_MS: 300000,
+  
+  // Progression
+  EXPLORATION_POINTS_PER_SECTOR: 10,
+  CONTRIBUTION_XP_PER_NODE: 1,
+  LEVEL_SCALING_BASE: 2,
+} as const;

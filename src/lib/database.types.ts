@@ -844,6 +844,200 @@ export interface Database {
           CREATED_AT?: string
         }
       }
+      // Metaverse Tables
+      user_avatars: {
+        Row: {
+          ID: string
+          USER_ID: string
+          DISPLAY_NAME: string
+          AVATAR_MODEL: string
+          AVATAR_COLOR: string
+          BADGES: Json
+          XP_TOTAL: number
+          LEVEL: number
+          NODES_DISCOVERED: number
+          SHARDS_MINTED: number
+          LAST_POSITION: [number, number, number]
+          LAST_ROTATION: [number, number, number, number]
+          LAST_SECTOR: string
+          LAST_SEEN: string
+          CREATED_AT: string
+          UPDATED_AT: string
+        }
+        Insert: {
+          ID?: string
+          USER_ID: string
+          DISPLAY_NAME?: string
+          AVATAR_MODEL?: string
+          AVATAR_COLOR?: string
+          BADGES?: Json
+          XP_TOTAL?: number
+          LEVEL?: number
+          NODES_DISCOVERED?: number
+          SHARDS_MINTED?: number
+          LAST_POSITION?: [number, number, number]
+          LAST_ROTATION?: [number, number, number, number]
+          LAST_SECTOR?: string
+          LAST_SEEN?: string
+          CREATED_AT?: string
+          UPDATED_AT?: string
+        }
+        Update: {
+          ID?: string
+          USER_ID?: string
+          DISPLAY_NAME?: string
+          AVATAR_MODEL?: string
+          AVATAR_COLOR?: string
+          BADGES?: Json
+          XP_TOTAL?: number
+          LEVEL?: number
+          NODES_DISCOVERED?: number
+          SHARDS_MINTED?: number
+          LAST_POSITION?: [number, number, number]
+          LAST_ROTATION?: [number, number, number, number]
+          LAST_SECTOR?: string
+          LAST_SEEN?: string
+          CREATED_AT?: string
+          UPDATED_AT?: string
+        }
+      }
+      presence_sessions: {
+        Row: {
+          ID: string
+          USER_ID: string
+          SESSION_ID: string
+          SECTOR: string
+          POSITION: [number, number, number]
+          STATUS: string
+          HEARTBEAT_AT: string
+          CONNECTED_AT: string
+        }
+        Insert: {
+          ID?: string
+          USER_ID: string
+          SESSION_ID: string
+          SECTOR?: string
+          POSITION?: [number, number, number]
+          STATUS?: string
+          HEARTBEAT_AT?: string
+          CONNECTED_AT?: string
+        }
+        Update: {
+          ID?: string
+          USER_ID?: string
+          SESSION_ID?: string
+          SECTOR?: string
+          POSITION?: [number, number, number]
+          STATUS?: string
+          HEARTBEAT_AT?: string
+          CONNECTED_AT?: string
+        }
+      }
+      realtime_events: {
+        Row: {
+          ID: string
+          EVENT_TYPE: string
+          SECTOR: string | null
+          PAYLOAD: Json
+          ACTOR_USER_ID: string | null
+          CREATED_AT: string
+          PROCESSED_AT: string | null
+        }
+        Insert: {
+          ID?: string
+          EVENT_TYPE: string
+          SECTOR?: string | null
+          PAYLOAD?: Json
+          ACTOR_USER_ID?: string | null
+          CREATED_AT?: string
+          PROCESSED_AT?: string | null
+        }
+        Update: {
+          ID?: string
+          EVENT_TYPE?: string
+          SECTOR?: string | null
+          PAYLOAD?: Json
+          ACTOR_USER_ID?: string | null
+          CREATED_AT?: string
+          PROCESSED_AT?: string | null
+        }
+      }
+      world_sectors: {
+        Row: {
+          ID: string
+          SECTOR_CODE: string
+          CENTER_X: number
+          CENTER_Y: number
+          CENTER_Z: number
+          RADIUS: number
+          ZONE_TYPE: string
+          AESTHETIC_THEME: string
+          NODE_COUNT: number
+          ASSET_COUNT: number
+          CREATED_AT: string
+        }
+        Insert: {
+          ID?: string
+          SECTOR_CODE: string
+          CENTER_X?: number
+          CENTER_Y?: number
+          CENTER_Z?: number
+          RADIUS?: number
+          ZONE_TYPE?: string
+          AESTHETIC_THEME?: string
+          NODE_COUNT?: number
+          ASSET_COUNT?: number
+          CREATED_AT?: string
+        }
+        Update: {
+          ID?: string
+          SECTOR_CODE?: string
+          CENTER_X?: number
+          CENTER_Y?: number
+          CENTER_Z?: number
+          RADIUS?: number
+          ZONE_TYPE?: string
+          AESTHETIC_THEME?: string
+          NODE_COUNT?: number
+          ASSET_COUNT?: number
+          CREATED_AT?: string
+        }
+      }
+      archive_partnerships: {
+        Row: {
+          ID: string
+          PARTNER_NAME: string
+          PARTNER_TYPE: string
+          API_ENDPOINT: string | null
+          DATA_AGREEMENT_HASH: string | null
+          ASSETS_CONTRIBUTED: number
+          TOKENS_MINTED: number
+          STATUS: string
+          JOINED_AT: string
+        }
+        Insert: {
+          ID?: string
+          PARTNER_NAME: string
+          PARTNER_TYPE?: string
+          API_ENDPOINT?: string | null
+          DATA_AGREEMENT_HASH?: string | null
+          ASSETS_CONTRIBUTED?: number
+          TOKENS_MINTED?: number
+          STATUS?: string
+          JOINED_AT?: string
+        }
+        Update: {
+          ID?: string
+          PARTNER_NAME?: string
+          PARTNER_TYPE?: string
+          API_ENDPOINT?: string | null
+          DATA_AGREEMENT_HASH?: string | null
+          ASSETS_CONTRIBUTED?: number
+          TOKENS_MINTED?: number
+          STATUS?: string
+          JOINED_AT?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -885,6 +1079,38 @@ export interface Database {
           p_voter_id: string
           p_vote_direction: boolean
         }
+        Returns: void
+      }
+      // Metaverse Functions
+      get_sector_presence: {
+        Args: { p_sector: string }
+        Returns: {
+          user_id: string
+          display_name: string
+          avatar_model: string
+          avatar_color: string
+          position: [number, number, number]
+          status: string
+        }[]
+      }
+      update_presence_heartbeat: {
+        Args: { p_session_id: string }
+        Returns: void
+      }
+      increment_exploration_points: {
+        Args: { p_user_id: string; p_points: number }
+        Returns: void
+      }
+      update_avatar_contribution: {
+        Args: { p_user_id: string; p_nodes_delta: number; p_shards_delta: number }
+        Returns: void
+      }
+      cleanup_stale_presence: {
+        Args: Record<string, never>
+        Returns: number
+      }
+      initialize_user_avatar: {
+        Args: { p_user_id: string }
         Returns: void
       }
     }
@@ -954,3 +1180,24 @@ export type GARDTokenizedAssetUpdate = Database['public']['Tables']['gard_tokeni
 export type PendingRewardsRow = Database['public']['Tables']['pending_rewards']['Row']
 export type PendingRewardsInsert = Database['public']['Tables']['pending_rewards']['Insert']
 export type PendingRewardsUpdate = Database['public']['Tables']['pending_rewards']['Update']
+
+// Metaverse Helper Types
+export type UserAvatarRow = Database['public']['Tables']['user_avatars']['Row']
+export type UserAvatarInsert = Database['public']['Tables']['user_avatars']['Insert']
+export type UserAvatarUpdate = Database['public']['Tables']['user_avatars']['Update']
+
+export type PresenceSessionRow = Database['public']['Tables']['presence_sessions']['Row']
+export type PresenceSessionInsert = Database['public']['Tables']['presence_sessions']['Insert']
+export type PresenceSessionUpdate = Database['public']['Tables']['presence_sessions']['Update']
+
+export type RealtimeEventRow = Database['public']['Tables']['realtime_events']['Row']
+export type RealtimeEventInsert = Database['public']['Tables']['realtime_events']['Insert']
+export type RealtimeEventUpdate = Database['public']['Tables']['realtime_events']['Update']
+
+export type WorldSectorRow = Database['public']['Tables']['world_sectors']['Row']
+export type WorldSectorInsert = Database['public']['Tables']['world_sectors']['Insert']
+export type WorldSectorUpdate = Database['public']['Tables']['world_sectors']['Update']
+
+export type ArchivePartnershipRow = Database['public']['Tables']['archive_partnerships']['Row']
+export type ArchivePartnershipInsert = Database['public']['Tables']['archive_partnerships']['Insert']
+export type ArchivePartnershipUpdate = Database['public']['Tables']['archive_partnerships']['Update']
