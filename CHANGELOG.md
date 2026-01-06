@@ -3,6 +3,43 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.2.0] - 2026-01-06
+
+### Added
+- **Story Navigator - "Choose Your Own Adventure" Experience:**
+  - Narrative Engine generates contextual story chapters as you explore
+  - Typewriter text animation for immersive reading
+  - Branching story choices with difficulty indicators (easy/medium/challenging)
+  - Mood system (mysterious, revelatory, contemplative, exciting, melancholic)
+  - Journey summary tracking your exploration path
+  - Reading time estimates for each chapter
+  - Thematic icons and colors based on node types (Person, Location, Organization, Date, Concept, Document)
+  
+- **Corpus Photo Display:**
+  - Floating thumbnail grid showing your captured images in the World view
+  - Chapter-related artifacts shown inline with the narrative
+  - Click-to-expand photo gallery with navigation between multiple views
+  - Direct asset view integration from story context
+
+- **Narrative Templates:**
+  - Rich opening templates for story chapters
+  - Connection-specific narratives (CREATED_BY, LOCATED_IN, MENTIONS, etc.)
+  - Teaser text for story choices by node type
+  - Mood-appropriate chapter transitions
+
+### Changed
+- **World Rotation Speed:** Dramatically slowed from ~10 seconds to ~5 minutes per revolution for contemplative exploration
+- **Panel System:** Replaced single Knowledge Explorer with switchable Story Narrator / Knowledge Explorer modes
+- **Panel Width:** Expandable panels (384px default, 480px expanded)
+- **Navigation Hint:** Updated to "Click nodes to start your story"
+
+### New Components
+- `StoryNarrator.tsx`: Interactive narrative panel with typewriter effect, photo gallery, and branching choices
+- `narrativeService.ts`: NarrativeEngine class for procedural story generation
+
+### Technical
+- CSS animations added for fadeIn, slideInRight, and pulse-glow effects
+
 ## [2.1.0] - 2026-01-06
 
 ### Added
