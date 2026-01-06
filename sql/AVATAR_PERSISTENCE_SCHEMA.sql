@@ -127,34 +127,43 @@ ALTER TABLE world_sectors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE archive_partnerships ENABLE ROW LEVEL SECURITY;
 
 -- Avatar Policies
+DROP POLICY IF EXISTS "Users can view all avatars" ON user_avatars;
 CREATE POLICY "Users can view all avatars"
 ON user_avatars FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Users can update their own avatar" ON user_avatars;
 CREATE POLICY "Users can update their own avatar"
 ON user_avatars FOR UPDATE USING (USER_ID = auth.uid());
 
+DROP POLICY IF EXISTS "Users can insert their own avatar" ON user_avatars;
 CREATE POLICY "Users can insert their own avatar"
 ON user_avatars FOR INSERT WITH CHECK (USER_ID = auth.uid());
 
 -- Presence Policies
+DROP POLICY IF EXISTS "Users can view active presence" ON presence_sessions;
 CREATE POLICY "Users can view active presence"
 ON presence_sessions FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Users can manage their own presence" ON presence_sessions;
 CREATE POLICY "Users can manage their own presence"
 ON presence_sessions FOR ALL USING (USER_ID = auth.uid());
 
 -- Events Policies
+DROP POLICY IF EXISTS "Users can view all events" ON realtime_events;
 CREATE POLICY "Users can view all events"
 ON realtime_events FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "Users can insert events" ON realtime_events;
 CREATE POLICY "Users can insert events"
 ON realtime_events FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 -- Sectors Policies
+DROP POLICY IF EXISTS "Anyone can view sectors" ON world_sectors;
 CREATE POLICY "Anyone can view sectors"
 ON world_sectors FOR SELECT USING (true);
 
 -- Partnerships Policies  
+DROP POLICY IF EXISTS "Anyone can view partnerships" ON archive_partnerships;
 CREATE POLICY "Anyone can view partnerships"
 ON archive_partnerships FOR SELECT USING (true);
 
