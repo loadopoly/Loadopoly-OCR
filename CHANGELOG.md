@@ -3,6 +3,46 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.0.0] - 2025-01-15
+
+### Added
+- **Metaverse Foundation:** Complete infrastructure for 3D world navigation and avatar persistence.
+- **Avatar Persistence System:** User avatars with customizable appearance, XP progression, and badge system.
+- **Real-time Presence Tracking:** Multi-user presence with heartbeat monitoring and activity status (ACTIVE/IDLE/AWAY).
+- **3D World Renderer:** Isometric canvas rendering with Three.js-ready architecture for WebGL upgrade path.
+- **Sector Navigation:** World divided into semantic zones (archive, research, marketplace, community, personal, special).
+- **Exploration Points:** XP rewards for discovering new nodes and contributing data.
+- **Database Optimizations:** BRIN indexes for time-series data, GIN indexes for JSONB searches, partial indexes for processing queues.
+- **Monitoring Views:** Production-ready observability with index_usage_stats, table_stats, and cache_hit_stats views.
+
+### New SQL Schemas
+- `sql/AVATAR_PERSISTENCE_SCHEMA.sql`: Avatar tables, presence tracking, world sectors, RLS policies
+- `sql/DATABASE_OPTIMIZATION.sql`: Performance indexes, monitoring views, autovacuum tuning
+
+### New Components
+- `WorldRenderer.tsx`: 3D/isometric world visualization with real-time multi-user presence
+- `src/components/metaverse/index.ts`: Metaverse component exports
+
+### New Services
+- `avatarService.ts`: Avatar initialization, position updates, presence management, exploration rewards
+
+### New Hooks
+- `useAvatar`: Avatar state, nearby users, sector tracking, position updates
+- `useWorldSectors`: Fetch available world sectors
+- `useContributionProgress`: Track contribution milestones
+
+### Changed
+- **App Navigation:** Added "3D World" tab with Globe icon (keyboard shortcut: `w`)
+- **Mobile Menu:** World tab added to responsive navigation
+- **Types:** Extended with UserAvatar, PresenceSession, WorldSector, and METAVERSE_CONFIG
+- **Package Version:** Bumped to 2.0.0 with optional three.js dependencies
+
+### Database Tables
+- `user_avatars`: Avatar customization, XP, badges, contribution stats
+- `presence_sessions`: Real-time position and activity tracking
+- `realtime_events`: Event queue for world state changes
+- `world_sectors`: Spatial partitioning with zone types and themes
+
 ## [1.9.4] - 2025-01-01
 
 ### Added

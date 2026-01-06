@@ -88,6 +88,8 @@ import AnnotationEditor from './components/AnnotationEditor';
 import { RoyaltyDashboard, ShardPortfolio, GovernanceVoting } from './components/gard';
 import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/KeyboardShortcuts';
 import { announce } from './lib/accessibility';
+import { WorldRenderer } from './components/metaverse';
+import { useAvatar } from './hooks/useAvatar';
 
 // --- Custom Hooks ---
 function useOnlineStatus() {
@@ -199,6 +201,9 @@ export default function App() {
   const [web3Enabled, setWeb3Enabled] = useState(false);
   const [scannerConnected, setScannerConnected] = useState(false);
 
+  // Avatar & Metaverse state
+  const { avatar, nearbyUsers, currentSector, updatePosition } = useAvatar(user?.id || null);
+
   const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
   const pendingLocalCount = localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
   const pendingGlobalCount = globalAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
@@ -219,6 +224,7 @@ export default function App() {
         case 's': setActiveTab('settings'); break;
         case 'g': setIsGlobalView(prev => !prev); break;
         case 'r': if (isGlobalView) refreshGlobalData(); break;
+        case 'w': setActiveTab('world'); break;
       }
     };
 
@@ -966,6 +972,7 @@ export default function App() {
           <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => switchTab('assets')} />
           <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => switchTab('curator')} />
           <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => switchTab('graph')} />
+          <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => switchTab('world')} />
           <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => switchTab('semantic')} />
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => switchTab('database')} />
           <SidebarItem icon={Users} label="Communities" active={activeTab === 'communities'} onClick={() => switchTab('communities')} />
@@ -1037,6 +1044,7 @@ export default function App() {
               <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => { switchTab('curator'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => { switchTab('graph'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => { switchTab('semantic'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => { switchTab('world'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={Users} label="Communities" active={activeTab === 'communities'} onClick={() => { switchTab('communities'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={MessageSquare} label="Messages" active={activeTab === 'messages'} onClick={() => { switchTab('messages'); setIsMobileMenuOpen(false); }} />
@@ -1656,6 +1664,27 @@ export default function App() {
           {activeTab === 'semantic' && (
             <div className="h-full bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
               <SemanticCanvas assets={assets} />
+            </div>
+          )}
+
+          {activeTab === 'world' && (
+            <div className="h-full bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+              <WorldRenderer
+                graphData={graphViewMode === 'GLOBAL' ? globalGraphData : (assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] })}
+                nearbyUsers={nearbyUsers}
+                currentUserId={user?.id}
+                onNodeSelect={(node) => {
+                  const asset = assets.find(a => a.id === node.id);
+                  if (asset) {
+                    setSelectedAssetId(asset.id);
+                  }
+                }}
+                onPositionChange={(pos) => {
+                  if (avatar) {
+                    updatePosition(pos, [0, 0, 0, 1], avatar.lastSector);
+                  }
+                }}
+              />
             </div>
           )}
 

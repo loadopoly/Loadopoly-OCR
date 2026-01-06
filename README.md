@@ -3,11 +3,11 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-1.9.4-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-2.0.0-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
-An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP processing, and sharded NFT asset management for LLM training data.
+An advanced OCR-to-Graph platform integrating GIS metadata, semantic NLP processing, immersive 3D world navigation, and sharded NFT asset management for LLM training data.
 
 ---
 
@@ -58,6 +58,62 @@ For mass usage, ensure your Supabase tables have RLS enabled. The project includ
 1. **Vercel:** The project is optimized for Vercel. Connect your GitHub repo and it will auto-deploy.
 2. **Environment Variables:** Add all `VITE_` variables in the Vercel dashboard.
 3. **PWA:** The app is a full PWA. Ensure you serve it over HTTPS for service worker support.
+
+---
+
+## 🚀 What's New in v2.0.0
+
+### 🌐 Metaverse Foundation & 3D World Navigation
+The knowledge graph is no longer just a 2D visualization—it's now a navigable 3D space where users can explore data as a spatial environment.
+
+**Avatar Persistence System:**
+- **User Avatars:** Persistent identity with customizable appearance, display names, and contribution-based XP
+- **Real-time Presence:** See other users exploring the same data sectors in real-time
+- **Heartbeat Tracking:** Automatic status updates (ACTIVE, IDLE, AWAY) based on activity
+- **Exploration Points:** Earn XP by discovering new nodes and contributing data
+
+**3D World Renderer:**
+- **Isometric Projection:** 2D canvas fallback for broad browser compatibility
+- **Three.js Ready:** Optional WebGL rendering with @react-three/fiber (install three.js)
+- **Sector Navigation:** World divided into semantic zones (archive, research, marketplace, etc.)
+- **Real-time Multi-user:** See nearby avatars with position tracking
+
+**New Database Tables:**
+- `user_avatars` - Avatar customization, XP, and badge progression
+- `presence_sessions` - Real-time position and activity tracking
+- `realtime_events` - Event queue for world state changes
+- `world_sectors` - Spatial partitioning of the knowledge graph
+
+### ⚡ Database Performance Optimizations
+Production-ready indexing strategy for high-throughput workloads:
+
+**BRIN Indexes (Block Range Index):**
+- 10x smaller than B-tree for time-series CREATED_AT columns
+- Optimized for sequential timestamp queries
+
+**GIN Indexes (Generalized Inverted Index):**
+- Fast JSONB searches on ENTITIES_EXTRACTED, KEYWORDS_TAGS, GEO_CONTEXT
+- Full-text search on EXTRACTED_TEXT
+
+**Partial Indexes:**
+- Processing queue optimization: index only PENDING/FAILED items
+- Curator workflow: index only verified/featured assets
+
+**Monitoring Views:**
+- `index_usage_stats` - Track which indexes are being used
+- `table_stats` - Row counts, live/dead tuple ratios
+- `cache_hit_stats` - Buffer cache efficiency metrics
+
+### New Files
+- `sql/AVATAR_PERSISTENCE_SCHEMA.sql` - Avatar and presence tables with RLS
+- `sql/DATABASE_OPTIMIZATION.sql` - Performance indexes and monitoring
+- `src/services/avatarService.ts` - Avatar state management service
+- `src/hooks/useAvatar.ts` - React hook for avatar state
+- `src/components/metaverse/WorldRenderer.tsx` - 3D world visualization
+
+### Navigation
+- **New Tab:** Access the 3D World via the Globe icon in the sidebar
+- **Keyboard Shortcut:** Press `w` to switch to World view
 
 ---
 
