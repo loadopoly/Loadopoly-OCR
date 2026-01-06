@@ -1,3 +1,65 @@
+# 🚀 GeoGraph Node: v2.3.0 Release Notes
+
+This release dramatically improves **duplicate detection** using modern NLP research and adds **manual curation tools** for intuitive asset consolidation.
+
+## 🧠 Enhanced Deduplication V2
+
+### Modern NLP Techniques
+The new `deduplicationServiceV2.ts` implements research-backed algorithms:
+
+| Technique | Purpose | Example |
+|-----------|---------|---------|
+| **N-gram Similarity** | Order-independent matching | "1950 Opening Day" ↔ "Opening Day 1950" |
+| **Word Shingles** | Semantic phrase overlap | "Bronze Bust by Antonio" ↔ "Bust Sculpture Antonio Bronze" |
+| **Semantic Concepts** | Prioritizes key data (years 4x weight) | Years, dates, proper nouns extracted |
+| **Phonetic Encoding** | OCR error tolerance | "Antonio" ↔ "Antoneo", "Photograph" ↔ "Photogragh" |
+
+### Research Foundation
+Based on peer-reviewed algorithms:
+- **Henzinger (2006):** Near-Duplicate Detection
+- **Charikar (2002):** SimHash fingerprinting
+- **Broder (1997):** MinHash for Jaccard estimation
+- **Navarro (2001):** Fuzzy String Matching
+
+### Improved Recall
+- Threshold lowered from `0.55` to `0.40`
+- Multi-technique scoring (takes best match)
+- Union-Find with path compression and rank optimization
+
+## 🎨 Curator Merge Panel
+
+New UI component for manual asset consolidation:
+
+### Suggestions Tab
+- AI-powered merge suggestions
+- One-click Accept/Reject actions
+- Similarity badges: High (80%+), Medium (60%+), Fair (40%+)
+- Match reason tags explaining why items are suggested
+
+### Manual Merge Tab
+- Multi-select assets from main view
+- Custom title override option
+- Preview consolidated metadata before merge
+
+### Find Similar Tab
+- Select a reference asset
+- Search for similar items in your corpus
+- Add matches to selection for bulk merge
+
+## 📦 New Files
+```
+src/
+├── services/deduplicationServiceV2.ts  # Modern NLP algorithms (~750 lines)
+├── components/CuratorMergePanel.tsx    # Manual curation UI
+```
+
+## ⚙️ Technical Changes
+- **Bundle Service:** Updated to use V2 deduplication
+- **Clustering:** Union-Find with path compression and rank optimization
+- **Scoring:** Best-of multiple techniques for higher recall
+
+---
+
 # 🚀 GeoGraph Node: v2.2.0 Release Notes
 
 This release transforms the Knowledge World into an immersive **narrative exploration experience**, guiding users through their corpus like a "choose your own adventure" story.

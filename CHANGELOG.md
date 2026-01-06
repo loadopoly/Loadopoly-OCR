@@ -3,6 +3,41 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.3.0] - 2026-01-06
+
+### Added
+- **Enhanced Deduplication Service V2:** Complete rewrite of duplicate detection with modern NLP techniques:
+  - **N-gram similarity:** Character trigrams for order-independent matching ("1950 Opening Day" ↔ "Opening Day 1950")
+  - **Shingle similarity:** Word n-grams (1-gram, 2-gram, 3-gram) for semantic phrase matching
+  - **Semantic concept extraction:** Prioritizes years (4x weight), dates, proper nouns, and key subjects
+  - **Phonetic encoding:** Soundex-like algorithm for OCR error tolerance ("Antonio" ↔ "Antoneo")
+  - **Multi-technique scoring:** Combines multiple similarity methods (takes best score)
+  - **Research-backed algorithms:** Based on Near-Duplicate Detection (Henzinger 2006), SimHash (Charikar 2002), MinHash (Broder 1997)
+  
+- **Curator Merge Panel:** New manual curation UI for consolidating assets:
+  - **Suggestions Tab:** AI-powered merge suggestions with one-click accept/reject
+  - **Manual Merge Tab:** Select multiple assets and merge with custom title
+  - **Find Similar Tab:** Search for assets similar to a selected reference
+  - Similarity badges showing match confidence (High/Medium/Fair/Low)
+  - Match reason tags explaining why items are suggested for merge
+  - Expandable detail view showing all items and consolidated metadata
+  - Selection-based workflow integrating with existing asset views
+
+### Changed
+- **Deduplication Threshold:** Lowered from 0.55 to 0.40 for better recall (catches more similar items)
+- **Bundle Service:** Updated to use V2 deduplication with enhanced clustering algorithm
+- **Union-Find Optimization:** Added path compression and rank optimization for faster clustering
+
+### Technical
+- `deduplicationServiceV2.ts`: New service with modern similarity algorithms (~750 lines)
+- `CuratorMergePanel.tsx`: Manual curation component with suggestions, manual merge, and similarity search
+
+### Research References
+- M. Henzinger, "Finding Near-Duplicate Web Pages: A Large-Scale Evaluation of Algorithms" (SIGIR 2006)
+- M. Charikar, "Similarity Estimation Techniques from Rounding Algorithms" (STOC 2002)
+- A. Broder, "On the Resemblance and Containment of Documents" (SEQUENCES 1997)
+- G. Navarro, "A Guided Tour to Approximate String Matching" (ACM Computing Surveys 2001)
+
 ## [2.2.0] - 2026-01-06
 
 ### Added
