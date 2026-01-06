@@ -3,6 +3,53 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.1.0] - 2026-01-06
+
+### Added
+- **Semantic Deduplication Service:** Intelligent detection and consolidation of duplicate/similar assets to prevent data dilution.
+  - Jaccard similarity for entity and keyword overlap
+  - Levenshtein distance for title/description comparison
+  - GPS proximity matching
+  - GIS zone correlation
+  - Union-Find clustering algorithm for grouping duplicates
+- **Consolidated Metadata:** When duplicates are detected, metadata is intelligently merged:
+  - Best title preserved with view count (e.g., "Bronze Bust (3 views)")
+  - Entities and keywords merged from all variants
+  - Most common category selected
+  - Descriptions combined with unique details preserved
+- **Interactive Knowledge Explorer:** Complete redesign of the 3D World view:
+  - Force-directed physics simulation for organic node clustering
+  - Sidebar panel showing direct connections, discovery paths, and thematic clusters
+  - Relationship type and direction indicators (→ outgoing, ← incoming)
+  - Path exploration showing routes between high-relevance nodes
+  - Random Discovery feature for serendipitous exploration
+  - Exploration history with backtracking
+- **Enhanced World Visualization:**
+  - Animated particles flowing along highlighted connections
+  - Glow effects on hovered/selected nodes
+  - Slow world rotation animation
+  - Connection highlighting on hover/select
+  - Type filter pills to focus on specific entity types
+  - Working zoom controls (previously non-functional)
+  - Labels and links visibility toggles
+  - Subtle grid background for spatial reference
+
+### Changed
+- **Bundle Service:** Now performs two-phase bundling:
+  1. Semantic deduplication (similarity threshold 0.55)
+  2. Traditional key-based bundling for unique assets
+- **Asset Display:** Bundled duplicates show image count and consolidated view
+
+### Fixed
+- **React 19 Compatibility:** Updated @react-three/fiber to v9.0.0, @react-three/drei to v9.122.0, three to v0.172.0
+- **Vercel Deployment:** Added .npmrc with legacy-peer-deps for Expo peer dependency conflicts
+
+### New Services
+- `deduplicationService.ts`: Similarity scoring, duplicate clustering, metadata consolidation
+
+### New Components
+- `KnowledgeExplorer.tsx`: Interactive sidebar for deep graph exploration
+
 ## [2.0.0] - 2025-01-15
 
 ### Added
