@@ -224,10 +224,10 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Get online users in a sector
+DROP FUNCTION IF EXISTS get_sector_presence(TEXT);
 CREATE OR REPLACE FUNCTION get_sector_presence(p_sector TEXT)
 RETURNS TABLE (
     user_id UUID,
-    session_id TEXT,
     display_name TEXT,
     avatar_color TEXT,
     world_position FLOAT[3],
@@ -237,7 +237,6 @@ BEGIN
     RETURN QUERY
     SELECT 
         ps.USER_ID,
-        ps.SESSION_ID,
         ua.DISPLAY_NAME,
         ua.AVATAR_COLOR,
         ps.WORLD_POSITION,
