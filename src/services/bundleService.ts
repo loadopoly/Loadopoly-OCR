@@ -1,6 +1,18 @@
 import { DigitalAsset, ImageBundle, HistoricalDocumentMetadata, AssetStatus } from '../types';
-import { findDuplicateClusters, consolidateMetadata, ConsolidatedMetadata } from './deduplicationService';
+import { 
+  findDuplicateClustersV2, 
+  consolidateMetadataV2, 
+  ConsolidatedMetadata,
+  DEFAULT_CONFIG,
+  DeduplicationConfig 
+} from './deduplicationServiceV2';
 import { logger } from '../lib/logger';
+
+// Enhanced config for better recall
+const BUNDLE_DEDUP_CONFIG: DeduplicationConfig = {
+  ...DEFAULT_CONFIG,
+  threshold: 0.40, // Lower threshold for more aggressive bundling
+};
 
 export const createBundles = (assets: DigitalAsset[]): (DigitalAsset | ImageBundle)[] => {
   const bundles: Record<string, DigitalAsset[]> = {};
@@ -10,14 +22,14 @@ export const createBundles = (assets: DigitalAsset[]): (DigitalAsset | ImageBund
   const autoBundleAssets = assets.filter(a => !a.sqlRecord?.USER_BUNDLE_ID);
   const userBundledAssets = assets.filter(a => !!a.sqlRecord?.USER_BUNDLE_ID);
 
-  // PHASE 1: Semantic deduplication - find similar assets that should be bundled
-  const deduplicationResult = findDuplicateClusters(autoBundleAssets, 0.55);
+  // PHASE 1: Enhanced semantic deduplication
+  const deduplicationResult = findDuplicateClustersV2(autoBundleAssets, BUNDLE_DEDUP_CONFIG);
   
-  logger.info('Deduplication analysis complete', {
-    module: 'BundleService',
+  logger.info('Enhanced deduplication analysis complete', {
     clusters: deduplicationResult.clusters.length,
     duplicatesFound: deduplicationResult.totalDuplicatesFound,
     uniqueAssets: deduplicationResult.uniqueAssets.length,
+    processingTime: deduplicationResult.processingTime,
   });
 
   // Create bundles from deduplication clusters
@@ -29,7 +41,7 @@ export const createBundles = (assets: DigitalAsset[]): (DigitalAsset | ImageBund
       bundle.bundleId = `DEDUP_${cluster.primaryAsset.id}`;
       dedupBundles.push(bundle);
     } catch (e) {
-      logger.error('Failed to create dedup bundle', e, { module: 'BundleService' });
+      logger.error('Failed to create dedup bundle', { error: e });
       // Fallback: add as singles
       singles.push(cluster.primaryAsset, ...cluster.duplicates);
     }
