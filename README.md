@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-2.1.0-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-2.2.0-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -58,6 +58,52 @@ For mass usage, ensure your Supabase tables have RLS enabled. The project includ
 1. **Vercel:** The project is optimized for Vercel. Connect your GitHub repo and it will auto-deploy.
 2. **Environment Variables:** Add all `VITE_` variables in the Vercel dashboard.
 3. **PWA:** The app is a full PWA. Ensure you serve it over HTTPS for service worker support.
+
+---
+
+## 🚀 What's New in v2.2.0
+
+### 📖 Story Navigator - "Choose Your Own Adventure"
+The Knowledge World now guides you through your corpus with an immersive narrative experience, transforming data exploration into an interactive story.
+
+**Narrative Engine:**
+- **Procedural Story Generation:** Each node becomes a story chapter with contextual narratives
+- **Mood System:** Chapters adopt moods (mysterious, revelatory, contemplative, exciting, melancholic) based on context
+- **Thematic Icons:** Node types have distinct themes (👤 Human Story, 🗺️ Places & Memory, 🏛️ Institutions, ⏳ Echoes of Time, 💡 Ideas & Beliefs, 📜 Written Records)
+
+**Typewriter Text Animation:**
+- Text reveals gradually for immersive reading
+- Skip button for quick navigation
+- Reading time estimates per chapter
+
+**Branching Story Choices:**
+- Each chapter offers 1-3 paths to continue your journey
+- Difficulty indicators: Easy (straightforward) → Medium (questions remain) → Challenging (complex connections)
+- Teaser text hints at what awaits down each path
+- Consequence previews help you choose
+
+**Journey Tracking:**
+- Breadcrumb trail of your exploration history
+- Summary of visited themes and key figures
+- Reset to start fresh adventures
+
+### 📸 Corpus Photo Integration
+Your captured images are now woven into the exploration experience:
+
+- **Floating Thumbnail Grid:** Top-left preview of your photo corpus
+- **Chapter Artifacts:** Related photos displayed inline with story chapters
+- **Photo Gallery:** Navigate between multiple views of bundled assets
+- **Direct Asset View:** Click any photo to see full details
+
+### 🐢 Contemplative World Movement
+- **Slow Rotation:** World now takes ~5 minutes for a full revolution (was ~10 seconds)
+- **Spatial Awareness:** Slower movement lets you absorb connections and context
+- **Meditative Experience:** Encourages thoughtful exploration over rapid scanning
+
+### 🎛️ Panel System
+- **Switchable Modes:** Toggle between Story Navigator (📖) and Knowledge Explorer (🗺️)
+- **Expandable Panels:** Click expand for wider view (384px → 480px)
+- **Navigation Hint:** "Click nodes to start your story"
 
 ---
 
