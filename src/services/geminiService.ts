@@ -1,5 +1,7 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { GISMetadata, GraphData, TokenizationData, AssetStatus, ScanType, TaxonomyData, ItemAttributes, SceneryAttributes, ReadingOrderBlock } from "../types";
+import { validateGeminiResponse, sanitizeLLMOutput, formatValidationErrors } from "../lib/validation";
+import { geminiLogger as logger } from "../lib/logger";
 
 // Using Gemini 2.5 Flash as requested for optimized speed and efficient extraction
 const GEMINI_MODEL = "gemini-2.5-flash";
@@ -87,7 +89,7 @@ const getAiClient = () => {
   if (!aiInstance) {
     const key = getApiKey();
     if (!key) {
-        console.warn("Gemini API Key is missing. Calls will fail.");
+        logger.warn("Gemini API Key is missing. Calls will fail.");
     }
     // Initialize strictly with the provided API key
     aiInstance = new GoogleGenAI({ apiKey: key });
@@ -104,11 +106,17 @@ export const processImageWithGemini = async (
   
   const apiKey = getApiKey();
   if (!apiKey) {
-      if (debugMode) console.error("DEBUG: Gemini API Key is missing.");
+      logger.error("Gemini API Key is missing", undefined, { operation: 'processImage' });
       throw new Error("Missing Gemini API Key. Please configure VITE_GEMINI_API_KEY in your environment.");
   }
 
-  if (debugMode) console.log(`DEBUG: Starting Gemini processing for ${file.name} (${file.type}, ${file.size} bytes)`);
+  logger.debug(`Starting Gemini processing`, { 
+    operation: 'processImage',
+    fileName: file.name, 
+    fileType: file.type, 
+    fileSize: file.size,
+    scanType 
+  });
 
   const imagePart = await fileToGenerativePart(file);
 
@@ -327,7 +335,7 @@ export const processImageWithGemini = async (
   };
 
   try {
-    if (debugMode) console.log("DEBUG: Sending request to Gemini API...");
+    logger.debug("Sending request to Gemini API", { operation: 'processImage' });
     const response = await getAiClient().models.generateContent({
       model: GEMINI_MODEL,
       contents: [
@@ -349,14 +357,24 @@ export const processImageWithGemini = async (
 
     const text = response.text;
     if (!text) {
-      if (debugMode) console.error("DEBUG: Gemini returned an empty response.");
+      logger.error("Gemini returned an empty response", undefined, { operation: 'processImage' });
       throw new Error("Gemini returned an empty response. This might be due to safety filters or an unsupported image.");
     }
     
-    if (debugMode) console.log("DEBUG: Gemini response received. Parsing JSON...");
+    logger.debug("Gemini response received, parsing JSON", { operation: 'processImage' });
     
     // Parse and Sanitize to ensure arrays exist
     const parsed = JSON.parse(text) as ProcessResponse;
+    
+    // Validate the response for LLM training data quality
+    const validationResult = validateGeminiResponse(parsed);
+    if (!validationResult.success) {
+      logger.warn("Gemini response validation issues detected", {
+        operation: 'processImage',
+        validationErrors: formatValidationErrors(validationResult.errors),
+        errorCount: validationResult.errors.length,
+      });
+    }
 
     return {
       ...parsed,
@@ -385,29 +403,30 @@ export const processImageWithGemini = async (
       suggestedCollection: parsed.suggestedCollection || "Unsorted Processing"
     };
 
-  } catch (error: any) {
-    console.error("Gemini Processing Error:", error);
+  } catch (error: unknown) {
+    const err = error as Error & { status?: number };
+    logger.error("Gemini Processing Error", error, { operation: 'processImage' });
     
     let userFriendlyMessage = "AI processing failed.";
     
-    if (error.message?.includes("API key")) {
+    if (err.message?.includes("API key")) {
       userFriendlyMessage = "Invalid or missing API key. Check VITE_GEMINI_API_KEY.";
-    } else if (error.message?.includes("safety")) {
+    } else if (err.message?.includes("safety")) {
       userFriendlyMessage = "Content blocked by safety filters.";
-    } else if (error.message?.includes("quota") || error.status === 429) {
+    } else if (err.message?.includes("quota") || err.status === 429) {
       userFriendlyMessage = "API quota exceeded. Please try again later.";
-    } else if (error.message?.includes("JSON")) {
+    } else if (err.message?.includes("JSON")) {
       userFriendlyMessage = "Failed to parse AI response. The image might be too complex or blurry.";
-    } else if (error.message?.includes("unsupported") || error.message?.includes("format")) {
+    } else if (err.message?.includes("unsupported") || err.message?.includes("format")) {
       userFriendlyMessage = "Unsupported file format or corrupted image.";
-    } else if (error.message?.includes("large")) {
+    } else if (err.message?.includes("large")) {
       userFriendlyMessage = "File size too large for Gemini processing.";
-    } else if (error.message) {
-      userFriendlyMessage = error.message;
+    } else if (err.message) {
+      userFriendlyMessage = err.message;
     }
 
     if (debugMode) {
-      throw new Error(`DEBUG_ERR: ${userFriendlyMessage} | Raw: ${error.message || String(error)}`);
+      throw new Error(`DEBUG_ERR: ${userFriendlyMessage} | Raw: ${err.message || String(error)}`);
     }
     throw new Error(userFriendlyMessage);
   }
