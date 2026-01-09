@@ -5,10 +5,13 @@ import ReactDOM from 'react-dom/client';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider, ConnectionStatus } from './components/Toast';
 import { Onboarding } from './components/Onboarding';
+import { ModuleProvider } from './contexts/ModuleContext';
+import { bootstrapModuleSystem } from './bootstrap';
 
-// Dynamic import ensures that 'polyfills' (above) has finished executing 
-// and attaching to window/global before 'App' and its dependencies (ethers, etc) are evaluated.
-import('./App')
+// Initialize module system first, then load the app
+// This ensures all providers, storage adapters, and plugins are ready
+bootstrapModuleSystem()
+  .then(() => import('./App'))
   .then(({ default: App }) => {
     const rootElement = document.getElementById('root');
     if (!rootElement) {
@@ -19,11 +22,13 @@ import('./App')
     root.render(
       <React.StrictMode>
         <ErrorBoundary>
-          <ToastProvider>
-            <ConnectionStatus />
-            <Onboarding onComplete={() => {}} />
-            <App />
-          </ToastProvider>
+          <ModuleProvider>
+            <ToastProvider>
+              <ConnectionStatus />
+              <Onboarding onComplete={() => {}} />
+              <App />
+            </ToastProvider>
+          </ModuleProvider>
         </ErrorBoundary>
       </React.StrictMode>
     );

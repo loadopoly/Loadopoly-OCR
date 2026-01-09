@@ -3,6 +3,61 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.5.0] - 2026-01-09
+
+### Added
+- **Modular Plugin Architecture** (`src/modules/`):
+  - `ModuleRegistry` - Central registry for all pluggable modules
+  - `EventEmitter` - Mitt-style pub/sub system for module communication
+  - `PluginLoader` - Dynamic loading of plugins from URLs or manifests
+  - `PluginBuilder` - Fluent API for creating plugins
+
+- **Abstract Storage Interface** (`src/modules/storage/`):
+  - `IDataStorage` interface for swappable backends
+  - `BaseStorage` abstract class with common functionality
+  - `SupabaseStorage` - Full implementation for Supabase backend
+  - `InMemoryStorage` - Testing/offline fallback storage
+
+- **LLM Provider System** (`src/modules/llm/`):
+  - `ILLMProvider` interface for AI backend abstraction
+  - `BaseLLMProvider` with conflict arbitration defaults
+  - `GeminiProvider` - Wraps existing Gemini service
+  - `OpenAIProvider` - Alternative GPT-4o integration
+  - `MockLLMProvider` - Testing fallback
+
+- **Self-Healing Graph System** (`src/modules/graphHealer.ts`):
+  - 4 built-in healing strategies:
+    - `deduplication` - Merges duplicate nodes by similarity
+    - `orphan-linking` - Links disconnected nodes to main graph
+    - `edge-inference` - Infers edges from shared neighbors
+    - `conflict-resolution` - LLM-powered metadata arbitration
+  - Scheduled healing with configurable intervals
+  - Healing history and event tracking
+
+- **Feature Flags System** (`src/modules/featureFlags.ts`):
+  - `LocalStorageFeatureFlagProvider` - Persistent browser storage
+  - `EnvironmentFeatureFlagProvider` - Environment variable based
+  - Rollout percentage support for gradual releases
+  - User tier restrictions (novice, intermediate, expert)
+  - Flag subscription for reactive UI updates
+
+- **React Integration** (`src/hooks/useModules.ts`, `src/contexts/ModuleContext.tsx`):
+  - `useFeatureFlag` - Check feature flag status
+  - `useStorage` - Access active storage adapter
+  - `useLLMProvider` - Access active LLM provider
+  - `useGraphHealer` - Heal graphs on demand
+  - `useModuleEvent` - Subscribe to module events
+  - `ModuleProvider` - Context provider for module system
+
+- **Example Plugin** (`src/plugins/threejs-renderer.tsx`):
+  - Three.js 3D graph renderer with interactive controls
+  - Demonstrates plugin architecture patterns
+  - WebGL support detection
+
+### Changed
+- `src/index.tsx` now bootstraps the module system before app render
+- Module system initializes LLM providers and storage adapters on startup
+
 ## [2.4.0] - 2026-01-09
 
 ### Added
