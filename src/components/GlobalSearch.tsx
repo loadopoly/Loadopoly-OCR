@@ -162,14 +162,14 @@ export default function GlobalSearch({
 
       // Search in various fields
       const titleMatch = fuzzyMatch(record.DOCUMENT_TITLE || '', query);
-      const contentMatch = fuzzyMatch(record.OCR_RAW_TEXT || '', query);
+      const contentMatch = fuzzyMatch(record.RAW_OCR_TRANSCRIPTION || '', query);
       const sourceMatch = fuzzyMatch(record.SOURCE_COLLECTION || '', query);
       const locationMatch = fuzzyMatch(
-        `${record.GIS_ZONE_NAME || ''} ${record.GIS_LAND_USE || ''}`,
+        `${record.LOCAL_GIS_ZONE || ''} ${record.OCR_DERIVED_GIS_ZONE || ''}`,
         query
       );
       const entityMatch = fuzzyMatch(
-        (record.ENTITIES_PEOPLE || []).concat(record.ENTITIES_ORGANIZATIONS || []).join(' '),
+        (record.ENTITIES_EXTRACTED || []).join(' '),
         query
       );
 
