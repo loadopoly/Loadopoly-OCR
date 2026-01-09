@@ -1,3 +1,214 @@
+# 🚀 GeoGraph Node: v2.4.0 Release Notes
+
+This release delivers a **comprehensive UX/UI overhaul** focusing on accessibility, user experience, progressive disclosure, and design polish.
+
+## 🎨 Theme System
+
+### Dark/Light Mode
+New `useTheme` hook provides seamless theme switching:
+
+```tsx
+import { useTheme } from './hooks/useTheme';
+
+const { theme, resolvedTheme, setTheme, toggleTheme } = useTheme();
+```
+
+| Feature | Description |
+|---------|-------------|
+| **System Detection** | Auto-detects OS preference (`prefers-color-scheme`) |
+| **Manual Toggle** | User can override with light/dark/system |
+| **Persistent Storage** | Preference saved to localStorage |
+| **CSS Variables** | Theme tokens applied via custom properties |
+
+### High Contrast Mode
+- Toggle for users with visual impairments
+- Meets WCAG AA contrast requirements (4.5:1 for text)
+- Enhanced border visibility
+
+### Reduced Motion
+- Respects `prefers-reduced-motion` media query
+- Animations disabled or minimized for accessibility
+
+## 🔍 Global Semantic Search
+
+New `GlobalSearch` component provides NLP-powered search across your corpus:
+
+### Keyboard Shortcuts
+- `Cmd+K` (Mac) / `Ctrl+K` (Windows) to open
+- `↑↓` Arrow keys to navigate results
+- `Enter` to select
+- `Esc` to close
+
+### Filter Categories
+| Filter | Icon | Description |
+|--------|------|-------------|
+| All | 🔍 | Search everything |
+| Locations | 📍 | GIS zones, coordinates |
+| People & Orgs | 👤 | Entities extracted from OCR |
+| Documents | 📄 | Titles, collections |
+| Dates | 📅 | Historical dates |
+| Keywords | 🏷️ | Tags, concepts |
+
+### Fuzzy Matching
+- Typo-tolerant search ("Antoneo" matches "Antonio")
+- Word-order independent ("1950 Opening" matches "Opening 1950")
+- Relevance scoring with percentage display
+
+## 📖 Enhanced Onboarding Wizard
+
+New multi-step onboarding flow replaces the simple intro:
+
+### Steps
+1. **Welcome** - Introduction to GeoGraph features
+2. **Account** (Optional) - Sign up/login with email or skip
+3. **API Keys** (Optional) - Configure Gemini API with secure input
+4. **Demo Tour** - Interactive feature highlights
+5. **Customize** - Set experience level and preferences
+
+### Progressive Disclosure
+| Level | Features Shown |
+|-------|----------------|
+| Beginner | Core upload, OCR, basic graph |
+| Intermediate | + GIS, communities, sync |
+| Advanced | + Web3, NFT minting, advanced GIS |
+
+### User Preferences Hook
+```tsx
+import { useUserPreferences } from './components/EnhancedOnboarding';
+
+const { preferences, updatePreferences } = useUserPreferences();
+// preferences.level, preferences.showWeb3Features, etc.
+```
+
+## 🗺️ 2D Map Fallback
+
+New `MapView2D` component for devices that struggle with WebGL:
+
+### Features
+- **Canvas Rendering:** Lightweight 2D alternative to Three.js
+- **Touch Gestures:** Pinch-to-zoom, pan with finger/mouse
+- **Haptic Feedback:** Vibration on node selection (mobile)
+- **Type Filtering:** Show/hide node types (Person, Location, etc.)
+- **View Modes:** Map (default), Grid, List
+
+### Integration
+```tsx
+import { MapView2D } from './components/metaverse';
+
+<MapView2D
+  graphData={graphData}
+  assets={assets}
+  onNodeSelect={handleNodeSelect}
+/>
+```
+
+## 📊 Analytics & Tracking
+
+New analytics system for understanding user behavior:
+
+### Event Types
+- `upload_started`, `upload_completed`, `upload_failed`
+- `ocr_processed`
+- `nft_flow_started`, `nft_minted`, `nft_flow_abandoned`
+- `onboarding_step`, `onboarding_completed`, `onboarding_skipped`
+- `error_occurred`
+
+### Funnel Analysis
+```tsx
+import { useFunnelAnalytics } from './hooks/useAnalytics';
+
+const funnel = useFunnelAnalytics('nft-minting', [
+  'select-assets',
+  'connect-wallet',
+  'confirm-mint',
+  'complete'
+]);
+
+funnel.enterFunnel();
+funnel.advanceStep(1);
+funnel.abandonFunnel('wallet-rejected');
+```
+
+### In-App Surveys
+```tsx
+import { useSurveyAnalytics } from './hooks/useAnalytics';
+
+const { openSurvey, completeSurvey, submitFeedback } = useSurveyAnalytics();
+```
+
+## ⚠️ Enhanced Error States
+
+New `ErrorState` component with contextual error handling:
+
+### Error Types
+| Type | Use Case | Actions |
+|------|----------|--------|
+| `ocr_failed` | Text extraction failed | Retry, Edit Manually |
+| `upload_failed` | File upload error | Try Again, Choose Different |
+| `network_error` | Offline/connection lost | Retry, Work Offline |
+| `wallet_error` | Web3 connection failed | Reconnect Wallet |
+| `file_not_supported` | Invalid format | Choose Different File |
+| `api_error` | Service unavailable | Retry, Check Status |
+
+### Usage
+```tsx
+import { ErrorState } from './components/ErrorState';
+
+<ErrorState
+  type="ocr_failed"
+  context={{
+    message: "Image too blurry",
+    onRetry: () => processAgain(),
+    onManualEdit: () => openEditor()
+  }}
+/>
+```
+
+## ♿ Accessibility Improvements
+
+### WCAG AA Compliance
+- Color contrast ratios ≥4.5:1 for normal text
+- Focus visible indicators on all interactive elements
+- Screen reader announcements via ARIA live regions
+- Keyboard navigation throughout
+
+### New Utilities
+```tsx
+import {
+  getContrastRatio,
+  meetsContrastRequirements,
+  trapFocus,
+  runAccessibilityAudit
+} from './lib/accessibility';
+
+// Check if colors meet WCAG AA
+meetsContrastRequirements('#ffffff', '#0f172a', 'normal'); // true
+
+// Run audit
+const { issues, warnings } = runAccessibilityAudit();
+```
+
+## 📦 New Files
+
+```
+src/
+├── hooks/
+│   ├── useTheme.ts          # Theme management
+│   └── useAnalytics.ts      # Event tracking
+├── components/
+│   ├── GlobalSearch.tsx     # Semantic search modal
+│   ├── EnhancedOnboarding.tsx # Multi-step wizard
+│   ├── ErrorState.tsx       # Error handling UI
+│   └── metaverse/
+│       └── MapView2D.tsx    # 2D fallback renderer
+├── lib/
+│   └── accessibility.ts     # Enhanced a11y utilities
+├── index.css                # Theme variables, animations
+└── tailwind.config.js       # Extended design tokens
+```
+
+---
+
 # 🚀 GeoGraph Node: v2.3.0 Release Notes
 
 This release dramatically improves **duplicate detection** using modern NLP research and adds **manual curation tools** for intuitive asset consolidation.
