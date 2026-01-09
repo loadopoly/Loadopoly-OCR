@@ -3,6 +3,88 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.4.0] - 2026-01-09
+
+### Added
+- **Enhanced Theme System** (`useTheme.ts`):
+  - Dark/Light mode toggle with system preference auto-detection
+  - High contrast mode for accessibility (WCAG AA)
+  - Reduced motion support for users who prefer minimal animations
+  - CSS custom properties for consistent theming
+  - Persistent user preferences via localStorage
+
+- **Global Semantic Search** (`GlobalSearch.tsx`):
+  - NLP-powered search with `Cmd+K` / `Ctrl+K` keyboard shortcut
+  - Filter by category: GIS locations, entities, documents, dates, keywords
+  - Fuzzy matching algorithm for typo-tolerant results
+  - Recent searches history
+  - Full keyboard navigation (↑↓ to navigate, Enter to select, Esc to close)
+
+- **Enhanced Onboarding Wizard** (`EnhancedOnboarding.tsx`):
+  - Multi-step setup: Welcome → Account → API Keys → Demo Tour → Customize
+  - Social login integration ready (Supabase auth)
+  - Secure API key input with visibility toggle and validation
+  - Progressive disclosure based on user level (beginner/intermediate/advanced)
+  - Optional step skipping for experienced users
+  - Demo tour highlighting key features
+
+- **2D Map Fallback for Metaverse** (`MapView2D.tsx`):
+  - Canvas-based 2D alternative to 3D WebGL visualization
+  - Touch support with pinch-to-zoom gestures
+  - Haptic feedback on mobile devices
+  - Pan/zoom controls with smooth transitions
+  - Type-based node filtering (Document, Person, Location, etc.)
+  - View mode switcher: Map, Grid, List
+
+- **Analytics & Event Tracking** (`useAnalytics.ts`):
+  - Comprehensive event tracking for user flows
+  - Funnel analysis for drop-off detection (NFT minting, uploads, onboarding)
+  - Session management with automatic start/end tracking
+  - Performance metrics (Core Web Vitals)
+  - In-app survey system for user feedback
+  - Batch event queuing with configurable flush intervals
+
+- **Enhanced Error States** (`ErrorState.tsx`):
+  - Contextual error messages for OCR, upload, network, wallet failures
+  - Actionable suggestions with retry options
+  - Manual edit fallback for OCR failures
+  - Inline and full-page error variants
+  - Copy error details for support tickets
+  - Help documentation links
+
+### Changed
+- **Tailwind Configuration:**
+  - Extended color palette with earth tones for GIS surfaces
+  - AI/metadata highlight colors (blue accent)
+  - New animations: fade-in, slide-up, slide-down, pulse-glow, bounce-subtle, shimmer
+  - Custom glow shadows for interactive elements
+  - Font family configuration (Inter for UI, JetBrains Mono for code)
+  - High contrast mode utilities
+
+- **CSS Enhancements** (`index.css`):
+  - CSS variables for light/dark theme switching
+  - Screen reader utilities (`.sr-only`)
+  - Focus visible styles for keyboard navigation
+  - Reduced motion media query support
+  - Custom scrollbar styling
+  - Loading skeleton animation
+  - Print-friendly styles
+
+- **Accessibility Utilities** (`accessibility.ts`):
+  - ARIA live region initialization
+  - Color contrast ratio calculation (WCAG 2.1 formula)
+  - Contrast requirement validation (4.5:1 normal, 3:1 large text)
+  - Accessible text color suggestion based on background
+  - Focus trap for modal dialogs
+  - Arrow key navigation helpers
+  - Screen reader description generators for images and graph nodes
+  - Accessibility audit function for Lighthouse-style checks
+
+### Technical
+- New hooks: `useTheme`, `useAnalytics`, `useFunnelAnalytics`, `usePerformanceAnalytics`, `useSurveyAnalytics`
+- New components: `GlobalSearch`, `EnhancedOnboarding`, `MapView2D`, `ErrorState`, `ProcessingState`, `EmptyState`
+- Metaverse index exports updated for new 2D map component
+
 ## [2.3.0] - 2026-01-06
 
 ### Added

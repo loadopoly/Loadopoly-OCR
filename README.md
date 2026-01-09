@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-2.3.0-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-2.4.0-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -58,6 +58,49 @@ For mass usage, ensure your Supabase tables have RLS enabled. The project includ
 1. **Vercel:** The project is optimized for Vercel. Connect your GitHub repo and it will auto-deploy.
 2. **Environment Variables:** Add all `VITE_` variables in the Vercel dashboard.
 3. **PWA:** The app is a full PWA. Ensure you serve it over HTTPS for service worker support.
+
+---
+
+## 🚀 What's New in v2.4.0
+
+### 🎨 Enhanced UX/UI System
+A comprehensive overhaul focusing on accessibility, user experience, and design polish.
+
+**Theme System:**
+- 🌙 Dark/Light mode toggle with system preference detection
+- 🔍 High contrast mode for accessibility (WCAG AA compliant)
+- ⏸️ Reduced motion support respecting user preferences
+- CSS custom properties for consistent theming across components
+
+**Global Semantic Search:**
+- ⌨️ `Cmd+K` / `Ctrl+K` to open search anywhere
+- 🔍 Filter by GIS locations, entities, documents, dates, keywords
+- 🧠 Fuzzy matching for typo-tolerant results
+- ⏱️ Recent searches history
+- Full keyboard navigation
+
+**Enhanced Onboarding:**
+- Multi-step wizard: Welcome → Account → API Keys → Demo → Customize
+- Progressive disclosure based on experience level
+- Secure API key input with validation
+- Skip options for experienced users
+
+**2D Map Fallback:**
+- Canvas-based alternative to 3D metaverse
+- Touch gestures with pinch-to-zoom
+- Haptic feedback on mobile
+- Type-based filtering
+
+**Analytics & Tracking:**
+- Funnel analysis for drop-off detection
+- Performance metrics (Core Web Vitals)
+- In-app survey system
+
+**Error Handling:**
+- Contextual error messages with actionable suggestions
+- OCR failure: "Retry or Edit Manually"
+- Network issues: Offline mode support
+- Copy error details for support
 
 ---
 
