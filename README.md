@@ -63,6 +63,40 @@ For mass usage, ensure your Supabase tables have RLS enabled. The project includ
 
 ## 🚀 What's New in v2.4.0
 
+### 🔌 Modular Plugin Architecture (NEW)
+
+A comprehensive pluggable architecture enabling extensibility and self-healing capabilities.
+
+**Module System:**
+- 🧩 **Plugin Loader** - Dynamic loading of third-party extensions
+- 🔄 **Module Registry** - Central registry for renderers, LLM providers, and storage adapters
+- 📡 **Event System** - Pub/sub event emitter for module communication
+- 🏥 **Graph Healer** - Self-healing graph with deduplication, orphan linking, edge inference
+
+**Pluggable Providers:**
+- 🤖 **LLM Providers** - Swap between Gemini, OpenAI, or custom AI backends
+- 💾 **Storage Adapters** - Abstract interface supporting Supabase, Firebase, or custom backends
+- 🎨 **Renderer Modules** - Register custom graph visualizers (includes Three.js 3D renderer)
+
+**Feature Flags:**
+- 🚩 A/B testing support with rollout percentages
+- 👤 User tier gating (novice, intermediate, expert)
+- 💾 LocalStorage and environment-based providers
+
+```typescript
+// Example: Register a custom LLM provider
+import { moduleRegistry, BaseLLMProvider } from './modules';
+
+class MyCustomLLM extends BaseLLMProvider {
+  name = 'custom-llm';
+  // ... implementation
+}
+
+moduleRegistry.registerLLMProvider(new MyCustomLLM());
+```
+
+See [src/modules/](src/modules/) for complete documentation.
+
 ### 🎨 Enhanced UX/UI System
 A comprehensive overhaul focusing on accessibility, user experience, and design polish.
 
