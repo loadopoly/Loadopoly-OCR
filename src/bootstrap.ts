@@ -59,11 +59,3 @@ export function isModuleSystemInitialized(): boolean {
 export function getInitPromise(): Promise<void> | null {
   return initPromise;
 }
-
-// Auto-initialize on import if in browser environment
-if (typeof window !== 'undefined') {
-  // Defer initialization to avoid blocking
-  setTimeout(() => {
-    bootstrapModuleSystem().catch(console.error);
-  }, 0);
-}
