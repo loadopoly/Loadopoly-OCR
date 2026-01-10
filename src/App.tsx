@@ -408,7 +408,9 @@ export default function App() {
       const ingestDate = new Date().toISOString();
       const id = uuidv4();
       const scanType = (file as any).scanType || ScanType.DOCUMENT;
-      const initialStatus = isOnline ? AssetStatus.PROCESSING : AssetStatus.PENDING;
+      // Always start as PENDING - only transition to PROCESSING when actually being processed
+      // This ensures consistency between what's shown in queues vs what handleProcessAllPending sees
+      const initialStatus = AssetStatus.PENDING;
 
       return {
         id,
@@ -417,7 +419,7 @@ export default function App() {
         timestamp: ingestDate,
         ocrText: "",
         status: initialStatus,
-        progress: isOnline ? 10 : 0,
+        progress: 0,
         sqlRecord: {
           ID: id,
           ASSET_ID: id,
@@ -463,12 +465,27 @@ export default function App() {
   };
 
   const processAssetPipeline = async (asset: DigitalAsset, file: File) => {
+      // Transition to PROCESSING state immediately when starting
+      const processingAsset = { ...asset, status: AssetStatus.PROCESSING, progress: 15 };
+      if (isGlobalView) {
+        setGlobalAssets(prev => prev.map(a => a.id === asset.id ? processingAsset : a));
+      } else {
+        setLocalAssets(prev => prev.map(a => a.id === asset.id ? processingAsset : a));
+      }
+      
       let location: {lat: number, lng: number} | null = null;
       if (navigator.geolocation) {
         try {
           const position = await new Promise<GeolocationPosition>((resolve, reject) => navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 }));
           location = { lat: position.coords.latitude, lng: position.coords.longitude };
         } catch (e) {}
+      }
+
+      // Update progress to show geo-location complete
+      if (isGlobalView) {
+        setGlobalAssets(prev => prev.map(a => a.id === asset.id ? { ...a, progress: 30 } : a));
+      } else {
+        setLocalAssets(prev => prev.map(a => a.id === asset.id ? { ...a, progress: 30 } : a));
       }
 
       const scanType = (asset.sqlRecord?.SCAN_TYPE as ScanType) || ScanType.DOCUMENT;
@@ -677,37 +694,84 @@ export default function App() {
   };
 
   const handleProcessAllPending = async () => {
-      let pendingAssets = (isGlobalView ? globalAssets : localAssets).filter(a => a.status === AssetStatus.PENDING);
+      // Include both PENDING and PROCESSING (stuck) assets - unified state check
+      let pendingAssets = (isGlobalView ? globalAssets : localAssets).filter(
+          a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING
+      );
+      
+      // Also check batch queue for queued items not yet in assets
+      const batchPendingCount = batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').length;
       
       // If in global view and no global pending, but there are local pending, offer to process local
       if (isGlobalView && pendingAssets.length === 0 && pendingLocalCount > 0) {
           if (window.confirm(`No pending global assets, but there are ${pendingLocalCount} pending local assets. Process them now?`)) {
-              pendingAssets = localAssets.filter(a => a.status === AssetStatus.PENDING);
+              pendingAssets = localAssets.filter(
+                  a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING
+              );
           } else {
               return;
           }
       }
 
-      if (pendingAssets.length === 0) {
-          alert("No pending assets to process.");
+      if (pendingAssets.length === 0 && batchPendingCount === 0) {
+          announce("All assets have been processed.");
           return;
       }
       
-      if (!window.confirm(`Process ${pendingAssets.length} pending assets?`)) return;
+      const totalToProcess = pendingAssets.length + batchPendingCount;
+      if (!window.confirm(`Process ${totalToProcess} pending asset${totalToProcess !== 1 ? 's' : ''}?`)) return;
       
       setIsProcessing(true);
+      let processedCount = 0;
+      let failedCount = 0;
+      
+      // Process assets from localAssets/globalAssets
       for (const asset of pendingAssets) {
           try {
               if (asset.imageBlob) {
                   const file = new File([asset.imageBlob], `reprocess_${asset.id}.jpg`, { type: 'image/jpeg' });
-                  await processAssetPipeline(asset, file);
+                  const processedAsset = await processAssetPipeline(asset, file);
+                  // Update the state with processed asset
+                  if (isGlobalView) {
+                      setGlobalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+                  } else {
+                      setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+                  }
+                  processedCount++;
+              } else if (asset.imageUrl && asset.imageUrl.startsWith('http')) {
+                  // Try to fetch the image from URL
+                  try {
+                      const response = await fetch(asset.imageUrl);
+                      const blob = await response.blob();
+                      const file = new File([blob], `reprocess_${asset.id}.jpg`, { type: blob.type });
+                      const processedAsset = await processAssetPipeline(asset, file);
+                      if (isGlobalView) {
+                          setGlobalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+                      } else {
+                          setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+                      }
+                      processedCount++;
+                  } catch (fetchErr) {
+                      console.error(`Failed to fetch image for asset ${asset.id}:`, fetchErr);
+                      failedCount++;
+                  }
+              } else {
+                  console.warn(`Asset ${asset.id} has no image data to process`);
+                  failedCount++;
               }
           } catch (err) {
               console.error(`Failed to process asset ${asset.id}:`, err);
+              failedCount++;
           }
       }
+      
+      // Trigger batch queue processing if there are items
+      if (batchPendingCount > 0) {
+          processNextBatchItem();
+      }
+      
       setIsProcessing(false);
-      alert("Finished processing all pending assets.");
+      announce(`Processed ${processedCount} asset${processedCount !== 1 ? 's' : ''}${failedCount > 0 ? `, ${failedCount} failed` : ''}.`);
   };
 
   const handleSendMessage = (receiverId: string, content: string, giftId?: string, isBundle?: boolean) => {
@@ -1906,29 +1970,71 @@ export default function App() {
         )}
 
         {showProcessingPanel && (
-            <div className="absolute top-16 right-8 w-80 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-40 flex flex-col max-h-[calc(100vh-120px)] animate-in slide-in-from-top-4 duration-200">
+            <div className="absolute top-16 right-8 w-96 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-40 flex flex-col max-h-[calc(100vh-120px)] animate-in slide-in-from-top-4 duration-200">
                 <div className="p-4 border-b border-slate-800 flex items-center justify-between">
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
                         <Zap size={14} className="text-amber-500" />
                         Processing Queue
+                        {(totalPendingCount > 0 || batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').length > 0) && (
+                            <span className="ml-2 px-2 py-0.5 bg-amber-500/20 text-amber-500 text-[10px] font-bold rounded-full">
+                                {totalPendingCount + batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').length}
+                            </span>
+                        )}
                     </h3>
                     <button onClick={() => setShowProcessingPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
                 </div>
                 <div className="flex-1 overflow-auto p-2 space-y-2 custom-scrollbar">
-                    {totalPendingCount === 0 ? (
-                        <div className="p-8 text-center text-slate-500 text-xs">No active processing tasks.</div>
+                    {/* Batch Queue Items */}
+                    {batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').map(item => (
+                        <div key={item.id} className="p-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center gap-3">
+                            <div className="w-10 h-10 bg-slate-800 rounded border border-slate-700 flex items-center justify-center">
+                                <ImageIcon size={16} className="text-slate-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex justify-between items-center mb-1">
+                                    <span className="text-[10px] font-mono text-slate-400 truncate">{item.file.name.slice(0, 20)}</span>
+                                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${item.status === 'PROCESSING' ? 'bg-amber-500/20 text-amber-500' : 'bg-blue-500/20 text-blue-400'}`}>
+                                        {item.status === 'PROCESSING' ? 'PROCESSING' : 'QUEUED'}
+                                    </span>
+                                </div>
+                                <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
+                                    <div 
+                                        className={`h-full transition-all duration-500 ${item.status === 'PROCESSING' ? 'bg-amber-500 animate-pulse' : 'bg-blue-500'}`}
+                                        style={{ width: `${item.progress || 5}%` }}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    
+                    {/* Asset Items (PENDING/PROCESSING) */}
+                    {totalPendingCount === 0 && batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').length === 0 ? (
+                        <div className="p-8 text-center text-slate-500 text-xs">
+                            <CheckCircle size={24} className="mx-auto mb-2 text-emerald-500" />
+                            All assets processed successfully.
+                        </div>
                     ) : (
                         [...localAssets, ...globalAssets]
                             .filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING)
                             .map(asset => (
-                            <div key={asset.id} className="p-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center gap-3">
+                            <div key={asset.id} className="p-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center gap-3 group">
                                 <img src={asset.imageUrl} className="w-10 h-10 object-cover rounded border border-slate-700" alt="thumb" />
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="text-[10px] font-mono text-slate-400 truncate">{asset.id.slice(0,8)}</span>
-                                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${asset.status === AssetStatus.PROCESSING ? 'bg-amber-500/20 text-amber-500' : 'bg-slate-800 text-slate-400'}`}>
-                                            {asset.status}
-                                        </span>
+                                        <div className="flex items-center gap-1">
+                                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${asset.status === AssetStatus.PROCESSING ? 'bg-amber-500/20 text-amber-500' : 'bg-slate-800 text-slate-400'}`}>
+                                                {asset.status}
+                                            </span>
+                                            {asset.status === AssetStatus.PENDING && !isProcessing && (
+                                                <button 
+                                                    onClick={() => resumeAsset(asset)}
+                                                    className="opacity-0 group-hover:opacity-100 text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 transition-all"
+                                                >
+                                                    Resume
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="w-full bg-slate-800 h-1 rounded-full overflow-hidden">
                                         <div 
@@ -1941,14 +2047,22 @@ export default function App() {
                         ))
                     )}
                 </div>
-                <div className="p-3 border-t border-slate-800 bg-slate-950/50 rounded-b-xl">
+                <div className="p-3 border-t border-slate-800 bg-slate-950/50 rounded-b-xl space-y-2">
+                    {isProcessing && (
+                        <div className="flex items-center justify-center gap-2 text-amber-500 text-xs py-1">
+                            <RefreshCw size={12} className="animate-spin" />
+                            Processing in progress...
+                        </div>
+                    )}
                     <button 
                         onClick={handleProcessAllPending}
-                        disabled={isProcessing || totalPendingCount === 0}
+                        disabled={isProcessing || (totalPendingCount === 0 && batchQueue.filter(i => i.status === 'QUEUED').length === 0)}
                         className="w-full py-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2"
                     >
                         <Zap size={14} />
-                        PROCESS ALL PENDING
+                        {totalPendingCount + batchQueue.filter(i => i.status === 'QUEUED').length > 0 
+                            ? `PROCESS ALL (${totalPendingCount + batchQueue.filter(i => i.status === 'QUEUED').length})`
+                            : 'ALL PROCESSED'}
                     </button>
                 </div>
             </div>
