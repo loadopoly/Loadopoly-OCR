@@ -1,9 +1,15 @@
-const CACHE_NAME = 'geograph-v1.8.1';
+const CACHE_NAME = 'geograph-v1.8.2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
   '/icon.svg'
+];
+
+// Assets that should NOT be cached (dynamic bundles change on each build)
+const NO_CACHE_PATTERNS = [
+  /\/assets\/.*\.js$/,
+  /\/assets\/.*\.css$/
 ];
 
 self.addEventListener('install', (event) => {
@@ -31,8 +37,20 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  if (!event.request.url.startsWith(self.location.origin)) return;
+  // Skip non-GET requests
   if (event.request.method !== 'GET') return;
+  
+  // Skip cross-origin requests
+  if (!event.request.url.startsWith(self.location.origin)) return;
+  
+  // Skip requests that match no-cache patterns (JS/CSS bundles)
+  const url = new URL(event.request.url);
+  const shouldSkipCache = NO_CACHE_PATTERNS.some(pattern => pattern.test(url.pathname));
+  
+  if (shouldSkipCache) {
+    // For JS/CSS bundles, always go to network first, don't cache
+    return;
+  }
 
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
@@ -47,6 +65,13 @@ self.addEventListener('fetch', (event) => {
           cache.put(event.request, responseToCache);
         });
         return response;
+      }).catch((error) => {
+        console.error('Fetch failed:', error);
+        // Return a basic offline response for navigation requests
+        if (event.request.mode === 'navigate') {
+          return caches.match('/index.html');
+        }
+        throw error;
       });
     })
   );
