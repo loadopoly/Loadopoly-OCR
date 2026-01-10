@@ -24,9 +24,36 @@ export default defineConfig({
     global: 'globalThis',
     // Ensures process.env exists for libraries accessing it directly
     'process.env': {},
+    // Build timestamp for cache busting verification
+    '__BUILD_TIME__': JSON.stringify(new Date().toISOString()),
   },
   server: {
     port: 3000,
+    // Ensure proper MIME types in dev
+    headers: {
+      'X-Content-Type-Options': 'nosniff',
+    },
+  },
+  build: {
+    // Generate source maps for debugging production issues
+    sourcemap: true,
+    // Use content hashes for cache busting
+    rollupOptions: {
+      output: {
+        // Ensure consistent chunk naming with content hashes
+        entryFileNames: 'assets/[name]-[hash].js',
+        chunkFileNames: 'assets/[name]-[hash].js',
+        assetFileNames: 'assets/[name]-[hash].[ext]',
+        // Manual chunks for better caching
+        manualChunks: {
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-ui': ['lucide-react'],
+          'vendor-data': ['dexie', '@supabase/supabase-js'],
+        },
+      },
+    },
+    // Increase chunk size warning limit (we have manual chunks now)
+    chunkSizeWarningLimit: 600,
   },
   optimizeDeps: {
     esbuildOptions: {
@@ -34,5 +61,13 @@ export default defineConfig({
         global: 'globalThis'
       },
     },
+    // Pre-bundle these dependencies for faster dev startup
+    include: [
+      'react',
+      'react-dom',
+      'lucide-react',
+      'uuid',
+      'dexie',
+    ],
   },
 });
