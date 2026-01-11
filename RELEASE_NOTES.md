@@ -6,6 +6,11 @@ This release introduces a sophisticated **cross-view dynamic filtering system** 
 
 ### 🎯 Unified Filter Architecture
 
+**Social Hub** - A consolidated social ecosystem for content curators, integrating communities, messaging, and GARD returns into a single ergonomic workspace.
+- **Curated Social Dashboard:** Unified view of social impact, rewards, and communication.
+- **Ergonomic Sub-navigation:** Quick access to Communities, Messaging, and Returns via a consolidated hub.
+- **Active Status Integration:** Real-time indicators for pending requests and unread messages within the hub.
+
 **FilterContext** - Centralized state management with dependency engine:
 
 | Component | Purpose |
