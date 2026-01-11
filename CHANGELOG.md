@@ -19,6 +19,13 @@ See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent majo
   - Expandable dimension cards with dependency constraint badges
   - Import/Export functionality for filter configurations
 
+- **Dynamic LLM Selection & Configuration** - Expanded AI capabilities:
+  - New "LLM Options & Credentials" section in Settings for managing multiple AI providers
+  - Support for Gemini, GPT-4o, Claude 3.5 Sonnet, and Local (Ollama) configurations
+  - Unified credential management (API Keys, Usernames, Logins) stored per-model
+  - Real-time LLM status display in the sidebar Geo Location section
+  - Updated preservation logs to track specific model agents used per process
+
 - **InlineFilterBar Component** - Compact filter bar for each view:
   - Category, Era, and License dropdowns
   - Active filter count with clear button

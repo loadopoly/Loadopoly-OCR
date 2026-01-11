@@ -31,7 +31,6 @@ import {
   FolderOpen,
   ArrowLeft,
   ShoppingBag,
-  MessageSquare,
   Users,
   Scan,
   Plus,
@@ -44,7 +43,6 @@ import {
   Radio,
   List,
   CloudDownload,
-  Sprout,
   Sliders
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
@@ -82,11 +80,9 @@ import SmartUploadSelector from './components/SmartUploadSelector';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import PurchaseModal from './components/PurchaseModal';
 import SmartSuggestions from './components/SmartSuggestions';
-import Communities from './components/Communities';
-import Messages from './components/Messages';
+import SocialApp from './components/SocialApp';
 import StatusBar from './components/StatusBar';
 import AnnotationEditor from './components/AnnotationEditor';
-import { RoyaltyDashboard, ShardPortfolio, GovernanceVoting } from './components/gard';
 import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/KeyboardShortcuts';
 import { announce } from './lib/accessibility';
 import { WorldRenderer } from './components/metaverse';
@@ -198,6 +194,23 @@ export default function App() {
   const [ownedAssetIds, setOwnedAssetIds] = useState<Set<string>>(new Set());
   const [purchaseModalData, setPurchaseModalData] = useState<{title: string, assets: DigitalAsset[]} | null>(null);
   const [debugMode, setDebugMode] = useState(localStorage.getItem('geograph-debug-mode') === 'true');
+  const [selectedLLM, setSelectedLLM] = useState(localStorage.getItem('geograph-selected-llm') || 'Gemini 2.5 Flash');
+  const [llmStatus, setLlmStatus] = useState<'connected' | 'error' | 'none'>('connected');
+
+  useEffect(() => {
+    const key = localStorage.getItem(`geograph-llm-key-${selectedLLM}`);
+    if (key) {
+      setLlmStatus('connected');
+    } else {
+      // For Gemini, we might also check the legacy key or env var
+      const legacyKey = localStorage.getItem('geograph-gemini-key');
+      if (selectedLLM === 'Gemini 2.5 Flash' && legacyKey) {
+        setLlmStatus('connected');
+      } else {
+        setLlmStatus('none');
+      }
+    }
+  }, [selectedLLM]);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { isOpen: isShortcutsOpen, setIsOpen: setIsShortcutsOpen } = useKeyboardShortcutsHelp() as any;
   const isOnline = useOnlineStatus();
@@ -532,7 +545,7 @@ export default function App() {
             IS_ENTERPRISE: true, // Processed assets move to enterprise corpus
             PRESERVATION_EVENTS: [
               ...(asset.sqlRecord?.PRESERVATION_EVENTS || []),
-              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "SUCCESS" as const }
+              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: selectedLLM, outcome: "SUCCESS" as const }
             ]
       };
 
@@ -669,7 +682,7 @@ export default function App() {
             IS_ENTERPRISE: false, // Keep in global corpus for super-user
             PRESERVATION_EVENTS: [
               ...(newAsset.sqlRecord?.PRESERVATION_EVENTS || []),
-              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "FAILURE" as const }
+              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: selectedLLM, outcome: "FAILURE" as const }
             ]
           }
         };
@@ -950,7 +963,7 @@ export default function App() {
                       IS_ENTERPRISE: false,
                       PRESERVATION_EVENTS: [
                         ...(newAsset.sqlRecord?.PRESERVATION_EVENTS || []),
-                        { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: "Gemini 2.5 Flash", outcome: "FAILURE" as const }
+                        { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: selectedLLM, outcome: "FAILURE" as const }
                       ]
                     }
                   };
@@ -1046,10 +1059,8 @@ export default function App() {
           <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => switchTab('world')} />
           <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => switchTab('semantic')} />
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => switchTab('database')} />
-          <SidebarItem icon={Users} label="Communities" active={activeTab === 'communities'} onClick={() => switchTab('communities')} />
-          <SidebarItem icon={MessageSquare} label="Messages" active={activeTab === 'messages'} onClick={() => switchTab('messages')} />
+          <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => switchTab('social')} />
           <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => switchTab('market')} />
-          <SidebarItem icon={Sprout} label="Social Returns" active={activeTab === 'gard'} onClick={() => switchTab('gard')} />
           {isAdmin && <SidebarItem icon={ShieldCheck} label="Review Queue" active={activeTab === 'review'} onClick={() => switchTab('review')} />}
           <div className="pt-4 mt-4 border-t border-slate-800">
              <SidebarItem icon={Sliders} label="Dynamic Filters" active={showUnifiedFilters} onClick={() => setShowUnifiedFilters(!showUnifiedFilters)} />
@@ -1087,8 +1098,8 @@ export default function App() {
                <span className={geoPermission ? 'text-green-500' : 'text-amber-500'}>●</span>
              </div>
              <div className="flex items-center justify-between">
-               <span>Gemini 2.5 Flash</span>
-               <span className="text-green-500">●</span>
+               <span>{selectedLLM}</span>
+               <span className={llmStatus === 'connected' ? 'text-green-500' : llmStatus === 'error' ? 'text-red-500' : 'text-slate-600'}>●</span>
              </div>
            </div>
         </div>
@@ -1118,10 +1129,8 @@ export default function App() {
               <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => { switchTab('semantic'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => { switchTab('world'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={Users} label="Communities" active={activeTab === 'communities'} onClick={() => { switchTab('communities'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={MessageSquare} label="Messages" active={activeTab === 'messages'} onClick={() => { switchTab('messages'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => { switchTab('social'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { switchTab('market'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={Sprout} label="Social Returns" active={activeTab === 'gard'} onClick={() => { switchTab('gard'); setIsMobileMenuOpen(false); }} />
               <div className="pt-4 mt-4 border-t border-slate-800">
                 <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsMobileMenuOpen(false); }} />
               </div>
@@ -1799,28 +1808,23 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'communities' && (
-            <Communities 
+          {activeTab === 'social' && (
+            <SocialApp 
               user={user}
               communities={communities}
               admissionRequests={admissionRequests}
-              selectedCommunityId={selectedCommunityId}
-              onJoin={handleJoinCommunity}
-              onCreate={handleCreateCommunity}
-              onApprove={handleApproveRequest}
-              onReject={(id) => setAdmissionRequests(prev => prev.filter(r => r.id !== id))}
-              onSelect={setSelectedCommunityId}
-            />
-          )}
-
-          {activeTab === 'messages' && (
-            <Messages 
-              user={user}
               messages={messages}
-              assets={localAssets}
-              bundles={displayItems.filter((i): i is ImageBundle => 'bundleId' in i)}
+              localAssets={localAssets}
+              displayItems={displayItems}
+              selectedCommunityId={selectedCommunityId}
+              onJoinCommunity={handleJoinCommunity}
+              onCreateCommunity={handleCreateCommunity}
+              onApproveRequest={handleApproveRequest}
+              onRejectRequest={(id) => setAdmissionRequests(prev => prev.filter(r => r.id !== id))}
+              onSelectCommunity={setSelectedCommunityId}
               onSendMessage={handleSendMessage}
               onClaimGift={handleClaimGift}
+              setAdmissionRequests={setAdmissionRequests}
             />
           )}
 
@@ -1862,28 +1866,6 @@ export default function App() {
                       ))}
                   </div>
                 )}
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'gard' && (
-            <div className="h-full flex flex-col gap-6 overflow-auto pr-2 custom-scrollbar">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-white">Social Returns (GARD)</h3>
-                  <p className="text-sm text-slate-400">Track royalties, manage shards, and fund community projects.</p>
-                </div>
-                <div className="flex items-center gap-2 px-3 py-1 bg-green-500/10 border border-green-500/20 rounded-full text-green-400 text-xs font-bold">
-                  <Sprout size={14} />
-                  TOKENOMICS ACTIVE
-                </div>
-              </div>
-
-              <RoyaltyDashboard />
-              
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
-                <ShardPortfolio userId={user?.id || ''} />
-                <GovernanceVoting userId={user?.id || ''} />
               </div>
             </div>
           )}
@@ -1964,6 +1946,8 @@ export default function App() {
               setScannerConnected={setScannerConnected}
               debugMode={debugMode}
               setDebugMode={setDebugMode}
+              selectedLLM={selectedLLM}
+              setSelectedLLM={setSelectedLLM}
             />
           )}
         </div>

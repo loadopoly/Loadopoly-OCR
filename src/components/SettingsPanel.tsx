@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { enableAutoSync, disableAutoSync, isSyncEnabled, setScannerUrl as setEngineScannerUrl } from '../lib/syncEngine';
 import { clearAllAssets } from '../lib/indexeddb';
-import { FolderSync, Radio, CheckCircle, User, LogIn, Trash2, AlertTriangle, Wallet, Globe } from 'lucide-react';
+import { FolderSync, Radio, CheckCircle, User, LogIn, Trash2, AlertTriangle, Wallet, Globe, Cpu, Key, Shield, RefreshCw } from 'lucide-react';
 import { getCurrentUser } from '../lib/auth';
 import AuthModal from './AuthModal';
 import ProfileSettings from './ProfileSettings';
@@ -16,6 +16,8 @@ interface SettingsPanelProps {
     setScannerConnected: (val: boolean) => void;
     debugMode: boolean;
     setDebugMode: (val: boolean) => void;
+    selectedLLM: string;
+    setSelectedLLM: (val: string) => void;
 }
 
 export default function SettingsPanel({ 
@@ -27,12 +29,17 @@ export default function SettingsPanel({
     scannerConnected,
     setScannerConnected,
     debugMode,
-    setDebugMode
+    setDebugMode,
+    selectedLLM,
+    setSelectedLLM
 }: SettingsPanelProps) {
   const [scannerUrl, setScannerUrl] = useState('');
   const [savedScannerUrl, setSavedScannerUrl] = useState('');
   const [user, setUser] = useState<any>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [llmKey, setLlmKey] = useState(localStorage.getItem(`geograph-llm-key-${selectedLLM}`) || '');
+  const [llmUser, setLlmUser] = useState(localStorage.getItem(`geograph-llm-user-${selectedLLM}`) || '');
+  const [llmLogin, setLlmLogin] = useState(localStorage.getItem(`geograph-llm-login-${selectedLLM}`) || '');
 
   useEffect(() => {
     const storedUrl = localStorage.getItem('geograph-scanner-url');
@@ -45,6 +52,26 @@ export default function SettingsPanel({
         setUser(data.user);
     });
   }, []);
+
+  useEffect(() => {
+    setLlmKey(localStorage.getItem(`geograph-llm-key-${selectedLLM}`) || '');
+    setLlmUser(localStorage.getItem(`geograph-llm-user-${selectedLLM}`) || '');
+    setLlmLogin(localStorage.getItem(`geograph-llm-login-${selectedLLM}`) || '');
+  }, [selectedLLM]);
+
+  const handleSaveLLMConfig = () => {
+    localStorage.setItem('geograph-selected-llm', selectedLLM);
+    localStorage.setItem(`geograph-llm-key-${selectedLLM}`, llmKey);
+    localStorage.setItem(`geograph-llm-user-${selectedLLM}`, llmUser);
+    localStorage.setItem(`geograph-llm-login-${selectedLLM}`, llmLogin);
+    
+    // Sync with legacy Gemini key
+    if (selectedLLM === 'Gemini 2.5 Flash') {
+      localStorage.setItem('geograph-gemini-key', llmKey);
+    }
+    
+    alert(`${selectedLLM} configuration saved!`);
+  };
 
   const handleToggleSync = async () => {
       if (syncOn) {
@@ -115,6 +142,90 @@ export default function SettingsPanel({
       )}
 
       {showAuthModal && <AuthModal onClose={() => { setShowAuthModal(false); getCurrentUser().then(({ data }) => setUser(data.user)); }} />}
+
+      {/* AI Model Configuration Section */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <div className="flex items-start gap-4">
+          <div className="p-3 rounded-lg bg-primary-900/30 text-primary-500">
+            <Cpu size={24} />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-bold text-white mb-2">LLM Options & Credentials</h3>
+            <p className="text-sm text-slate-400 mb-6">
+              Configure and select which dynamic LLM to use for processing. 
+              Manage all API keys, usernames, and logins here.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Model Selection</label>
+                <select 
+                  value={selectedLLM}
+                  onChange={(e) => setSelectedLLM(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white text-sm focus:border-primary-500 outline-none transition-all"
+                >
+                  <option value="Gemini 2.5 Flash">Gemini 2.5 Flash (Default)</option>
+                  <option value="GPT-4o">GPT-4o</option>
+                  <option value="Claude 3.5 Sonnet">Claude 3.5 Sonnet</option>
+                  <option value="Local (Ollama)">Local (Ollama)</option>
+                  <option value="Custom LLM">Custom LLM</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">API Key / Token</label>
+                  <div className="relative">
+                    <input
+                      type="password"
+                      value={llmKey}
+                      onChange={(e) => setLlmKey(e.target.value)}
+                      placeholder="sk-..."
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-white text-sm focus:border-primary-500 outline-none transition-all"
+                    />
+                    <Key size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Username / Login</label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={llmUser}
+                      onChange={(e) => setLlmUser(e.target.value)}
+                      placeholder="Username or Email"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-white text-sm focus:border-primary-500 outline-none transition-all"
+                    />
+                    <User size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">System Login / Domain</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={llmLogin}
+                    onChange={(e) => setLlmLogin(e.target.value)}
+                    placeholder="https://your-custom-llm-endpoint.com"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-lg pl-10 pr-4 py-2 text-white text-sm focus:border-primary-500 outline-none transition-all"
+                  />
+                  <Shield size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" />
+                </div>
+              </div>
+
+              <button
+                onClick={handleSaveLLMConfig}
+                className="w-full px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-bold text-sm flex items-center justify-center gap-2 transition-all mt-2"
+              >
+                <RefreshCw size={16} /> Save LLM Configuration
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Web3 / Blockchain Settings */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">

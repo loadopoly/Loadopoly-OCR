@@ -6,8 +6,17 @@ import { geminiLogger as logger } from "../lib/logger";
 // Using Gemini 2.5 Flash as requested for optimized speed and efficient extraction
 const GEMINI_MODEL = "gemini-2.5-flash";
 
-// Helper to obtain API Key from environment variables
+// Helper to obtain API Key from environment variables or localStorage
 const getApiKey = (): string => {
+  // Check localStorage first (user-configured)
+  if (typeof localStorage !== 'undefined') {
+    const selectedLLM = localStorage.getItem('geograph-selected-llm');
+    if (selectedLLM === 'Gemini 2.5 Flash') {
+      const savedKey = localStorage.getItem('geograph-llm-key-Gemini 2.5 Flash') || localStorage.getItem('geograph-gemini-key');
+      if (savedKey) return savedKey;
+    }
+  }
+
   // Vite environment variables (prefixed with VITE_)
   // @ts-ignore - Vite's import.meta.env
   if (typeof import.meta !== 'undefined' && import.meta.env) {
