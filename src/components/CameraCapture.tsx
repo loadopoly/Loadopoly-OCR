@@ -1,17 +1,21 @@
 import React, { useRef, useState, useEffect } from 'react';
-import { Camera, X, Circle, RefreshCw, Smartphone, WifiOff } from 'lucide-react';
+import { Camera, X, Circle, RefreshCw, Smartphone, WifiOff, ZoomIn, ZoomOut } from 'lucide-react';
 import { announce } from '../lib/accessibility';
 
 interface CameraCaptureProps {
   onCapture: (file: File) => void;
   isOnline?: boolean;
+  zoomEnabled?: boolean;
 }
 
-export default function CameraCapture({ onCapture, isOnline = true }: CameraCaptureProps) {
+export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled = true }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [isOpen, setIsOpen] = useState(false);
   const [facingMode, setFacingMode] = useState<'user' | 'environment'>('environment');
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [zoom, setZoom] = useState(1);
+  const [zoomSupported, setZoomSupported] = useState(false);
+  const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1 });
 
   useEffect(() => {
     return () => {
@@ -21,6 +25,17 @@ export default function CameraCapture({ onCapture, isOnline = true }: CameraCapt
       }
     };
   }, [stream]);
+
+  useEffect(() => {
+    if (stream && zoomSupported) {
+      const track = stream.getVideoTracks()[0];
+      if (track) {
+        track.applyConstraints({
+          advanced: [{ zoom: zoom }]
+        } as any).catch(err => console.error("Failed to apply zoom", err));
+      }
+    }
+  }, [zoom, stream, zoomSupported]);
 
   const startCamera = async () => {
     setIsOpen(true);
@@ -37,6 +52,23 @@ export default function CameraCapture({ onCapture, isOnline = true }: CameraCapt
         },
         audio: false
       });
+      
+      const videoTrack = newStream.getVideoTracks()[0];
+      const capabilities = videoTrack.getCapabilities() as any;
+      if (capabilities.zoom) {
+          setZoomSupported(true);
+          setZoomRange({
+              min: capabilities.zoom.min,
+              max: capabilities.zoom.max,
+              step: capabilities.zoom.step
+          });
+          // Set to current zoom or default to min
+          const currentZoom = (videoTrack.getConstraints() as any).zoom || capabilities.zoom.min;
+          setZoom(currentZoom);
+      } else {
+          setZoomSupported(false);
+      }
+
       setStream(newStream);
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
@@ -75,6 +107,19 @@ export default function CameraCapture({ onCapture, isOnline = true }: CameraCapt
                     video: { facingMode: newMode },
                     audio: false
                  }).then(s => {
+                     const track = s.getVideoTracks()[0];
+                     const caps = track.getCapabilities() as any;
+                     if (caps.zoom) {
+                        setZoomSupported(true);
+                        setZoomRange({
+                            min: caps.zoom.min,
+                            max: caps.zoom.max,
+                            step: caps.zoom.step
+                        });
+                        setZoom(caps.zoom.min);
+                     } else {
+                        setZoomSupported(false);
+                     }
                      setStream(s);
                      if (videoRef.current) {
                         videoRef.current.srcObject = s;
@@ -154,6 +199,25 @@ export default function CameraCapture({ onCapture, isOnline = true }: CameraCapt
             className={`max-h-full max-w-full object-contain ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
          />
       </div>
+
+      {/* Zoom Controls */}
+      {zoomSupported && zoomEnabled && (
+          <div className="px-8 py-4 bg-black/40 backdrop-blur-md flex items-center gap-4">
+              <ZoomOut size={20} className="text-white opacity-60" />
+              <input 
+                type="range"
+                min={zoomRange.min}
+                max={zoomRange.max}
+                step={zoomRange.step}
+                value={zoom}
+                onChange={(e) => setZoom(parseFloat(e.target.value))}
+                className="flex-1 accent-primary-500 h-1.5 bg-white/20 rounded-lg appearance-none cursor-pointer"
+                aria-label="Camera Zoom"
+              />
+              <ZoomIn size={20} className="text-white opacity-60" />
+              <span className="text-white text-xs font-mono w-8">{zoom.toFixed(1)}x</span>
+          </div>
+      )}
 
       {/* Controls */}
       <div className="h-32 bg-slate-900 flex items-center justify-around pb-6 pt-4">

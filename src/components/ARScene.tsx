@@ -1,26 +1,45 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Zap, ScanLine, MapPin, ArrowRight, Layers, WifiOff } from 'lucide-react';
+import { Camera, Zap, ScanLine, MapPin, ArrowRight, Layers, WifiOff, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface ARSceneProps {
   onCapture: (file: File) => void;
   onFinishSession?: () => void;
   sessionCount: number;
   isOnline?: boolean;
+  zoomEnabled?: boolean;
 }
 
-export default function ARScene({ onCapture, onFinishSession, sessionCount, isOnline = true }: ARSceneProps) {
+export default function ARScene({ onCapture, onFinishSession, sessionCount, isOnline = true, zoomEnabled = true }: ARSceneProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [flash, setFlash] = useState(false);
   const [scanning, setScanning] = useState(true);
   const [simulatedNodes, setSimulatedNodes] = useState<{id: number, x: number, y: number, label: string}[]>([]);
+  const [zoom, setZoom] = useState(1);
+  const [zoomSupported, setZoomSupported] = useState(false);
+  const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1 });
+  const [stream, setStream] = useState<MediaStream | null>(null);
 
   useEffect(() => {
     // 1. Request camera + AR session
     navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
-    }).then(stream => {
+    }).then(newStream => {
+      setStream(newStream);
+      
+      const track = newStream.getVideoTracks()[0];
+      const caps = track.getCapabilities() as any;
+      if (caps.zoom) {
+          setZoomSupported(true);
+          setZoomRange({
+              min: caps.zoom.min,
+              max: caps.zoom.max,
+              step: caps.zoom.step
+          });
+          setZoom(caps.zoom.min);
+      }
+
       if (videoRef.current) {
-        videoRef.current.srcObject = stream;
+        videoRef.current.srcObject = newStream;
         videoRef.current.play();
       }
     }).catch(err => {
@@ -44,12 +63,28 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
 
     return () => {
         clearInterval(interval);
-        if (videoRef.current && videoRef.current.srcObject) {
-            const stream = videoRef.current.srcObject as MediaStream;
+        // We'll handle cleanup in a separate effect or just here if we don't depend on stream
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+        if (stream) {
             stream.getTracks().forEach(track => track.stop());
         }
     };
-  }, []);
+  }, [stream]);
+
+  useEffect(() => {
+      if (stream && zoomSupported) {
+          const track = stream.getVideoTracks()[0];
+          if (track) {
+              track.applyConstraints({
+                  advanced: [{ zoom: zoom }]
+              } as any).catch(err => console.error("Failed to apply zoom in AR", err));
+          }
+      }
+  }, [zoom, stream, zoomSupported]);
 
   const handleCapture = () => {
       if (videoRef.current) {
@@ -130,6 +165,25 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
               </button>
           )}
       </div>
+
+      {/* Zoom Controls Overlay */}
+      {zoomSupported && zoomEnabled && (
+        <div className="absolute bottom-44 left-1/2 -translate-x-1/2 w-64 px-4 py-2 bg-black/40 backdrop-blur-md rounded-full flex items-center gap-3 z-20">
+            <ZoomOut size={16} className="text-white opacity-60" />
+            <input 
+              type="range"
+              min={zoomRange.min}
+              max={zoomRange.max}
+              step={zoomRange.step}
+              value={zoom}
+              onChange={(e) => setZoom(parseFloat(e.target.value))}
+              className="flex-1 accent-primary-500 h-1 bg-white/20 rounded-lg appearance-none cursor-pointer"
+              aria-label="AR Zoom"
+            />
+            <ZoomIn size={16} className="text-white opacity-60" />
+            <span className="text-white text-[10px] font-mono w-6">{zoom.toFixed(1)}x</span>
+        </div>
+      )}
 
       {/* Shutter Controls */}
       <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-black/90 to-transparent flex items-center justify-center pb-8 z-10">
