@@ -1,4 +1,91 @@
-# 🚀 GeoGraph Node: v2.5.2 Release Notes
+# 🚀 GeoGraph Node: v2.5.3 Release Notes
+
+## 🎛️ v2.5.3 - Dynamic Filter Dependency System (2026-01-12)
+
+This release introduces a sophisticated **cross-view dynamic filtering system** with dependency-aware propagation across Knowledge Graph, 3D World, Structure DB, and Curator Mode.
+
+### 🎯 Unified Filter Architecture
+
+**FilterContext** - Centralized state management with dependency engine:
+
+| Component | Purpose |
+|-----------|---------|
+| `FilterProvider` | Root context provider with asset/graph data |
+| `useFilterContext` | Access all filter state and actions |
+| `useFilteredAssets` | Get filtered asset results |
+| `useFilteredGraphData` | Get filtered graph nodes/edges |
+| `useFilterAnalytics` | Access filter impact analytics |
+
+### 📊 12 Filter Dimensions
+
+| Dimension | Type | Description |
+|-----------|------|-------------|
+| `confidence` | range | OCR/AI confidence thresholds |
+| `dateRange` | range | Temporal filtering (min/max dates) |
+| `assetTypes` | multi | IMAGE, VIDEO, AUDIO, TEXT, 3D |
+| `licenseTypes` | multi | PUBLIC_DOMAIN, CC_BY, etc. |
+| `tags` | multi | Free-form tag selection |
+| `sources` | multi | Data source filtering |
+| `processingStatus` | multi | PENDING, PROCESSING, MINTED |
+| `graphConnectivity` | range | Node connection thresholds |
+| `spatialBounds` | range | Geographic bounding box |
+| `semanticClusters` | multi | NLP-derived clusters |
+| `verificationStatus` | multi | VERIFIED, PENDING, FLAGGED |
+| `curatorStatus` | multi | APPROVED, REJECTED, REVIEW |
+
+### 🔗 Dependency Graph
+
+```
+confidence ──────────► graphConnectivity
+     │                       │
+     ▼                       ▼
+assetTypes ◄──────── semanticClusters
+     │                       │
+     ▼                       ▼
+licenseTypes         curatorStatus
+     │                       │
+     └───────► sources ◄─────┘
+               │
+               ▼
+          dateRange ──────► spatialBounds
+                                │
+                                ▼
+                      processingStatus
+                                │
+                                ▼
+                      verificationStatus
+```
+
+### 🎨 UI Components
+
+- **UnifiedFilterPanel** - Sliding panel with all filter controls
+- **InlineFilterBar** - Compact toolbar for quick access
+- **FilterBadge** - Active filter count indicator
+- **FilterDependencyVisualizer** - SVG dependency graph
+- **FilterInsightsPanel** - Analytics and suggestions
+
+### ⚡ Quick Filter Presets
+
+| Preset | Description |
+|--------|-------------|
+| `public_domain` | Only public domain licensed items |
+| `high_confidence` | OCR confidence ≥ 80% |
+| `recent_era` | Items from last 50 years |
+| `historic_era` | Items over 100 years old |
+| `documents_only` | Text/document assets |
+| `items_only` | Physical item assets |
+| `needs_review` | Pending verification |
+| `graph_ready` | High connectivity items |
+
+### 🔄 Cross-View Synchronization
+
+Filters now propagate intelligently across views:
+- **Knowledge Graph**: Highlights filtered nodes/edges
+- **3D World**: Shows/hides objects based on filters
+- **Structure DB**: Applies SQL-like filtering
+- **Curator Mode**: Focuses review queue
+
+---
 
 ## 🔧 v2.5.2 - Sidebar Responsiveness Fix (2026-01-11)
 

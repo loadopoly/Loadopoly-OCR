@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Camera, 
   Map as MapIcon, 
@@ -44,7 +44,8 @@ import {
   Radio,
   List,
   CloudDownload,
-  Sprout
+  Sprout,
+  Sliders
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { 
@@ -91,6 +92,8 @@ import { announce } from './lib/accessibility';
 import { WorldRenderer } from './components/metaverse';
 import { useAvatar } from './hooks/useAvatar';
 import IntegrationsHub from './components/IntegrationsHub';
+import { FilterProvider, useFilterContext } from './contexts/FilterContext';
+import UnifiedFilterPanel, { InlineFilterBar, FilterBadge } from './components/UnifiedFilterPanel';
 
 // --- Custom Hooks ---
 function useOnlineStatus() {
@@ -202,6 +205,7 @@ export default function App() {
   const [web3Enabled, setWeb3Enabled] = useState(false);
   const [scannerConnected, setScannerConnected] = useState(false);
   const [showIntegrationsHub, setShowIntegrationsHub] = useState(false);
+  const [showUnifiedFilters, setShowUnifiedFilters] = useState(false);
 
   // Avatar & Metaverse state
   const { avatar, nearbyUsers, currentSector, updatePosition } = useAvatar(user?.id || null);
@@ -1019,6 +1023,7 @@ export default function App() {
   }, [assets, graphFilters]);
 
   return (
+    <FilterProvider initialAssets={assets} initialGraphData={globalGraphData}>
     <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30">
       
       {/* Sidebar - Desktop */}
@@ -1047,6 +1052,7 @@ export default function App() {
           <SidebarItem icon={Sprout} label="Social Returns" active={activeTab === 'gard'} onClick={() => switchTab('gard')} />
           {isAdmin && <SidebarItem icon={ShieldCheck} label="Review Queue" active={activeTab === 'review'} onClick={() => switchTab('review')} />}
           <div className="pt-4 mt-4 border-t border-slate-800">
+             <SidebarItem icon={Sliders} label="Dynamic Filters" active={showUnifiedFilters} onClick={() => setShowUnifiedFilters(!showUnifiedFilters)} />
              <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => switchTab('settings')} />
           </div>
         </nav>
@@ -1337,6 +1343,7 @@ export default function App() {
                   <p className="text-sm text-slate-400">Manually manage bundles and refine AI-extracted annotations.</p>
                 </div>
                 <div className="flex gap-2">
+                  <FilterBadge count={0} onClick={() => setShowUnifiedFilters(true)} />
                   {selectedAssetIds.size > 0 && (
                     <button 
                       onClick={handleManualBundle}
@@ -1354,6 +1361,9 @@ export default function App() {
                   </button>
                 </div>
               </div>
+              
+              {/* Inline Filter Bar for Curator Mode */}
+              <InlineFilterBar activeView="curator" />
 
               <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
                 <div className="px-4 py-3 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
@@ -1439,6 +1449,7 @@ export default function App() {
                       </p>
                    </div>
                    <div className="flex flex-wrap gap-4">
+                       <FilterBadge count={groupBy !== 'SOURCE' ? 1 : 0} onClick={() => setShowUnifiedFilters(true)} />
                        <button 
                           onClick={handleProcessAllPending}
                           className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg flex items-center gap-2 transition-all"
@@ -1464,6 +1475,9 @@ export default function App() {
                        </div>
                    </div>
                </div>
+               
+               {/* Inline Filter Bar for Structure DB */}
+               <InlineFilterBar activeView="database" />
 
                {dbViewMode === 'GROUPS' && (
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-auto pb-4">
@@ -1683,21 +1697,27 @@ export default function App() {
             <div className="flex gap-6 h-full flex-col">
                <div className="flex items-center justify-between">
                  <h3 className="text-lg font-bold text-white">Knowledge Graph</h3>
-                 <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
-                    <button 
-                      onClick={() => setGraphViewMode('SINGLE')} 
-                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'SINGLE' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                    >
-                      Single Asset
-                    </button>
-                    <button 
-                      onClick={() => setGraphViewMode('GLOBAL')} 
-                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'GLOBAL' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                    >
-                      Global Corpus
-                    </button>
+                 <div className="flex items-center gap-3">
+                   <FilterBadge count={graphFilters.category !== 'all' || graphFilters.era !== 'all' || graphFilters.contested ? 1 : 0} onClick={() => setShowUnifiedFilters(true)} />
+                   <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
+                      <button 
+                        onClick={() => setGraphViewMode('SINGLE')} 
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'SINGLE' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Single Asset
+                      </button>
+                      <button 
+                        onClick={() => setGraphViewMode('GLOBAL')} 
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'GLOBAL' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Global Corpus
+                      </button>
+                   </div>
                  </div>
                </div>
+               
+               {/* Inline Filter Bar for Knowledge Graph */}
+               <InlineFilterBar activeView="graph" />
                
                {graphViewMode === 'SINGLE' && (
                  <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
@@ -1740,23 +1760,31 @@ export default function App() {
           )}
 
           {activeTab === 'world' && (
-            <div className="h-full bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-              <WorldRenderer
-                graphData={graphViewMode === 'GLOBAL' ? globalGraphData : (assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] })}
-                nearbyUsers={nearbyUsers}
-                currentUserId={user?.id}
-                onNodeSelect={(node) => {
-                  const asset = assets.find(a => a.id === node.id);
-                  if (asset) {
-                    setSelectedAssetId(asset.id);
-                  }
-                }}
-                onPositionChange={(pos) => {
-                  if (avatar) {
-                    updatePosition(pos, [0, 0, 0, 1], avatar.lastSector);
-                  }
-                }}
-              />
+            <div className="h-full flex flex-col bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+              {/* Header with filter integration */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+                <h3 className="text-lg font-bold text-white">3D World</h3>
+                <FilterBadge count={0} onClick={() => setShowUnifiedFilters(true)} />
+              </div>
+              <InlineFilterBar activeView="world" />
+              <div className="flex-1">
+                <WorldRenderer
+                  graphData={graphViewMode === 'GLOBAL' ? globalGraphData : (assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] })}
+                  nearbyUsers={nearbyUsers}
+                  currentUserId={user?.id}
+                  onNodeSelect={(node) => {
+                    const asset = assets.find(a => a.id === node.id);
+                    if (asset) {
+                      setSelectedAssetId(asset.id);
+                    }
+                  }}
+                  onPositionChange={(pos) => {
+                    if (avatar) {
+                      updatePosition(pos, [0, 0, 0, 1], avatar.lastSector);
+                    }
+                  }}
+                />
+              </div>
             </div>
           )}
 
@@ -2091,7 +2119,24 @@ export default function App() {
           onTabChange={(tab) => setActiveTab(tab)}
         />
       </main>
+
+      {/* Unified Filter Panel - Sliding */}
+      {showUnifiedFilters && (
+        <div className="fixed right-0 top-0 bottom-0 w-96 bg-slate-900/95 backdrop-blur-sm border-l border-slate-800 shadow-2xl z-50 overflow-y-auto">
+          <div className="p-4">
+            <UnifiedFilterPanel
+              activeView={activeTab as any}
+              isCollapsed={false}
+              onCollapsedChange={(collapsed) => setShowUnifiedFilters(!collapsed)}
+              showQuickFilters={true}
+              showViewSync={true}
+              showAnalytics={true}
+            />
+          </div>
+        </div>
+      )}
     </div>
+    </FilterProvider>
   );
 }
 

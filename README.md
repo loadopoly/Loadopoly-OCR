@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-2.5.1-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-2.5.3-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -61,9 +61,62 @@ For mass usage, ensure your Supabase tables have RLS enabled. The project includ
 
 ---
 
-## 🚀 What's New in v2.4.0
+## 🚀 What's New in v2.5.3
 
-### 🔌 Modular Plugin Architecture (NEW)
+### 🎛️ Dynamic Filter Dependency System (NEW)
+
+A sophisticated interdependent filtering engine for qualitative modeling of complex quantitative data structures across Knowledge Graph, 3D World, Structure DB, and Curator Mode.
+
+**Filter Dimensions (12 total):**
+- 📂 **Category** - NLP-derived document categorization
+- 📅 **Era** - Time period from document analysis
+- 📜 **License** - Data license type (CC0, GEOGRAPH_CORPUS_1.0)
+- 🔗 **Node Type** - Knowledge graph node classification
+- 🌍 **Zone** - GIS geographic zone
+- 📄 **Scan Type** - Document/Item/Scenery
+- ⚙️ **Status** - Processing status
+- 🎯 **Confidence** - Analysis confidence score
+- 👤 **Entities** - Extracted named entities
+- 📊 **Relevance** - Graph node relevance
+- ⚠️ **Contested** - Access restrictions flag
+- 📁 **Source** - Source collection
+
+**Dynamic Dependencies:**
+```
+category ──constrains──> entities
+zone ──constrains──> category
+scanType ──constrains──> entities
+license ──constrains──> nodeType
+confidence ──constrains──> relevance
+category <──suggests──> nodeType
+source ──suggests──> era
+```
+
+**Components:**
+- `UnifiedFilterPanel` - Sliding panel with quick filters, view sync, analytics
+- `InlineFilterBar` - Compact bar integrated into each view
+- `FilterDependencyVisualizer` - Interactive SVG dependency graph
+- `FilterInsightsPanel` - Dashboard widget with AI recommendations
+
+**Usage:**
+```typescript
+import { useFilterContext, useFilteredAssets } from './contexts/FilterContext';
+
+function MyComponent() {
+  const { setFilter, applyQuickFilter, clearAllFilters } = useFilterContext();
+  const filteredAssets = useFilteredAssets();
+  
+  // Apply a quick filter preset
+  applyQuickFilter('public_domain');
+  
+  // Set a custom filter
+  setFilter('confidence', { dimension: 'confidence', value: 0.8, operator: 'gte' });
+}
+```
+
+---
+
+## 🔌 Modular Plugin Architecture
 
 A comprehensive pluggable architecture enabling extensibility and self-healing capabilities.
 
