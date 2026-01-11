@@ -1,4 +1,84 @@
-# 🚀 GeoGraph Node: v2.5.5 Release Notes
+# 🚀 GeoGraph Node: v2.5.6 Release Notes
+
+## 📜 v2.5.6 - Historian-Informed Discovery Filters (2026-01-11)
+
+### 🎯 Overview
+A comprehensive expansion of the filter system designed by Digital Transformation Public Historians to enable **serendipitous discovery** and **creative associations** while maintaining scholarly rigor and data integrity.
+
+### 🔬 The Philosophy
+> *"The best archival discoveries come not from knowing exactly what you're looking for, but from following unexpected connections across time and space."*
+
+This release transforms the filtering system from a technical constraint tool into a **discovery engine** that respects the qualitative nature of historical research while providing guardrails for data quality.
+
+### ✨ 24 Filter Dimensions (Organized by Theme)
+
+| Category | Dimensions | Purpose |
+|----------|------------|---------|
+| **Temporal** | Era, Historical Period, Document Age | Navigate time with historian-familiar period names |
+| **Spatial** | GIS Zone, Geographic Scale, Place Type | Explore from local to international scope |
+| **Content** | Category, Scan Type, Media Type, Subject Matter | Classify by format and focus |
+| **Knowledge Graph** | Node Type, Connection Density, Narrative Role | Understand story structures |
+| **Provenance** | License, Confidence, Verification Level, Contested | Trust and attribution |
+| **Discovery** | Source, Status, Entities, Relevance, Serendipity, Research Potential | Find the unexpected |
+
+### 🏛️ Historical Period Mapping
+
+Automatic derivation of culturally meaningful period names from decade-based eras:
+
+| Era | Derived Periods |
+|-----|-----------------|
+| 1890s-1900s | Victorian Era, Gilded Age, Edwardian Period |
+| 1920s-1930s | Roaring Twenties, Jazz Age, Art Deco, Great Depression, Swing Era |
+| 1940s-1950s | WWII Home Front, Atomic Age, Mid-Century Modern |
+| 1960s-1970s | Space Age, Counterculture, Civil Rights Era, Disco Era |
+| 1980s-2000s | Digital Dawn, Information Age, Social Media Era |
+
+### 🎲 Discovery-First Presets
+
+New quick filter presets designed for **exploration** rather than just retrieval:
+
+| Preset | Description |
+|--------|-------------|
+| **Serendipity High** | Documents with rare entities and unexpected cross-connections |
+| **Research Goldmine** | High entity density + strong graph connectivity |
+| **Hidden Connections** | Hub nodes that bridge disparate collections |
+| **Lonely Artifacts** | Isolated items awaiting their story connections |
+| **People Stories** | Person-focused documents for biographical research |
+| **Place Histories** | Location-centered content for geographic study |
+| **Ephemera Treasures** | Tickets, menus, ads, receipts—the everyday past |
+| **Narrative Anchors** | Key focal points that center historical narratives |
+| **Context Builders** | Supporting evidence that enriches understanding |
+
+### 🧮 Smart Scoring Functions
+
+| Function | Calculation Basis |
+|----------|-------------------|
+| **Serendipity Score** | Rare entity frequency × contested status × cross-category connections |
+| **Research Potential** | Entity richness + graph connectivity + confidence + description depth |
+| **Connection Density** | Graph edge count → Isolated / Linked / Hub classification |
+| **Narrative Role** | Person count → Setting vs Evidence vs Protagonist |
+
+### 🔗 Enhanced Dependency Graph
+
+25+ filter relationships that cascade intelligently:
+
+```
+Era ─────────► Historical Period ─► Document Age
+              │
+Subject Matter ──────────────────► Narrative Role
+              │
+Connection Density ──────────────► Research Potential
+              │
+Verification Level ──────────────► Confidence
+```
+
+### 📝 Technical Notes
+- `FilterContext.tsx` expanded from 12 to 24 dimensions
+- `applyFilterToAsset()` now receives full asset corpus for context-aware scoring
+- `FilterDependencyVisualizer` reorganized with thematic node clusters
+- All new dimensions have rich metadata labels and descriptions
+
+---
 
 ## 🔎 v2.5.5 - Precision Camera Zoom & Device Settings (2026-01-11)
 

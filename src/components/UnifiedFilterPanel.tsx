@@ -26,6 +26,7 @@ import {
   ShieldCheck,
   BarChart2,
   TrendingDown,
+  TrendingUp,
   Info,
   Save,
   Upload,
@@ -35,6 +36,10 @@ import {
   MapPin,
   CheckCircle,
   AlertTriangle,
+  Search,
+  Users,
+  Building,
+  BookOpen,
 } from 'lucide-react';
 import {
   useFilterContext,
@@ -75,18 +80,40 @@ interface DimensionFilterProps {
 // ============================================
 
 const DIMENSION_ICONS: Record<FilterDimension, React.ReactNode> = {
-  category: <Tag size={14} />,
+  // === TEMPORAL ===
   era: <Clock size={14} />,
-  license: <ShieldCheck size={14} />,
-  nodeType: <Network size={14} />,
+  historicalPeriod: <Clock size={14} />,
+  documentAge: <Clock size={14} />,
+  
+  // === SPATIAL ===
   zone: <MapPin size={14} />,
+  geographicScale: <Globe size={14} />,
+  placeType: <MapPin size={14} />,
+  
+  // === CONTENT ===
+  category: <Tag size={14} />,
   scanType: <FileText size={14} />,
-  status: <CheckCircle size={14} />,
+  mediaType: <FileText size={14} />,
+  subjectMatter: <Layers size={14} />,
+  
+  // === KNOWLEDGE GRAPH ===
+  nodeType: <Network size={14} />,
+  connectionDensity: <Network size={14} />,
+  narrativeRole: <Layers size={14} />,
+  
+  // === PROVENANCE & TRUST ===
+  license: <ShieldCheck size={14} />,
   confidence: <Target size={14} />,
+  verificationLevel: <ShieldCheck size={14} />,
+  contested: <AlertTriangle size={14} />,
+  
+  // === DISCOVERY ===
+  source: <Database size={14} />,
+  status: <CheckCircle size={14} />,
   entities: <Layers size={14} />,
   relevance: <TrendingDown size={14} />,
-  contested: <AlertTriangle size={14} />,
-  source: <Database size={14} />,
+  serendipityScore: <Sparkles size={14} />,
+  researchPotential: <TrendingUp size={14} />,
 };
 
 const VIEW_ICONS: Record<ViewMode, React.ReactNode> = {
@@ -97,6 +124,7 @@ const VIEW_ICONS: Record<ViewMode, React.ReactNode> = {
 };
 
 const QUICK_FILTER_INFO: Record<QuickFilterPreset, { label: string; icon: React.ReactNode; description: string }> = {
+  // === CLASSIC PRESETS ===
   public_domain: { label: 'Public Domain', icon: <ShieldCheck size={12} />, description: 'CC0 licensed items only' },
   high_confidence: { label: 'High Confidence', icon: <Target size={12} />, description: 'Confidence score ≥ 80%' },
   recent_era: { label: 'Recent Era', icon: <Clock size={12} />, description: '2000s onwards' },
@@ -106,6 +134,30 @@ const QUICK_FILTER_INFO: Record<QuickFilterPreset, { label: string; icon: React.
   needs_review: { label: 'Needs Review', icon: <AlertTriangle size={12} />, description: 'Low confidence items' },
   graph_ready: { label: 'Graph Ready', icon: <Network size={12} />, description: 'Assets with graph data' },
   clear_all: { label: 'Clear All', icon: <X size={12} />, description: 'Reset all filters' },
+  
+  // === TRUST & VERIFICATION ===
+  expert_verified: { label: 'Expert Verified', icon: <ShieldCheck size={12} />, description: 'Institutionally or curator verified' },
+  community_curated: { label: 'Community Curated', icon: <Users size={12} />, description: 'Community-contributed with verification' },
+  
+  // === HISTORICAL PERIOD PRESETS ===
+  turn_of_century: { label: 'Turn of Century', icon: <Clock size={12} />, description: '1890s-1910s Victorian/Edwardian' },
+  interwar_period: { label: 'Interwar', icon: <Clock size={12} />, description: '1920s-1930s Jazz Age & Depression' },
+  postwar_modern: { label: 'Postwar', icon: <Clock size={12} />, description: '1950s-1970s Mid-century modern' },
+  
+  // === DISCOVERY MODES ===
+  serendipity_high: { label: 'Serendipity', icon: <Sparkles size={12} />, description: 'High surprise potential finds' },
+  research_goldmine: { label: 'Research Goldmine', icon: <TrendingUp size={12} />, description: 'High scholarly value items' },
+  hidden_connections: { label: 'Hidden Connections', icon: <Network size={12} />, description: 'Unexpected graph links' },
+  lonely_artifacts: { label: 'Lonely Artifacts', icon: <Search size={12} />, description: 'Isolated items awaiting connection' },
+  
+  // === SUBJECT-FOCUSED ===
+  people_stories: { label: 'People Stories', icon: <Users size={12} />, description: 'Person-focused documents' },
+  place_histories: { label: 'Place Histories', icon: <MapPin size={12} />, description: 'Location-centered content' },
+  ephemera_treasures: { label: 'Ephemera', icon: <FileText size={12} />, description: 'Tickets, menus, ads, receipts' },
+  
+  // === NARRATIVE ROLES ===
+  narrative_anchors: { label: 'Anchors', icon: <BookOpen size={12} />, description: 'Key story focal points' },
+  context_builders: { label: 'Context', icon: <Building size={12} />, description: 'Background supporting evidence' },
 };
 
 // ============================================

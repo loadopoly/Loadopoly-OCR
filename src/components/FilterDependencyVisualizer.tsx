@@ -56,20 +56,42 @@ const DEPENDENCY_EDGES: DependencyEdge[] = [
   { source: 'source', target: 'era', type: 'suggests', weight: 0.5 },
 ];
 
-// Layout positions for dimensions (circular layout)
+// Layout positions for dimensions (organized by thematic clusters)
 const DIMENSION_POSITIONS: Record<FilterDimension, NodePosition> = {
-  category: { x: 50, y: 15 },
-  era: { x: 85, y: 30 },
-  license: { x: 90, y: 55 },
-  nodeType: { x: 75, y: 80 },
-  zone: { x: 40, y: 85 },
-  scanType: { x: 15, y: 70 },
-  status: { x: 10, y: 45 },
-  confidence: { x: 25, y: 20 },
-  entities: { x: 60, y: 50 },
-  relevance: { x: 50, y: 70 },
-  contested: { x: 30, y: 55 },
-  source: { x: 65, y: 30 },
+  // === TEMPORAL CLUSTER (top-left) ===
+  era: { x: 20, y: 10 },
+  historicalPeriod: { x: 35, y: 15 },
+  documentAge: { x: 25, y: 25 },
+  
+  // === SPATIAL CLUSTER (top-right) ===
+  zone: { x: 70, y: 10 },
+  geographicScale: { x: 85, y: 15 },
+  placeType: { x: 75, y: 25 },
+  
+  // === CONTENT CLUSTER (center-left) ===
+  category: { x: 15, y: 45 },
+  scanType: { x: 10, y: 55 },
+  mediaType: { x: 20, y: 60 },
+  subjectMatter: { x: 30, y: 50 },
+  
+  // === KNOWLEDGE GRAPH CLUSTER (center) ===
+  nodeType: { x: 50, y: 40 },
+  connectionDensity: { x: 55, y: 55 },
+  narrativeRole: { x: 45, y: 60 },
+  
+  // === PROVENANCE CLUSTER (center-right) ===
+  license: { x: 80, y: 45 },
+  confidence: { x: 90, y: 50 },
+  verificationLevel: { x: 85, y: 60 },
+  contested: { x: 75, y: 55 },
+  
+  // === DISCOVERY CLUSTER (bottom) ===
+  source: { x: 30, y: 80 },
+  status: { x: 45, y: 85 },
+  entities: { x: 55, y: 80 },
+  relevance: { x: 65, y: 85 },
+  serendipityScore: { x: 40, y: 75 },
+  researchPotential: { x: 60, y: 75 },
 };
 
 // ============================================
