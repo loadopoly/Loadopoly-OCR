@@ -1,4 +1,15 @@
-# 🚀 GeoGraph Node: v2.5.1 Release Notes
+# 🚀 GeoGraph Node: v2.5.2 Release Notes
+
+## 🔧 v2.5.2 - Sidebar Responsiveness Fix (2026-01-11)
+
+This patch resolves the navigation issue where the sidebar was not scrollable on smaller screens or when many view items were present.
+
+### 📱 Layout and Navigation
+- **Sidebar Scrolling**: Added `overflow-y-auto` to the desktop and mobile navigation sidebars.
+- **Custom Scrollbar**: Implemented a unified `.custom-scrollbar` utility for a better visual experience when scrolling sidebar navigation.
+- **Mobile Experience**: Fixed overflow-y in the mobile menu overlay to ensure all tabs (Marketplace, Gardening, Settings) are reachable.
+
+---
 
 ## 🔧 v2.5.1 - Stability & Caching Fixes (2026-01-11)
 
