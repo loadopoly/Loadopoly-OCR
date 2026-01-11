@@ -1,4 +1,22 @@
-# 🚀 GeoGraph Node: v2.5.4 Release Notes
+# 🚀 GeoGraph Node: v2.5.5 Release Notes
+
+## 🔎 v2.5.5 - Precision Camera Zoom & Device Settings (2026-01-11)
+
+### 🎯 Overview
+Introduces native camera zoom support for mobile and desktop devices, allowing curators to capture high-precision data from a distance or focus on small artifact details.
+
+### ✨ New Features
+- **Native Zoom Controls**: Integrated zoom slider in both AR Scanner and Instant Capture modes.
+- **Device Capability Detection**: Automatically detects and exposes hardware zoom ranges (min, max, step) supported by the device camera.
+- **Configurable Persistence**: New "Camera & Scanning" section in Settings to enable/disable advanced zoom functions.
+- **AR Precision**: Improved target acquisition in AR mode by allowing magnification of distant nodes.
+
+### 📝 Technical Specifications
+- Utilizes `MediaTrackCapabilities.zoom` and `ImageCapture` API (where supported).
+- Advanced track constraints applied via `applyConstraints({ advanced: [{ zoom: X }] })`.
+- Global settings persistence in `localStorage` for `loadopoly-zoom-enabled`.
+
+---
 
 ## 🔀 v2.5.4 - Semantic View Integration (2026-01-11)
 

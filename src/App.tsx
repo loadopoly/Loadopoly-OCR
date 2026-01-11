@@ -194,6 +194,7 @@ export default function App() {
   const [ownedAssetIds, setOwnedAssetIds] = useState<Set<string>>(new Set());
   const [purchaseModalData, setPurchaseModalData] = useState<{title: string, assets: DigitalAsset[]} | null>(null);
   const [debugMode, setDebugMode] = useState(localStorage.getItem('geograph-debug-mode') === 'true');
+  const [zoomEnabled, setZoomEnabled] = useState(localStorage.getItem('loadopoly-zoom-enabled') !== 'false');
   const [selectedLLM, setSelectedLLM] = useState(localStorage.getItem('geograph-selected-llm') || 'Gemini 2.5 Flash');
   const [llmStatus, setLlmStatus] = useState<'connected' | 'error' | 'none'>('connected');
 
@@ -1204,6 +1205,7 @@ export default function App() {
                   <CameraCapture 
                     onCapture={(file) => ingestFile(file, isGlobalView ? "Global Contribution" : "Mobile Camera")} 
                     isOnline={isOnline}
+                    zoomEnabled={zoomEnabled}
                   />
                   <label className={`flex items-center gap-2 px-4 py-2 ${isGlobalView ? 'bg-indigo-900/40 border-indigo-500/50 hover:bg-indigo-900/60' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'} border text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                       {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Upload size={18} />}
@@ -1819,6 +1821,7 @@ export default function App() {
                 onFinishSession={() => switchTab('batch')}
                 sessionCount={arSessionQueue.length}
                 isOnline={isOnline}
+                zoomEnabled={zoomEnabled}
               />
             </div>
           )}
@@ -1961,6 +1964,8 @@ export default function App() {
               setScannerConnected={setScannerConnected}
               debugMode={debugMode}
               setDebugMode={setDebugMode}
+              zoomEnabled={zoomEnabled}
+              setZoomEnabled={setZoomEnabled}
               selectedLLM={selectedLLM}
               setSelectedLLM={setSelectedLLM}
             />

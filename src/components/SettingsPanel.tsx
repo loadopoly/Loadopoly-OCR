@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { enableAutoSync, disableAutoSync, isSyncEnabled, setScannerUrl as setEngineScannerUrl } from '../lib/syncEngine';
 import { clearAllAssets } from '../lib/indexeddb';
-import { FolderSync, Radio, CheckCircle, User, LogIn, Trash2, AlertTriangle, Wallet, Globe, Cpu, Key, Shield, RefreshCw } from 'lucide-react';
+import { FolderSync, Radio, CheckCircle, User, LogIn, Trash2, AlertTriangle, Wallet, Globe, Cpu, Key, Shield, RefreshCw, Camera } from 'lucide-react';
 import { getCurrentUser } from '../lib/auth';
 import AuthModal from './AuthModal';
 import ProfileSettings from './ProfileSettings';
@@ -16,6 +16,8 @@ interface SettingsPanelProps {
     setScannerConnected: (val: boolean) => void;
     debugMode: boolean;
     setDebugMode: (val: boolean) => void;
+    zoomEnabled: boolean;
+    setZoomEnabled: (val: boolean) => void;
     selectedLLM: string;
     setSelectedLLM: (val: string) => void;
 }
@@ -30,6 +32,8 @@ export default function SettingsPanel({
     setScannerConnected,
     debugMode,
     setDebugMode,
+    zoomEnabled,
+    setZoomEnabled,
     selectedLLM,
     setSelectedLLM
 }: SettingsPanelProps) {
@@ -93,6 +97,12 @@ export default function SettingsPanel({
       const newState = !debugMode;
       setDebugMode(newState);
       localStorage.setItem('geograph-debug-mode', String(newState));
+  };
+
+  const handleToggleZoom = () => {
+      const newState = !zoomEnabled;
+      setZoomEnabled(newState);
+      localStorage.setItem('loadopoly-zoom-enabled', String(newState));
   };
 
   const handleSaveScanner = () => {
@@ -343,6 +353,30 @@ export default function SettingsPanel({
         </div>
       </div>
 
+      {/* Camera & Scanning Settings */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <div className="flex items-start gap-4">
+            <div className={`p-3 rounded-lg ${zoomEnabled ? 'bg-primary-900/30 text-primary-500' : 'bg-slate-800 text-slate-500'}`}>
+                <Camera size={24} />
+            </div>
+            <div className="flex-1">
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-lg font-bold text-white">Camera & Scanning</h3>
+                    <button 
+                        onClick={handleToggleZoom}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${zoomEnabled ? 'bg-primary-600' : 'bg-slate-700'}`}
+                    >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${zoomEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                    </button>
+                </div>
+                <p className="text-sm text-slate-400">
+                    Enable advanced zoom functions in the AR Scanner and Instant Capture mode. 
+                    This allows for better precision when scanning distant or small artifacts.
+                </p>
+            </div>
+        </div>
+      </div>
+
       {/* Debug & Developer Section */}
       <div className="bg-slate-900 border border-amber-900/30 rounded-xl p-6">
         <div className="flex items-start gap-4">
@@ -389,7 +423,7 @@ export default function SettingsPanel({
       </div>
 
       <div className="text-center text-xs text-slate-600 mt-8 pb-4 flex flex-col gap-2 items-center">
-        <p>GeoGraph Node v1.1.0 • Local-First Architecture</p>
+        <p>GeoGraph Node v2.5.5 • Local-First Architecture</p>
         <button 
           onClick={onOpenPrivacy}
           className="text-slate-500 hover:text-slate-300 underline transition-colors"
