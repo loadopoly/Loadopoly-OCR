@@ -90,6 +90,7 @@ import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/Ke
 import { announce } from './lib/accessibility';
 import { WorldRenderer } from './components/metaverse';
 import { useAvatar } from './hooks/useAvatar';
+import IntegrationsHub from './components/IntegrationsHub';
 
 // --- Custom Hooks ---
 function useOnlineStatus() {
@@ -200,6 +201,7 @@ export default function App() {
   const [syncOn, setSyncOn] = useState(false);
   const [web3Enabled, setWeb3Enabled] = useState(false);
   const [scannerConnected, setScannerConnected] = useState(false);
+  const [showIntegrationsHub, setShowIntegrationsHub] = useState(false);
 
   // Avatar & Metaverse state
   const { avatar, nearbyUsers, currentSector, updatePosition } = useAvatar(user?.id || null);
@@ -1233,6 +1235,12 @@ export default function App() {
                 web3Enabled={web3Enabled}
                 scannerConnected={scannerConnected}
                 onAction={(tab) => setActiveTab(tab)}
+                pendingCount={totalPendingCount}
+                processingCount={batchQueue.filter(b => b.status === 'PROCESSING').length}
+                geminiConnected={true}
+                supabaseConnected={isOnline}
+                recentActivity={batchQueue.length > 0 ? 'upload' : null}
+                onOpenIntegrationsHub={() => setShowIntegrationsHub(true)}
               />
 
               {assets.length === 0 ? (
@@ -1952,6 +1960,11 @@ export default function App() {
         {showPrivacyPolicy && (
           <PrivacyPolicyModal onClose={() => setShowPrivacyPolicy(false)} />
         )}
+
+        <IntegrationsHub 
+          isOpen={showIntegrationsHub} 
+          onClose={() => setShowIntegrationsHub(false)} 
+        />
 
         <KeyboardShortcutsHelp 
           isOpen={isShortcutsOpen} 
