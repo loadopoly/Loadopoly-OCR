@@ -3,6 +3,41 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.5.8] - 2026-01-11
+
+### Added
+- **Cluster Sync Statistics Panel** - Human-in-the-loop comprehension interface:
+  - **ClusterSyncStatsPanel.tsx** - Full-featured statistics overview modal:
+    - Overview tab with key metrics: Total Assets, Fully Structured, Partially Classified, Unstructured
+    - Visual pie chart showing classification distribution with quality score
+    - LLM attribution tracking showing which models performed classifications
+  - **Clusters tab** - Per-cluster progress visualization:
+    - Progress bars for all 6 structured clusters (Temporal, Spatial, Content, Knowledge Graph, Provenance, Discovery)
+    - Color-coded completion percentages with threshold indicators
+    - Quick reference guide explaining what gets classified in each cluster
+  - **Quality tab** - Corpus health metrics:
+    - Circular quality indicators for Structured Coverage, Average Confidence, Overall Quality
+    - Intelligent recommendations based on corpus state
+    - Benefits summary of structured data for discovery
+  - Seamless transition to full Cluster Synchronizer from any tab
+
+- **ClusterSyncButton Component** - Easily identifiable button for Curator Mode:
+  - Gradient background with primary-to-violet color scheme
+  - GitMerge icon for visual recognition
+  - Real-time percentage badge showing classification progress
+  - Color-coded badge (green ≥80%, amber ≥50%, gray <50%)
+  - Hover effects with scale transform
+
+### Changed
+- **App.tsx** - Integrated Cluster Sync UI into Curator Mode:
+  - Added ClusterSyncButton to Curator Mode header (next to FilterBadge)
+  - Button shows live stats calculating fully-structured asset count
+  - ClusterSyncStatsPanel modal renders when button clicked
+
+### Fixed
+- **ClusterSynchronizer.tsx** - Fixed property access for LLM response:
+  - Changed `result.analysis` to `result.rawAnalysis` to match `MetadataExtractionResult` interface
+
 ## [2.5.7] - 2026-01-11
 
 ### Added

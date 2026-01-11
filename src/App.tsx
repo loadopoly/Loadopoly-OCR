@@ -90,6 +90,7 @@ import { useAvatar } from './hooks/useAvatar';
 import IntegrationsHub from './components/IntegrationsHub';
 import { FilterProvider, useFilterContext } from './contexts/FilterContext';
 import UnifiedFilterPanel, { InlineFilterBar, FilterBadge } from './components/UnifiedFilterPanel';
+import { ClusterSyncStatsPanel, ClusterSyncButton } from './components/ClusterSyncStatsPanel';
 
 // --- Custom Hooks ---
 function useOnlineStatus() {
@@ -220,6 +221,7 @@ export default function App() {
   const [scannerConnected, setScannerConnected] = useState(false);
   const [showIntegrationsHub, setShowIntegrationsHub] = useState(false);
   const [showUnifiedFilters, setShowUnifiedFilters] = useState(false);
+  const [showClusterSyncStats, setShowClusterSyncStats] = useState(false);
   const [worldViewMode, setWorldViewMode] = useState<'3d' | 'semantic'>('3d');
 
   // Avatar & Metaverse state
@@ -1353,6 +1355,21 @@ export default function App() {
                   <p className="text-sm text-slate-400">Manually manage bundles and refine AI-extracted annotations.</p>
                 </div>
                 <div className="flex gap-2">
+                  {/* Cluster Sync Statistics Button - Human-in-the-Loop Overview */}
+                  <ClusterSyncButton 
+                    onClick={() => setShowClusterSyncStats(true)}
+                    stats={{
+                      structured: assets.filter(a => 
+                        a.sqlRecord?.STRUCTURED_TEMPORAL && 
+                        a.sqlRecord?.STRUCTURED_SPATIAL && 
+                        a.sqlRecord?.STRUCTURED_CONTENT && 
+                        a.sqlRecord?.STRUCTURED_KNOWLEDGE_GRAPH && 
+                        a.sqlRecord?.STRUCTURED_PROVENANCE && 
+                        a.sqlRecord?.STRUCTURED_DISCOVERY
+                      ).length,
+                      total: assets.length
+                    }}
+                  />
                   <FilterBadge count={0} onClick={() => setShowUnifiedFilters(true)} />
                   {selectedAssetIds.size > 0 && (
                     <button 
@@ -2138,6 +2155,14 @@ export default function App() {
             />
           </div>
         </div>
+      )}
+
+      {/* Cluster Sync Statistics Panel - Human-in-the-Loop Overview */}
+      {showClusterSyncStats && (
+        <ClusterSyncStatsPanel
+          assets={assets}
+          onClose={() => setShowClusterSyncStats(false)}
+        />
       )}
     </div>
     </FilterProvider>

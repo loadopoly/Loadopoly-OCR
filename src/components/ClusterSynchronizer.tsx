@@ -749,7 +749,7 @@ export function ClusterSynchronizer({
       
       // Parse the analysis field which contains the LLM response
       const structuredValue = parseClassificationResponse(
-        result.analysis || JSON.stringify(result),
+        result.rawAnalysis || JSON.stringify(result),
         clusterType
       );
       
