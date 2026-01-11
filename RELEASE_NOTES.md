@@ -18,6 +18,26 @@ This release introduces a sophisticated **cross-view dynamic filtering system** 
 
 ### 📊 12 Filter Dimensions
 
+---
+
+## 🤖 v2.5.4 - Dynamic LLM Orchestration & Credential Vault
+
+Expanding the AI core to support a broader range of vision-language models with enterprise-grade credential management.
+
+### 🧠 Multi-Provider AI Selection
+
+Users can now swap their extraction engine on-the-fly without restarting the node:
+- **Google Gemini 1.5/2.5** - Optimized for high-speed OCR/NLP
+- **GPT-4o** - Industry standard for complex entity extraction
+- **Claude 3.5 Sonnet** - Superior nuance for historical document analysis
+- **Local (Ollama)** - Private, air-gapped processing via local inference
+
+### 🔐 Options & Credentials
+Integrated a new "LLM Options" vault within the Settings panel:
+- **Unique Store**: Each model maintains its own API Key, Username, and Login credentials.
+- **Auto-Sync**: Switching the model in the UI automatically swaps the active API context.
+- **Visibility**: The active model and its connection health are now continuously monitored in the sidebar Geo Location display.
+
 | Dimension | Type | Description |
 |-----------|------|-------------|
 | `confidence` | range | OCR/AI confidence thresholds |
