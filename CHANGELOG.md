@@ -3,6 +3,12 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.5.2] - 2026-01-11
+
+### Fixed
+- **Sidebar Scrolling** - Implemented `overflow-y-auto` on both desktop and mobile sidebars to ensure all navigation items are accessible on smaller viewports.
+- **Custom Scrollbar** - Defined `.custom-scrollbar` utility in `index.css` for a cleaner, unified UI experience across the application.
+
 ## [2.5.1] - 2026-01-11
 
 ### Fixed
