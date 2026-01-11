@@ -1,4 +1,50 @@
-# 🚀 GeoGraph Node: v2.4.0 Release Notes
+# 🚀 GeoGraph Node: v2.5.1 Release Notes
+
+## 🔧 v2.5.1 - Stability & Caching Fixes (2026-01-11)
+
+This hotfix release addresses critical issues with service worker caching that caused blank pages and MIME type errors in production.
+
+### 🛠️ Service Worker v2.0.0
+
+Complete rewrite of the PWA service worker to prevent caching issues:
+
+| Issue Fixed | Solution |
+|-------------|----------|
+| Blank pages after deploy | JS/CSS bundles are NEVER cached |
+| MIME type errors | Content-type validation + Vercel headers |
+| Stale cache poisoning | Auto-cleanup on activation |
+| Module load failures | Skip cache for `/assets/*` entirely |
+
+### 🔄 Processing State Consistency
+
+Fixed state synchronization across all views:
+- Dashboard, Batch tab, and Processing Queue now show consistent status
+- Assets properly transition: `PENDING` → `PROCESSING` → `MINTED`
+- Individual "Resume" buttons in the Processing Queue panel
+- Real-time progress bar updates during AI processing
+
+### ⚡ Build Improvements
+
+```
+dist/
+├── vendor-react-[hash].js   # React core (cached long-term)
+├── vendor-ui-[hash].js      # UI components (cached long-term)
+├── vendor-data-[hash].js    # Data layer (cached long-term)
+├── index-[hash].js          # App entry
+└── App-[hash].js            # Main app bundle
+```
+
+### 🆘 Recovery UX
+
+New error handling for cache-related failures:
+- Loading spinner shown immediately (no blank screen)
+- "Clear Cache & Reload" button in error UI
+- Auto-prompt when new version is available
+- Build timestamp in console for debugging
+
+---
+
+# 🚀 GeoGraph Node: v2.5.0 Release Notes
 
 This release delivers a **comprehensive UX/UI overhaul** focusing on accessibility, user experience, progressive disclosure, and design polish.
 

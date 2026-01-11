@@ -3,6 +3,45 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.5.1] - 2026-01-11
+
+### Fixed
+- **Service Worker Caching Issues** - Complete rewrite of `sw.js` (v2.0.0):
+  - Fixed blank page issues caused by stale cached JS/CSS bundles
+  - Fixed MIME type errors (`text/html` served instead of `text/css`)
+  - Service worker now NEVER caches Vite-generated assets (`/assets/*`)
+  - Network-first strategy for navigation requests
+  - Auto-cleanup of stale assets on SW activation
+  - Content-type validation before caching
+
+- **Processing State Consistency** - Fixed mismatch between different views:
+  - `handleProcessAllPending` now includes both PENDING and PROCESSING status
+  - Assets start as PENDING and transition to PROCESSING when pipeline starts
+  - Processing Queue panel shows unified view of batch queue + pending assets
+  - Individual "Resume" button for each pending asset in queue panel
+  - Real-time progress updates during processing pipeline
+
+- **Bootstrap Race Condition** - Removed auto-initialization in `bootstrap.ts`
+  that caused race conditions with explicit `bootstrapModuleSystem()` call
+
+### Added
+- **Loading State** - Immediate loading spinner while app initializes (no blank screen)
+- **SW Update Detection** - Auto-prompts users when new version is available
+- **Cache Recovery UI** - "Clear Cache & Reload" button in error screen for SW issues
+- **Build Timestamp** - `__BUILD_TIME__` injection for debugging cache problems
+- **Vercel Headers** - Proper MIME types and caching headers:
+  - `X-Content-Type-Options: nosniff` prevents MIME sniffing
+  - Immutable caching (1 year) for hashed assets
+  - No-cache for `index.html` and `sw.js`
+
+### Changed
+- **Vite Build Config** - Added manual chunks for better caching:
+  - `vendor-react` - React and React DOM
+  - `vendor-ui` - Lucide React icons
+  - `vendor-data` - Dexie and Supabase client
+- Source maps now enabled for production debugging
+- Pre-bundled common dependencies for faster dev startup
+
 ## [2.5.0] - 2026-01-09
 
 ### Added
