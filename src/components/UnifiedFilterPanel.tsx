@@ -114,6 +114,9 @@ const DIMENSION_ICONS: Record<FilterDimension, React.ReactNode> = {
   relevance: <TrendingDown size={14} />,
   serendipityScore: <Sparkles size={14} />,
   researchPotential: <TrendingUp size={14} />,
+  
+  // === CLASSIFICATION STATUS ===
+  classificationStatus: <Building size={14} />,
 };
 
 const VIEW_ICONS: Record<ViewMode, React.ReactNode> = {
@@ -158,6 +161,11 @@ const QUICK_FILTER_INFO: Record<QuickFilterPreset, { label: string; icon: React.
   // === NARRATIVE ROLES ===
   narrative_anchors: { label: 'Anchors', icon: <BookOpen size={12} />, description: 'Key story focal points' },
   context_builders: { label: 'Context', icon: <Building size={12} />, description: 'Background supporting evidence' },
+  
+  // === CLASSIFICATION STATUS ===
+  structured_only: { label: 'Structured', icon: <Building size={12} />, description: 'Fully LLM-classified assets' },
+  unstructured_only: { label: 'Unstructured', icon: <Search size={12} />, description: 'Assets needing classification' },
+  partially_classified: { label: 'Partial', icon: <AlertTriangle size={12} />, description: 'Partially classified assets' },
 };
 
 // ============================================

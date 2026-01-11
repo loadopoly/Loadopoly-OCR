@@ -3,7 +3,57 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
-## [2.5.5] - 2026-01-11
+## [2.5.7] - 2026-01-11
+
+### Added
+- **Cluster Synchronizer Curator Tool** - LLM-powered structured classification system:
+  - **6 Structured Cluster Columns** for synchronized dimension values:
+    - `STRUCTURED_TEMPORAL` - Era, Historical Period, Document Age
+    - `STRUCTURED_SPATIAL` - Zone, Geographic Scale, Place Type
+    - `STRUCTURED_CONTENT` - Category, Scan Type, Media Type, Subject Matter
+    - `STRUCTURED_KNOWLEDGE_GRAPH` - Node Type, Connection Density, Narrative Role
+    - `STRUCTURED_PROVENANCE` - License, Verification Level, Contested
+    - `STRUCTURED_DISCOVERY` - Source, Entity Types, Serendipity Score, Research Potential
+  - **LLM Attribution**: `CLASSIFICATION_LLM`, `CLASSIFICATION_DATE`, `CLASSIFICATION_VERSION`, `CLASSIFICATION_CONFIDENCE`
+
+- **ClusterSynchronizer.tsx Component** - Interactive curator tool:
+  - Per-cluster LLM classification with custom prompts
+  - Bulk sync capability for corpus-wide classification
+  - Progress tracking with pause/resume/skip controls
+  - Export classification results as JSON
+  - Learned mapping panel for similarity-based proxy classification
+
+- **Structured Classification Mappings** - Similarity-based proxy classification:
+  - `structured_classification_mappings` table for learned correlations
+  - `classification_audit_log` for provenance tracking
+  - `cluster_dimension_statistics` for corpus-wide dimension distribution
+  - Helper functions: `find_structured_mapping()`, `get_dimension_distribution()`, `upsert_classification_mapping()`
+
+- **Classification Status Filter Dimension** - New filter for structured vs unstructured:
+  - `classificationStatus` dimension: structured | partial | unstructured
+  - Quick filter presets: `structured_only`, `unstructured_only`, `partially_classified`
+  - `getClassificationStatus()` utility function
+
+- **New TypeScript Types** for structured clusters:
+  - `StructuredTemporalCluster`, `StructuredSpatialCluster`, `StructuredContentCluster`
+  - `StructuredKnowledgeGraphCluster`, `StructuredProvenanceCluster`, `StructuredDiscoveryCluster`
+  - Classification fields on `HistoricalDocumentMetadata`
+
+### Changed
+- **FilterContext.tsx** - Added 25th filter dimension (`classificationStatus`) and 3 new quick filter presets
+- **UnifiedFilterPanel.tsx** - Extended dimension icons and quick filter info for classification status
+- **FilterDependencyVisualizer.tsx** - Added classification status node position
+- **types.ts** - Extended `HistoricalDocumentMetadata` with 6 structured cluster columns and classification metadata
+
+### Database
+- **sql/STRUCTURED_CLUSTER_SCHEMA.sql** - Complete schema for structured classification:
+  - ALTER TABLE for 10 new columns on `historical_documents_global`
+  - 3 new tables: `structured_classification_mappings`, `classification_audit_log`, `cluster_dimension_statistics`
+  - GIN indexes for JSONB columns
+  - RLS policies for public read, authenticated write
+  - Stored functions for mapping lookup and statistics
+
+## [2.5.6] - 2026-01-11
 
 ### Added
 - **Historian-Informed Filter System** - Comprehensive expansion of filter dimensions designed by Digital Transformation Public Historians:

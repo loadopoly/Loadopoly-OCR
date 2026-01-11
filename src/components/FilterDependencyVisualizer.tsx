@@ -92,6 +92,9 @@ const DIMENSION_POSITIONS: Record<FilterDimension, NodePosition> = {
   relevance: { x: 65, y: 85 },
   serendipityScore: { x: 40, y: 75 },
   researchPotential: { x: 60, y: 75 },
+  
+  // === CLASSIFICATION STATUS (bottom-right) ===
+  classificationStatus: { x: 80, y: 80 },
 };
 
 // ============================================
