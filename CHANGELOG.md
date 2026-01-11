@@ -3,6 +3,48 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.5.3] - 2026-01-11
+
+### Added
+- **Dynamic Filter Dependency System** - Comprehensive interdependent filtering across views:
+  - `FilterContext` - Centralized React context managing filter state across all views
+  - 12 filter dimensions: category, era, license, nodeType, zone, scanType, status, confidence, entities, relevance, contested, source
+  - Dynamic dependency graph defining relationships between dimensions
+  - Cross-view synchronization with toggle controls
+
+- **UnifiedFilterPanel Component** - Sophisticated sliding panel UI:
+  - Quick filter presets (Public Domain, High Confidence, Documents Only, etc.)
+  - View sync toggles showing which views share filters
+  - Analytics bar with real-time filter efficiency metrics
+  - Expandable dimension cards with dependency constraint badges
+  - Import/Export functionality for filter configurations
+
+- **InlineFilterBar Component** - Compact filter bar for each view:
+  - Category, Era, and License dropdowns
+  - Active filter count with clear button
+  - Integrated into Knowledge Graph, 3D World, Structure DB, and Curator views
+
+- **FilterDependencyVisualizer Component** - Interactive SVG visualization:
+  - Circular layout of filter dimensions as nodes
+  - Dependency edges with weight indicators
+  - "Constrains" vs "Suggests" relationship types
+  - Active filter highlighting with glow effects
+  - Hover tooltips with dimension metadata
+
+- **FilterInsightsPanel** - Dashboard widget in SmartSuggestions:
+  - Collapsed summary bar showing filter stats
+  - Cross-view dependency indicators
+  - Embedded dependency graph toggle
+  - AI-powered filter recommendations
+
+### Changed
+- **App.tsx** - Wrapped with FilterProvider, added sidebar toggle for Dynamic Filters
+- **Knowledge Graph view** - Added FilterBadge and InlineFilterBar integration
+- **3D World view** - Added header with FilterBadge and InlineFilterBar
+- **Structure DB view** - Added FilterBadge and InlineFilterBar
+- **Curator Mode view** - Added FilterBadge and InlineFilterBar
+- **SmartSuggestions** - Added FilterInsightsPanel with dependency visualization
+
 ## [2.5.2] - 2026-01-11
 
 ### Fixed
