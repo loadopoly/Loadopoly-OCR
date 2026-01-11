@@ -219,6 +219,7 @@ export default function App() {
   const [scannerConnected, setScannerConnected] = useState(false);
   const [showIntegrationsHub, setShowIntegrationsHub] = useState(false);
   const [showUnifiedFilters, setShowUnifiedFilters] = useState(false);
+  const [worldViewMode, setWorldViewMode] = useState<'3d' | 'semantic'>('3d');
 
   // Avatar & Metaverse state
   const { avatar, nearbyUsers, currentSector, updatePosition } = useAvatar(user?.id || null);
@@ -1057,7 +1058,6 @@ export default function App() {
           <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => switchTab('curator')} />
           <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => switchTab('graph')} />
           <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => switchTab('world')} />
-          <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => switchTab('semantic')} />
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => switchTab('database')} />
           <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => switchTab('social')} />
           <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => switchTab('market')} />
@@ -1126,7 +1126,6 @@ export default function App() {
               <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => { switchTab('assets'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => { switchTab('curator'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => { switchTab('graph'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={Zap} label="Semantic View" active={activeTab === 'semantic'} onClick={() => { switchTab('semantic'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => { switchTab('world'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsMobileMenuOpen(false); }} />
               <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => { switchTab('social'); setIsMobileMenuOpen(false); }} />
@@ -1762,37 +1761,53 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'semantic' && (
-            <div className="h-full bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-              <SemanticCanvas assets={assets} />
-            </div>
-          )}
-
           {activeTab === 'world' && (
             <div className="h-full flex flex-col bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-              {/* Header with filter integration */}
+              {/* Header with view mode toggle and filter integration */}
               <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-                <h3 className="text-lg font-bold text-white">3D World</h3>
+                <div className="flex items-center gap-4">
+                  <h3 className="text-lg font-bold text-white">{worldViewMode === '3d' ? '3D World' : 'Semantic Canvas'}</h3>
+                  <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+                    <button 
+                      onClick={() => setWorldViewMode('3d')} 
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${worldViewMode === '3d' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      <Globe size={14} />
+                      3D View
+                    </button>
+                    <button 
+                      onClick={() => setWorldViewMode('semantic')} 
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${worldViewMode === 'semantic' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      <Zap size={14} />
+                      Semantic
+                    </button>
+                  </div>
+                </div>
                 <FilterBadge count={0} onClick={() => setShowUnifiedFilters(true)} />
               </div>
               <InlineFilterBar activeView="world" />
               <div className="flex-1">
-                <WorldRenderer
-                  graphData={graphViewMode === 'GLOBAL' ? globalGraphData : (assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] })}
-                  nearbyUsers={nearbyUsers}
-                  currentUserId={user?.id}
-                  onNodeSelect={(node) => {
-                    const asset = assets.find(a => a.id === node.id);
-                    if (asset) {
-                      setSelectedAssetId(asset.id);
-                    }
-                  }}
-                  onPositionChange={(pos) => {
-                    if (avatar) {
-                      updatePosition(pos, [0, 0, 0, 1], avatar.lastSector);
-                    }
-                  }}
-                />
+                {worldViewMode === '3d' ? (
+                  <WorldRenderer
+                    graphData={graphViewMode === 'GLOBAL' ? globalGraphData : (assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] })}
+                    nearbyUsers={nearbyUsers}
+                    currentUserId={user?.id}
+                    onNodeSelect={(node) => {
+                      const asset = assets.find(a => a.id === node.id);
+                      if (asset) {
+                        setSelectedAssetId(asset.id);
+                      }
+                    }}
+                    onPositionChange={(pos) => {
+                      if (avatar) {
+                        updatePosition(pos, [0, 0, 0, 1], avatar.lastSector);
+                      }
+                    }}
+                  />
+                ) : (
+                  <SemanticCanvas assets={assets} />
+                )}
               </div>
             </div>
           )}

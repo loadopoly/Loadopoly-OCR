@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.5.4] - 2026-01-11
+
+### Changed
+- **Semantic View Integration** - Semantic Canvas is now a selectable sub-view within 3D World:
+  - Removed Semantic View from the main sidebar navigation
+  - Added view mode toggle in 3D World header (3D View / Semantic)
+  - Streamlined navigation with cleaner sidebar structure
+  - Semantic Canvas dynamically loads within the 3D World container
+
+### Removed
+- Standalone Semantic View sidebar item (now accessible via 3D World view toggle)
+- `semantic` ViewMode type from FilterContext (consolidated into `world` view)
+
 ## [2.5.3] - 2026-01-11
 
 ### Added

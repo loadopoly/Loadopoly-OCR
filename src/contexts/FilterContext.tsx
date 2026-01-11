@@ -27,7 +27,7 @@ export type FilterDimension =
   | 'contested'     // Contested/restricted items
   | 'source';       // Source collection
 
-export type ViewMode = 'graph' | 'world' | 'database' | 'curator' | 'semantic';
+export type ViewMode = 'graph' | 'world' | 'database' | 'curator';
 
 export interface FilterValue {
   dimension: FilterDimension;

@@ -1,4 +1,35 @@
-# 🚀 GeoGraph Node: v2.5.3 Release Notes
+# 🚀 GeoGraph Node: v2.5.4 Release Notes
+
+## 🔀 v2.5.4 - Semantic View Integration (2026-01-11)
+
+This patch consolidates the Semantic Canvas as a **dependent sub-view** within 3D World, streamlining navigation.
+
+### 🎯 Changes
+
+| Before | After |
+|--------|-------|
+| Semantic View as standalone sidebar item | Integrated as toggle within 3D World |
+| 5 primary visualization views | 4 primary views (cleaner sidebar) |
+| Separate navigation context | Unified world exploration context |
+
+### 🔄 3D World View Modes
+
+The 3D World now supports two visualization modes:
+
+| Mode | Icon | Description |
+|------|------|-------------|
+| **3D View** | 🌐 | Immersive WebGL metaverse navigation |
+| **Semantic** | ⚡ | 2D semantic canvas for NLP clustering |
+
+Toggle between modes using the header buttons in 3D World.
+
+### 📝 Technical Notes
+
+- Removed `semantic` from `ViewMode` type in FilterContext
+- Added `worldViewMode` state (`'3d' | 'semantic'`) to App.tsx
+- SemanticCanvas component now renders conditionally within WorldRenderer container
+
+---
 
 ## 🎛️ v2.5.3 - Dynamic Filter Dependency System (2026-01-12)
 
