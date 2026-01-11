@@ -3,6 +3,51 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.5.5] - 2026-01-11
+
+### Added
+- **Historian-Informed Filter System** - Comprehensive expansion of filter dimensions designed by Digital Transformation Public Historians:
+  - **24 Filter Dimensions** organized into 6 thematic clusters:
+    - *Temporal*: Era, Historical Period, Document Age
+    - *Spatial*: GIS Zone, Geographic Scale, Place Type
+    - *Content Classification*: Category, Scan Type, Media Type, Subject Matter
+    - *Knowledge Graph*: Node Type, Connection Density, Narrative Role
+    - *Provenance & Trust*: License, Confidence, Verification Level, Contested
+    - *Discovery Modes*: Source, Status, Entities, Relevance, Serendipity Score, Research Potential
+
+- **Historical Period Mapping** - Intelligent era-to-period derivation:
+  - Victorian Era, Edwardian Period, Roaring Twenties, Jazz Age, Art Deco
+  - Great Depression, Swing Era, WWII Home Front, Atomic Age
+  - Mid-Century Modern, Space Age, Counterculture, Civil Rights Era
+  - Disco Era, Digital Dawn, Information Age, Social Media Era
+
+- **25+ Quick Filter Presets** - New historian and discovery-focused presets:
+  - *Trust & Verification*: Expert Verified, Community Curated
+  - *Historical Periods*: Turn of Century (1890s-1910s), Interwar Period (1920s-1930s), Postwar Modern (1950s-1970s)
+  - *Discovery Modes*: Serendipity High, Research Goldmine, Hidden Connections, Lonely Artifacts
+  - *Subject-Focused*: People Stories, Place Histories, Ephemera Treasures
+  - *Narrative Roles*: Narrative Anchors, Context Builders
+
+- **Advanced Utility Functions** for dynamic dimension derivation:
+  - `calculateSerendipityScore()` - Measures surprise potential from rare entities, contested status, cross-category links
+  - `calculateResearchPotential()` - Scores scholarly value from entity richness, graph connectivity, confidence
+  - `getConnectionDensity()` - Classifies graph role as Isolated/Linked/Hub based on connection count
+  - `deriveNarrativeRole()` - Identifies story function: Protagonist, Setting, Evidence, Context
+  - `deriveMediaType()` - Classifies format: Photograph, Map, Letter, Newspaper, etc.
+  - `deriveGeographicScale()` - Determines scope: Local, Regional, National, International
+
+- **Enhanced Dependency Graph** - 25+ filter relationships with historian-informed cascades:
+  - Era → Historical Period, Document Age (automatic derivation)
+  - Subject Matter → Narrative Role (content-to-story mapping)
+  - Connection Density → Research Potential (hub identification)
+  - Verification Level → Confidence (trust propagation)
+
+### Changed
+- **FilterContext.tsx** - Complete rewrite of dimension metadata with rich descriptions
+- **UnifiedFilterPanel.tsx** - Extended to support all 24 dimensions with new icons
+- **FilterDependencyVisualizer.tsx** - Reorganized node positions into thematic clusters
+- **applyFilterToAsset()** - Context-aware filtering with full asset corpus access
+
 ## [2.5.4] - 2026-01-11
 
 ### Changed
