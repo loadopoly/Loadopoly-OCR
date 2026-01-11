@@ -6,6 +6,7 @@ See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent majo
 ## [2.5.3] - 2026-01-11
 
 ### Added
+- **Social Hub** - Unified interface condensing Communities, Messaging, and Social Returns (GARD) into a single, curated social experience.
 - **Dynamic Filter Dependency System** - Comprehensive interdependent filtering across views:
   - `FilterContext` - Centralized React context managing filter state across all views
   - 12 filter dimensions: category, era, license, nodeType, zone, scanType, status, confidence, entities, relevance, contested, source
