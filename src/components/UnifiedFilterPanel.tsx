@@ -94,7 +94,6 @@ const VIEW_ICONS: Record<ViewMode, React.ReactNode> = {
   world: <Globe size={14} />,
   database: <Database size={14} />,
   curator: <ShieldCheck size={14} />,
-  semantic: <Layers size={14} />,
 };
 
 const QUICK_FILTER_INFO: Record<QuickFilterPreset, { label: string; icon: React.ReactNode; description: string }> = {
@@ -389,7 +388,6 @@ function ViewSyncToggle({ view, isSynced, onToggle }: { view: ViewMode; isSynced
     world: '3D World',
     database: 'Structure DB',
     curator: 'Curator Mode',
-    semantic: 'Semantic View',
   };
   
   return (
