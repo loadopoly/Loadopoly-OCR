@@ -1,4 +1,133 @@
-# 🚀 GeoGraph Node: v2.5.6 Release Notes
+# 🚀 GeoGraph Node: v2.5.7 Release Notes
+
+## 🧬 v2.5.7 - Cluster Synchronizer Curator Tool (2026-01-11)
+
+### 🎯 Overview
+A powerful LLM-powered curator tool for **synchronizing dimension values** across thematic clusters, enabling corpus improvement through **structured classification** and **similarity-based proxy learning**.
+
+### 💡 The Philosophy
+> *"Structured data enables corpus improvement by proxy—as we classify new documents, the accumulated knowledge refines future classifications through learned correlations."*
+
+This release introduces a feedback loop where:
+1. **LLM classifies** individual documents into structured dimension values
+2. **Mappings are learned** between raw/derived values and structured classifications
+3. **Similarity matching** enables proxy classification for new data
+4. **Corpus improves** through accumulated datum correlations
+
+---
+
+### 🗄️ 6 Structured Cluster Columns
+
+New JSONB columns for storing synchronized, LLM-classified dimension values:
+
+| Column | Dimensions | Purpose |
+|--------|------------|---------|
+| `STRUCTURED_TEMPORAL` | Era, Historical Period, Document Age | Normalized time classification |
+| `STRUCTURED_SPATIAL` | Zone, Geographic Scale, Place Type | Geographic harmonization |
+| `STRUCTURED_CONTENT` | Category, Scan Type, Media Type, Subject Matter | Content standardization |
+| `STRUCTURED_KNOWLEDGE_GRAPH` | Node Type, Connection Density, Narrative Role | Graph structure classification |
+| `STRUCTURED_PROVENANCE` | License, Verification Level, Contested | Trust normalization |
+| `STRUCTURED_DISCOVERY` | Source, Entity Types, Serendipity, Research Potential | Discovery scoring |
+
+### 📋 Classification Metadata
+
+Each classified asset tracks:
+
+| Field | Description |
+|-------|-------------|
+| `CLASSIFICATION_LLM` | Which LLM performed classification (Gemini, GPT-4o, Claude, Ollama) |
+| `CLASSIFICATION_DATE` | When classification occurred |
+| `CLASSIFICATION_VERSION` | Schema version (v1.0.0) |
+| `CLASSIFICATION_CONFIDENCE` | Overall confidence score |
+
+---
+
+### 🔧 ClusterSynchronizer Component
+
+Interactive curator tool for structured classification:
+
+**Features:**
+- 🧠 **Per-cluster LLM classification** with tailored prompts
+- 📦 **Bulk sync** for corpus-wide batch processing
+- ⏸️ **Progress controls** (pause, resume, skip)
+- 📊 **Classification status** per asset
+- 📤 **Export** results as JSON
+- 🔗 **Learned mappings** panel for proxy classification insights
+
+**Workflow:**
+```
+Select Asset → Expand Cluster → Classify with LLM → Review → Save
+                    ↓
+              Learn Mapping → Apply to Similar Documents
+```
+
+---
+
+### 🔄 Similarity-Based Proxy Classification
+
+New tables for corpus improvement through accumulated correlations:
+
+| Table | Purpose |
+|-------|---------|
+| `structured_classification_mappings` | Raw value → Structured value correlations |
+| `classification_audit_log` | Provenance tracking for all classifications |
+| `cluster_dimension_statistics` | Corpus-wide dimension distributions |
+
+**Helper Functions:**
+- `find_structured_mapping(cluster, dimension, raw_value)` → Similar structured values
+- `get_dimension_distribution(cluster, dimension)` → Value frequency analysis
+- `upsert_classification_mapping(...)` → Learn new correlations
+
+---
+
+### 🔍 Classification Status Filter
+
+New filter dimension to separate structured from unstructured data:
+
+| Status | Description |
+|--------|-------------|
+| `structured` | All 6 clusters classified |
+| `partial` | Some clusters classified |
+| `unstructured` | No structured classification |
+
+**Quick Filter Presets:**
+- **Structured Only** - Fully classified corpus
+- **Unstructured Only** - Assets needing classification
+- **Partially Classified** - In-progress classification
+
+---
+
+### 📊 Database Schema
+
+New SQL file: `sql/STRUCTURED_CLUSTER_SCHEMA.sql`
+
+```sql
+-- 10 new columns on historical_documents_global
+ALTER TABLE historical_documents_global
+ADD COLUMN STRUCTURED_TEMPORAL JSONB,
+ADD COLUMN STRUCTURED_SPATIAL JSONB,
+ADD COLUMN STRUCTURED_CONTENT JSONB,
+ADD COLUMN STRUCTURED_KNOWLEDGE_GRAPH JSONB,
+ADD COLUMN STRUCTURED_PROVENANCE JSONB,
+ADD COLUMN STRUCTURED_DISCOVERY JSONB,
+ADD COLUMN CLASSIFICATION_LLM TEXT,
+ADD COLUMN CLASSIFICATION_DATE TIMESTAMPTZ,
+ADD COLUMN CLASSIFICATION_VERSION TEXT,
+ADD COLUMN CLASSIFICATION_CONFIDENCE NUMERIC(4,3);
+```
+
+**Indexes:** GIN indexes on all JSONB columns for fast querying.
+**RLS:** Public read, authenticated write policies.
+
+---
+
+### 📝 Technical Notes
+- New TypeScript types: `StructuredTemporalCluster`, `StructuredSpatialCluster`, etc.
+- `getClassificationStatus()` utility function
+- 25th filter dimension: `classificationStatus`
+- 3 new quick filter presets for classification workflow
+
+---
 
 ## 📜 v2.5.6 - Historian-Informed Discovery Filters (2026-01-11)
 

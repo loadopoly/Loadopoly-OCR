@@ -182,6 +182,91 @@ export interface HistoricalDocumentMetadata {
   IS_ENTERPRISE?: boolean; // Flag for enterprise-only corpus
   USER_ID?: string | null; // Supabase auth user ID
   ORIGINAL_IMAGE_URL?: string | null; // Public URL from Supabase Storage
+
+  // ============================================
+  // STRUCTURED CLUSTER CLASSIFICATION FIELDS
+  // LLM-synchronized dimension values for corpus consistency
+  // ============================================
+  
+  /** Structured temporal classification: era, historicalPeriod, documentAge */
+  STRUCTURED_TEMPORAL?: StructuredTemporalCluster | null;
+  
+  /** Structured spatial classification: zone, geographicScale, placeType */
+  STRUCTURED_SPATIAL?: StructuredSpatialCluster | null;
+  
+  /** Structured content classification: category, scanType, mediaType, subjectMatter */
+  STRUCTURED_CONTENT?: StructuredContentCluster | null;
+  
+  /** Structured graph classification: nodeType, connectionDensity, narrativeRole */
+  STRUCTURED_KNOWLEDGE_GRAPH?: StructuredKnowledgeGraphCluster | null;
+  
+  /** Structured provenance classification: license, confidence, verificationLevel, contested */
+  STRUCTURED_PROVENANCE?: StructuredProvenanceCluster | null;
+  
+  /** Structured discovery classification: source, status, entityTypes, serendipityScore, researchPotential */
+  STRUCTURED_DISCOVERY?: StructuredDiscoveryCluster | null;
+  
+  /** Name of the LLM provider that performed the structured classification */
+  CLASSIFICATION_LLM?: string | null;
+  
+  /** Timestamp when the structured classification was performed */
+  CLASSIFICATION_DATE?: string | null;
+  
+  /** Version of the classification schema used */
+  CLASSIFICATION_VERSION?: string | null;
+  
+  /** Overall confidence score for the structured classification */
+  CLASSIFICATION_CONFIDENCE?: number | null;
+}
+
+// ============================================
+// Structured Cluster Types
+// ============================================
+
+export interface StructuredClusterBase {
+  derivedFromFields: string[];
+  confidence: number;
+}
+
+export interface StructuredTemporalCluster extends StructuredClusterBase {
+  era: string;
+  historicalPeriod: string[];
+  documentAge: 'Contemporary' | 'Modern' | 'Historic' | 'Antique' | 'Unknown';
+}
+
+export interface StructuredSpatialCluster extends StructuredClusterBase {
+  zone: string;
+  geographicScale: 'Local' | 'Regional' | 'National' | 'International' | 'Unknown';
+  placeType: 'Urban' | 'Suburban' | 'Rural' | 'Industrial' | 'Commercial' | 'Residential' | 'Sacred' | 'Natural' | 'Unknown';
+}
+
+export interface StructuredContentCluster extends StructuredClusterBase {
+  category: string;
+  scanType: 'DOCUMENT' | 'ITEM' | 'SCENERY';
+  mediaType: string;
+  subjectMatter: 'People' | 'Places' | 'Events' | 'Commerce' | 'Religion' | 'Government' | 'Culture' | 'Nature' | 'Other';
+}
+
+export interface StructuredKnowledgeGraphCluster extends StructuredClusterBase {
+  nodeType: 'DOCUMENT' | 'PERSON' | 'LOCATION' | 'ORGANIZATION' | 'DATE' | 'CONCEPT';
+  connectionDensity: 'Isolated' | 'Linked' | 'Hub';
+  narrativeRole: 'Protagonist' | 'Setting' | 'Evidence' | 'Context';
+  graphNodeCount: number;
+  graphEdgeCount: number;
+}
+
+export interface StructuredProvenanceCluster extends StructuredClusterBase {
+  license: string;
+  verificationLevel: 'Unverified' | 'Community' | 'Expert' | 'Institutional';
+  contested: boolean;
+}
+
+export interface StructuredDiscoveryCluster extends StructuredClusterBase {
+  source: string;
+  status: string;
+  entityTypes: string[];
+  serendipityScore: 'low' | 'medium' | 'high';
+  researchPotential: 'low' | 'medium' | 'high';
 }
 
 export interface DigitalAsset {

@@ -54,6 +54,9 @@ export type FilterDimension =
   | 'relevance'        // Relevance score threshold
   | 'serendipityScore' // Likelihood of surprising connections
   | 'researchPotential'// Potential for new discoveries
+  
+  // === CLASSIFICATION STATUS ===
+  | 'classificationStatus' // Structured vs unstructured classification state
 
 export type ViewMode = 'graph' | 'world' | 'database' | 'curator';
 
@@ -246,6 +249,11 @@ export type QuickFilterPreset =
   | 'narrative_anchors'   // Strong protagonist/evidence roles
   | 'context_builders'    // Setting/context materials
   
+  // === CLASSIFICATION STATUS ===
+  | 'structured_only'     // Only fully structured/classified assets
+  | 'unstructured_only'   // Assets needing structured classification
+  | 'partially_classified' // Assets with some but not all clusters classified
+  
   | 'clear_all';
 
 const QUICK_FILTER_DEFINITIONS: Record<QuickFilterPreset, FilterValue[]> = {
@@ -331,6 +339,17 @@ const QUICK_FILTER_DEFINITIONS: Record<QuickFilterPreset, FilterValue[]> = {
   ],
   context_builders: [
     { dimension: 'narrativeRole', value: ['Setting', 'Context'], operator: 'in' },
+  ],
+  
+  // === CLASSIFICATION STATUS ===
+  structured_only: [
+    { dimension: 'classificationStatus', value: 'structured', operator: 'eq' },
+  ],
+  unstructured_only: [
+    { dimension: 'classificationStatus', value: 'unstructured', operator: 'eq' },
+  ],
+  partially_classified: [
+    { dimension: 'classificationStatus', value: 'partial', operator: 'eq' },
   ],
   
   clear_all: [],
@@ -596,6 +615,50 @@ function deriveGeographicScale(record: any): string {
   return 'Local';
 }
 
+// Determine classification status (structured vs unstructured)
+function getClassificationStatus(record: any): 'structured' | 'partial' | 'unstructured' {
+  if (!record) return 'unstructured';
+  
+  const clusters = [
+    record.STRUCTURED_TEMPORAL,
+    record.STRUCTURED_SPATIAL,
+    record.STRUCTURED_CONTENT,
+    record.STRUCTURED_KNOWLEDGE_GRAPH,
+    record.STRUCTURED_PROVENANCE,
+    record.STRUCTURED_DISCOVERY,
+  ];
+  
+  const classifiedCount = clusters.filter(c => c !== null && c !== undefined).length;
+  
+  if (classifiedCount === 6) return 'structured';
+  if (classifiedCount > 0) return 'partial';
+  return 'unstructured';
+}
+
+// Get similarity score for proxy classification
+function getSimilarityBasedValue(
+  rawValue: string,
+  dimension: FilterDimension,
+  mappings: Array<{ rawValue: string; structuredValue: string; confidence: number }>
+): string | null {
+  // Exact match first
+  const exactMatch = mappings.find(m => m.rawValue.toLowerCase() === rawValue.toLowerCase());
+  if (exactMatch && exactMatch.confidence >= 0.8) {
+    return exactMatch.structuredValue;
+  }
+  
+  // Partial match - check if raw value contains or is contained by mapping
+  const partialMatch = mappings.find(m => 
+    m.rawValue.toLowerCase().includes(rawValue.toLowerCase()) ||
+    rawValue.toLowerCase().includes(m.rawValue.toLowerCase())
+  );
+  if (partialMatch && partialMatch.confidence >= 0.6) {
+    return partialMatch.structuredValue;
+  }
+  
+  return null;
+}
+
 function extractDimensionValues(assets: DigitalAsset[], dimension: FilterDimension): any[] {
   const values = new Set<any>();
   
@@ -691,6 +754,11 @@ function extractDimensionValues(assets: DigitalAsset[], dimension: FilterDimensi
         break;
       case 'researchPotential':
         values.add(calculateResearchPotential(asset));
+        break;
+        
+      // === CLASSIFICATION STATUS ===
+      case 'classificationStatus':
+        values.add(getClassificationStatus(record));
         break;
     }
   });
@@ -799,6 +867,11 @@ function applyFilterToAsset(asset: DigitalAsset, filter: FilterValue, allAssets:
       actualValue = calculateResearchPotential(asset);
       break;
       
+    // === CLASSIFICATION STATUS ===
+    case 'classificationStatus':
+      actualValue = getClassificationStatus(record);
+      break;
+      
     default:
       return true;
   }
@@ -895,7 +968,9 @@ export function FilterProvider({ children, initialAssets = [], initialGraphData 
       // Provenance & Trust
       'license', 'confidence', 'verificationLevel', 'contested',
       // Discovery
-      'source', 'status', 'entities', 'relevance', 'serendipityScore', 'researchPotential'
+      'source', 'status', 'entities', 'relevance', 'serendipityScore', 'researchPotential',
+      // Classification Status
+      'classificationStatus'
     ];
     
     const dimensionLabels: Record<FilterDimension, { label: string; description: string; dataType: DimensionMetadata['dataType'] }> = {
@@ -933,6 +1008,9 @@ export function FilterProvider({ children, initialAssets = [], initialGraphData 
       relevance: { label: 'Relevance', description: 'Contextual importance score', dataType: 'number' },
       serendipityScore: { label: 'Serendipity', description: 'Potential for surprising discoveries', dataType: 'string' },
       researchPotential: { label: 'Research Potential', description: 'Value for scholarly investigation', dataType: 'string' },
+      
+      // === CLASSIFICATION STATUS ===
+      classificationStatus: { label: 'Classification', description: 'Structured classification status: structured, partial, or unstructured', dataType: 'string' },
     };
     
     dimensions.forEach(dim => {
