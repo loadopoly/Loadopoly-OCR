@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, Zap, ScanLine, MapPin, ArrowRight, Layers, WifiOff, ZoomIn, ZoomOut } from 'lucide-react';
+import ARSafetyWarning from './ARSafetyWarning';
 
 interface ARSceneProps {
   onCapture: (file: File) => void;
@@ -18,8 +19,11 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   const [zoomSupported, setZoomSupported] = useState(false);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1 });
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [showSafetyWarning, setShowSafetyWarning] = useState(true);
 
   useEffect(() => {
+    if (showSafetyWarning) return;
+
     // 1. Request camera + AR session
     navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
@@ -65,7 +69,7 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
         clearInterval(interval);
         // We'll handle cleanup in a separate effect or just here if we don't depend on stream
     };
-  }, []);
+  }, [showSafetyWarning]);
 
   useEffect(() => {
     return () => {
@@ -110,6 +114,8 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden">
+      {showSafetyWarning && <ARSafetyWarning onAccept={() => setShowSafetyWarning(false)} />}
+      
       <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
       
       {/* Flash Overlay */}

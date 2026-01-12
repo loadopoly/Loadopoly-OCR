@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.5.9] - 2026-01-12
+
+### Fixed
+- **Story Narrator Engine Initialization** - Fixed issue where "Begin Your Journey" action would fail due to stale narrative engine state using `useMemo`.
+- **Story Start Fallback** - Added automatic fallback to highest relevance node if narrative suggestion is unavailable.
+- **World Rendering Sync** - Added state-stale detection and recovery for node selection in WorldRenderer.
+- **Narrative Loading UI** - Added loading state for story chapter generation to improve UX.
+
+### Added
+- **AR Safety Warning** - Integrated mandatory safety briefing before initiating AR camera sessions.
+
 ## [2.5.8] - 2026-01-11
 
 ### Added
