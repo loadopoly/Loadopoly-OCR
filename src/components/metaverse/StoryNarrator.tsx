@@ -312,7 +312,7 @@ export function StoryNarrator({
   onToggleExpand,
 }: StoryNarratorProps) {
   // State
-  const [narrativeEngine] = useState(() => createNarrativeEngine(graphData, assets));
+  const narrativeEngine = useMemo(() => createNarrativeEngine(graphData, assets), [graphData, assets]);
   const [currentChapter, setCurrentChapter] = useState<StoryChapter | null>(null);
   const [storyPath, setStoryPath] = useState<StoryPath | null>(null);
   const [pathIndex, setPathIndex] = useState(0);
@@ -352,9 +352,14 @@ export function StoryNarrator({
       if (suggestion) {
         onNodeSelect(suggestion);
         setJourneyCount(prev => prev + 1);
+      } else if (graphData.nodes.length > 0) {
+        // Fallback to highest relevance node if engine suggestion fails
+        const bestNode = [...graphData.nodes].sort((a, b) => b.relevance - a.relevance)[0];
+        onNodeSelect(bestNode);
+        setJourneyCount(prev => prev + 1);
       }
     }
-  }, [narrativeEngine, onNodeSelect]);
+  }, [narrativeEngine, onNodeSelect, graphData.nodes]);
 
   // Reset the journey
   const handleResetJourney = useCallback(() => {
@@ -438,6 +443,16 @@ export function StoryNarrator({
             </div>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  if (!currentChapter) {
+    return (
+      <div className="h-full flex flex-col items-center justify-center bg-slate-900 text-white p-8 text-center">
+        <div className="w-16 h-16 border-4 border-primary-500/20 border-t-primary-500 rounded-full animate-spin mb-6"></div>
+        <h3 className="text-xl font-bold mb-2">Consulting the Chronicles</h3>
+        <p className="text-slate-400">Finding records related to {selectedNode.label}...</p>
       </div>
     );
   }

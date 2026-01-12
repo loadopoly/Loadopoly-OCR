@@ -734,7 +734,15 @@ export default function WorldRenderer({
     }
     
     // Find the WorldNode
-    const worldNode = worldData.nodes.find(n => n.id === node.id);
+    let worldNode = worldData.nodes.find(n => n.id === node.id);
+
+    // Fallback if worldData is stale (not yet updated from graphData)
+    if (!worldNode && graphData.nodes.find(n => n.id === node.id)) {
+      const initial = initializeForceLayout(graphData);
+      setWorldData(initial);
+      worldNode = initial.nodes.find(n => n.id === node.id);
+    }
+    
     if (worldNode) {
       setSelectedNode(worldNode);
       onNodeSelect?.(worldNode);
@@ -742,7 +750,7 @@ export default function WorldRenderer({
       // Center view on node
       setOffset({ x: -worldNode.worldPosition[0] * zoom * 4, y: -worldNode.worldPosition[1] * zoom * 4 });
     }
-  }, [worldData.nodes, zoom, onNodeSelect]);
+  }, [worldData.nodes, graphData, zoom, onNodeSelect]);
 
   const handleZoomIn = () => setZoom(z => Math.min(5, z * 1.2));
   const handleZoomOut = () => setZoom(z => Math.max(0.2, z / 1.2));
