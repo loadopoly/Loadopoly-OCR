@@ -1,6 +1,26 @@
-# 🚀 GeoGraph Node: v2.5.7 Release Notes
+# 🚀 GeoGraph Node: v2.6.0 Release Notes
 
-## 🧬 v2.5.7 - Cluster Synchronizer Curator Tool (2026-01-11)
+## 🧬 v2.6.0 - High-Concurrency Processing Infrastructure (2026-01-12)
+
+### 🎯 Overview
+A major architectural overhaul of the data processing pipeline, introducing server-side background queues, fault-tolerant API consumption, and client-side performance optimizations.
+
+### 💡 The Philosophy
+> *"Scalability is not just about doing things faster, but about doing them correctly, resiliently, and without blocking the user's path."*
+
+This release transforms the GeoGraph processing engine from a sequential, blocking model to a high-concurrency, asynchronous infrastructure.
+
+### 🛠️ Key Architectural Pillars
+
+*   **Asynchronous Processing Queue**: Offloads OCR and NLP analysis to a server-side Supabase/Edge Function worker pool. This enables large batch uploads without UI freezing.
+*   **Circuit Breaker Logic**: Protects against cascading failures in external LLM providers (Gemini). The system automatically detects outages and falls back to queued retries.
+*   **Intelligent Image Compression**: Reduces upload latency and storage costs by pre-compressing images on the client using the Canvas API before transmission.
+*   **Web Worker Parallelism**: Dedicated Worker Pool for similarity matching and text analysis, keeping the main UI thread at a smooth 60fps.
+*   **Real-time Monitoring**: A new Queue Monitor interface providing live feedback on the status of server infrastructure and job progress.
+
+---
+
+# 🧬 v2.5.7 - Cluster Synchronizer Curator Tool (2026-01-11)
 
 ### 🎯 Overview
 A powerful LLM-powered curator tool for **synchronizing dimension values** across thematic clusters, enabling corpus improvement through **structured classification** and **similarity-based proxy learning**.

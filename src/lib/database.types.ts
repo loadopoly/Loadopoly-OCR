@@ -1038,11 +1038,106 @@ export interface Database {
           JOINED_AT?: string
         }
       }
+      processing_queue: {
+        Row: {
+          ID: string
+          USER_ID: string | null
+          ASSET_ID: string
+          IMAGE_PATH: string
+          SCAN_TYPE: string
+          PRIORITY: number
+          STATUS: string
+          PROGRESS: number | null
+          STAGE: string | null
+          RETRY_COUNT: number | null
+          MAX_RETRIES: number | null
+          LAST_ERROR: string | null
+          ERROR_CODE: string | null
+          WORKER_ID: string | null
+          LOCKED_AT: string | null
+          LOCK_TIMEOUT_SECONDS: number | null
+          CREATED_AT: string
+          STARTED_AT: string | null
+          COMPLETED_AT: string | null
+          UPDATED_AT: string
+          RESULT_DATA: Json | null
+          METADATA: Json | null
+          LATITUDE: number | null
+          LONGITUDE: number | null
+        }
+        Insert: {
+          ID?: string
+          USER_ID?: string | null
+          ASSET_ID: string
+          IMAGE_PATH: string
+          SCAN_TYPE?: string
+          PRIORITY?: number
+          STATUS?: string
+          PROGRESS?: number | null
+          STAGE?: string | null
+          RETRY_COUNT?: number | null
+          MAX_RETRIES?: number | null
+          LAST_ERROR?: string | null
+          ERROR_CODE?: string | null
+          WORKER_ID?: string | null
+          LOCKED_AT?: string | null
+          LOCK_TIMEOUT_SECONDS?: number | null
+          CREATED_AT?: string
+          STARTED_AT?: string | null
+          COMPLETED_AT?: string | null
+          UPDATED_AT?: string
+          RESULT_DATA?: Json | null
+          METADATA?: Json | null
+          LATITUDE?: number | null
+          LONGITUDE?: number | null
+        }
+        Update: {
+          ID?: string
+          USER_ID?: string | null
+          ASSET_ID?: string
+          IMAGE_PATH?: string
+          SCAN_TYPE?: string
+          PRIORITY?: number
+          STATUS?: string
+          PROGRESS?: number | null
+          STAGE?: string | null
+          RETRY_COUNT?: number | null
+          MAX_RETRIES?: number | null
+          LAST_ERROR?: string | null
+          ERROR_CODE?: string | null
+          WORKER_ID?: string | null
+          LOCKED_AT?: string | null
+          LOCK_TIMEOUT_SECONDS?: number | null
+          CREATED_AT?: string
+          STARTED_AT?: string | null
+          COMPLETED_AT?: string | null
+          UPDATED_AT?: string
+          RESULT_DATA?: Json | null
+          METADATA?: Json | null
+          LATITUDE?: number | null
+          LONGITUDE?: number | null
+        }
+      }
     }
     Views: {
-      [_ in never]: never
+      queue_stats: {
+        Row: {
+          status: string | null
+          count: number | null
+          avg_age_seconds: number | null
+          oldest_job: string | null
+          newest_job: string | null
+          retry_attempts: number | null
+        }
+      }
     }
     Functions: {
+      cleanup_completed_jobs: {
+        Args: {
+          p_days_old: number
+        }
+        Returns: number
+      }
       delete_user_account: {
         Args: Record<string, never>
         Returns: void

@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.6.0] - 2026-01-12
+
+### Added
+- **Architectural Improvements for Data Processing**:
+  - Implemented background processing queue using Supabase and Postgres.
+  - Added [src/services/processingQueueService.ts](src/services/processingQueueService.ts) to manage server-side OCR orchestration.
+  - Integrated client-side image compression in [src/lib/imageCompression.ts](src/lib/imageCompression.ts) using Canvas API.
+  - Implemented **Circuit Breaker** pattern in [src/lib/circuitBreaker.ts](src/lib/circuitBreaker.ts) for Gemini API fault tolerance.
+  - Added **Worker Pool** in [src/lib/workerPool.ts](src/lib/workerPool.ts) and [src/workers/parallelWorker.ts](src/workers/parallelWorker.ts) for off-thread parallel processing.
+  - Created [src/components/QueueMonitor.tsx](src/components/QueueMonitor.tsx) for real-time infrastructure health monitoring.
+  - Added master roadmap in [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md).
+  - Added SQL schemas for [processing queue](sql/PROCESSING_QUEUE_SCHEMA.sql) and [vector embeddings](sql/VECTOR_EMBEDDINGS_SCHEMA.sql).
+
+### Changed
+- **Gemini Integration** - Updated [src/services/geminiService.ts](src/services/geminiService.ts) to use the Circuit Breaker, preventing cascading failures during API outages.
+- **Frontend Pipeline** - Refactored [src/App.tsx](src/App.tsx) to support background queuing, real-time status updates, and graceful client-side fallbacks.
+
 ## [2.5.9] - 2026-01-12
 
 ### Fixed
