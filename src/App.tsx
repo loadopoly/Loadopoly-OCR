@@ -68,6 +68,9 @@ import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
 import { redeemPhygitalCertificate } from './services/web3Service';
 import { getCurrentUser } from './lib/auth';
 import { fetchGlobalCorpus, contributeAssetToGlobalCorpus, fetchUserAssets } from './services/supabaseService';
+import { processingQueueService } from './services/processingQueueService';
+import { compressImage } from './lib/imageCompression';
+import { WorkerPool } from './lib/workerPool';
 import GraphVisualizer from './components/GraphVisualizer';
 import ContributeButton from './components/ContributeButton';
 import BundleCard from './components/BundleCard';
@@ -91,6 +94,7 @@ import IntegrationsHub from './components/IntegrationsHub';
 import { FilterProvider, useFilterContext } from './contexts/FilterContext';
 import UnifiedFilterPanel, { InlineFilterBar, FilterBadge } from './components/UnifiedFilterPanel';
 import { ClusterSyncStatsPanel, ClusterSyncButton } from './components/ClusterSyncStatsPanel';
+import { QueueMonitor } from './components/QueueMonitor';
 
 // --- Custom Hooks ---
 function useOnlineStatus() {
@@ -223,6 +227,41 @@ export default function App() {
   const [showUnifiedFilters, setShowUnifiedFilters] = useState(false);
   const [showClusterSyncStats, setShowClusterSyncStats] = useState(false);
   const [worldViewMode, setWorldViewMode] = useState<'3d' | 'semantic'>('3d');
+
+  // Initialize Worker Pool for parallel processing
+  const workerPool = useMemo(() => new WorkerPool(4), []);
+
+  // Initialize Processing Queue Service
+  useEffect(() => {
+    if (user?.id) {
+      processingQueueService.init(user.id);
+      
+      // Set callbacks for queue updates
+      processingQueueService.setCallbacks({
+        onJobStarted: (job) => {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, status: AssetStatus.PROCESSING, progress: 10 } : a
+          ));
+        },
+        onJobProgress: (job) => {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, progress: job.progress } : a
+          ));
+        },
+        onJobCompleted: (job) => {
+          // Re-fetch data or update successfully
+          if (user?.id) {
+            fetchUserAssets(user.id).then(assets => setLocalAssets(assets as any));
+          }
+        },
+        onJobFailed: (job) => {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, errorMessage: job.error } : a
+          ));
+        }
+      });
+    }
+  }, [user?.id]);
 
   // Avatar & Metaverse state
   const { avatar, nearbyUsers, currentSector, updatePosition } = useAvatar(user?.id || null);
@@ -652,13 +691,13 @@ export default function App() {
       const newAsset = await createInitialAsset(file);
       if (newAsset.sqlRecord) {
         newAsset.sqlRecord.SOURCE_COLLECTION = source;
-        newAsset.sqlRecord.IS_ENTERPRISE = false; // Initially not enterprise
+        newAsset.sqlRecord.IS_ENTERPRISE = false; 
       }
+      
+      // Update state immediately for UI feedback
       setLocalAssets(prev => [newAsset, ...prev]);
       
-      // Initial upload to Supabase as PENDING (Automatic Cloud Sync)
-      // SKIPPED: We skip initial Supabase upload to avoid RLS update errors (no UPDATE policy).
-      // The asset will be uploaded once processing is complete.
+      // Save locally as fallback
       await saveAsset(newAsset);
 
       if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
@@ -669,32 +708,25 @@ export default function App() {
         return;
       }
 
+      // Background Processing Queue Integration
       try {
+        const scanType = (file as any).scanType || selectedScanType || ScanType.DOCUMENT;
+        
+        await processingQueueService.queueFile(file, {
+          scanType,
+          metadata: {
+            DOCUMENT_TITLE: newAsset.sqlRecord?.DOCUMENT_TITLE,
+            SOURCE_COLLECTION: source
+          }
+        }, newAsset.id);
+        
+        announce("Asset queued for background processing.");
+      } catch (queueErr) {
+        console.error("Failed to queue for background processing, falling back to client-side:", queueErr);
+        // Fallback to legacy client-side pipeline if queue fails
         const processedAsset = await processAssetPipeline(newAsset, file);
         setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
         if (!user) await saveAsset(processedAsset);
-      } catch (processErr) {
-        console.error("Processing failed, marking for super-user review:", processErr);
-        const failedAsset: DigitalAsset = {
-          ...newAsset,
-          status: AssetStatus.FAILED,
-          progress: 100,
-          errorMessage: processErr instanceof Error ? processErr.message : String(processErr),
-          sqlRecord: {
-            ...newAsset.sqlRecord!,
-            PROCESSING_STATUS: AssetStatus.FAILED,
-            IS_ENTERPRISE: false, // Keep in global corpus for super-user
-            PRESERVATION_EVENTS: [
-              ...(newAsset.sqlRecord?.PRESERVATION_EVENTS || []),
-              { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: selectedLLM, outcome: "FAILURE" as const }
-            ]
-          }
-        };
-        setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? failedAsset : a));
-        
-        // Sync the failure to Supabase so it can be reviewed by admins (Automatic Cloud Sync)
-        const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-        contributeAssetToGlobalCorpus(failedAsset, user?.id, license as any, true).catch(e => console.error("Failed to sync error state", e));
       }
     } catch (err) {
       console.error("Ingestion failed:", err);
@@ -751,22 +783,39 @@ export default function App() {
       // Process assets from localAssets/globalAssets
       for (const asset of pendingAssets) {
           try {
-              if (asset.imageBlob) {
-                  const file = new File([asset.imageBlob], `reprocess_${asset.id}.jpg`, { type: 'image/jpeg' });
-                  const processedAsset = await processAssetPipeline(asset, file);
-                  // Update the state with processed asset
-                  if (isGlobalView) {
-                      setGlobalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+              if (asset.imageBlob || (asset.imageUrl && asset.imageUrl.startsWith('http'))) {
+                  let file: File;
+                  if (asset.imageBlob) {
+                      file = new File([asset.imageBlob], `reprocess_${asset.id}.jpg`, { type: 'image/jpeg' });
                   } else {
-                      setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
-                  }
-                  processedCount++;
-              } else if (asset.imageUrl && asset.imageUrl.startsWith('http')) {
-                  // Try to fetch the image from URL
-                  try {
                       const response = await fetch(asset.imageUrl);
                       const blob = await response.blob();
-                      const file = new File([blob], `reprocess_${asset.id}.jpg`, { type: blob.type });
+                      file = new File([blob], `reprocess_${asset.id}.jpg`, { type: blob.type });
+                  }
+
+                  if (isOnline) {
+                      // Use background queue
+                      try {
+                          await processingQueueService.queueFile(file, {
+                              scanType: (asset.sqlRecord?.SCAN_TYPE as ScanType) || ScanType.DOCUMENT,
+                              metadata: {
+                                  DOCUMENT_TITLE: asset.sqlRecord?.DOCUMENT_TITLE,
+                                  SOURCE_COLLECTION: asset.sqlRecord?.SOURCE_COLLECTION || "Reprocess"
+                              }
+                          }, asset.id);
+                          processedCount++;
+                      } catch (queueErr) {
+                          // Fallback to client-side
+                          const processedAsset = await processAssetPipeline(asset, file);
+                          if (isGlobalView) {
+                              setGlobalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+                          } else {
+                              setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+                          }
+                          processedCount++;
+                      }
+                  } else {
+                      // Offline: manual client-side processing
                       const processedAsset = await processAssetPipeline(asset, file);
                       if (isGlobalView) {
                           setGlobalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
@@ -774,9 +823,6 @@ export default function App() {
                           setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
                       }
                       processedCount++;
-                  } catch (fetchErr) {
-                      console.error(`Failed to fetch image for asset ${asset.id}:`, fetchErr);
-                      failedCount++;
                   }
               } else {
                   console.warn(`Asset ${asset.id} has no image data to process`);
@@ -939,9 +985,6 @@ export default function App() {
                 }
                 setLocalAssets(prev => [newAsset, ...prev]);
                 
-                // Initial upload to Supabase as PENDING if authenticated
-                // SKIPPED: We skip initial Supabase upload to avoid RLS update errors (no UPDATE policy).
-                // The asset will be uploaded once processing is complete.
                 await saveAsset(newAsset);
 
                 if (!isOnline) {
@@ -949,37 +992,24 @@ export default function App() {
                   return;
                 }
 
+                // Integration with background processing queue
                 try {
+                  await processingQueueService.queueFile(itemToProcess.file, {
+                    scanType: itemToProcess.scanType || selectedScanType || ScanType.DOCUMENT,
+                    priority: 3, 
+                    metadata: {
+                      DOCUMENT_TITLE: newAsset.sqlRecord?.DOCUMENT_TITLE,
+                      SOURCE_COLLECTION: "Batch Ingest"
+                    }
+                  }, newAsset.id);
+                  
+                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+                } catch (queueErr) {
+                  // Fallback to client-side
                   const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
                   setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
                   if (!user) await saveAsset(processedAsset);
                   setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
-                } catch (processErr: any) {
-                  console.error("Batch processing failed for item:", processErr);
-                  const failedAsset: DigitalAsset = {
-                    ...newAsset,
-                    status: AssetStatus.FAILED,
-                    progress: 100,
-                    errorMessage: processErr.message || String(processErr),
-                    sqlRecord: {
-                      ...newAsset.sqlRecord!,
-                      PROCESSING_STATUS: AssetStatus.FAILED,
-                      IS_ENTERPRISE: false,
-                      PRESERVATION_EVENTS: [
-                        ...(newAsset.sqlRecord?.PRESERVATION_EVENTS || []),
-                        { eventType: "GEMINI_PROCESSING", timestamp: new Date().toISOString(), agent: selectedLLM, outcome: "FAILURE" as const }
-                      ]
-                    }
-                  };
-                  setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? failedAsset : a));
-                  
-                  if (user?.id) {
-                    const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-                    await contributeAssetToGlobalCorpus(failedAsset, user.id, license as any, true);
-                  } else {
-                    await saveAsset(failedAsset);
-                  }
-                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: processErr.message || "Failed" } : i));
                 }
              } catch (e: any) {
                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Failed" } : i));
@@ -2045,9 +2075,22 @@ export default function App() {
                     </h3>
                     <button onClick={() => setShowProcessingPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
                 </div>
-                <div className="flex-1 overflow-auto p-2 space-y-2 custom-scrollbar">
-                    {/* Batch Queue Items */}
-                    {batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').map(item => (
+                <div className="flex-1 overflow-auto p-2 space-y-4 custom-scrollbar">
+                    {/* Server-Side Monitor Section */}
+                    {user?.id && (
+                        <div className="px-2 py-2 border-b border-slate-800/50 pb-4">
+                            <QueueMonitor userId={user.id} />
+                        </div>
+                    )}
+
+                    <div className="space-y-2">
+                        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-1 flex items-center gap-1.5">
+                            <Activity size={10} />
+                            Local & Batch Stream
+                        </h4>
+                        
+                        {/* Batch Queue Items */}
+                        {batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').map(item => (
                         <div key={item.id} className="p-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center gap-3">
                             <div className="w-10 h-10 bg-slate-800 rounded border border-slate-700 flex items-center justify-center">
                                 <ImageIcon size={16} className="text-slate-500" />

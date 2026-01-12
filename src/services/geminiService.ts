@@ -2,6 +2,7 @@ import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { GISMetadata, GraphData, TokenizationData, AssetStatus, ScanType, TaxonomyData, ItemAttributes, SceneryAttributes, ReadingOrderBlock } from "../types";
 import { validateGeminiResponse, sanitizeLLMOutput, formatValidationErrors } from "../lib/validation";
 import { geminiLogger as logger } from "../lib/logger";
+import { geminiCircuitBreaker } from "../lib/circuitBreaker";
 
 // Using Gemini 2.5 Flash as requested for optimized speed and efficient extraction
 const GEMINI_MODEL = "gemini-2.5-flash";
@@ -107,6 +108,15 @@ const getAiClient = () => {
 };
 
 export const processImageWithGemini = async (
+  file: File, 
+  location: { lat: number; lng: number } | null,
+  scanType: ScanType = ScanType.DOCUMENT,
+  debugMode: boolean = false
+): Promise<ProcessResponse> => {
+  return geminiCircuitBreaker.execute(() => processImageWithGeminiInternal(file, location, scanType, debugMode));
+};
+
+const processImageWithGeminiInternal = async (
   file: File, 
   location: { lat: number; lng: number } | null,
   scanType: ScanType = ScanType.DOCUMENT,
