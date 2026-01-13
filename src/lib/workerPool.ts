@@ -81,7 +81,7 @@ export class WorkerPool {
   private workerUrl: URL;
   private options: Required<WorkerPoolOptions>;
   private workers: Map<number, WorkerState> = new Map();
-  private taskQueue: QueuedTask[] = [];
+  private taskQueue: QueuedTask<any>[] = [];
   private nextWorkerId = 0;
   private nextTaskId = 0;
   private circuitOpen = false;
@@ -292,7 +292,7 @@ export class WorkerPool {
     return state;
   }
 
-  private enqueue(task: QueuedTask): void {
+  private enqueue(task: QueuedTask<any>): void {
     // Insert in priority order (higher priority first)
     const insertIndex = this.taskQueue.findIndex(t => t.priority < task.priority);
     if (insertIndex === -1) {
