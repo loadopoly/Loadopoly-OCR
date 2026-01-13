@@ -12,6 +12,7 @@ import {
   Share2,
   CheckCircle,
   AlertCircle,
+  Activity,
   Table as TableIcon,
   Search,
   Download,
@@ -229,7 +230,7 @@ export default function App() {
   const [worldViewMode, setWorldViewMode] = useState<'3d' | 'semantic'>('3d');
 
   // Initialize Worker Pool for parallel processing
-  const workerPool = useMemo(() => new WorkerPool(4), []);
+  const workerPool = useMemo(() => new WorkerPool('../workers/parallelWorker.ts', { maxWorkers: 4 }), []);
 
   // Initialize Processing Queue Service
   useEffect(() => {
@@ -2151,6 +2152,7 @@ export default function App() {
                             </div>
                         ))
                     )}
+                    </div>
                 </div>
                 <div className="p-3 border-t border-slate-800 bg-slate-950/50 rounded-b-xl space-y-2">
                     {isProcessing && (
