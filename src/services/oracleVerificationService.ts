@@ -251,11 +251,6 @@ class OracleVerificationService {
             body: JSON.stringify(verificationPayload),
           });
           return res.json();
-        },
-        {
-          maxFailures: 3,
-          resetTimeout: 30000,
-          name: `oracle_${provider.id}`,
         }
       );
 

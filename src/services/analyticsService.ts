@@ -290,26 +290,28 @@ class AnalyticsService {
         : BigInt(0);
 
       // Estimate savings
-      const expectedIndividualGas = batchEvents.reduce(
+      const expectedIndividualGas: bigint = batchEvents.reduce(
         (sum: bigint, e: any) => sum + BigInt(e.batchSize || 1) * avgGasPerMint,
         BigInt(0)
       );
-      const actualBatchGas = batchEvents.reduce(
+      const actualBatchGas: bigint = batchEvents.reduce(
         (sum: bigint, e: any) => sum + BigInt(e.gasUsed),
         BigInt(0)
       );
-      const gasSaved = expectedIndividualGas > actualBatchGas
-        ? expectedIndividualGas - actualBatchGas
-        : BigInt(0);
+      let gasSaved: bigint = BigInt(0);
+      if (expectedIndividualGas > actualBatchGas) {
+        gasSaved = expectedIndividualGas - actualBatchGas;
+      }
 
       const savingsPercentage = expectedIndividualGas > BigInt(0)
         ? Number((gasSaved * BigInt(100)) / (expectedIndividualGas || BigInt(1)))
         : 0;
 
       // Get current gas price
-      const gasPrice = this.provider
-        ? (await this.provider.getFeeData()).gasPrice || BigInt(30e9)
-        : BigInt(30e9);
+      const feeData = this.provider
+        ? await this.provider.getFeeData()
+        : null;
+      const gasPrice: bigint = BigInt(feeData?.gasPrice?.toString() || '30000000000');
 
       const metrics: GasMetrics = {
         timestamp: Date.now(),

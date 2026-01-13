@@ -146,7 +146,7 @@ class EdgeOCRService {
    */
   private async initializeWorkerForLanguage(language: string): Promise<void> {
     const worker = await createWorker(language, 1, {
-      logger: (m) => {
+      logger: (m: { status: string; progress: number }) => {
         if (m.status === 'recognizing text') {
           logger.debug('OCR progress', { progress: m.progress });
         }
@@ -431,7 +431,7 @@ class EdgeOCRService {
   ): EdgeOCRResult {
     const { data } = result;
     
-    const words: WordResult[] = data.words.map(word => ({
+    const words: WordResult[] = data.words.map((word: any) => ({
       text: word.text,
       confidence: word.confidence / 100,
       bbox: {
@@ -445,7 +445,7 @@ class EdgeOCRService {
       baseline: word.baseline,
     }));
 
-    const blocks: BlockResult[] = data.blocks.map(block => ({
+    const blocks: BlockResult[] = data.blocks.map((block: any) => ({
       text: block.text,
       confidence: block.confidence / 100,
       bbox: {
@@ -456,7 +456,7 @@ class EdgeOCRService {
         width: block.bbox.x1 - block.bbox.x0,
         height: block.bbox.y1 - block.bbox.y0,
       },
-      lines: block.lines.map(line => ({
+      lines: block.lines.map((line: any) => ({
         text: line.text,
         confidence: line.confidence / 100,
         bbox: {
@@ -467,7 +467,7 @@ class EdgeOCRService {
           width: line.bbox.x1 - line.bbox.x0,
           height: line.bbox.y1 - line.bbox.y0,
         },
-        words: line.words.map(w => ({
+        words: line.words.map((w: any) => ({
           text: w.text,
           confidence: w.confidence / 100,
           bbox: {
@@ -626,11 +626,6 @@ Respond in JSON format.`;
           }
         );
         return res.json();
-      },
-      {
-        maxFailures: 3,
-        resetTimeout: 30000,
-        name: 'gemini_escalation',
       }
     );
 

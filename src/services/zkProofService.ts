@@ -254,7 +254,7 @@ class ZKProofService {
     const nodeHashes = limitedNodes.map(n => this.hashNode(n));
     const edgeHashes = limitedEdges.map(e => this.hashEdge(e));
     const nodeTypes = limitedNodes.map(n => this.encodeType(n.type));
-    const edgeTypes = limitedEdges.map(e => this.encodeType(e.type));
+    const edgeTypes = limitedEdges.map(e => this.encodeType(e.type || 'RELATED'));
     const adjacencyMatrix = this.buildAdjacencyMatrix(limitedNodes, limitedEdges);
     const graphHash = this.computeGraphHash(limitedNodes, limitedEdges);
 
@@ -361,7 +361,7 @@ class ZKProofService {
       verificationTime: Date.now() - startTime,
     };
 
-    logger.info('ZK proof verified locally', result);
+    logger.info('ZK proof verified locally', { ...result });
 
     return result;
   }
@@ -394,7 +394,7 @@ class ZKProofService {
         onChainTxHash: receipt.hash,
       };
 
-      logger.info('ZK proof verified on-chain', result);
+      logger.info('ZK proof verified on-chain', { ...result });
 
       return result;
     } catch (error) {
@@ -457,7 +457,7 @@ class ZKProofService {
       query.targetNodeTypes.length === 0 || query.targetNodeTypes.includes(n.type)
     );
     const filteredEdges = edges.filter(e =>
-      query.relationshipTypes.length === 0 || query.relationshipTypes.includes(e.type)
+      query.relationshipTypes.length === 0 || query.relationshipTypes.includes(e.type || '')
     );
 
     // Compute node type counts
