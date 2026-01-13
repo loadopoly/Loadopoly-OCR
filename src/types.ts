@@ -73,6 +73,7 @@ export interface GraphNode {
   type: 'PERSON' | 'LOCATION' | 'ORGANIZATION' | 'DATE' | 'CONCEPT' | 'CLUSTER' | 'DOCUMENT';
   relevance: number; // 0-1
   license?: string; // e.g., 'CC0' or 'COMMERCIAL'
+  confidence?: number;
 }
 
 export interface GraphLink {
@@ -80,6 +81,8 @@ export interface GraphLink {
   target: string;
   relationship: string;
 }
+
+export interface GraphEdge extends GraphLink {}
 
 export interface GraphData {
   nodes: GraphNode[];
@@ -99,6 +102,7 @@ export interface NFTData {
   totalShards: number;
   availableShards: number;
   pricePerShard: number;
+  royaltyPercentage?: number;
   ownership: Array<{ holder: string; percentage: number }>;
   // DCC1 Phygital Data
   dcc1?: {
@@ -107,6 +111,36 @@ export interface NFTData {
     isRedeemable: boolean;
     certificateTokenId?: string;
   }
+}
+
+export interface DataAsset {
+  id: string;
+  status: AssetStatus;
+  type: ScanType;
+  metadata: GISMetadata;
+  attributes: ItemAttributes | SceneryAttributes;
+  tokenization?: TokenizationData;
+  nft?: NFTData;
+  confidence?: number;
+}
+
+export type ZoneType = 'URBAN' | 'RURAL' | 'WILDERNESS' | 'HISTORICAL' | 'INDUSTRIAL';
+export type VisualTheme = 'CLASSIC' | 'DENSE' | 'SCHEMATIC' | 'ABSTRACT';
+
+export interface MetaverseZone {
+  zoneId: string;
+  center: { x: number; y: number; z: number };
+  type: ZoneType;
+  theme: VisualTheme;
+  nodes: string[];
+  owner?: string;
+}
+
+export interface ProcessingJob {
+  id: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed';
+  data: any;
+  result?: any;
 }
 
 export interface PreservationEvent {

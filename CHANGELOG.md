@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.7.0] - 2026-01-13
+
+### Added
+- **Web3 Architecture Enhancements**:
+  - **Oracle Verification**: Chainlink integration for multi-LLM consensus on OCR outputs ([src/services/oracleVerificationService.ts](src/services/oracleVerificationService.ts)).
+  - **Batch Processing**: Gas-efficient ERC1155 sharding with semantic clustering and GARD staking ([src/services/batchProcessingService.ts](src/services/batchProcessingService.ts)).
+  - **Edge OCR**: Offline pre-processing using Tesseract.js WebAssembly to reduce API costs ([src/services/edgeOCRService.ts](src/services/edgeOCRService.ts)).
+  - **ZK Proofs**: Privacy-preserving graph integrity proofs using SnarkJS ([src/services/zkProofService.ts](src/services/zkProofService.ts)).
+  - **Zone Sharding**: Voxel-based metaverse partitioning and micro-DAO spatial governance ([src/services/zoneShardingService.ts](src/services/zoneShardingService.ts)).
+  - **Hybrid Rendering**: Adaptive WebGL-to-SVG visualization with IPFS lazy loading ([src/plugins/hybridRenderingPlugin.ts](src/plugins/hybridRenderingPlugin.ts)).
+  - **Adaptive Royalties**: Utility-based dynamic royalty curves in upgraded GARD contracts ([contracts/GARDDataShardV2.sol](contracts/GARDDataShardV2.sol)).
+  - **Cross-Chain Bridge**: HTLC atomic swaps for shard liquidity between Polygon, Optimism, Arbitrum, and Base ([contracts/ShardBridge.sol](contracts/ShardBridge.sol)).
+  - **Plugin Security**: EIP-712 signature verification and permission-based sandboxing ([src/services/pluginSecurityService.ts](src/services/pluginSecurityService.ts)).
+  - **Web3 Analytics**: Automated metrics for queue health, gas efficiency, and tokenomics sustainability ([src/services/analyticsService.ts](src/services/analyticsService.ts)).
+- **Documentation**: New [WEB3_ARCHITECTURE.md](WEB3_ARCHITECTURE.md) master guide for decentralized optimizations.
+
 ## [2.6.0] - 2026-01-12
 
 ### Added
