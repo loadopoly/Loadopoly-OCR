@@ -10,6 +10,7 @@
 
 import { logger } from '../lib/logger';
 import { GraphNode, GraphEdge, DataAsset } from '../types';
+import type { Vector3 } from 'three';
 
 // Rendering Configuration
 const RENDER_CONFIG = {
@@ -162,7 +163,7 @@ class HybridRenderingService {
       preferredMode,
     };
 
-    logger.info('Rendering capabilities detected', this.capabilities);
+    logger.info('Rendering capabilities detected', { ...this.capabilities });
 
     return this.capabilities;
   }
@@ -201,7 +202,7 @@ class HybridRenderingService {
     try {
       // Dynamic import of Three.js
       const THREE = await import('three');
-      const { OrbitControls } = await import('three/examples/jsm/controls/OrbitControls');
+      const { OrbitControls } = await import('three/examples/jsm/controls/OrbitControls.js');
 
       const width = container.clientWidth;
       const height = container.clientHeight;
@@ -465,7 +466,7 @@ class HybridRenderingService {
     const nodeGeometry = new THREE.SphereGeometry(5, 16, 16);
     const highlightSet = new Set(options.highlightIds || []);
 
-    const nodePositions = new Map<string, THREE.Vector3>();
+    const nodePositions = new Map<string, Vector3>();
 
     nodes.forEach((node, index) => {
       const material = new THREE.MeshPhongMaterial({

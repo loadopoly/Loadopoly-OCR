@@ -683,7 +683,7 @@ class PluginSecurityService {
     }
 
     if (options?.since) {
-      logs = logs.filter(e => e.timestamp >= options.since);
+      logs = logs.filter(e => e.timestamp >= options.since!);
     }
 
     if (options?.limit) {

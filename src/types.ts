@@ -82,7 +82,9 @@ export interface GraphLink {
   relationship: string;
 }
 
-export interface GraphEdge extends GraphLink {}
+export interface GraphEdge extends GraphLink {
+  type?: string;
+}
 
 export interface GraphData {
   nodes: GraphNode[];
