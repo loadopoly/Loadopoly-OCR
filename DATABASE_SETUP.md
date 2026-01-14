@@ -7,6 +7,68 @@ All database migration and fix scripts are located in the `sql/` directory.
 - `sql/FIX_TABLE_RLS.sql`: Resets Row Level Security policies to allow public uploads (Fixes "new row violates RLS policy").
 - `sql/FIX_ALL_COLUMNS_TO_UPPERCASE.sql`: Renames all columns to UPPERCASE to match the application schema.
 - `sql/ADD_MISSING_COLUMNS.sql`: Adds any missing columns required by the latest version.
+- `sql/PROCESSING_QUEUE_SCHEMA.sql`: **Required for v2.8+** - Sets up background processing queue with Realtime support.
+- `sql/COMPLETE_SCHEMA_SETUP_V2.8.0.sql`: Complete idempotent schema setup for v2.8+.
+
+## ⚠️ Important: Processing Queue Setup (v2.8.1+)
+
+For edge processing to work correctly, you must run the updated `claim_processing_job` function:
+
+```sql
+-- Run this in Supabase SQL Editor to enable USER_ID in job claims
+CREATE OR REPLACE FUNCTION claim_processing_job(p_worker_id TEXT)
+RETURNS TABLE (
+    job_id UUID,
+    asset_id TEXT,
+    image_path TEXT,
+    scan_type TEXT,
+    user_id UUID,
+    latitude DOUBLE PRECISION,
+    longitude DOUBLE PRECISION,
+    metadata JSONB
+) AS $$
+DECLARE
+    v_job_id UUID;
+BEGIN
+    UPDATE processing_queue
+    SET 
+        STATUS = 'PROCESSING',
+        WORKER_ID = p_worker_id,
+        LOCKED_AT = NOW(),
+        STARTED_AT = COALESCE(STARTED_AT, NOW()),
+        UPDATED_AT = NOW(),
+        PROGRESS = 10,
+        STAGE = 'CLAIMED'
+    WHERE ID = (
+        SELECT ID FROM processing_queue
+        WHERE STATUS = 'PENDING'
+        ORDER BY PRIORITY DESC, CREATED_AT ASC
+        LIMIT 1
+        FOR UPDATE SKIP LOCKED
+    )
+    RETURNING ID INTO v_job_id;
+    
+    IF v_job_id IS NULL THEN
+        RETURN;
+    END IF;
+    
+    RETURN QUERY
+    SELECT 
+        pq.ID as job_id,
+        pq.ASSET_ID as asset_id,
+        pq.IMAGE_PATH as image_path,
+        pq.SCAN_TYPE as scan_type,
+        pq.USER_ID as user_id,
+        pq.LATITUDE as latitude,
+        pq.LONGITUDE as longitude,
+        pq.METADATA as metadata
+    FROM processing_queue pq
+    WHERE pq.ID = v_job_id;
+END;
+$$ LANGUAGE plpgsql;
+```
+
+This enables the edge function to save `USER_ID` to `historical_documents_global`, which is required for Realtime subscription filtering.
 
 ## 1. Create a Storage Bucket
 1. Log in to your Supabase Dashboard.

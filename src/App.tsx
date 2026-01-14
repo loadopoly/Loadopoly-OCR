@@ -68,7 +68,7 @@ import { initSync, isSyncEnabled } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
 import { redeemPhygitalCertificate } from './services/web3Service';
 import { getCurrentUser } from './lib/auth';
-import { fetchGlobalCorpus, contributeAssetToGlobalCorpus, fetchUserAssets } from './services/supabaseService';
+import { fetchGlobalCorpus, contributeAssetToGlobalCorpus, fetchUserAssets, subscribeToAssetUpdates } from './services/supabaseService';
 import { processingQueueService } from './services/processingQueueService';
 import { compressImage } from './lib/imageCompression';
 import { WorkerPool } from './lib/workerPool';
@@ -232,12 +232,13 @@ export default function App() {
   // Initialize Worker Pool for parallel processing
   const workerPool = useMemo(() => new WorkerPool('../workers/parallelWorker.ts', { maxWorkers: 4 }), []);
 
-  // Initialize Processing Queue Service
+  // Initialize Processing Queue Service with simplified callbacks
+  // The heavy lifting is done by the direct Realtime subscription below
   useEffect(() => {
     if (user?.id) {
       processingQueueService.init(user.id);
       
-      // Set callbacks for queue updates
+      // Lightweight callbacks for progress updates only
       processingQueueService.setCallbacks({
         onJobStarted: (job) => {
           setLocalAssets(prev => prev.map(a => 
@@ -246,22 +247,60 @@ export default function App() {
         },
         onJobProgress: (job) => {
           setLocalAssets(prev => prev.map(a => 
-            a.id === job.assetId ? { ...a, progress: job.progress } : a
+            a.id === job.assetId ? { ...a, progress: Math.min(90, job.progress) } : a
           ));
         },
+        // onJobCompleted is now handled by the direct Realtime subscription below
+        // This avoids double-fetching and redundant sync
         onJobCompleted: (job) => {
-          // Re-fetch data or update successfully
-          if (user?.id) {
-            fetchUserAssets(user.id).then(assets => setLocalAssets(assets as any));
-          }
+          // Mark as completed in UI immediately - Realtime will provide full data
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, progress: 100 } : a
+          ));
         },
         onJobFailed: (job) => {
           setLocalAssets(prev => prev.map(a => 
-            a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, errorMessage: job.error } : a
+            a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, progress: 0, errorMessage: job.error } : a
           ));
         }
       });
     }
+  }, [user?.id]);
+
+  // Direct Realtime subscription to historical_documents_global
+  // This is more efficient - edge function saves directly to this table,
+  // and we get the full asset data in one step without re-fetching
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const unsubscribe = subscribeToAssetUpdates(
+      user.id,
+      // On asset UPDATE (e.g., edge processing completed)
+      (updatedAsset) => {
+        setLocalAssets(prev => {
+          const exists = prev.some(a => a.id === updatedAsset.id);
+          if (exists) {
+            return prev.map(a => a.id === updatedAsset.id ? updatedAsset : a);
+          }
+          return prev;
+        });
+        // Also persist to local IndexedDB
+        saveAsset(updatedAsset).catch(e => console.error('Failed to persist updated asset', e));
+      },
+      // On asset INSERT (e.g., new asset from edge function)
+      (newAsset) => {
+        setLocalAssets(prev => {
+          // Avoid duplicates
+          if (prev.some(a => a.id === newAsset.id)) {
+            return prev.map(a => a.id === newAsset.id ? newAsset : a);
+          }
+          return [newAsset, ...prev];
+        });
+        saveAsset(newAsset).catch(e => console.error('Failed to persist new asset', e));
+      }
+    );
+
+    return () => unsubscribe();
   }, [user?.id]);
 
   // Avatar & Metaverse state

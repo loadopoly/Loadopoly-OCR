@@ -3,6 +3,33 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.8.1] - 2026-01-14
+
+### Fixed
+- **Edge Processing Pipeline**: Fixed critical issue where photos were not processing on edge and database was not being updated.
+
+### Changed
+- **Optimized Realtime Architecture**: Replaced inefficient callback chain with direct Supabase Realtime subscription.
+  - Now subscribes directly to `historical_documents_global` instead of `processing_queue` for asset updates.
+  - Edge function saves `USER_ID` to enable Realtime filter matching.
+  - Removed redundant client-side re-sync to global corpus (edge function already handles this).
+  - Single Realtime event now delivers complete asset data without re-fetching.
+
+- **Updated SQL Functions**:
+  - `claim_processing_job` RPC now returns `user_id` for proper asset attribution in edge function.
+
+- **Processing Queue Service Improvements**:
+  - Added `getJobById()` method for direct job lookup.
+  - Enhanced Realtime subscription with auto-reconnection on channel close.
+  - Simplified callbacks to focus on progress updates only.
+
+- **New Supabase Service Export**:
+  - Added `subscribeToAssetUpdates()` for efficient direct Realtime subscription to asset table.
+
+### Technical Details
+- **Before**: Client → queue → edge → DB → queue notification → client fetches result → client re-syncs → IndexedDB
+- **After**: Client → queue → edge → DB (with USER_ID) → direct Realtime notification → IndexedDB
+
 ## [2.8.0] - 2026-01-14
 
 ### Added

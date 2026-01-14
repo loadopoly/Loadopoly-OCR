@@ -158,6 +158,7 @@ RETURNS TABLE (
     asset_id TEXT,
     image_path TEXT,
     scan_type TEXT,
+    user_id UUID,
     latitude DOUBLE PRECISION,
     longitude DOUBLE PRECISION,
     metadata JSONB
@@ -194,6 +195,7 @@ BEGIN
         pq.ASSET_ID as asset_id,
         pq.IMAGE_PATH as image_path,
         pq.SCAN_TYPE as scan_type,
+        pq.USER_ID as user_id,
         pq.LATITUDE as latitude,
         pq.LONGITUDE as longitude,
         pq.METADATA as metadata

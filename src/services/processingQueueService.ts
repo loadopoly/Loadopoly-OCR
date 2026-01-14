@@ -293,6 +293,28 @@ class ProcessingQueueService {
   }
 
   /**
+   * Get a specific job by ID
+   */
+  async getJobById(jobId: string): Promise<QueueJob | null> {
+    if (!isSupabaseConfigured()) {
+      return this.pendingLocalJobs.find(j => j.id === jobId) || null;
+    }
+    
+    const { data, error } = await ( (supabase as any))
+      .from(QUEUE_TABLE)
+      .select('*')
+      .eq('ID', jobId)
+      .single();
+    
+    if (error) {
+      logger.error('Failed to fetch job by ID', { jobId, error });
+      return null;
+    }
+    
+    return data ? this.mapRowToJob(data) : null;
+  }
+
+  /**
    * Cancel a pending job
    */
   async cancelJob(jobId: string): Promise<boolean> {
@@ -469,23 +491,40 @@ class ProcessingQueueService {
       return;
     }
     
-    const channel =  ( (supabase as any))
-      .channel(`queue:${this.userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: QUEUE_TABLE,
-          filter: `USER_ID=eq.${this.userId}`,
-        },
-        (payload: any) => {
-          this.handleJobUpdate(payload);
-        }
-      )
-      .subscribe();
-    
-    this.subscriptions.set('user-jobs', channel);
+    try {
+      const channel =  ( (supabase as any))
+        .channel(`queue:${this.userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: QUEUE_TABLE,
+            filter: `USER_ID=eq.${this.userId}`,
+          },
+          (payload: any) => {
+            logger.debug('Job update received', { 
+              jobId: payload.new?.ID, 
+              status: payload.new?.STATUS,
+              event: payload.eventType
+            });
+            this.handleJobUpdate(payload);
+          }
+        )
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            logger.info(`Subscribed to job updates for user ${this.userId}`);
+          } else if (status === 'CLOSED') {
+            logger.warn('Job subscription closed, resubscribing...');
+            this.subscriptions.delete('user-jobs');
+            setTimeout(() => this.subscribeToUserJobs(), 5000);
+          }
+        });
+      
+      this.subscriptions.set('user-jobs', channel);
+    } catch (error) {
+      logger.error('Failed to subscribe to user jobs', { error });
+    }
   }
 
   private handleJobUpdate(payload: any): void {

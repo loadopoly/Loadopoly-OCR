@@ -30,6 +30,7 @@ interface ProcessingJob {
   asset_id: string;
   image_path: string;
   scan_type: string;
+  user_id?: string;
   latitude?: number;
   longitude?: number;
   metadata?: Record<string, unknown>;
@@ -196,10 +197,23 @@ async function processJob(
     // Save to historical_documents_global
     await saveAsset(supabase, job, result);
 
-    // Mark job complete
+    // Mark job complete WITH result data serialized as JSON
+    const resultDataJson = {
+      ocrText: result.ocrText,
+      documentTitle: result.documentTitle,
+      documentDescription: result.documentDescription,
+      entities: result.entities,
+      keywords: result.keywords,
+      graphData: result.graphData,
+      gisMetadata: result.gisMetadata,
+      confidence: result.confidence,
+      processingTime: Date.now() - startTime,
+      completedAt: new Date().toISOString(),
+    };
+
     await supabase.rpc('complete_processing_job', {
       p_job_id: job.id,
-      p_result_data: result,
+      p_result_data: resultDataJson,
     });
 
     const processingTime = Date.now() - startTime;
@@ -333,6 +347,7 @@ async function saveAsset(
 
   const assetRecord = {
     ASSET_ID: job.asset_id,
+    USER_ID: job.user_id || null,  // Required for Realtime subscription filter
     ORIGINAL_IMAGE_URL: urlData?.publicUrl || '',
     RAW_OCR_TRANSCRIPTION: result.ocrText,
     DOCUMENT_TITLE: result.documentTitle,
