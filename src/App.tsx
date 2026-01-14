@@ -96,6 +96,8 @@ import { FilterProvider, useFilterContext } from './contexts/FilterContext';
 import UnifiedFilterPanel, { InlineFilterBar, FilterBadge } from './components/UnifiedFilterPanel';
 import { ClusterSyncStatsPanel, ClusterSyncButton } from './components/ClusterSyncStatsPanel';
 import { QueueMonitor } from './components/QueueMonitor';
+import BatchProcessingPanel from './components/BatchProcessingPanel';
+import { batchProcessor } from './services/batchProcessorService';
 
 // --- Custom Hooks ---
 function useOnlineStatus() {
@@ -207,8 +209,9 @@ export default function App() {
   const [arSessionQueue, setArSessionQueue] = useState<File[]>([]);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showProcessingPanel, setShowProcessingPanel] = useState(false);
+  const [showNewBatchPanel, setShowNewBatchPanel] = useState(false);
   
-  // Batch processing concurrency control
+  // Batch processing concurrency control (legacy - kept for compatibility)
   const [activeBatchJobs, setActiveBatchJobs] = useState(0);
   const MAX_CONCURRENT_BATCH_JOBS = 3; // Limit concurrent processing for mobile memory
   const batchProcessingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -804,32 +807,159 @@ export default function App() {
     }
   };
 
-  const handleBatchFiles = (files: File[]) => {
-    // For very large batches, process in chunks to prevent memory issues
-    const BATCH_CHUNK_SIZE = 50; // Process files in groups of 50
-    
-    const newQueueItems: BatchItem[] = files.map(file => ({
-      id: uuidv4(),
-      file,
-      status: 'QUEUED',
-      progress: 0,
-      scanType: (file as any).scanType || selectedScanType || ScanType.DOCUMENT
-    }));
-    
-    // If batch is very large, show notification
-    if (files.length > 100) {
-      announce(`Large batch detected: ${files.length} files. Processing will be throttled for stability.`);
+  // New scalable batch processor handler
+  const handleNewBatchProcess = useCallback(async (
+    file: File, 
+    itemId: string, 
+    scanType: ScanType,
+    onProgress: (progress: number, stage: string) => void
+  ): Promise<string | null> => {
+    try {
+      onProgress(5, 'Creating asset...');
+      
+      // Create local asset
+      const compressionResult = await compressImage(file);
+      const imageUrl = URL.createObjectURL(compressionResult.file);
+      
+      const newAsset: DigitalAsset = {
+        id: itemId,
+        imageUrl,
+        imageBlob: compressionResult.file,
+        timestamp: new Date().toISOString(),
+        ocrText: '',
+        status: AssetStatus.PROCESSING,
+        progress: 10,
+        sqlRecord: {
+          ID: itemId,
+          USER_ID: user?.id || 'anonymous',
+          SCAN_TYPE: scanType,
+          SOURCE_COLLECTION: 'Batch Import',
+          PROCESSING_STATUS: AssetStatus.PROCESSING,
+          CREATED_AT: new Date().toISOString(),
+          LAST_MODIFIED: new Date().toISOString(),
+          IS_ENTERPRISE: false,
+        } as HistoricalDocumentMetadata
+      };
+      
+      // Add to local assets immediately for UI feedback
+      setLocalAssets(prev => [newAsset, ...prev]);
+      
+      onProgress(15, 'Getting location...');
+      
+      // Get location
+      let location: { lat: number; lng: number } | null = null;
+      if (navigator.geolocation) {
+        try {
+          const position = await new Promise<GeolocationPosition>((resolve, reject) => 
+            navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 })
+          );
+          location = { lat: position.coords.latitude, lng: position.coords.longitude };
+        } catch (e) {}
+      }
+      
+      onProgress(25, 'AI analysis...');
+      
+      // Process with Gemini
+      const analysis = await processImageWithGemini(file, location, scanType, debugMode);
+      
+      onProgress(70, 'Building metadata...');
+      
+      // Build result
+      const updatedSqlRecord: HistoricalDocumentMetadata = {
+        ...newAsset.sqlRecord!,
+        OCR_DERIVED_TIMESTAMP: analysis.ocrDerivedTimestamp,
+        NLP_DERIVED_TIMESTAMP: analysis.nlpDerivedTimestamp,
+        LOCAL_GIS_ZONE: analysis.gisMetadata?.zoneType || 'Unknown',
+        OCR_DERIVED_GIS_ZONE: analysis.ocrDerivedGisZone,
+        NLP_DERIVED_GIS_ZONE: analysis.nlpDerivedGisZone,
+        NODE_COUNT: analysis.graphData?.nodes?.length || 0,
+        NLP_NODE_CATEGORIZATION: analysis.nlpNodeCategorization,
+        RAW_OCR_TRANSCRIPTION: analysis.ocrText,
+        PREPROCESS_OCR_TRANSCRIPTION: analysis.preprocessOcrTranscription,
+        DOCUMENT_TITLE: analysis.documentTitle,
+        DOCUMENT_DESCRIPTION: analysis.documentDescription,
+        SOURCE_COLLECTION: analysis.suggestedCollection || 'Batch Import',
+        ASSOCIATIVE_ITEM_TAG: analysis.associativeItemTag,
+        CREATOR_AGENT: analysis.creatorAgent,
+        RIGHTS_STATEMENT: analysis.rightsStatement,
+        LANGUAGE_CODE: analysis.languageCode,
+        LAST_MODIFIED: new Date().toISOString(),
+        PROCESSING_STATUS: AssetStatus.MINTED,
+        CONFIDENCE_SCORE: analysis.confidenceScore,
+        TOKEN_COUNT: analysis.tokenization.tokenCount,
+        ENTITIES_EXTRACTED: analysis.graphData?.nodes ? analysis.graphData.nodes.map(n => n.label) : [],
+        KEYWORDS_TAGS: analysis.keywordsTags || [],
+        ACCESS_RESTRICTIONS: analysis.accessRestrictions,
+        TAXONOMY: analysis.taxonomy,
+        ITEM_ATTRIBUTES: analysis.itemAttributes,
+        SCENERY_ATTRIBUTES: analysis.sceneryAttributes,
+        ALT_TEXT_SHORT: analysis.alt_text_short,
+        ALT_TEXT_LONG: analysis.alt_text_long,
+        READING_ORDER: analysis.reading_order,
+        ACCESSIBILITY_SCORE: analysis.accessibility_score,
+        IS_ENTERPRISE: true,
+        PRESERVATION_EVENTS: [
+          ...(newAsset.sqlRecord?.PRESERVATION_EVENTS || []),
+          { eventType: 'GEMINI_PROCESSING', timestamp: new Date().toISOString(), agent: selectedLLM, outcome: 'SUCCESS' as const }
+        ]
+      };
+      
+      const resultAsset: DigitalAsset = {
+        ...newAsset,
+        status: AssetStatus.MINTED,
+        progress: 100,
+        ocrText: analysis.ocrText,
+        gisMetadata: analysis.gisMetadata,
+        graphData: analysis.graphData,
+        tokenization: analysis.tokenization,
+        processingAnalysis: analysis.analysis,
+        location: location ? { latitude: location.lat, longitude: location.lng, accuracy: 1 } : undefined,
+        sqlRecord: updatedSqlRecord
+      };
+      
+      onProgress(85, 'Syncing to cloud...');
+      
+      // Update local state
+      setLocalAssets(prev => prev.map(a => a.id === itemId ? resultAsset : a));
+      
+      // Auto-sync to cloud
+      const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+      try {
+        const syncResult = await contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true);
+        if (syncResult.success && syncResult.publicUrl) {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === itemId ? { ...a, imageUrl: syncResult.publicUrl || a.imageUrl } : a
+          ));
+        }
+      } catch (e) {
+        console.warn('Cloud sync failed, asset saved locally:', e);
+      }
+      
+      onProgress(100, 'Complete');
+      
+      return resultAsset.id;
+    } catch (error: any) {
+      console.error('Batch item processing failed:', error);
+      // Update asset to failed state
+      setLocalAssets(prev => prev.map(a => 
+        a.id === itemId ? { ...a, status: AssetStatus.FAILED, errorMessage: error.message } : a
+      ));
+      throw error;
     }
+  }, [user?.id, debugMode, selectedLLM, isPublicBroadcast]);
+
+  // Legacy batch handler - now delegates to new system
+  const handleBatchFiles = (files: File[]) => {
+    // Add files to new batch processor
+    batchProcessor.addFiles(files, selectedScanType || ScanType.DOCUMENT);
     
-    setBatchQueue(prev => [...prev, ...newQueueItems]);
+    // Show the new batch panel
+    setShowNewBatchPanel(true);
     setActiveTab('batch');
-    setShowProcessingPanel(true); // Show panel for large batches
     
-    // Use requestIdleCallback on supported browsers for better mobile performance
-    if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(() => processNextBatchItem(), { timeout: 200 });
-    } else {
-      setTimeout(() => processNextBatchItem(), 100);
+    // Announce for accessibility
+    if (files.length > 50) {
+      announce(`Large batch: ${files.length} files queued. Processing will be managed for optimal performance.`);
     }
   };
 
@@ -2419,8 +2549,32 @@ export default function App() {
                             ? `PROCESS ALL (${totalPendingCount + batchQueue.filter(i => i.status === 'QUEUED').length})`
                             : 'ALL PROCESSED'}
                     </button>
+                    
+                    {/* Open New Batch Panel button */}
+                    <button 
+                        onClick={() => { setShowNewBatchPanel(true); setShowProcessingPanel(false); }}
+                        className="w-full py-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2"
+                    >
+                        <Layers size={14} />
+                        Open Large Batch Manager
+                    </button>
                 </div>
             </div>
+        )}
+
+        {/* New Scalable Batch Processing Panel */}
+        {showNewBatchPanel && (
+          <div className="fixed inset-4 md:inset-8 lg:inset-16 z-50 flex items-center justify-center">
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowNewBatchPanel(false)} />
+            <div className="relative w-full max-w-4xl h-full max-h-[90vh]">
+              <BatchProcessingPanel
+                onProcessItem={handleNewBatchProcess}
+                onClose={() => setShowNewBatchPanel(false)}
+                maxConcurrent={3}
+                defaultScanType={selectedScanType || ScanType.DOCUMENT}
+              />
+            </div>
+          </div>
         )}
 
         <StatusBar 

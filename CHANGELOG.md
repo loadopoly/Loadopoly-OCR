@@ -3,6 +3,32 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.8.2] - 2026-01-14
+
+### Added
+- **New Scalable Batch Processing System**: Complete rewrite of batch processing for handling 100s-1000s of documents efficiently.
+  - New `BatchProcessorService` ([src/services/batchProcessorService.ts](src/services/batchProcessorService.ts)) - fault-tolerant processing engine.
+  - New `BatchProcessingPanel` ([src/components/BatchProcessingPanel.tsx](src/components/BatchProcessingPanel.tsx)) - comprehensive UI with real-time progress.
+  - **Pause/Resume/Cancel** capabilities for long-running batch jobs.
+  - **Automatic retry** with configurable exponential backoff (3 retries by default).
+  - **Processing timeout** protection (60 seconds per item).
+  - **Progress persistence** across page reloads (completed items survive refresh).
+  - **Real-time stats**: ETA calculation, throughput metrics, completion times.
+  - **Drag & drop** file uploads with keyboard shortcuts (Ctrl+P pause/resume, Esc close).
+  - **Memory-efficient**: Virtualized list shows first 100 items, chunked file processing.
+  - **Mobile-optimized**: Respects `MAX_CONCURRENT_BATCH_JOBS = 3` limit.
+
+### Changed
+- **Batch Import Flow**: `handleBatchFiles()` now delegates to the new `BatchProcessorService` singleton.
+- **Processing Panel**: Added "Open Large Batch Manager" button to access the new full-featured panel.
+- Legacy batch queue (batchQueue state) preserved for backward compatibility but new panel is recommended.
+
+### Technical Details
+- **BatchProcessorService** is a singleton with configurable callbacks for UI updates.
+- Files are stored in memory Map (can't persist File objects), but item metadata persists to localStorage.
+- State machine: IDLE → RUNNING → PAUSED/STOPPING → IDLE.
+- Items stuck at PROCESSING status are auto-recovered to QUEUED on component mount.
+
 ## [2.8.1] - 2026-01-14
 
 ### Fixed
