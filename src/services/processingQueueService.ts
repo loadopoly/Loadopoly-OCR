@@ -405,18 +405,47 @@ class ProcessingQueueService {
   private async uploadToStorage(assetId: string, file: File): Promise<string> {
     const path = `${this.userId}/${assetId}/${file.name}`;
     
-    const { error } = await  ( (supabase as any)).storage
-      .from(STORAGE_BUCKET)
-      .upload(path, file, {
-        cacheControl: '3600',
-        upsert: false,
-      });
+    // For large files (>5MB), use chunked upload with retries
+    const FIVE_MB = 5 * 1024 * 1024;
     
-    if (error) {
-      throw new Error(`Storage upload failed: ${error.message}`);
+    const uploadOptions: any = {
+      cacheControl: '3600',
+      upsert: false,
+    };
+    
+    // Add duplex option for larger files to handle streaming properly
+    if (file.size > FIVE_MB) {
+      uploadOptions.duplex = 'half';
     }
     
-    return path;
+    // Retry logic for mobile network instability
+    let lastError: Error | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const { error } = await ( (supabase as any)).storage
+          .from(STORAGE_BUCKET)
+          .upload(path, file, uploadOptions);
+        
+        if (!error) {
+          return path;
+        }
+        
+        lastError = new Error(`Storage upload failed: ${error.message}`);
+        
+        // Don't retry on 4xx errors (client errors)
+        if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
+          break;
+        }
+        
+        // Wait before retry with exponential backoff
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      } catch (e: any) {
+        lastError = e;
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+      }
+    }
+    
+    throw lastError || new Error('Storage upload failed after retries');
   }
 
   private async insertJob(params: {

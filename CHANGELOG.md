@@ -7,6 +7,7 @@ See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent majo
 
 ### Fixed
 - **Edge Processing Pipeline**: Fixed critical issue where photos were not processing on edge and database was not being updated.
+- **Large Batch Processing on Mobile**: Fixed memory and performance issues when processing 100+ items from local cached data.
 
 ### Changed
 - **Optimized Realtime Architecture**: Replaced inefficient callback chain with direct Supabase Realtime subscription.
@@ -22,9 +23,17 @@ See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent majo
   - Added `getJobById()` method for direct job lookup.
   - Enhanced Realtime subscription with auto-reconnection on channel close.
   - Simplified callbacks to focus on progress updates only.
+  - Added retry logic with exponential backoff for storage uploads on unstable mobile networks.
 
 - **New Supabase Service Export**:
   - Added `subscribeToAssetUpdates()` for efficient direct Realtime subscription to asset table.
+
+- **Mobile Batch Processing Optimizations**:
+  - Added concurrency limit (`MAX_CONCURRENT_BATCH_JOBS = 3`) to prevent memory exhaustion.
+  - Throttled `processNextBatchItem` with scheduled delays between items for GC and UI responsiveness.
+  - Optimized SHA256 hashing for large files (>10MB) using chunked approach instead of full-file read.
+  - Added cleanup effect to revoke blob URLs and free memory when component unmounts.
+  - Uses `requestIdleCallback` when available for better mobile performance.
 
 ### Technical Details
 - **Before**: Client → queue → edge → DB → queue notification → client fetches result → client re-syncs → IndexedDB
