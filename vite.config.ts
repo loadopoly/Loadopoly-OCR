@@ -37,6 +37,8 @@ export default defineConfig({
   build: {
     // Generate source maps for debugging production issues
     sourcemap: true,
+    // Target modern browsers for smaller bundles
+    target: 'es2020',
     // Use content hashes for cache busting
     rollupOptions: {
       output: {
@@ -44,16 +46,22 @@ export default defineConfig({
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
-        // Manual chunks for better caching
+        // Manual chunks for better caching and code splitting
         manualChunks: {
           'vendor-react': ['react', 'react-dom'],
           'vendor-ui': ['lucide-react'],
           'vendor-data': ['dexie', '@supabase/supabase-js'],
+          // Separate heavy visualization libraries
+          'vendor-d3': ['d3'],
+          // Three.js and related 3D libraries (lazy loaded)
+          'vendor-three': ['three'],
         },
       },
     },
     // Increase chunk size warning limit (we have manual chunks now)
     chunkSizeWarningLimit: 600,
+    // Use esbuild for minification (faster than terser, included by default)
+    minify: 'esbuild',
   },
   optimizeDeps: {
     esbuildOptions: {
@@ -69,5 +77,7 @@ export default defineConfig({
       'uuid',
       'dexie',
     ],
+    // Exclude heavy libs from pre-bundling (let Vite handle dynamically)
+    exclude: ['three'],
   },
 });

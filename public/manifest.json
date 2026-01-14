@@ -1,22 +1,25 @@
 {
-  "id": "/",
+  "id": "geograph-ocr-node",
   "name": "GeoGraph OCR Node",
   "short_name": "GeoGraph",
   "description": "Advanced OCR-to-Graph platform for historical data extraction and GIS metadata generation.",
   "lang": "en",
   "dir": "ltr",
-  "start_url": "/?v=1.8.1",
+  "start_url": "/?source=pwa&v=1.9.0",
   "scope": "/",
   "display": "standalone",
   "background_color": "#020617",
   "theme_color": "#020617",
-  "orientation": "any",
+  "orientation": "natural",
   "categories": [
     "education",
     "productivity",
-    "utilities"
+    "utilities",
+    "photo"
   ],
+  "iarc_rating_id": "",
   "prefer_related_applications": false,
+  "handle_links": "preferred",
   "icons": [
     {
       "src": "/icon-192.png",
@@ -131,12 +134,16 @@
     }
   ],
   "launch_handler": {
-    "client_mode": "navigate-existing"
+    "client_mode": ["navigate-existing", "auto"]
   },
   "display_override": [
     "window-controls-overlay",
     "standalone",
+    "minimal-ui",
     "browser"
+  ],
+  "scope_extensions": [
+    {"origin": "*.vercel.app"}
   ],
   "edge_side_panel": {
     "preferred_width": 400

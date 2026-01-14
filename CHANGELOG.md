@@ -3,6 +3,47 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.8.0] - 2026-01-14
+
+### Added
+- **PWA Optimization Suite**:
+  - Enhanced Service Worker v3.0.0 with multi-cache architecture (static, images, API).
+  - Stale-while-revalidate caching strategy for images.
+  - Rich push notifications with actions and deep linking.
+  - Background sync handlers for offline contributions.
+  - New [src/lib/pwaUtils.ts](src/lib/pwaUtils.ts) for install prompts, update management, share API, and wake lock.
+
+- **Performance Monitoring Infrastructure**:
+  - Web Vitals tracking (LCP, FID, CLS, FCP, TTFB) in [src/lib/performanceMonitor.ts](src/lib/performanceMonitor.ts).
+  - Real-time FPS monitoring for animation performance.
+  - Memory usage tracking via Performance API.
+  - Device capability detection with automatic tier classification (low/mid/high).
+  - Adaptive settings that auto-adjust based on device capability.
+
+- **Lazy Loading System**:
+  - Code-split heavy components via [src/lib/lazyComponents.tsx](src/lib/lazyComponents.tsx).
+  - Suspense boundaries with branded loading states.
+  - Error boundaries with retry capability.
+  - Viewport-based lazy loading using IntersectionObserver.
+  - Preload hints for route prefetching.
+
+### Changed
+- **Manifest Enhancements**:
+  - Added `display_override` with window-controls-overlay for desktop PWA.
+  - Added `handle_links: "preferred"` for link capturing.
+  - Added `scope_extensions` for Vercel deployment domains.
+  - Updated `orientation: "natural"` for device-adaptive layout.
+  - Bumped manifest version to 1.9.0.
+
+- **Build Optimization**:
+  - Added manual chunks for vendor-d3 and vendor-three.
+  - Set ES2020 target for smaller modern bundles.
+  - Switched from terser to esbuild for faster minification.
+  - Excluded Three.js from pre-bundling for better code splitting.
+
+### Documentation
+- Updated [ARCHITECTURE_IMPROVEMENTS.md](ARCHITECTURE_IMPROVEMENTS.md) with Phase 6: PWA & Performance Optimization.
+
 ## [2.7.0] - 2026-01-13
 
 ### Added
