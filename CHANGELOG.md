@@ -27,6 +27,16 @@ See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent majo
   - Viewport-based lazy loading using IntersectionObserver.
   - Preload hints for route prefetching.
 
+- **Database Schema Management**:
+  - [sql/HEALTH_CHECK_V2.8.0.sql](sql/HEALTH_CHECK_V2.8.0.sql) - Comprehensive verification query for all schema requirements.
+  - [sql/COMPLETE_SCHEMA_SETUP_V2.8.0.sql](sql/COMPLETE_SCHEMA_SETUP_V2.8.0.sql) - Idempotent setup script covering:
+    - pgvector extension for semantic similarity search.
+    - `processing_queue` table with RLS policies.
+    - `structured_clusters` table with RLS policies.
+    - Vector embedding columns (`TEXT_EMBEDDING`, `IMAGE_EMBEDDING`, `COMBINED_EMBEDDING`).
+    - Structured classification columns (6 cluster types + 4 LLM attribution fields).
+    - GIN indexes for JSONB columns.
+
 ### Changed
 - **Manifest Enhancements**:
   - Added `display_override` with window-controls-overlay for desktop PWA.
