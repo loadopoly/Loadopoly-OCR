@@ -115,6 +115,29 @@ function useOnlineStatus() {
 
 // --- Helper Functions ---
 async function calculateSHA256(file: File): Promise<string> {
+  // For large files on mobile, use chunked hashing to avoid memory pressure
+  // If file is > 10MB, use a simplified hash based on metadata (mobile optimization)
+  const TEN_MB = 10 * 1024 * 1024;
+  
+  if (file.size > TEN_MB) {
+    // Lightweight hash: Use first 64KB + last 64KB + file metadata
+    const CHUNK_SIZE = 64 * 1024;
+    const firstChunk = await file.slice(0, CHUNK_SIZE).arrayBuffer();
+    const lastChunk = await file.slice(Math.max(0, file.size - CHUNK_SIZE)).arrayBuffer();
+    const metaString = `${file.name}|${file.size}|${file.type}|${file.lastModified}`;
+    const metaBuffer = new TextEncoder().encode(metaString);
+    
+    const combined = new Uint8Array(firstChunk.byteLength + lastChunk.byteLength + metaBuffer.byteLength);
+    combined.set(new Uint8Array(firstChunk), 0);
+    combined.set(new Uint8Array(lastChunk), firstChunk.byteLength);
+    combined.set(metaBuffer, firstChunk.byteLength + lastChunk.byteLength);
+    
+    const hashBuffer = await crypto.subtle.digest('SHA-256', combined);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  
+  // Original full-file hash for smaller files
   const buffer = await file.arrayBuffer();
   const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -184,6 +207,12 @@ export default function App() {
   const [arSessionQueue, setArSessionQueue] = useState<File[]>([]);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showProcessingPanel, setShowProcessingPanel] = useState(false);
+  
+  // Batch processing concurrency control
+  const [activeBatchJobs, setActiveBatchJobs] = useState(0);
+  const MAX_CONCURRENT_BATCH_JOBS = 3; // Limit concurrent processing for mobile memory
+  const batchProcessingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   const [messages, setMessages] = useState<UserMessage[]>([
     { id: '1', senderId: 'system', receiverId: 'me', content: 'Welcome to GeoGraph Social! You can now message other curators and share data.', timestamp: new Date().toISOString(), isRead: false },
     { id: '2', senderId: 'user_882', receiverId: 'me', content: 'Hey, I saw your collection of 19th century maps. Would you be interested in a trade?', timestamp: new Date(Date.now() - 3600000).toISOString(), isRead: false }
@@ -776,17 +805,49 @@ export default function App() {
   };
 
   const handleBatchFiles = (files: File[]) => {
-      const newQueueItems: BatchItem[] = files.map(file => ({
-          id: uuidv4(),
-          file,
-          status: 'QUEUED',
-          progress: 0,
-          scanType: (file as any).scanType || selectedScanType || ScanType.DOCUMENT
-      }));
-      setBatchQueue(prev => [...prev, ...newQueueItems]);
-      setActiveTab('batch');
+    // For very large batches, process in chunks to prevent memory issues
+    const BATCH_CHUNK_SIZE = 50; // Process files in groups of 50
+    
+    const newQueueItems: BatchItem[] = files.map(file => ({
+      id: uuidv4(),
+      file,
+      status: 'QUEUED',
+      progress: 0,
+      scanType: (file as any).scanType || selectedScanType || ScanType.DOCUMENT
+    }));
+    
+    // If batch is very large, show notification
+    if (files.length > 100) {
+      announce(`Large batch detected: ${files.length} files. Processing will be throttled for stability.`);
+    }
+    
+    setBatchQueue(prev => [...prev, ...newQueueItems]);
+    setActiveTab('batch');
+    setShowProcessingPanel(true); // Show panel for large batches
+    
+    // Use requestIdleCallback on supported browsers for better mobile performance
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(() => processNextBatchItem(), { timeout: 200 });
+    } else {
       setTimeout(() => processNextBatchItem(), 100);
+    }
   };
+
+  // Cleanup effect for batch processing
+  useEffect(() => {
+    return () => {
+      // Cleanup timeout on unmount
+      if (batchProcessingTimeoutRef.current) {
+        clearTimeout(batchProcessingTimeoutRef.current);
+      }
+      // Revoke any remaining blob URLs to free memory
+      batchQueue.forEach(item => {
+        if ((item as any).imageUrl?.startsWith('blob:')) {
+          URL.revokeObjectURL((item as any).imageUrl);
+        }
+      });
+    };
+  }, []);
 
   const handleProcessAllPending = async () => {
       // Include both PENDING and PROCESSING (stuck) assets - unified state check
@@ -1009,57 +1070,106 @@ export default function App() {
     setActiveTab('assets');
   };
 
-  const processNextBatchItem = async () => {
-      setBatchQueue(currentQueue => {
-          const nextItemIndex = currentQueue.findIndex(i => i.status === 'QUEUED');
-          if (nextItemIndex === -1) return currentQueue;
-          const itemToProcess = currentQueue[nextItemIndex];
-          (async () => {
-             try {
-                setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'PROCESSING', progress: 10 } : i));
-                if (itemToProcess.scanType) (itemToProcess.file as any).scanType = itemToProcess.scanType;
-                const newAsset = await createInitialAsset(itemToProcess.file);
-                if (newAsset.sqlRecord) {
-                  newAsset.sqlRecord.SOURCE_COLLECTION = "Batch Ingest";
-                  newAsset.sqlRecord.IS_ENTERPRISE = false;
-                }
-                setLocalAssets(prev => [newAsset, ...prev]);
-                
-                await saveAsset(newAsset);
+  // Throttled batch processing - handles large batches efficiently on mobile
+  const processNextBatchItem = useCallback(() => {
+    // Clear any pending timeout to prevent duplicate triggers
+    if (batchProcessingTimeoutRef.current) {
+      clearTimeout(batchProcessingTimeoutRef.current);
+      batchProcessingTimeoutRef.current = null;
+    }
+    
+    setBatchQueue(currentQueue => {
+      // Count currently processing items
+      const processingCount = currentQueue.filter(i => i.status === 'PROCESSING').length;
+      
+      // Check if we're at concurrency limit
+      if (processingCount >= MAX_CONCURRENT_BATCH_JOBS) {
+        // Schedule retry after a delay
+        batchProcessingTimeoutRef.current = setTimeout(() => processNextBatchItem(), 500);
+        return currentQueue;
+      }
+      
+      // Find next item to process
+      const nextItemIndex = currentQueue.findIndex(i => i.status === 'QUEUED');
+      if (nextItemIndex === -1) {
+        return currentQueue; // Nothing left to process
+      }
+      
+      const itemToProcess = currentQueue[nextItemIndex];
+      
+      // Mark as processing immediately
+      const updatedQueue = currentQueue.map((item, idx) => 
+        idx === nextItemIndex ? { ...item, status: 'PROCESSING' as const, progress: 5 } : item
+      );
+      
+      // Process asynchronously
+      (async () => {
+        try {
+          // Update progress to 10%
+          setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, progress: 10 } : i));
+          
+          if (itemToProcess.scanType) (itemToProcess.file as any).scanType = itemToProcess.scanType;
+          
+          const newAsset = await createInitialAsset(itemToProcess.file);
+          if (newAsset.sqlRecord) {
+            newAsset.sqlRecord.SOURCE_COLLECTION = "Batch Ingest";
+            newAsset.sqlRecord.IS_ENTERPRISE = false;
+          }
+          
+          // Update progress to 30%
+          setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, progress: 30 } : i));
+          
+          setLocalAssets(prev => [newAsset, ...prev]);
+          await saveAsset(newAsset);
+          
+          // Update progress to 50%
+          setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, progress: 50 } : i));
 
-                if (!isOnline) {
-                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
-                  return;
-                }
+          if (!isOnline) {
+            setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+            // Release object URL to free memory
+            if (newAsset.imageUrl?.startsWith('blob:')) {
+              URL.revokeObjectURL(newAsset.imageUrl);
+            }
+            return;
+          }
 
-                // Integration with background processing queue
-                try {
-                  await processingQueueService.queueFile(itemToProcess.file, {
-                    scanType: itemToProcess.scanType || selectedScanType || ScanType.DOCUMENT,
-                    priority: 3, 
-                    metadata: {
-                      DOCUMENT_TITLE: newAsset.sqlRecord?.DOCUMENT_TITLE,
-                      SOURCE_COLLECTION: "Batch Ingest"
-                    }
-                  }, newAsset.id);
-                  
-                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
-                } catch (queueErr) {
-                  // Fallback to client-side
-                  const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
-                  setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-                  if (!user) await saveAsset(processedAsset);
-                  setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
-                }
-             } catch (e: any) {
-                 setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Failed" } : i));
-             } finally {
-                 processNextBatchItem();
-             }
-          })();
-          return currentQueue;
-      });
-  };
+          // Integration with background processing queue
+          try {
+            await processingQueueService.queueFile(itemToProcess.file, {
+              scanType: itemToProcess.scanType || selectedScanType || ScanType.DOCUMENT,
+              priority: 3, 
+              metadata: {
+                DOCUMENT_TITLE: newAsset.sqlRecord?.DOCUMENT_TITLE,
+                SOURCE_COLLECTION: "Batch Ingest"
+              }
+            }, newAsset.id);
+            
+            setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+          } catch (queueErr) {
+            // Fallback to client-side
+            const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
+            setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+            if (!user) await saveAsset(processedAsset);
+            setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+          }
+        } catch (e: any) {
+          console.error('Batch item processing failed:', e);
+          setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Failed" } : i));
+        } finally {
+          // Schedule next item with a small delay to allow GC and prevent UI blocking
+          batchProcessingTimeoutRef.current = setTimeout(() => processNextBatchItem(), 100);
+        }
+      })();
+      
+      // Also try to start more items if we have capacity
+      if (processingCount + 1 < MAX_CONCURRENT_BATCH_JOBS) {
+        batchProcessingTimeoutRef.current = setTimeout(() => processNextBatchItem(), 50);
+      }
+      
+      return updatedQueue;
+    });
+  }, [isOnline, selectedScanType, user]);
 
   const getAggregatedGroups = () => {
     const groups: Record<string, DigitalAsset[]> = {};
