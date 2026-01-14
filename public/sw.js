@@ -14,15 +14,14 @@
  * - Performance optimizations with preload hints
  */
 
-const CACHE_VERSION = '3.0.0';
+const CACHE_VERSION = '3.1.0';
 const CACHE_NAME = `geograph-v${CACHE_VERSION}`;
 const IMAGE_CACHE_NAME = `geograph-images-v${CACHE_VERSION}`;
 const API_CACHE_NAME = `geograph-api-v${CACHE_VERSION}`;
 
 // Only cache truly static assets that don't change per build
+// IMPORTANT: Do NOT cache index.html - it references versioned JS bundles
 const ASSETS_TO_CACHE = [
-  '/',
-  '/index.html',
   '/manifest.json',
   '/icon.svg',
   '/icon-192.png',
@@ -87,12 +86,17 @@ self.addEventListener('activate', (event) => {
           })
         );
       }),
-      // Clean any accidentally cached JS/CSS from current cache
+      // Clean any accidentally cached JS/CSS/HTML from current cache
       caches.open(CACHE_NAME).then((cache) => {
         return cache.keys().then((requests) => {
           return Promise.all(
             requests.map((request) => {
               const url = new URL(request.url);
+              // Remove any HTML files from cache
+              if (url.pathname === '/' || url.pathname.endsWith('.html')) {
+                log('Removing cached HTML:', url.pathname);
+                return cache.delete(request);
+              }
               if (NEVER_CACHE_PATTERNS.some(p => p.test(url.pathname) || p.test(url.href))) {
                 log('Removing stale asset:', url.pathname);
                 return cache.delete(request);
@@ -108,6 +112,12 @@ self.addEventListener('activate', (event) => {
             const toDelete = requests.slice(0, requests.length - 50);
             return Promise.all(toDelete.map(r => cache.delete(r)));
           }
+        });
+      }),
+      // Notify all clients to reload for the new version
+      self.clients.matchAll({ type: 'window' }).then((clients) => {
+        clients.forEach((client) => {
+          client.postMessage({ type: 'SW_UPDATED', version: CACHE_VERSION });
         });
       })
     ])
@@ -146,19 +156,31 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // For navigation requests (page loads), use network-first strategy
+  // For navigation requests (page loads), ALWAYS fetch from network
+  // CRITICAL: Never serve cached HTML as it references versioned JS bundles
   if (request.mode === 'navigate') {
     event.respondWith(
       fetch(request)
         .then((response) => {
-          // Cache the fresh HTML
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, responseClone));
+          // Return fresh HTML but don't cache it
           return response;
         })
         .catch(() => {
-          // Offline fallback
-          return caches.match('/index.html');
+          // Offline fallback - show a simple offline message instead of stale HTML
+          return new Response(
+            `<!DOCTYPE html>
+            <html>
+              <head><title>Offline - GeoGraph</title></head>
+              <body style="background:#020617;color:#f8fafc;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;">
+                <div style="text-align:center;">
+                  <h1>You're Offline</h1>
+                  <p style="color:#94a3b8;">Please check your internet connection and try again.</p>
+                  <button onclick="location.reload()" style="margin-top:16px;padding:12px 24px;background:#3b82f6;color:white;border:none;border-radius:8px;cursor:pointer;font-size:16px;">Retry</button>
+                </div>
+              </body>
+            </html>`,
+            { headers: { 'Content-Type': 'text/html' } }
+          );
         })
     );
     return;
