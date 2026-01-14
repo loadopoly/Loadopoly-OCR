@@ -1,11 +1,11 @@
 -- ============================================
--- COMPREHENSIVE DATABASE HEALTH CHECK (v2.8.0)
+-- COMPREHENSIVE DATABASE HEALTH CHECK (v2.8.1)
 -- ============================================
 -- Run this query to verify your Supabase schema
--- is up to date with the Loadopoly-OCR v2.8.0 frontend.
+-- is up to date with the Loadopoly-OCR v2.8.1 frontend.
 --
 -- All items should show ✅ status.
--- If any show ❌, run COMPLETE_SCHEMA_SETUP_V2.8.0.sql
+-- If any show ❌, run COMPLETE_SCHEMA_SETUP_V2.8.1.sql
 -- ============================================
 
 SELECT 'Table: processing_queue' as schema_item, 

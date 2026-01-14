@@ -1,8 +1,8 @@
 -- =============================================
--- LOADOPOLY-OCR v2.8.0 - COMPLETE SCHEMA SETUP
+-- LOADOPOLY-OCR v2.8.1 - COMPLETE SCHEMA SETUP
 -- =============================================
 -- Run this script to bring your Supabase project
--- up to date with the v2.8.0 frontend requirements.
+-- up to date with the v2.8.1 frontend requirements.
 --
 -- This script is idempotent - safe to run multiple times.
 -- =============================================
@@ -327,5 +327,5 @@ END $$;
 -- ============================================
 -- COMPLETION MESSAGE
 -- ============================================
-SELECT '✅ Loadopoly-OCR v2.8.0 schema setup complete!' as result,
-       'Run HEALTH_CHECK_V2.8.0.sql to verify' as next_step;
+SELECT '✅ Loadopoly-OCR v2.8.1 schema setup complete!' as result,
+       'Run HEALTH_CHECK_V2.8.1.sql to verify' as next_step;

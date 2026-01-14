@@ -8,11 +8,11 @@ All database migration and fix scripts are located in the `sql/` directory.
 - `sql/FIX_ALL_COLUMNS_TO_UPPERCASE.sql`: Renames all columns to UPPERCASE to match the application schema.
 - `sql/ADD_MISSING_COLUMNS.sql`: Adds any missing columns required by the latest version.
 - `sql/PROCESSING_QUEUE_SCHEMA.sql`: **Required for v2.8+** - Sets up background processing queue with Realtime support.
-- `sql/COMPLETE_SCHEMA_SETUP_V2.8.0.sql`: Complete idempotent schema setup for v2.8+.
+- `sql/COMPLETE_SCHEMA_SETUP_V2.8.1.sql`: Complete idempotent schema setup for v2.8+.
 
-## ⚠️ Important: Processing Queue Setup (v2.8.1+)
+## ⚠️ Important: Processing Queue Setup (v2.8.1)
 
-For edge processing to work correctly, you must run the updated `claim_processing_job` function:
+For edge processing to work correctly, you must update the `claim_processing_job` function to include `user_id`:
 
 ```sql
 -- Run this in Supabase SQL Editor to enable USER_ID in job claims

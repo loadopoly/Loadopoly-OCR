@@ -423,7 +423,7 @@ export default function SettingsPanel({
       </div>
 
       <div className="text-center text-xs text-slate-600 mt-8 pb-4 flex flex-col gap-2 items-center">
-        <p>GeoGraph Node v2.5.5 • Local-First Architecture</p>
+        <p>GeoGraph Node v2.8.1 • Local-First Architecture</p>
         <button 
           onClick={onOpenPrivacy}
           className="text-slate-500 hover:text-slate-300 underline transition-colors"
