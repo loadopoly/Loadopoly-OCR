@@ -1070,6 +1070,20 @@ export default function App() {
     setActiveTab('assets');
   };
 
+  // Debug logs state for mobile debugging
+  const [debugLogs, setDebugLogs] = useState<Array<{id: string, timestamp: string, message: string, level: 'info'|'error'|'warn'}>>([]);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const debugLogger = useCallback((message: string, level: 'info'|'error'|'warn' = 'info') => {
+    const logEntry = {
+      id: uuidv4(),
+      timestamp: new Date().toLocaleTimeString(),
+      message,
+      level
+    };
+    setDebugLogs(prev => [...prev.slice(-49), logEntry]); // Keep last 50 logs
+    console.log(`[BatchProcessor] ${message}`);
+  }, []);
+
   // Throttled batch processing - handles large batches efficiently on mobile
   const processNextBatchItem = useCallback(() => {
     // Clear any pending timeout to prevent duplicate triggers
@@ -1081,9 +1095,13 @@ export default function App() {
     setBatchQueue(currentQueue => {
       // Count currently processing items
       const processingCount = currentQueue.filter(i => i.status === 'PROCESSING').length;
+      const queuedCount = currentQueue.filter(i => i.status === 'QUEUED').length;
+      
+      debugLogger(`Processing: ${processingCount}, Queued: ${queuedCount}`);
       
       // Check if we're at concurrency limit
       if (processingCount >= MAX_CONCURRENT_BATCH_JOBS) {
+        debugLogger(`At concurrency limit (${MAX_CONCURRENT_BATCH_JOBS}), scheduling retry`);
         // Schedule retry after a delay
         batchProcessingTimeoutRef.current = setTimeout(() => processNextBatchItem(), 500);
         return currentQueue;
@@ -1092,84 +1110,127 @@ export default function App() {
       // Find next item to process
       const nextItemIndex = currentQueue.findIndex(i => i.status === 'QUEUED');
       if (nextItemIndex === -1) {
+        debugLogger('No more items to process');
         return currentQueue; // Nothing left to process
       }
       
       const itemToProcess = currentQueue[nextItemIndex];
+      debugLogger(`Starting ${itemToProcess.file.name}`);
       
-      // Mark as processing immediately
-      const updatedQueue = currentQueue.map((item, idx) => 
+      // Mark as processing immediately and return - don't do async work in setState
+      return currentQueue.map((item, idx) => 
         idx === nextItemIndex ? { ...item, status: 'PROCESSING' as const, progress: 5 } : item
       );
+    });
+    
+    // Process the next item asynchronously (outside of setState)
+    processItemAsync();
+    
+  }, [isOnline, selectedScanType, user, debugLogger]);
+  
+  // Separate async function for processing individual items
+  const processItemAsync = useCallback(async () => {
+    let itemToProcess: BatchItem | null = null;
+    
+    // Find the item that was just marked as PROCESSING
+    setBatchQueue(currentQueue => {
+      const processingItem = currentQueue.find(i => i.status === 'PROCESSING' && i.progress === 5);
+      if (processingItem) {
+        itemToProcess = processingItem;
+      }
+      return currentQueue;
+    });
+    
+    if (!itemToProcess) {
+      debugLogger('No processing item found, scheduling next check', 'warn');
+      batchProcessingTimeoutRef.current = setTimeout(() => processNextBatchItem(), 100);
+      return;
+    }
+    
+    // Type assertion to fix TypeScript inference issue
+    const item = itemToProcess as BatchItem;
+    
+    debugLogger(`Processing ${item.file.name}...`);
+    
+    try {
+      // Update progress to 10%
+      setBatchQueue(q => q.map(i => i.id === item.id ? { ...i, progress: 10 } : i));
       
-      // Process asynchronously
-      (async () => {
-        try {
-          // Update progress to 10%
-          setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, progress: 10 } : i));
-          
-          if (itemToProcess.scanType) (itemToProcess.file as any).scanType = itemToProcess.scanType;
-          
-          const newAsset = await createInitialAsset(itemToProcess.file);
-          if (newAsset.sqlRecord) {
-            newAsset.sqlRecord.SOURCE_COLLECTION = "Batch Ingest";
-            newAsset.sqlRecord.IS_ENTERPRISE = false;
-          }
-          
-          // Update progress to 30%
-          setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, progress: 30 } : i));
-          
-          setLocalAssets(prev => [newAsset, ...prev]);
-          await saveAsset(newAsset);
-          
-          // Update progress to 50%
-          setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, progress: 50 } : i));
-
-          if (!isOnline) {
-            setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
-            // Release object URL to free memory
-            if (newAsset.imageUrl?.startsWith('blob:')) {
-              URL.revokeObjectURL(newAsset.imageUrl);
-            }
-            return;
-          }
-
-          // Integration with background processing queue
-          try {
-            await processingQueueService.queueFile(itemToProcess.file, {
-              scanType: itemToProcess.scanType || selectedScanType || ScanType.DOCUMENT,
-              priority: 3, 
-              metadata: {
-                DOCUMENT_TITLE: newAsset.sqlRecord?.DOCUMENT_TITLE,
-                SOURCE_COLLECTION: "Batch Ingest"
-              }
-            }, newAsset.id);
-            
-            setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
-          } catch (queueErr) {
-            // Fallback to client-side
-            const processedAsset = await processAssetPipeline(newAsset, itemToProcess.file);
-            setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-            if (!user) await saveAsset(processedAsset);
-            setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
-          }
-        } catch (e: any) {
-          console.error('Batch item processing failed:', e);
-          setBatchQueue(q => q.map(i => i.id === itemToProcess.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Failed" } : i));
-        } finally {
-          // Schedule next item with a small delay to allow GC and prevent UI blocking
-          batchProcessingTimeoutRef.current = setTimeout(() => processNextBatchItem(), 100);
-        }
-      })();
+      if (item.scanType) (item.file as any).scanType = item.scanType;
       
-      // Also try to start more items if we have capacity
-      if (processingCount + 1 < MAX_CONCURRENT_BATCH_JOBS) {
-        batchProcessingTimeoutRef.current = setTimeout(() => processNextBatchItem(), 50);
+      const newAsset = await createInitialAsset(item.file);
+      if (newAsset.sqlRecord) {
+        newAsset.sqlRecord.SOURCE_COLLECTION = "Batch Ingest";
+        newAsset.sqlRecord.IS_ENTERPRISE = false;
       }
       
-      return updatedQueue;
-    });
-  }, [isOnline, selectedScanType, user]);
+      debugLogger(`Created asset for ${item.file.name}`);
+      
+      // Update progress to 30%
+      setBatchQueue(q => q.map(i => i.id === item.id ? { ...i, progress: 30 } : i));
+      
+      setLocalAssets(prev => [newAsset, ...prev]);
+      await saveAsset(newAsset);
+      
+      debugLogger(`Saved asset for ${item.file.name}`);
+      
+      // Update progress to 50%
+      setBatchQueue(q => q.map(i => i.id === item.id ? { ...i, progress: 50 } : i));
+
+      if (!isOnline) {
+        debugLogger(`Offline - marking ${item.file.name} as completed`);
+        setBatchQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+        // Release object URL to free memory
+        if (newAsset.imageUrl?.startsWith('blob:')) {
+          URL.revokeObjectURL(newAsset.imageUrl);
+        }
+      } else {
+        // Integration with background processing queue
+        try {
+          debugLogger(`Queueing ${item.file.name} for server processing`);
+          
+          await processingQueueService.queueFile(item.file, {
+            scanType: item.scanType || selectedScanType || ScanType.DOCUMENT,
+            priority: 3, 
+            metadata: {
+              DOCUMENT_TITLE: newAsset.sqlRecord?.DOCUMENT_TITLE,
+              SOURCE_COLLECTION: "Batch Ingest"
+            }
+          }, newAsset.id);
+          
+          debugLogger(`Successfully queued ${item.file.name}`);
+          setBatchQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+        } catch (queueErr) {
+          debugLogger(`Server queue failed for ${item.file.name}, falling back to client processing: ${queueErr}`, 'warn');
+          
+          // Fallback to client-side processing with timeout protection
+          const processPromise = processAssetPipeline(newAsset, item.file);
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Client processing timeout')), 30000)
+          );
+          
+          try {
+            const processedAsset = await Promise.race([processPromise, timeoutPromise]) as any;
+            setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
+            if (!user) await saveAsset(processedAsset);
+            setBatchQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
+            debugLogger(`Client processing completed for ${item.file.name}`);
+          } catch (clientErr: any) {
+            debugLogger(`Client processing failed for ${item.file.name}: ${clientErr.message}`, 'error');
+            throw clientErr; // Will be caught by outer try-catch
+          }
+        }
+      }
+    } catch (e: any) {
+      debugLogger(`Processing failed for ${item.file.name}: ${e.message}`, 'error');
+      setBatchQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'ERROR', progress: 100, errorMsg: e.message || "Failed" } : i));
+    } finally {
+      // Schedule next item with a delay to allow GC and prevent UI blocking
+      debugLogger(`Finished ${item.file.name}, scheduling next item`);
+      batchProcessingTimeoutRef.current = setTimeout(() => processNextBatchItem(), 200);
+    }
+    
+  }, [isOnline, selectedScanType, user, debugLogger]);
 
   const getAggregatedGroups = () => {
     const groups: Record<string, DigitalAsset[]> = {};
@@ -2223,13 +2284,51 @@ export default function App() {
                             </span>
                         )}
                     </h3>
-                    <button onClick={() => setShowProcessingPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
+                    <div className="flex items-center gap-2">
+                        <button 
+                            onClick={() => setShowDebugPanel(!showDebugPanel)}
+                            className={`p-2 rounded text-xs font-mono ${showDebugPanel ? 'bg-blue-500/20 text-blue-400' : 'text-slate-500 hover:text-white'}`}
+                            title="Toggle Debug Logs"
+                        >
+                            LOG
+                        </button>
+                        <button onClick={() => setShowProcessingPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
+                    </div>
                 </div>
                 <div className="flex-1 overflow-auto p-2 space-y-4 custom-scrollbar">
                     {/* Server-Side Monitor Section */}
                     {user?.id && (
                         <div className="px-2 py-2 border-b border-slate-800/50 pb-4">
                             <QueueMonitor userId={user.id} />
+                        </div>
+                    )}
+
+                    {/* Debug Logs Panel */}
+                    {showDebugPanel && (
+                        <div className="px-2 py-2 border-b border-slate-800/50 pb-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+                                    <Activity size={10} />
+                                    Debug Logs
+                                </h4>
+                                <button 
+                                    onClick={() => setDebugLogs([])}
+                                    className="text-[8px] text-slate-500 hover:text-white uppercase"
+                                >
+                                    Clear
+                                </button>
+                            </div>
+                            <div className="bg-slate-950 border border-slate-800 rounded max-h-32 overflow-y-auto text-[8px] font-mono">
+                                {debugLogs.length === 0 ? (
+                                    <div className="p-2 text-slate-600 text-center">No logs yet</div>
+                                ) : (
+                                    debugLogs.map(log => (
+                                        <div key={log.id} className={`p-1 border-b border-slate-800/30 ${log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-yellow-400' : 'text-slate-300'}`}>
+                                            <span className="text-slate-500">{log.timestamp}</span> {log.message}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
                         </div>
                     )}
 
