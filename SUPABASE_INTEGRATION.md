@@ -168,6 +168,27 @@ High-level service functions for database operations.
 - `fetchUserAssets(userId)` - Get user-specific documents
 - `contributeAssetToGlobalCorpus(asset, userId, license, isAutoSave)` - Upload new document
 - `recordWeb3Transaction(userId, assetId, txHash, details)` - Log blockchain transaction
+- `subscribeToAssetUpdates(userId, onUpdated, onInserted)` - **v2.8.1+** Real-time subscription to asset changes
+
+### [src/services/processingQueueService.ts](src/services/processingQueueService.ts)
+Background processing queue management for server-side OCR.
+
+**Functions:**
+- `init(userId)` - Initialize service with user context
+- `queueFile(file, options, existingAssetId)` - Queue file for edge processing
+- `queueFiles(files, options, onProgress)` - Batch queue multiple files
+- `getStats()` - Get queue statistics (pending, processing, completed, failed)
+- `getUserJobs(options)` - Fetch user's job history
+- `getJobById(jobId)` - Fetch specific job with result data
+- `cancelJob(jobId)` - Cancel pending job
+- `retryJob(jobId)` - Retry failed job
+- `setCallbacks(callbacks)` - Set progress/completion callbacks
+
+**Callbacks:**
+- `onJobStarted(job)` - Triggered when job begins processing
+- `onJobProgress(job)` - Triggered on progress updates
+- `onJobCompleted(job)` - Triggered when job completes successfully
+- `onJobFailed(job)` - Triggered on job failure
 
 ## API Endpoints
 
@@ -315,9 +336,9 @@ If upgrading from the old schema:
 ## Future Enhancements
 
 Potential improvements:
-- [ ] Real-time subscriptions for collaborative features
+- [x] **Real-time subscriptions for asset updates** - Implemented in v2.8.1 via `subscribeToAssetUpdates()`
+- [x] **Edge Functions for OCR processing** - `api/process-ocr` handles server-side OCR
 - [ ] Full-text search using Supabase FTS
-- [ ] Edge Functions for complex business logic
 - [ ] PostgREST views for common queries
 - [ ] Automated backups and versioning
 - [ ] Data archival strategies

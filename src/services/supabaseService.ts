@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { supabase, isSupabaseConfigured, testSupabaseConnection } from '../lib/supabaseClient';
 import { encryptData, decryptData } from '../lib/encryption';
 import type { Database } from '../lib/database.types';
+import { logger } from '../lib/logger';
 
 // Re-export utilities for convenience
 export { supabase, isSupabaseConfigured, testSupabaseConnection };
@@ -246,6 +247,70 @@ export const contributeAssetToGlobalCorpus = async (
     console.error("Supabase sync failed:", err);
     throw err;
   }
+};
+
+/**
+ * Subscribe to real-time asset updates for a user.
+ * This is more efficient than polling processing_queue - we watch the final destination table.
+ */
+export const subscribeToAssetUpdates = (
+  userId: string,
+  onAssetUpdated: (asset: DigitalAsset) => void,
+  onAssetInserted: (asset: DigitalAsset) => void
+): (() => void) => {
+  if (!supabase || !userId) {
+    logger.warn('Cannot subscribe to asset updates: Supabase not configured or no userId');
+    return () => {};
+  }
+
+  const channel = supabase
+    .channel(`assets:${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'historical_documents_global',
+        filter: `USER_ID=eq.${userId}`,
+      },
+      async (payload) => {
+        try {
+          const asset = await mapRowToAsset(payload.new, userId);
+          logger.debug('Asset updated via Realtime', { assetId: asset.id, status: asset.status });
+          onAssetUpdated(asset);
+        } catch (err) {
+          logger.error('Failed to map updated asset', { error: err });
+        }
+      }
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'historical_documents_global',
+        filter: `USER_ID=eq.${userId}`,
+      },
+      async (payload) => {
+        try {
+          const asset = await mapRowToAsset(payload.new, userId);
+          logger.debug('Asset inserted via Realtime', { assetId: asset.id });
+          onAssetInserted(asset);
+        } catch (err) {
+          logger.error('Failed to map inserted asset', { error: err });
+        }
+      }
+    )
+    .subscribe((status) => {
+      if (status === 'SUBSCRIBED') {
+        logger.info(`Subscribed to asset updates for user ${userId}`);
+      }
+    });
+
+  // Return unsubscribe function
+  return () => {
+    supabase?.removeChannel(channel);
+  };
 };
 
 /**
