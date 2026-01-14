@@ -342,6 +342,9 @@ export default function App() {
   const pendingLocalCount = localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
   const pendingGlobalCount = globalAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
   const totalPendingCount = pendingLocalCount + pendingGlobalCount;
+  
+  // Count stuck assets (PROCESSING but likely from prior session)
+  const stuckAssetsCount = localAssets.filter(a => a.status === AssetStatus.PROCESSING).length;
 
   useEffect(() => {
     const handleShortcuts = (e: KeyboardEvent) => {
@@ -742,6 +745,56 @@ export default function App() {
         setIsProcessing(false);
     }
   };
+
+  // Auto-restart stuck assets from prior sessions (PROCESSING status with imageBlob available)
+  const restartStuckAssets = useCallback(async () => {
+    const stuckAssets = localAssets.filter(a => 
+      a.status === AssetStatus.PROCESSING && (a.imageBlob || a.imageUrl?.startsWith('http'))
+    );
+    
+    if (stuckAssets.length === 0) return 0;
+    
+    console.log(`[AutoRestart] Found ${stuckAssets.length} stuck assets from prior session`);
+    announce(`Restarting ${stuckAssets.length} stuck item${stuckAssets.length !== 1 ? 's' : ''} from prior session...`);
+    
+    let restarted = 0;
+    for (const asset of stuckAssets) {
+      try {
+        // Reset to PENDING first so resumeAsset can pick it up
+        const resetAsset = { ...asset, status: AssetStatus.PENDING, progress: 0 };
+        setLocalAssets(prev => prev.map(a => a.id === asset.id ? resetAsset : a));
+        await saveAsset(resetAsset);
+        restarted++;
+      } catch (e) {
+        console.error(`Failed to reset stuck asset ${asset.id}:`, e);
+      }
+    }
+    
+    return restarted;
+  }, [localAssets]);
+
+  // On mount: auto-restart stuck assets once (with slight delay to ensure state is loaded)
+  const hasAutoRestartedRef = useRef(false);
+  useEffect(() => {
+    if (hasAutoRestartedRef.current) return;
+    if (localAssets.length === 0) return;
+    
+    const stuckCount = localAssets.filter(a => 
+      a.status === AssetStatus.PROCESSING && (a.imageBlob || a.imageUrl?.startsWith('http'))
+    ).length;
+    
+    if (stuckCount > 0) {
+      hasAutoRestartedRef.current = true;
+      // Delay to let UI settle
+      setTimeout(() => {
+        restartStuckAssets().then(count => {
+          if (count > 0) {
+            console.log(`[AutoRestart] Reset ${count} stuck assets to PENDING`);
+          }
+        });
+      }, 1500);
+    }
+  }, [localAssets, restartStuckAssets]);
 
   useEffect(() => {
     if (isOnline && localAssets.length > 0) {
@@ -2539,6 +2592,23 @@ export default function App() {
                             Processing in progress...
                         </div>
                     )}
+                    {/* Restart Stuck button - for prior session items */}
+                    {stuckAssetsCount > 0 && (
+                        <button 
+                            onClick={async () => {
+                                const count = await restartStuckAssets();
+                                if (count > 0) {
+                                    announce(`Restarted ${count} stuck items. Processing will begin shortly.`);
+                                }
+                            }}
+                            disabled={isProcessing}
+                            className="w-full py-2 bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 mb-2"
+                        >
+                            <RefreshCw size={14} />
+                            RESTART {stuckAssetsCount} STUCK FROM PRIOR SESSION
+                        </button>
+                    )}
+                    
                     <button 
                         onClick={handleProcessAllPending}
                         disabled={isProcessing || (totalPendingCount === 0 && batchQueue.filter(i => i.status === 'QUEUED').length === 0)}
