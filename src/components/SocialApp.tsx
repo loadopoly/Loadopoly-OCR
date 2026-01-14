@@ -64,7 +64,7 @@ export default function SocialApp({
         <div>
           <h2 className="text-2xl font-bold text-white flex items-center gap-3">
             Social Hub
-            <span className="px-2 py-0.5 bg-primary-500/10 border border-primary-500/20 rounded text-[10px] text-primary-400 font-mono uppercase tracking-widest">v2.0 curated</span>
+            <span className="px-2 py-0.5 bg-primary-500/10 border border-primary-500/20 rounded text-[10px] text-primary-400 font-mono uppercase tracking-widest">v2.8.1</span>
           </h2>
           <p className="text-sm text-slate-400 mt-1">Unified ecosystem for collaboration, communication, and social equity.</p>
         </div>

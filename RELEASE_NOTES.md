@@ -1,6 +1,29 @@
-# 🚀 GeoGraph Node: v2.6.0 Release Notes
+# 🚀 GeoGraph Node: v2.8.1 Release Notes
 
-## 🧬 v2.6.0 - High-Concurrency Processing Infrastructure (2026-01-12)
+## 🧬 v2.8.1 - Optimized Realtime Feedback Loop (2026-01-14)
+
+### 🎯 Overview
+This release resolves a critical bottleneck in the OCR processing pipeline by implementing a direct, server-to-client Realtime feedback loop. It eliminates redundant API calls and ensures the UI reflects processing results instantly as they are written to the database.
+
+### 💡 The Philosophy
+> *"The user's time is the most valuable asset. Every millisecond between data being ready and data being visible is a failure of architecture."*
+
+### 🛠️ Key Architectural Pillars
+
+*   **Direct Asset Observation**: Shifted from monitoring metadata (queue status) to monitoring primary data (asset table). This bypasses the multi-step polling/fetching routine used in previous versions.
+*   **User-Scoped Subscriptions**: Implemented Realtime filters on the backend to ensure clients only receive updates for their own assets, maintaining privacy and reducing network overhead.
+*   **Decentralized Asset Hydration**: The Edge Function now handles the heavy lifting of global corpus synchronization, allowing the client to simply receive the final resulting object.
+
+### ⚙️ Improvements
+- **Realtime**: Replaced `processing_queue` subscription with direct `historical_documents_global` monitoring.
+- **Backend**: Updated `claim_processing_job` to include `user_id` in its return payload for edge worker attribution.
+- **Client**: Streamlined `App.tsx` and `processingQueueService` to handle asset arrival as a single event.
+
+---
+
+# 🚀 GeoGraph Node: v2.8.0 Release Notes
+
+## 🧬 v2.8.0 - High-Concurrency PWA Suite (2026-01-14)
 
 ### 🎯 Overview
 A major architectural overhaul of the data processing pipeline, introducing server-side background queues, fault-tolerant API consumption, and client-side performance optimizations.

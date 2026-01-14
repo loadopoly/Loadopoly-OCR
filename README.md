@@ -3,7 +3,7 @@
 [![MIT License](https://img.shields.io/badge/Code-MIT-blue.svg)](LICENSE)
 [![Data CC0](https://img.shields.io/badge/Data-CC0-brightgreen.svg)](DATA-LICENSE.md)
 [![Privacy Policy](https://img.shields.io/badge/Privacy-Policy-orange.svg)](PRIVACY-POLICY.md)
-[![Version](https://img.shields.io/badge/Version-2.7.0-blueviolet.svg)](RELEASE_NOTES.md)
+[![Version](https://img.shields.io/badge/Version-2.8.1-blueviolet.svg)](RELEASE_NOTES.md)
 
 **Open-source code (MIT) • Public-domain contributions (CC0) • Commercial dataset licensing available**
 
@@ -60,6 +60,12 @@ For mass usage, ensure your Supabase tables have RLS enabled. The project includ
 3. **PWA:** The app is a full PWA. Ensure you serve it over HTTPS for service worker support.
 
 ---
+
+## 🚀 What's New in v2.8.1
+
+- **Optimized Realtime Feedback Loop**: Instant UI updates via direct Supabase Realtime table monitoring.
+- **Improved Edge Reliability**: Fixed processing bottlenecks and established stronger data attribution for background workers.
+- **Enhanced Data Flow**: Single-trip asset hydration from database to local IndexedDB.
 
 ## 🚀 What's New in v2.5.3
 
