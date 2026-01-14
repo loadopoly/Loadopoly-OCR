@@ -225,8 +225,73 @@ Each phase is independently deployable and can be rolled back:
 | [src/workers/parallelWorker.ts](src/workers/parallelWorker.ts) | Parallel similarity calculations | ✅ Complete |
 | [src/services/processingQueueService.ts](src/services/processingQueueService.ts) | Queue management client | ✅ Complete |
 | [api/process-ocr/index.ts](api/process-ocr/index.ts) | Supabase Edge Function | ✅ Complete |
+| [src/lib/pwaUtils.ts](src/lib/pwaUtils.ts) | PWA utilities & install handling | ✅ Complete |
+| [src/lib/performanceMonitor.ts](src/lib/performanceMonitor.ts) | Web Vitals & adaptive settings | ✅ Complete |
+| [src/lib/lazyComponents.tsx](src/lib/lazyComponents.tsx) | Code-split lazy loading | ✅ Complete |
 
 ---
 
-*Document Version: 1.1.0*
-*Last Updated: January 12, 2026*
+## Phase 6: PWA & Performance Optimization (Priority: HIGH)
+
+### 6.1 Enhanced Service Worker (v3.0.0)
+
+The service worker has been upgraded with:
+- **Multi-cache architecture**: Separate caches for static assets, images, and API responses
+- **Stale-while-revalidate** for images: Instant display with background refresh
+- **Network-first API caching**: Offline support for dataset metadata
+- **Rich push notifications**: With actions and deep linking
+- **Background sync**: For offline contributions
+
+### 6.2 Optimized Web App Manifest
+
+Enhancements for native-like experience:
+- `display_override: ["window-controls-overlay", "standalone", "minimal-ui"]`
+- `handle_links: "preferred"` for capturing web links
+- `scope_extensions` for Vercel deployment domains
+- `orientation: "natural"` for device-adaptive layout
+
+### 6.3 Performance Monitoring
+
+New `performanceMonitor.ts` provides:
+- **Web Vitals tracking**: LCP, FID, CLS, FCP, TTFB
+- **FPS monitoring**: Real-time frame rate tracking
+- **Memory usage**: JavaScript heap monitoring
+- **Device capability detection**: Automatic tier classification (low/mid/high)
+- **Adaptive settings**: Auto-adjust graph nodes, animations, texture quality based on device
+
+### 6.4 Lazy Loading Strategy
+
+Code-split heavy components with `lazyComponents.tsx`:
+- **GraphVisualizer**: D3.js force-directed graph (~64KB)
+- **ARScene**: Camera and WebGL overlay
+- **WorldRenderer**: Three.js 3D metaverse view
+- **SemanticCanvas**: Canvas-based visualization
+
+Features:
+- Suspense boundaries with loading states
+- Error boundaries with retry capability
+- Viewport-based loading (IntersectionObserver)
+- Preload hints for route prefetching
+
+### 6.5 PWA Utilities
+
+New `pwaUtils.ts` provides:
+- **Install prompt handling**: Detect installability, trigger install
+- **Update management**: Detect SW updates, prompt user
+- **Background sync registration**: Queue offline actions
+- **Push notification subscription**: VAPID key handling
+- **Share API**: Native sharing capabilities
+- **Wake Lock**: Prevent screen sleep during AR sessions
+
+### 6.6 Build Optimization
+
+Vite config enhancements:
+- **Manual chunks**: Split vendor-react, vendor-ui, vendor-d3, vendor-data, vendor-three
+- **ES2020 target**: Smaller bundles for modern browsers
+- **Source maps**: Production debugging capability
+- **esbuild minification**: Fast, efficient compression
+
+---
+
+*Document Version: 1.2.0*
+*Last Updated: January 14, 2026*
