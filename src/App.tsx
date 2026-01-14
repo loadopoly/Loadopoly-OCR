@@ -746,7 +746,7 @@ export default function App() {
     }
   };
 
-  // Auto-restart stuck assets from prior sessions (PROCESSING status with imageBlob available)
+  // Concurrent restart of stuck assets - processes while resetting more
   const restartStuckAssets = useCallback(async () => {
     const stuckAssets = localAssets.filter(a => 
       a.status === AssetStatus.PROCESSING && (a.imageBlob || a.imageUrl?.startsWith('http'))
@@ -754,24 +754,69 @@ export default function App() {
     
     if (stuckAssets.length === 0) return 0;
     
-    console.log(`[AutoRestart] Found ${stuckAssets.length} stuck assets from prior session`);
-    announce(`Restarting ${stuckAssets.length} stuck item${stuckAssets.length !== 1 ? 's' : ''} from prior session...`);
+    console.log(`[AutoRestart] Found ${stuckAssets.length} stuck assets - starting concurrent recovery`);
+    announce(`Recovering ${stuckAssets.length} stuck item${stuckAssets.length !== 1 ? 's' : ''}...`);
     
+    // Process in concurrent batches - reset a few, process them, continue
+    const CONCURRENT_RESET = 3; // Match MAX_CONCURRENT_BATCH_JOBS
     let restarted = 0;
-    for (const asset of stuckAssets) {
+    let activeProcessing = 0;
+    
+    const processOne = async (asset: DigitalAsset) => {
+      activeProcessing++;
       try {
-        // Reset to PENDING first so resumeAsset can pick it up
-        const resetAsset = { ...asset, status: AssetStatus.PENDING, progress: 0 };
-        setLocalAssets(prev => prev.map(a => a.id === asset.id ? resetAsset : a));
-        await saveAsset(resetAsset);
-        restarted++;
+        let fileToProcess: File | Blob | null = asset.imageBlob || null;
+        
+        if (!fileToProcess && asset.imageUrl?.startsWith('http')) {
+          const response = await fetch(asset.imageUrl);
+          fileToProcess = await response.blob();
+        }
+        
+        if (fileToProcess) {
+          const file = fileToProcess instanceof File 
+            ? fileToProcess 
+            : new File([fileToProcess], asset.sqlRecord?.DOCUMENT_TITLE || `recover_${asset.id}.jpg`, { type: fileToProcess.type });
+          
+          const processedAsset = await processAssetPipeline(asset, file);
+          setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+          if (!user) await saveAsset(processedAsset);
+        }
       } catch (e) {
-        console.error(`Failed to reset stuck asset ${asset.id}:`, e);
+        console.error(`[AutoRestart] Failed to process ${asset.id}:`, e);
+        // Mark as failed so user knows
+        setLocalAssets(prev => prev.map(a => 
+          a.id === asset.id ? { ...a, status: AssetStatus.FAILED, errorMessage: String(e) } : a
+        ));
+      } finally {
+        activeProcessing--;
+      }
+    };
+    
+    // Process all stuck assets with concurrency limit
+    for (let i = 0; i < stuckAssets.length; i++) {
+      // Wait if at capacity
+      while (activeProcessing >= CONCURRENT_RESET) {
+        await new Promise(r => setTimeout(r, 200));
+      }
+      
+      const asset = stuckAssets[i];
+      // Don't await - fire and continue to next
+      processOne(asset);
+      restarted++;
+      
+      // Small stagger to prevent overwhelming
+      if (i < stuckAssets.length - 1) {
+        await new Promise(r => setTimeout(r, 50));
       }
     }
     
+    // Wait for all remaining to complete
+    while (activeProcessing > 0) {
+      await new Promise(r => setTimeout(r, 200));
+    }
+    
     return restarted;
-  }, [localAssets]);
+  }, [localAssets, user]);
 
   // On mount: auto-restart stuck assets once (with slight delay to ensure state is loaded)
   const hasAutoRestartedRef = useRef(false);
@@ -785,11 +830,12 @@ export default function App() {
     
     if (stuckCount > 0) {
       hasAutoRestartedRef.current = true;
-      // Delay to let UI settle
+      // Delay to let UI settle, then start concurrent processing
       setTimeout(() => {
         restartStuckAssets().then(count => {
           if (count > 0) {
-            console.log(`[AutoRestart] Reset ${count} stuck assets to PENDING`);
+            console.log(`[AutoRestart] Processed ${count} stuck assets`);
+            announce(`Recovered ${count} items from prior session.`);
           }
         });
       }, 1500);
