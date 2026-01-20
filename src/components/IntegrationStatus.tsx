@@ -222,8 +222,11 @@ export function useIntegrationStatus() {
     try {
       const { supabase, isSupabaseConfigured } = await import('../lib/supabaseClient');
       if (!isSupabaseConfigured() || !supabase) return 'disconnected';
-      const { error } = await supabase.from('GEOGRAPH_CORPUS_ASSETS').select('ID').limit(1);
-      return error ? 'error' : 'connected';
+      // Use correct table name - historical_documents_global
+      const { error } = await supabase.from('historical_documents_global').select('ASSET_ID').limit(1);
+      // PGRST116 = no rows found, which is OK - connection works
+      if (error && error.code !== 'PGRST116') return 'error';
+      return 'connected';
     } catch {
       return 'error';
     }
