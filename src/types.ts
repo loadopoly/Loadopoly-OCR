@@ -320,6 +320,7 @@ export interface DigitalAsset {
   progress?: number; // 0-100 for ingestion tracking
   processingAnalysis?: string; // Raw LLM thoughts
   errorMessage?: string; // Captured error during processing
+  scanType?: ScanType; // Type of scan (ITEM, DOCUMENT, SCENERY)
   
   // The structured DB record
   sqlRecord?: HistoricalDocumentMetadata;
@@ -342,11 +343,12 @@ export interface ImageBundle {
 export interface BatchItem {
   id: string;
   file: File;
-  status: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'ERROR';
+  status: 'QUEUED' | 'PROCESSING' | 'COMPLETED' | 'ERROR' | 'FAILED';
   progress: number; // 0-100
   errorMsg?: string;
   assetId?: string; // Link to the created asset
   scanType?: ScanType;
+  stage?: string; // Processing stage description
 }
 
 export interface UserMessage {

@@ -35,8 +35,8 @@ export default defineConfig({
     },
   },
   build: {
-    // Generate source maps for debugging production issues
-    sourcemap: true,
+    // Disable source maps in production for smaller bundle
+    sourcemap: false,
     // Target modern browsers for smaller bundles
     target: 'es2020',
     // Use content hashes for cache busting
@@ -46,22 +46,66 @@ export default defineConfig({
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash].[ext]',
-        // Manual chunks for better caching and code splitting
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-ui': ['lucide-react'],
-          'vendor-data': ['dexie', '@supabase/supabase-js'],
-          // Separate heavy visualization libraries
-          'vendor-d3': ['d3'],
-          // Three.js and related 3D libraries (lazy loaded)
-          'vendor-three': ['three'],
+        // Aggressive manual chunks for optimal code splitting
+        manualChunks(id) {
+          // React core - smallest possible
+          if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
+            return 'vendor-react';
+          }
+          // Icons - commonly used but heavy
+          if (id.includes('lucide-react')) {
+            return 'vendor-icons';
+          }
+          // Supabase client - only needed when online
+          if (id.includes('@supabase/')) {
+            return 'vendor-supabase';
+          }
+          // IndexedDB / offline storage
+          if (id.includes('dexie')) {
+            return 'vendor-storage';
+          }
+          // D3 visualization - lazy load
+          if (id.includes('d3') || id.includes('d3-')) {
+            return 'vendor-d3';
+          }
+          // 3D/Three.js - lazy load, rarely used
+          if (id.includes('three') || id.includes('@react-three')) {
+            return 'vendor-3d';
+          }
+          // ethers/web3 - lazy load, optional
+          if (id.includes('ethers')) {
+            return 'vendor-web3';
+          }
+          // Google AI
+          if (id.includes('@google/genai')) {
+            return 'vendor-ai';
+          }
+          // Force graph - visualization
+          if (id.includes('react-force-graph')) {
+            return 'vendor-graph';
+          }
+          // Split heavy components into their own chunks
+          if (id.includes('/components/metaverse/')) {
+            return 'chunk-metaverse';
+          }
+          if (id.includes('/components/ClusterSync')) {
+            return 'chunk-cluster';
+          }
+          if (id.includes('/components/BatchProcessing') || id.includes('/components/QueueMonitor')) {
+            return 'chunk-batch';
+          }
+          if (id.includes('/services/')) {
+            return 'chunk-services';
+          }
         },
       },
     },
-    // Increase chunk size warning limit (we have manual chunks now)
-    chunkSizeWarningLimit: 600,
+    // Set reasonable chunk size warning
+    chunkSizeWarningLimit: 300,
     // Use esbuild for minification (faster than terser, included by default)
     minify: 'esbuild',
+    // Enable CSS code splitting
+    cssCodeSplit: true,
   },
   optimizeDeps: {
     esbuildOptions: {
