@@ -231,9 +231,18 @@ async function processJob(
     // Update progress: Processing with Gemini
     await updateProgress(supabase, job.id, 40, 'CALLING_GEMINI');
 
-    // Convert to base64
+    // Convert to base64 using chunked approach to avoid stack overflow
     const buffer = await imageData.arrayBuffer();
-    const base64 = btoa(String.fromCharCode(...new Uint8Array(buffer)));
+    const bytes = new Uint8Array(buffer);
+    
+    // Chunked base64 encoding to avoid "Maximum call stack size exceeded"
+    let base64 = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+      base64 += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    base64 = btoa(base64);
 
     // Call Gemini
     const result = await callGemini(genAI, base64, imageData.type, job);

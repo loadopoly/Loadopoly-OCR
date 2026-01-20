@@ -742,7 +742,7 @@ class ProcessingQueueService {
    * Can be called directly or via trigger
    */
   async invokeEdgeFunction(maxJobs: number = 5): Promise<{ processed: number; succeeded: number; failed: number } | null> {
-    if (!isSupabaseConfigured()) {
+    if (!isSupabaseConfigured() || !supabase) {
       logger.warn('Cannot invoke Edge Function: Supabase not configured');
       return null;
     }
