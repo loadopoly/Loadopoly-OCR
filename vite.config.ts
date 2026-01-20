@@ -64,9 +64,9 @@ export default defineConfig({
           if (id.includes('dexie')) {
             return 'vendor-storage';
           }
-          // D3 visualization - lazy load
-          if (id.includes('d3') || id.includes('d3-')) {
-            return 'vendor-d3';
+          // D3 + Force graph visualization - keep together, lazy load
+          if (id.includes('d3') || id.includes('d3-') || id.includes('react-force-graph')) {
+            return 'vendor-visualization';
           }
           // 3D/Three.js - lazy load, rarely used
           if (id.includes('three') || id.includes('@react-three')) {
@@ -80,22 +80,13 @@ export default defineConfig({
           if (id.includes('@google/genai')) {
             return 'vendor-ai';
           }
-          // Force graph - visualization
-          if (id.includes('react-force-graph')) {
-            return 'vendor-graph';
-          }
           // Split heavy components into their own chunks
           if (id.includes('/components/metaverse/')) {
             return 'chunk-metaverse';
           }
-          if (id.includes('/components/ClusterSync')) {
-            return 'chunk-cluster';
-          }
-          if (id.includes('/components/BatchProcessing') || id.includes('/components/QueueMonitor')) {
-            return 'chunk-batch';
-          }
-          if (id.includes('/services/')) {
-            return 'chunk-services';
+          // Cluster and batch components share dependencies
+          if (id.includes('/components/ClusterSync') || id.includes('/components/BatchProcessing') || id.includes('/components/QueueMonitor')) {
+            return 'chunk-processing-ui';
           }
         },
       },
