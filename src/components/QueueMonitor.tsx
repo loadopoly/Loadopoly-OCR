@@ -64,6 +64,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
   const [localPendingCount, setLocalPendingCount] = useState(0);
   const [isRequeuing, setIsRequeuing] = useState(false);
   const [requeueProgress, setRequeueProgress] = useState({ done: 0, total: 0 });
+  const [lastRequeueResult, setLastRequeueResult] = useState<{ queued: number; failed: number; time: Date } | null>(null);
   const [diagnostics, setDiagnostics] = useState<any>(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [connectionTest, setConnectionTest] = useState<ConnectionTestResult | null>(null);
@@ -182,15 +183,21 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
         (done, total) => setRequeueProgress({ done, total })
       );
       
-      // Show result
+      // Save result for display
+      setLastRequeueResult({ queued: result.queued, failed: result.failed, time: new Date() });
+      
+      // Show result with more context
       if (result.failed > 0) {
-        alert(`Re-queued ${result.queued} assets. ${result.failed} failed.\n\nErrors:\n${result.errors.slice(0, 5).join('\n')}`);
+        alert(`Uploaded ${result.queued} to server queue. ${result.failed} failed.\n\nErrors:\n${result.errors.slice(0, 5).join('\n')}`);
+      } else if (result.queued > 0) {
+        alert(`✓ Successfully uploaded ${result.queued} items to server queue!\n\nCheck the "Waitlist" counter above - it should increase.\nJobs will be processed by the Edge Function.`);
       } else {
-        alert(`Successfully queued ${result.queued} assets for server processing!`);
+        alert('No items were queued. All assets may be missing image data.');
       }
       
-      // Refresh stats
+      // Refresh stats and jobs immediately to show the new queue items
       await fetchStats();
+      await fetchJobs();
       onRequeueComplete?.();
     } catch (err) {
       console.error('Requeue failed:', err);
@@ -651,6 +658,23 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
         )}
       </div>
 
+      {/* Last re-queue result */}
+      {lastRequeueResult && (
+        <div className={`px-2 py-1.5 rounded border text-[9px] flex items-center justify-between ${
+          lastRequeueResult.failed > 0 
+            ? 'bg-amber-900/20 border-amber-700/30 text-amber-400' 
+            : 'bg-emerald-900/20 border-emerald-700/30 text-emerald-400'
+        }`}>
+          <span>
+            Last upload: {lastRequeueResult.queued} queued
+            {lastRequeueResult.failed > 0 && `, ${lastRequeueResult.failed} failed`}
+          </span>
+          <span className="text-slate-500">
+            {lastRequeueResult.time.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+          </span>
+        </div>
+      )}
+
       {/* Local pending assets indicator */}
       {localPendingCount > 0 && (
         <div className="px-2 py-2 bg-amber-900/20 border border-amber-700/30 rounded-lg">
@@ -663,23 +687,74 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
           <p className="text-[8px] text-amber-600/80 mb-2">
             These items are stored locally and need to be sent to server for OCR processing.
           </p>
-          <button
-            onClick={handleRequeueAll}
-            disabled={isRequeuing}
-            className="w-full py-1.5 px-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-[10px] font-medium rounded flex items-center justify-center gap-1.5 transition-colors"
-          >
-            {isRequeuing ? (
-              <>
+          <div className="flex gap-2">
+            <button
+              onClick={handleRequeueAll}
+              disabled={isRequeuing || isTesting}
+              className="flex-1 py-1.5 px-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-[10px] font-medium rounded flex items-center justify-center gap-1.5 transition-colors"
+            >
+              {isRequeuing ? (
+                <>
+                  <RefreshCw size={10} className="animate-spin" />
+                  {requeueProgress.done}/{requeueProgress.total}
+                </>
+              ) : (
+                <>
+                  <Upload size={10} />
+                  Upload to Server
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleTestConnection}
+              disabled={isRequeuing || isTesting}
+              className="py-1.5 px-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 disabled:cursor-not-allowed text-slate-300 text-[10px] rounded flex items-center justify-center gap-1 transition-colors"
+              title="Test server connection"
+            >
+              {isTesting ? (
                 <RefreshCw size={10} className="animate-spin" />
-                Re-queuing... {requeueProgress.done}/{requeueProgress.total}
-              </>
-            ) : (
-              <>
-                <Upload size={10} />
-                Re-queue All to Server
-              </>
-            )}
-          </button>
+              ) : (
+                <TestTube2 size={10} />
+              )}
+            </button>
+          </div>
+          
+          {/* Connection test results */}
+          {connectionTest && (
+            <div className="mt-2 p-2 bg-slate-900 rounded text-[8px] space-y-1">
+              <div className="flex items-center gap-1">
+                {connectionTest.storageUpload.success ? (
+                  <CheckCircle size={10} className="text-emerald-400" />
+                ) : (
+                  <AlertCircle size={10} className="text-rose-400" />
+                )}
+                <span className={connectionTest.storageUpload.success ? 'text-emerald-400' : 'text-rose-400'}>
+                  Storage: {connectionTest.storageUpload.success ? 'OK' : connectionTest.storageUpload.error}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                {connectionTest.queueInsert.success ? (
+                  <CheckCircle size={10} className="text-emerald-400" />
+                ) : (
+                  <AlertCircle size={10} className="text-rose-400" />
+                )}
+                <span className={connectionTest.queueInsert.success ? 'text-emerald-400' : 'text-rose-400'}>
+                  Queue Insert: {connectionTest.queueInsert.success ? 'OK' : connectionTest.queueInsert.error}
+                </span>
+              </div>
+              <div className="flex items-center gap-1">
+                {connectionTest.queueSelect.success ? (
+                  <CheckCircle size={10} className="text-emerald-400" />
+                ) : (
+                  <AlertCircle size={10} className="text-rose-400" />
+                )}
+                <span className={connectionTest.queueSelect.success ? 'text-emerald-400' : 'text-rose-400'}>
+                  Queue Read: {connectionTest.queueSelect.success ? 'OK' : connectionTest.queueSelect.error}
+                </span>
+              </div>
+            </div>
+          )}
+          
           {diagnostics && !diagnostics.canProcessServer && (
             <p className="text-[8px] text-rose-400 mt-1 text-center">
               {!diagnostics.userId ? 'Login required' : !diagnostics.isOnline ? 'Offline' : 'Check configuration'}
