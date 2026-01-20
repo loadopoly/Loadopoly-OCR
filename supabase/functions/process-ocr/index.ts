@@ -203,13 +203,29 @@ async function processJob(
     // Update progress: Fetching image
     await updateProgress(supabase, job.id, 20, 'FETCHING_IMAGE');
 
+    // Determine which bucket to use based on the image path
+    // If path starts with "corpus-images/", use that bucket; otherwise use "processing-uploads"
+    let bucket = 'processing-uploads';
+    let imagePath = job.image_path;
+    
+    if (job.image_path.startsWith('corpus-images/')) {
+      bucket = 'corpus-images';
+      imagePath = job.image_path.replace('corpus-images/', '');
+    } else if (job.image_path.includes('corpus-images')) {
+      // Handle full URL case
+      bucket = 'corpus-images';
+      imagePath = job.image_path.split('corpus-images/').pop() || job.image_path;
+    }
+    
+    console.log(`[${workerId}] Fetching from bucket: ${bucket}, path: ${imagePath}`);
+
     // Fetch image from storage
     const { data: imageData, error: fetchError } = await supabase.storage
-      .from('processing-uploads')
-      .download(job.image_path);
+      .from(bucket)
+      .download(imagePath);
 
     if (fetchError || !imageData) {
-      throw new Error(`Failed to fetch image: ${fetchError?.message}`);
+      throw new Error(`Failed to fetch image from ${bucket}/${imagePath}: ${fetchError?.message}`);
     }
 
     // Update progress: Processing with Gemini
