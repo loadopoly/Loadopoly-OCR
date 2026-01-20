@@ -533,13 +533,17 @@ export default function IntegrationsHub({ isOpen, onClose }: IntegrationsHubProp
                   <button 
                     onClick={async () => {
                       try {
-                        const { supabase } = await import('../lib/supabaseClient');
-                        if (!supabase) throw new Error('Supabase client not configured');
+                        const { supabase, testSupabaseConnection } = await import('../lib/supabaseClient');
+                        if (!supabase) throw new Error('Supabase client not configured. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
                         const start = Date.now();
-                        await supabase.from('GEOGRAPH_CORPUS_ASSETS').select('ID').limit(1);
-                        alert(`Supabase connection OK (${Date.now() - start}ms)`);
+                        const result = await testSupabaseConnection();
+                        if (result.connected) {
+                          alert(`✅ Supabase connection OK (${Date.now() - start}ms)`);
+                        } else {
+                          alert(`❌ Supabase error: ${result.error || 'Unknown error'}`);
+                        }
                       } catch (e: any) {
-                        alert(`Supabase error: ${e.message}`);
+                        alert(`❌ Supabase error: ${e.message}`);
                       }
                     }}
                     className="w-full text-left text-xs p-2 bg-slate-900/50 hover:bg-slate-700 rounded flex items-center gap-2"

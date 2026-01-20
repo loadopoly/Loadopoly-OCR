@@ -44,7 +44,8 @@ import {
   Radio,
   List,
   CloudDownload,
-  Sliders
+  Sliders,
+  Server
 } from 'lucide-react';
 import { v4 as uuidv4 } from 'uuid';
 import { 
@@ -276,10 +277,17 @@ export default function App() {
           setLocalAssets(prev => prev.map(a => 
             a.id === job.assetId ? { ...a, status: AssetStatus.PROCESSING, progress: 10 } : a
           ));
+          // Also update batch queue if item exists there
+          setBatchQueue(prev => prev.map(item => 
+            item.assetId === job.assetId ? { ...item, status: 'PROCESSING', progress: 10, stage: 'Started' } : item
+          ));
         },
         onJobProgress: (job) => {
           setLocalAssets(prev => prev.map(a => 
             a.id === job.assetId ? { ...a, progress: Math.min(90, job.progress) } : a
+          ));
+          setBatchQueue(prev => prev.map(item => 
+            item.assetId === job.assetId ? { ...item, progress: job.progress, stage: job.stage } : item
           ));
         },
         // onJobCompleted is now handled by the direct Realtime subscription below
@@ -289,14 +297,66 @@ export default function App() {
           setLocalAssets(prev => prev.map(a => 
             a.id === job.assetId ? { ...a, progress: 100 } : a
           ));
+          setBatchQueue(prev => prev.map(item => 
+            item.assetId === job.assetId ? { ...item, status: 'COMPLETED', progress: 100, stage: 'Done' } : item
+          ));
         },
         onJobFailed: (job) => {
           setLocalAssets(prev => prev.map(a => 
             a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, progress: 0, errorMessage: job.error } : a
           ));
+          setBatchQueue(prev => prev.map(item => 
+            item.assetId === job.assetId ? { ...item, status: 'FAILED', progress: 0, errorMsg: job.error || 'Processing failed' } : item
+          ));
         }
       });
     }
+  }, [user?.id]);
+
+  // Direct Realtime subscription to processing_queue for job updates
+  // This ensures we get updates even if the internal subscription fails
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const subscription = processingQueueService.subscribeToJobUpdates(
+      user.id,
+      (job) => {
+        console.log('📡 Queue Realtime update:', job.id, job.status, job.stage);
+        
+        // Update batch queue UI based on job status
+        setBatchQueue(prev => prev.map(item => {
+          if (item.assetId !== job.assetId) return item;
+
+          switch (job.status) {
+            case 'COMPLETED':
+              return { ...item, status: 'COMPLETED', progress: 100, stage: 'Done' };
+            case 'FAILED':
+              return { ...item, status: 'FAILED', progress: 0, errorMsg: job.error || 'Failed' };
+            case 'PROCESSING':
+              return { ...item, status: 'PROCESSING', progress: job.progress, stage: job.stage || 'Processing...' };
+            default:
+              return item;
+          }
+        }));
+
+        // Update local assets based on job status
+        if (job.status === 'COMPLETED') {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, status: AssetStatus.MINTED, progress: 100 } : a
+          ));
+        } else if (job.status === 'FAILED') {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, progress: 0, errorMessage: job.error } : a
+          ));
+        } else if (job.status === 'PROCESSING') {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, status: AssetStatus.PROCESSING, progress: job.progress } : a
+          ));
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, [user?.id]);
 
   // Direct Realtime subscription to historical_documents_global
@@ -362,6 +422,7 @@ export default function App() {
         case 'g': setIsGlobalView(prev => !prev); break;
         case 'r': if (isGlobalView) refreshGlobalData(); break;
         case 'w': setActiveTab('world'); break;
+        case 'q': setShowProcessingPanel(prev => !prev); break; // Queue panel toggle
       }
     };
 
@@ -1663,15 +1724,32 @@ export default function App() {
                 </div>
             </div>
           <div className="flex items-center gap-2">
-             {totalPendingCount > 0 && (
-                <button 
-                    onClick={() => setShowProcessingPanel(!showProcessingPanel)}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${showProcessingPanel ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}`}
-                >
-                    <div className={`w-2 h-2 rounded-full bg-amber-500 ${isProcessing ? 'animate-pulse' : ''}`}></div>
-                    <span className="text-xs font-bold">{totalPendingCount} PENDING</span>
-                </button>
-             )}
+             {/* Queue Status Button - ALWAYS VISIBLE */}
+             <button 
+                 onClick={() => setShowProcessingPanel(!showProcessingPanel)}
+                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
+                   showProcessingPanel 
+                     ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' 
+                     : totalPendingCount > 0 || stuckAssetsCount > 0
+                       ? 'bg-amber-900/30 border-amber-600/50 text-amber-400 hover:bg-amber-900/50'
+                       : 'bg-slate-800/50 border-slate-700 text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                 }`}
+                 title="Processing Queue (Q)"
+             >
+                 {totalPendingCount > 0 || stuckAssetsCount > 0 ? (
+                   <>
+                     <div className={`w-2 h-2 rounded-full bg-amber-500 ${isProcessing ? 'animate-pulse' : ''}`}></div>
+                     <span className="text-xs font-bold">
+                       {totalPendingCount > 0 ? `${totalPendingCount} PENDING` : `${stuckAssetsCount} STUCK`}
+                     </span>
+                   </>
+                 ) : (
+                   <>
+                     <CheckCircle size={14} className="text-emerald-500" />
+                     <span className="text-xs font-medium">Queue</span>
+                   </>
+                 )}
+             </button>
              {activeTab !== 'batch' && activeTab !== 'ar' && (
                 <>
                   <CameraCapture 
@@ -1709,6 +1787,41 @@ export default function App() {
           
           {activeTab === 'dashboard' && (
             <div className="space-y-8 max-w-6xl mx-auto">
+              {/* Processing Queue Status - ALWAYS VISIBLE on Dashboard */}
+              <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-white font-bold flex items-center gap-2">
+                    <Server size={18} className="text-primary-500" />
+                    Processing Queue Status
+                  </h3>
+                  <button 
+                    onClick={() => setShowProcessingPanel(true)}
+                    className="text-xs text-primary-400 hover:text-primary-300 flex items-center gap-1"
+                  >
+                    Open Full Panel <ChevronRight size={14} />
+                  </button>
+                </div>
+                {user?.id ? (
+                  <QueueMonitor userId={user.id} onRequeueComplete={() => {
+                    loadAssets().then(loaded => setLocalAssets(loaded));
+                  }} />
+                ) : (
+                  <div className="text-center py-6 text-slate-400">
+                    <User size={32} className="mx-auto mb-2 text-slate-600" />
+                    <p className="text-sm mb-2">Login to enable server-side processing</p>
+                    <p className="text-xs text-slate-500">
+                      {totalPendingCount > 0 && `${totalPendingCount} items waiting locally`}
+                    </p>
+                    <button 
+                      onClick={() => setActiveTab('settings')}
+                      className="mt-3 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold rounded-lg"
+                    >
+                      Login / Sign Up
+                    </button>
+                  </div>
+                )}
+              </div>
+              
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <StatCard label="Total Assets" value={assets.length} icon={FileText} color="text-blue-500" onClick={() => setActiveTab('assets')} />
                 <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} icon={Network} color="text-purple-500" onClick={() => setActiveTab('graph')} />
@@ -1934,6 +2047,15 @@ export default function App() {
 
           {activeTab === 'database' && (
              <div className="h-full flex flex-col gap-4">
+               {/* Processing Queue Status Banner for Master View */}
+               {user?.id && isGlobalView && (
+                 <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
+                   <QueueMonitor userId={user.id} onRequeueComplete={() => {
+                     loadAssets().then(loaded => setLocalAssets(loaded));
+                   }} />
+                 </div>
+               )}
+               
                <div className="flex flex-col md:flex-row justify-between items-end bg-slate-900 p-4 rounded-xl border border-slate-800 gap-4">
                    <div className="space-y-1">
                       <h3 className="text-white font-bold flex items-center gap-2">
@@ -2038,6 +2160,15 @@ export default function App() {
 
           {activeTab === 'batch' && (
              <div className="max-w-6xl mx-auto h-full flex flex-col">
+                {/* Server Queue Status - Always visible when logged in */}
+                {user?.id && (
+                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4">
+                    <QueueMonitor userId={user.id} onRequeueComplete={() => {
+                      loadAssets().then(loaded => setLocalAssets(loaded));
+                    }} />
+                  </div>
+                )}
+                
                 {isGlobalView && !isAdmin ? (
                     <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
                         <div className="text-center bg-slate-900 p-8 rounded-2xl border border-slate-800 shadow-2xl">
@@ -2147,6 +2278,17 @@ export default function App() {
                         </button>
                      </div>
                  </div>
+                 
+                 {/* Processing Queue Status Banner */}
+                 {user?.id && (
+                   <div className="mb-6">
+                     <QueueMonitor userId={user.id} onRequeueComplete={() => {
+                       // Refresh assets after requeue
+                       loadAssets().then(loaded => setLocalAssets(loaded));
+                     }} />
+                   </div>
+                 )}
+                 
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
                      {displayItems.map(item => ('bundleId' in item) ? <BundleCard key={item.bundleId} bundle={item as ImageBundle} onAssetUpdated={handleAssetUpdate} /> : (
                         <div 
@@ -2525,13 +2667,6 @@ export default function App() {
                     </div>
                 </div>
                 <div className="flex-1 overflow-auto p-2 space-y-4 custom-scrollbar">
-                    {/* Server-Side Monitor Section */}
-                    {user?.id && (
-                        <div className="px-2 py-2 border-b border-slate-800/50 pb-4">
-                            <QueueMonitor userId={user.id} />
-                        </div>
-                    )}
-
                     {/* Debug Logs Panel */}
                     {showDebugPanel && (
                         <div className="px-2 py-2 border-b border-slate-800/50 pb-4">
@@ -2638,6 +2773,16 @@ export default function App() {
                             Processing in progress...
                         </div>
                     )}
+                    
+                    {/* Server Queue Monitor */}
+                    {user?.id && (
+                        <div className="mb-3 pb-3 border-b border-slate-800">
+                            <QueueMonitor userId={user.id} onRequeueComplete={() => {
+                                loadAssets().then(loaded => setLocalAssets(loaded));
+                            }} />
+                        </div>
+                    )}
+                    
                     {/* Restart Stuck button - for prior session items */}
                     {stuckAssetsCount > 0 && (
                         <button 
@@ -2701,6 +2846,9 @@ export default function App() {
           isGlobalView={isGlobalView}
           setIsGlobalView={setIsGlobalView}
           onTabChange={(tab) => setActiveTab(tab)}
+          pendingCount={totalPendingCount}
+          stuckCount={stuckAssetsCount}
+          onQueueClick={() => setShowProcessingPanel(prev => !prev)}
         />
       </main>
 

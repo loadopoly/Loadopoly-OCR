@@ -1,5 +1,5 @@
 import React from 'react';
-import { Cloud, CloudOff, Database, User, Shield, Wifi, WifiOff, Globe, Lock } from 'lucide-react';
+import { Cloud, CloudOff, Database, User, Shield, Wifi, WifiOff, Globe, Lock, Activity, AlertCircle } from 'lucide-react';
 
 interface StatusBarProps {
     user: any;
@@ -9,9 +9,23 @@ interface StatusBarProps {
     isGlobalView: boolean;
     setIsGlobalView: (val: boolean) => void;
     onTabChange: (tab: string) => void;
+    pendingCount?: number;
+    stuckCount?: number;
+    onQueueClick?: () => void;
 }
 
-export default function StatusBar({ user, syncOn, isOnline, localCount, isGlobalView, setIsGlobalView, onTabChange }: StatusBarProps) {
+export default function StatusBar({ 
+    user, 
+    syncOn, 
+    isOnline, 
+    localCount, 
+    isGlobalView, 
+    setIsGlobalView, 
+    onTabChange,
+    pendingCount = 0,
+    stuckCount = 0,
+    onQueueClick 
+}: StatusBarProps) {
     return (
         <div className="fixed bottom-0 left-0 right-0 bg-slate-950/80 backdrop-blur-md border-t border-slate-800 px-4 py-1.5 flex items-center justify-between z-50 text-[10px] font-medium text-slate-500">
             <div className="flex items-center gap-4">
@@ -26,6 +40,30 @@ export default function StatusBar({ user, syncOn, isOnline, localCount, isGlobal
                         </span>
                     )}
                 </div>
+                
+                <div className="h-3 w-px bg-slate-800 hidden sm:block" />
+                
+                {/* Processing Queue Status - Always Visible */}
+                <button 
+                    onClick={onQueueClick}
+                    className={`flex items-center gap-1.5 transition-colors hover:text-white ${
+                        pendingCount > 0 ? 'text-amber-400' : stuckCount > 0 ? 'text-orange-400' : 'text-slate-500'
+                    }`}
+                    title="Press Q to toggle queue panel"
+                >
+                    {stuckCount > 0 ? (
+                        <AlertCircle size={12} className="text-orange-500" />
+                    ) : (
+                        <Activity size={12} className={pendingCount > 0 ? 'animate-pulse' : ''} />
+                    )}
+                    <span>
+                        {pendingCount > 0 
+                            ? `${pendingCount} pending` 
+                            : stuckCount > 0 
+                                ? `${stuckCount} stuck` 
+                                : 'Queue idle'}
+                    </span>
+                </button>
                 
                 <div className="h-3 w-px bg-slate-800 hidden sm:block" />
                 

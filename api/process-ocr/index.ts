@@ -1,3 +1,4 @@
+
 /**
  * OCR Processing Edge Function
  * 
@@ -20,6 +21,19 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.2.0';
+
+// ============================================
+// Utility: Timeout wrapper
+// ============================================
+
+function withTimeout<T>(promise: Promise<T>, ms: number, errorMessage: string): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(errorMessage)), ms);
+  });
+  
+  return Promise.race([promise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+}
 
 // ============================================
 // Types
@@ -59,7 +73,8 @@ interface ProcessingResult {
 
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const MAX_CONCURRENT_JOBS = 5;
-const JOB_TIMEOUT_MS = 60000;
+const JOB_TIMEOUT_MS = 120000; // 2 minutes - increased from 60s for complex documents
+const GEMINI_TIMEOUT_MS = 90000; // 90 seconds for Gemini API call
 
 // ============================================
 // Edge Function Handler
@@ -98,6 +113,18 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[${workerId}] Starting processing batch (max: ${maxJobs})`);
 
+    // Release any stale locks before claiming new jobs
+    // This unblocks jobs stuck in PROCESSING state longer than LOCK_TIMEOUT_SECONDS
+    try {
+      const { data: releasedCount } = await supabase.rpc('release_stale_locks');
+      if (releasedCount && releasedCount > 0) {
+        console.log(`[${workerId}] Released ${releasedCount} stale locks`);
+      }
+    } catch (releaseError) {
+      console.warn(`[${workerId}] Failed to release stale locks:`, releaseError);
+      // Continue anyway - this is not critical
+    }
+
     // Claim jobs from queue
     const jobs: ProcessingJob[] = [];
     for (let i = 0; i < maxJobs; i++) {
@@ -118,9 +145,13 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[${workerId}] Claimed ${jobs.length} jobs`);
 
-    // Process jobs in parallel
+    // Process jobs in parallel with timeout protection
     const results = await Promise.allSettled(
-      jobs.map(job => processJob(supabase, genAI, job, workerId))
+      jobs.map(job => withTimeout(
+        processJob(supabase, genAI, job, workerId),
+        JOB_TIMEOUT_MS,
+        `Job ${job.id} timed out after ${JOB_TIMEOUT_MS}ms`
+      ))
     );
 
     // Summarize results
@@ -293,15 +324,20 @@ async function callGemini(
     }
   `;
 
-  const result = await model.generateContent([
-    { text: prompt },
-    {
-      inlineData: {
-        mimeType: mimeType || 'image/jpeg',
-        data: imageBase64,
+  // Wrap Gemini call with timeout to prevent indefinite hangs
+  const result = await withTimeout(
+    model.generateContent([
+      { text: prompt },
+      {
+        inlineData: {
+          mimeType: mimeType || 'image/jpeg',
+          data: imageBase64,
+        },
       },
-    },
-  ]);
+    ]),
+    GEMINI_TIMEOUT_MS,
+    'Gemini API call timed out'
+  );
 
   const response = result.response;
   const text = response.text();
@@ -347,7 +383,7 @@ async function saveAsset(
 
   const assetRecord = {
     ASSET_ID: job.asset_id,
-    USER_ID: job.user_id || null,  // Required for Realtime subscription filter
+    USER_ID: job.user_id || null,
     ORIGINAL_IMAGE_URL: urlData?.publicUrl || '',
     RAW_OCR_TRANSCRIPTION: result.ocrText,
     DOCUMENT_TITLE: result.documentTitle,
@@ -362,9 +398,12 @@ async function saveAsset(
     LOCAL_GIS_ZONE: result.gisMetadata?.zoneType || 'UNKNOWN',
     LOCAL_TIMESTAMP: new Date().toISOString(),
     CREATED_AT: new Date().toISOString(),
-    // Store graph data as JSONB
-    GRAPH_NODES: result.graphData.nodes,
-    GRAPH_LINKS: result.graphData.links,
+    // Store graph data in the correct JSONB column
+    STRUCTURED_KNOWLEDGE_GRAPH: {
+      nodes: result.graphData.nodes,
+      links: result.graphData.links,
+      generatedAt: new Date().toISOString(),
+    },
   };
 
   // Check if asset already exists
