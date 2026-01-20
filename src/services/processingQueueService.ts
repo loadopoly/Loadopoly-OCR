@@ -815,15 +815,20 @@ class ProcessingQueueService {
     }
 
     const results = { queued: 0, failed: 0, errors: [] as string[] };
+    const total = assets.length;
+    
+    // Report initial progress
+    onProgress?.(0, total, '');
     
     for (let i = 0; i < assets.length; i++) {
       const asset = assets[i];
-      onProgress?.(i, assets.length, asset.id);
       
       try {
         if (!asset.imageBlob) {
           results.failed++;
           results.errors.push(`Asset ${asset.id}: No image blob available`);
+          // Still report progress even on failure
+          onProgress?.(i + 1, total, asset.id);
           continue;
         }
         
@@ -848,9 +853,11 @@ class ProcessingQueueService {
         results.errors.push(`Asset ${asset.id}: ${error.message}`);
         logger.error(`Failed to re-queue asset ${asset.id}`, error);
       }
+      
+      // Report progress AFTER each item (success or failure)
+      onProgress?.(i + 1, total, asset.id);
     }
     
-    onProgress?.(assets.length, assets.length, '');
     logger.info(`Re-queue complete: ${results.queued} queued, ${results.failed} failed`);
     
     return results;
