@@ -3,6 +3,43 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.9.0] - 2026-01-20
+
+### Added
+- **Enhanced Queue Monitor UI**: Complete overhaul of the processing queue monitor component.
+  - **Prominent Queue Badge**: Shows total queued items (pending + processing) with animated indicator.
+  - **Stage Breakdown Panel**: Collapsible panel showing all processing stages with item counts.
+  - **Interactive Filtering**: Click on any stage to filter the job list; status filter buttons (PEND/PROC/COMP/FAIL).
+  - **Detailed Job List**: Scrollable list with status indicators, scan type icons, asset IDs, current stage, and progress bars.
+  - **Expandable Job Details**: Click to expand job metadata including ID, status, priority, retries, timestamps, and error messages.
+  - **Real-time Updates**: Automatic refresh every 30 seconds with manual refresh option.
+
+### Changed
+- **Aggressive Bundle Splitting**: Reduced main bundle size by 70% through improved Vite configuration.
+  - App chunk: 892KB → 329KB (gzipped: 266KB → 81KB)
+  - Visualization libs (D3 + Force Graph) lazy-loaded together
+  - Processing UI components (QueueMonitor, BatchProcessing, ClusterSync) in dedicated chunk
+  - Metaverse components in separate lazy-loaded chunk
+  - No more circular chunk warnings
+
+### Fixed
+- **TypeScript Errors**: Fixed type mismatches in BatchItem and DigitalAsset interfaces.
+  - Added `FAILED` status and `stage` property to `BatchItem` type.
+  - Added `scanType` property to `DigitalAsset` interface.
+  - Fixed null check for Supabase client in `processingQueueService`.
+
+### Technical Details
+- **Bundle Sizes (gzipped)**:
+  - `index.js`: 14KB (entry point)
+  - `vendor-icons.js`: 10KB (Lucide icons)
+  - `vendor-storage.js`: 32KB (Dexie/IndexedDB)
+  - `vendor-supabase.js`: 44KB (Supabase client)
+  - `vendor-visualization.js`: 64KB (D3 + Force graph)
+  - `chunk-processing-ui.js`: 51KB (Queue/Batch panels)
+  - `vendor-ai.js`: 50KB (Google AI)
+  - `vendor-web3.js`: 97KB (Ethers.js - optional)
+  - `App.js`: 81KB (main app)
+
 ## [2.8.2] - 2026-01-14
 
 ### Added

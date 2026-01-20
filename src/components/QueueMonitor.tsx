@@ -3,9 +3,15 @@
  * 
  * Displays the current status of the server-side processing queue.
  * Integrates with ProcessingQueueService to show real-time progress.
+ * 
+ * Features:
+ * - Real-time queue statistics
+ * - Detailed job list with processing stages
+ * - Stage breakdown and filtering
+ * - Interactive job management
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Server, 
   Activity, 
@@ -16,15 +22,33 @@ import {
   Zap,
   Upload,
   RotateCcw,
-  TestTube2
+  TestTube2,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  Filter,
+  List,
+  Layers,
+  FileText,
+  Image,
+  Mountain,
+  X,
+  Pause,
+  Play,
+  Trash2
 } from 'lucide-react';
-import { processingQueueService, QueueStats } from '../services/processingQueueService';
+import { processingQueueService, QueueStats, QueueJob, JobStatus } from '../services/processingQueueService';
 import { loadAssets } from '../lib/indexeddb';
-import { AssetStatus } from '../types';
+import { AssetStatus, ScanType } from '../types';
+
+// ============================================
+// Types
+// ============================================
 
 interface QueueMonitorProps {
   userId?: string;
   onRequeueComplete?: () => void;
+  compact?: boolean;
 }
 
 interface ConnectionTestResult {
@@ -33,7 +57,7 @@ interface ConnectionTestResult {
   queueSelect: { success: boolean; error?: string };
 }
 
-export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueComplete }) => {
+export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueComplete, compact = false }) => {
   const [stats, setStats] = useState<QueueStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -44,6 +68,49 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [connectionTest, setConnectionTest] = useState<ConnectionTestResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+  
+  // New state for detailed job list
+  const [jobs, setJobs] = useState<QueueJob[]>([]);
+  const [showJobList, setShowJobList] = useState(false);
+  const [selectedStageFilter, setSelectedStageFilter] = useState<string | null>(null);
+  const [selectedStatusFilter, setSelectedStatusFilter] = useState<JobStatus | null>(null);
+  const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  const [jobsLoading, setJobsLoading] = useState(false);
+
+  // Derived: stage breakdown from jobs
+  const stageBreakdown = useMemo(() => {
+    const breakdown: Record<string, { count: number; status: JobStatus }> = {};
+    jobs.forEach(job => {
+      const stage = job.stage || 'Waiting';
+      if (!breakdown[stage]) {
+        breakdown[stage] = { count: 0, status: job.status };
+      }
+      breakdown[stage].count++;
+    });
+    return breakdown;
+  }, [jobs]);
+
+  // Filtered jobs based on selected filters
+  const filteredJobs = useMemo(() => {
+    return jobs.filter(job => {
+      if (selectedStatusFilter && job.status !== selectedStatusFilter) return false;
+      if (selectedStageFilter && job.stage !== selectedStageFilter) return false;
+      return true;
+    });
+  }, [jobs, selectedStatusFilter, selectedStageFilter]);
+
+  const fetchJobs = useCallback(async () => {
+    if (!userId) return;
+    setJobsLoading(true);
+    try {
+      const userJobs = await processingQueueService.getUserJobs({ limit: 100 });
+      setJobs(userJobs);
+    } catch (err) {
+      console.error('Failed to fetch jobs:', err);
+    } finally {
+      setJobsLoading(false);
+    }
+  }, [userId]);
 
   const fetchStats = async () => {
     try {
@@ -167,18 +234,27 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
 
   useEffect(() => {
     fetchStats();
+    fetchJobs();
     
     // Refresh stats every 30 seconds
-    const interval = setInterval(fetchStats, 30000);
+    const interval = setInterval(() => {
+      fetchStats();
+      if (showJobList) fetchJobs();
+    }, 30000);
     
     // Also listen for job completion to refresh
     processingQueueService.setCallbacks({
-       onJobCompleted: () => fetchStats(),
-       onJobFailed: () => fetchStats()
+       onJobCompleted: () => { fetchStats(); fetchJobs(); },
+       onJobFailed: () => { fetchStats(); fetchJobs(); },
+       onJobStarted: () => { if (showJobList) fetchJobs(); },
+       onJobProgress: () => { if (showJobList) fetchJobs(); }
     });
 
     return () => clearInterval(interval);
-  }, [userId]);
+  }, [userId, showJobList, fetchJobs]);
+
+  // Helper to get total queued count
+  const totalQueued = stats ? (stats.pending + stats.processing) : 0;
 
   if (!stats && loading) return (
     <div className="p-4 bg-slate-900/50 border border-slate-800 rounded-lg flex items-center justify-center">
@@ -191,14 +267,31 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
 
   return (
     <div className="space-y-3">
+      {/* Header with prominent queue count */}
       <div className="flex items-center justify-between px-1">
-        <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
-          <Server size={10} />
-          Server Infrastructure
-        </h4>
+        <div className="flex items-center gap-3">
+          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+            <Server size={10} />
+            Processing Queue
+          </h4>
+          {/* Prominent queue badge */}
+          {totalQueued > 0 && (
+            <div className="flex items-center gap-1 px-2 py-0.5 bg-blue-600 rounded-full animate-pulse">
+              <Activity size={10} className="text-white" />
+              <span className="text-[10px] font-bold text-white">{totalQueued} queued</span>
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-2">
+            <button 
+              onClick={() => { setShowJobList(!showJobList); if (!showJobList) fetchJobs(); }}
+              className={`text-[8px] px-2 py-0.5 rounded transition-colors flex items-center gap-1 ${showJobList ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+            >
+              <List size={8} />
+              {showJobList ? 'Hide' : 'Show'} Jobs
+            </button>
             <span className="text-[8px] text-slate-600">Updated {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-            <button onClick={fetchStats} className="text-slate-500 hover:text-white transition-colors">
+            <button onClick={() => { fetchStats(); fetchJobs(); }} className="text-slate-500 hover:text-white transition-colors">
                 <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
             </button>
         </div>
@@ -246,6 +339,214 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
         <div className="px-2 py-1.5 bg-slate-800/30 rounded border border-slate-800/50 flex items-center justify-between">
             <span className="text-[9px] text-slate-400">Avg. Processing Speed</span>
             <span className="text-[9px] font-mono text-slate-300">{(stats.avgProcessingTime / 1000).toFixed(1)}s / file</span>
+        </div>
+      )}
+
+      {/* Stage Breakdown Panel - Shows what stages items are in */}
+      {Object.keys(stageBreakdown).length > 0 && (
+        <div className="border border-slate-800 rounded-lg overflow-hidden">
+          <button 
+            onClick={() => setShowJobList(!showJobList)}
+            className="w-full px-2 py-1.5 bg-slate-900 text-[9px] text-slate-400 flex items-center justify-between hover:bg-slate-800"
+          >
+            <span className="flex items-center gap-1">
+              <Layers size={10} />
+              Processing Stages ({Object.keys(stageBreakdown).length})
+            </span>
+            <ChevronDown size={12} className={`transform transition-transform ${showJobList ? 'rotate-180' : ''}`} />
+          </button>
+          {showJobList && (
+            <div className="p-2 bg-slate-950 space-y-1">
+              {Object.entries(stageBreakdown).map(([stage, data]) => (
+                <button
+                  key={stage}
+                  onClick={() => setSelectedStageFilter(selectedStageFilter === stage ? null : stage)}
+                  className={`w-full flex items-center justify-between px-2 py-1 rounded text-[9px] transition-colors ${
+                    selectedStageFilter === stage 
+                      ? 'bg-blue-600/20 border border-blue-500/50 text-blue-300' 
+                      : 'bg-slate-800/50 hover:bg-slate-800 text-slate-400'
+                  }`}
+                >
+                  <span className="flex items-center gap-1.5">
+                    {data.status === 'PROCESSING' && <Zap size={10} className="text-blue-400 animate-pulse" />}
+                    {data.status === 'PENDING' && <Clock size={10} className="text-amber-400" />}
+                    {data.status === 'COMPLETED' && <CheckCircle size={10} className="text-emerald-400" />}
+                    {data.status === 'FAILED' && <AlertCircle size={10} className="text-rose-400" />}
+                    {stage}
+                  </span>
+                  <span className="font-mono font-bold">{data.count}</span>
+                </button>
+              ))}
+              {selectedStageFilter && (
+                <button
+                  onClick={() => setSelectedStageFilter(null)}
+                  className="w-full text-center text-[8px] text-slate-500 hover:text-slate-300 py-1"
+                >
+                  Clear filter
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Detailed Job List - Interactive */}
+      {showJobList && (
+        <div className="border border-slate-800 rounded-lg overflow-hidden">
+          <div className="px-2 py-1.5 bg-slate-900 flex items-center justify-between">
+            <span className="text-[9px] text-slate-400 flex items-center gap-1">
+              <List size={10} />
+              Jobs ({filteredJobs.length}{selectedStageFilter || selectedStatusFilter ? ' filtered' : ''})
+            </span>
+            <div className="flex items-center gap-1">
+              {/* Status filter buttons */}
+              {(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'] as JobStatus[]).map(status => (
+                <button
+                  key={status}
+                  onClick={() => setSelectedStatusFilter(selectedStatusFilter === status ? null : status)}
+                  className={`px-1.5 py-0.5 rounded text-[7px] font-medium transition-colors ${
+                    selectedStatusFilter === status
+                      ? status === 'PENDING' ? 'bg-amber-500 text-white'
+                        : status === 'PROCESSING' ? 'bg-blue-500 text-white'
+                        : status === 'COMPLETED' ? 'bg-emerald-500 text-white'
+                        : 'bg-rose-500 text-white'
+                      : 'bg-slate-800 text-slate-500 hover:bg-slate-700'
+                  }`}
+                >
+                  {status.slice(0, 4)}
+                </button>
+              ))}
+              {(selectedStatusFilter || selectedStageFilter) && (
+                <button
+                  onClick={() => { setSelectedStatusFilter(null); setSelectedStageFilter(null); }}
+                  className="text-slate-500 hover:text-white ml-1"
+                >
+                  <X size={10} />
+                </button>
+              )}
+            </div>
+          </div>
+          
+          {/* Job list with scrollable area */}
+          <div className="max-h-64 overflow-y-auto bg-slate-950">
+            {jobsLoading ? (
+              <div className="p-4 text-center">
+                <RefreshCw size={16} className="text-slate-500 animate-spin mx-auto mb-2" />
+                <span className="text-[10px] text-slate-500">Loading jobs...</span>
+              </div>
+            ) : filteredJobs.length === 0 ? (
+              <div className="p-4 text-center text-[10px] text-slate-500">
+                {selectedStageFilter || selectedStatusFilter ? 'No jobs match filter' : 'No jobs in queue'}
+              </div>
+            ) : (
+              filteredJobs.map(job => (
+                <div 
+                  key={job.id}
+                  className="border-b border-slate-800/50 last:border-0"
+                >
+                  {/* Job row - clickable to expand */}
+                  <button
+                    onClick={() => setExpandedJobId(expandedJobId === job.id ? null : job.id)}
+                    className="w-full px-2 py-2 flex items-center gap-2 hover:bg-slate-900/50 transition-colors"
+                  >
+                    {/* Status indicator */}
+                    <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                      job.status === 'PROCESSING' ? 'bg-blue-500 animate-pulse'
+                      : job.status === 'PENDING' ? 'bg-amber-500'
+                      : job.status === 'COMPLETED' ? 'bg-emerald-500'
+                      : 'bg-rose-500'
+                    }`} />
+                    
+                    {/* Scan type icon */}
+                    <div className="flex-shrink-0">
+                      {job.scanType === ScanType.DOCUMENT && <FileText size={12} className="text-blue-400" />}
+                      {job.scanType === ScanType.ITEM && <Image size={12} className="text-amber-400" />}
+                      {job.scanType === ScanType.SCENERY && <Mountain size={12} className="text-emerald-400" />}
+                    </div>
+                    
+                    {/* Job info */}
+                    <div className="flex-1 min-w-0 text-left">
+                      <div className="text-[9px] text-slate-300 font-mono truncate">
+                        {job.assetId.slice(0, 8)}...
+                      </div>
+                      <div className="text-[8px] text-slate-500">
+                        {job.stage || 'Waiting'}
+                      </div>
+                    </div>
+                    
+                    {/* Progress */}
+                    <div className="flex-shrink-0 w-16">
+                      <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full transition-all duration-300 ${
+                            job.status === 'PROCESSING' ? 'bg-blue-500'
+                            : job.status === 'COMPLETED' ? 'bg-emerald-500'
+                            : job.status === 'FAILED' ? 'bg-rose-500'
+                            : 'bg-amber-500'
+                          }`}
+                          style={{ width: `${job.progress}%` }}
+                        />
+                      </div>
+                      <div className="text-[7px] text-slate-500 text-right mt-0.5">{job.progress}%</div>
+                    </div>
+                    
+                    {/* Expand indicator */}
+                    <ChevronRight size={10} className={`text-slate-500 transition-transform ${expandedJobId === job.id ? 'rotate-90' : ''}`} />
+                  </button>
+                  
+                  {/* Expanded details */}
+                  {expandedJobId === job.id && (
+                    <div className="px-3 py-2 bg-slate-900/50 border-t border-slate-800/50 text-[8px] space-y-1.5">
+                      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                        <div>
+                          <span className="text-slate-500">Job ID:</span>
+                          <span className="ml-1 text-slate-300 font-mono">{job.id.slice(0, 12)}...</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Asset ID:</span>
+                          <span className="ml-1 text-slate-300 font-mono">{job.assetId.slice(0, 12)}...</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Status:</span>
+                          <span className={`ml-1 font-medium ${
+                            job.status === 'PROCESSING' ? 'text-blue-400'
+                            : job.status === 'COMPLETED' ? 'text-emerald-400'
+                            : job.status === 'FAILED' ? 'text-rose-400'
+                            : 'text-amber-400'
+                          }`}>{job.status}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Priority:</span>
+                          <span className="ml-1 text-slate-300">{job.priority}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Retries:</span>
+                          <span className="ml-1 text-slate-300">{job.retryCount}</span>
+                        </div>
+                        <div>
+                          <span className="text-slate-500">Created:</span>
+                          <span className="ml-1 text-slate-300">
+                            {new Date(job.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                      </div>
+                      {job.error && (
+                        <div className="mt-2 p-1.5 bg-rose-900/20 border border-rose-800/50 rounded text-rose-300">
+                          <span className="text-rose-400 font-medium">Error: </span>{job.error}
+                        </div>
+                      )}
+                      {job.status === 'PROCESSING' && (
+                        <div className="mt-2 p-1.5 bg-blue-900/20 border border-blue-800/50 rounded text-blue-300 flex items-center gap-1">
+                          <Zap size={10} className="animate-pulse" />
+                          <span>Currently at stage: <strong>{job.stage || 'Initializing'}</strong></span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
 
