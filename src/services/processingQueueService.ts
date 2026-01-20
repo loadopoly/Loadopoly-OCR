@@ -19,6 +19,7 @@ import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { compressImage, CompressionOptions } from '../lib/imageCompression';
 import { logger } from '../lib/logger';
 import { ScanType, DigitalAsset, AssetStatus } from '../types';
+import { saveAsset, loadAssets } from '../lib/indexeddb';
 import { v4 as uuidv4 } from 'uuid';
 
 // ============================================
@@ -804,7 +805,8 @@ class ProcessingQueueService {
 
   /**
    * Re-queue local assets that are stuck in PENDING/PROCESSING status
-   * Call this to push local items to the server queue for processing
+   * Call this to push local items to the server queue for processing.
+   * Successfully queued assets are marked as PROCESSING in IndexedDB.
    */
   async requeueLocalAssets(
     assets: Array<{ id: string; imageBlob?: Blob; scanType?: string }>,
@@ -816,6 +818,10 @@ class ProcessingQueueService {
 
     const results = { queued: 0, failed: 0, errors: [] as string[] };
     const total = assets.length;
+    
+    // Load all local assets to get full objects for updating
+    const localAssets = await loadAssets();
+    const assetMap = new Map(localAssets.map(a => [a.id, a]));
     
     // Report initial progress
     onProgress?.(0, total, '');
@@ -845,6 +851,19 @@ class ProcessingQueueService {
           scanType: (asset.scanType as ScanType) || ScanType.DOCUMENT,
           priority: 5,
         });
+        
+        // Update local IndexedDB to mark as PROCESSING (queued on server)
+        const localAsset = assetMap.get(asset.id);
+        if (localAsset) {
+          const updatedAsset: DigitalAsset = {
+            ...localAsset,
+            status: AssetStatus.PROCESSING,
+            serverJobId: asset.id, // Track that it's been queued
+            progress: 5, // Initial progress to show it's been sent
+          };
+          await saveAsset(updatedAsset);
+          logger.debug(`Updated local asset ${asset.id} to PROCESSING`);
+        }
         
         results.queued++;
         logger.debug(`Re-queued asset ${asset.id}`);

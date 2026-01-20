@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.9.2] - 2026-01-20
+
+### Fixed
+- **Assets Reset on Refresh**: Fixed critical bug where pending assets count would reset after page refresh.
+  - `requeueLocalAssets()` now updates IndexedDB to mark assets as `PROCESSING` with a `serverJobId` after successful upload.
+  - Added `serverJobId` field to `DigitalAsset` interface to track which assets have been sent to the server.
+  - Local pending count now excludes assets that have already been uploaded (have `serverJobId`).
+  - Re-queue filter now skips assets already sent to server, preventing duplicate uploads.
+  - Assets persist their "sent to server" state across page refreshes.
+
 ## [2.9.1] - 2026-01-20
 
 ### Fixed
