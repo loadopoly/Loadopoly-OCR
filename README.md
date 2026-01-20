@@ -1,6 +1,6 @@
 # GeoGraph OCR Node
 
-[![Version](https://img.shields.io/badge/version-2.9.0-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.9.1-blue.svg)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Dual-green.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
