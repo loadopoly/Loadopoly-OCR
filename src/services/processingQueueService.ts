@@ -343,10 +343,10 @@ class ProcessingQueueService {
   }
 
   /**
-   * Get current queue stats
+   * Get current queue stats for the current user
    */
   async getStats(): Promise<QueueStats> {
-    if (!isSupabaseConfigured() || !this.userId || ! ( (supabase as any))) {
+    if (!isSupabaseConfigured() || !this.userId || !supabase) {
       return {
         pending: this.pendingLocalJobs.filter(j => j.status === 'PENDING').length,
         processing: this.pendingLocalJobs.filter(j => j.status === 'PROCESSING').length,
@@ -357,9 +357,12 @@ class ProcessingQueueService {
     }
     
     try {
-      const { data, error } = await ( (supabase as any))
-        .from('queue_stats')
-        .select('*');
+      // Query the processing_queue table directly for accurate user-specific stats
+      // The queue_stats view doesn't filter by user and has case issues
+      const { data, error } = await (supabase as any)
+        .from(QUEUE_TABLE)
+        .select('status, created_at, started_at, completed_at')
+        .eq('user_id', this.userId);
       
       if (error) throw error;
       
@@ -371,12 +374,41 @@ class ProcessingQueueService {
         avgProcessingTime: 0,
       };
       
+      let totalProcessingTime = 0;
+      let completedCount = 0;
+      
       data?.forEach((row: any) => {
-        const status = row.status?.toLowerCase() as keyof QueueStats;
-        if (status in stats) {
-          (stats as any)[status] = row.count;
+        // Handle both lowercase and uppercase column names
+        const status = (row.status || row.STATUS || '').toUpperCase();
+        
+        switch (status) {
+          case 'PENDING':
+            stats.pending++;
+            break;
+          case 'PROCESSING':
+            stats.processing++;
+            break;
+          case 'COMPLETED':
+            stats.completed++;
+            // Calculate processing time if we have timestamps
+            const startedAt = row.started_at || row.STARTED_AT;
+            const completedAt = row.completed_at || row.COMPLETED_AT;
+            if (startedAt && completedAt) {
+              const processingTime = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+              totalProcessingTime += processingTime;
+              completedCount++;
+            }
+            break;
+          case 'FAILED':
+            stats.failed++;
+            break;
         }
       });
+      
+      // Calculate average processing time
+      if (completedCount > 0) {
+        stats.avgProcessingTime = totalProcessingTime / completedCount;
+      }
       
       return stats;
     } catch (error) {
@@ -399,11 +431,11 @@ class ProcessingQueueService {
     limit?: number;
     offset?: number;
   } = {}): Promise<QueueJob[]> {
-    if (!isSupabaseConfigured() || !this.userId) {
+    if (!isSupabaseConfigured() || !this.userId || !supabase) {
       return this.pendingLocalJobs;
     }
     
-    let query =  ( (supabase as any))
+    let query = (supabase as any)
       .from(QUEUE_TABLE)
       .select('*')
       .eq('user_id', this.userId)
@@ -437,7 +469,7 @@ class ProcessingQueueService {
       return this.pendingLocalJobs.find(j => j.id === jobId) || null;
     }
     
-    const { data, error } = await ( (supabase as any))
+    const { data, error } = await (supabase as any)
       .from(QUEUE_TABLE)
       .select('*')
       .eq('id', jobId)
@@ -466,7 +498,7 @@ class ProcessingQueueService {
       return false;
     }
     
-    const { error } = await  ( (supabase as any))
+    const { error } = await  (supabase as any)
       .from(QUEUE_TABLE)
       .update({ status: 'CANCELLED', updated_at: new Date().toISOString() })
       .eq('id', jobId)
@@ -488,7 +520,7 @@ class ProcessingQueueService {
       return false;
     }
     
-    const { error } = await  ( (supabase as any))
+    const { error } = await  (supabase as any)
       .from(QUEUE_TABLE)
       .update({
         status: 'PENDING',
@@ -519,7 +551,7 @@ class ProcessingQueueService {
     }
     
     try {
-      const { data, error } = await ( (supabase as any))
+      const { data, error } = await (supabase as any)
         .rpc('release_stale_locks');
       
       if (error) {
@@ -547,7 +579,7 @@ class ProcessingQueueService {
     }
     
     try {
-      const { error } = await ( (supabase as any))
+      const { error } = await (supabase as any)
         .from(QUEUE_TABLE)
         .update({
           status: 'PENDING',
@@ -581,7 +613,7 @@ class ProcessingQueueService {
       return 0;
     }
     
-    const { data, error } = await  ( (supabase as any))
+    const { data, error } = await  (supabase as any)
       .rpc('cleanup_completed_jobs', { p_days_old: daysOld });
     
     if (error) {
@@ -624,7 +656,7 @@ class ProcessingQueueService {
     let lastError: Error | null = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const { error } = await ( (supabase as any)).storage
+        const { error } = await (supabase as any).storage
           .from(STORAGE_BUCKET)
           .upload(path, file, uploadOptions);
         
@@ -658,7 +690,7 @@ class ProcessingQueueService {
     location?: { lat: number; lng: number };
     metadata?: Record<string, unknown>;
   }): Promise<QueueJob> {
-    const { data, error } = await  ( (supabase as any))
+    const { data, error } = await  (supabase as any)
       .from(QUEUE_TABLE)
       .insert({
         user_id: this.userId,
@@ -825,12 +857,17 @@ class ProcessingQueueService {
   }
 
   private async subscribeToUserJobs(): Promise<void> {
-    if (!this.userId || this.subscriptions.has('user-jobs')) {
+    if (!this.userId || this.subscriptions.has('user-jobs') || !isSupabaseConfigured() || !supabase) {
+      logger.debug('Skipping job subscription', { 
+        userId: this.userId ?? undefined, 
+        hasExistingSub: this.subscriptions.has('user-jobs'),
+        supabaseConfigured: isSupabaseConfigured() 
+      });
       return;
     }
     
     try {
-      const channel =  ( (supabase as any))
+      const channel = supabase
         .channel(`queue:${this.userId}`)
         .on(
           'postgres_changes',
@@ -856,6 +893,9 @@ class ProcessingQueueService {
             logger.warn('Job subscription closed, resubscribing...');
             this.subscriptions.delete('user-jobs');
             setTimeout(() => this.subscribeToUserJobs(), 5000);
+          } else if (status === 'CHANNEL_ERROR') {
+            logger.error('Job subscription channel error');
+            this.subscriptions.delete('user-jobs');
           }
         });
       

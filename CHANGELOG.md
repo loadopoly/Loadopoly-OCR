@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.9.1] - 2026-01-20
+
+### Fixed
+- **Queue Stats Not Updating**: Fixed critical bug where processing queue status never updated.
+  - `getStats()` was querying a `queue_stats` view that only returned global stats (not user-specific) and excluded COMPLETED items.
+  - Now queries `processing_queue` table directly with proper user filtering.
+  - Fixed case mismatch: database returns `STATUS` (uppercase) but code expected `status` (lowercase).
+  - Added proper null checks before Supabase operations to prevent silent failures.
+  - Fixed malformed double-parenthesis casts `( (supabase as any))` throughout the service.
+  - Added error handling for Realtime subscription CHANNEL_ERROR status.
+  - Realtime subscription now properly validates Supabase is configured before attempting to subscribe.
+
 ## [2.9.0] - 2026-01-20
 
 ### Added
