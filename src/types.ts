@@ -321,6 +321,7 @@ export interface DigitalAsset {
   processingAnalysis?: string; // Raw LLM thoughts
   errorMessage?: string; // Captured error during processing
   scanType?: ScanType; // Type of scan (ITEM, DOCUMENT, SCENERY)
+  serverJobId?: string; // ID of server-side processing job (when queued to server)
   
   // The structured DB record
   sqlRecord?: HistoricalDocumentMetadata;
