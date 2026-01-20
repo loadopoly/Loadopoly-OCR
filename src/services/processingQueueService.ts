@@ -93,6 +93,8 @@ class ProcessingQueueService {
   private callbacks: QueueEventCallbacks = {};
   private isOnline: boolean = navigator.onLine;
   private pendingLocalJobs: QueueJob[] = [];
+  private edgeTriggerTimeout: ReturnType<typeof setTimeout> | null = null;
+  private edgeTriggerDebounceMs: number = 1000; // Debounce edge invocations
 
   constructor() {
     // Listen for online/offline events
@@ -303,6 +305,9 @@ class ProcessingQueueService {
       logger.info(`Job inserted successfully: ${job.id}`);
       
       this.callbacks.onJobQueued?.(job);
+      
+      // Trigger Edge Function to process the queue (debounced)
+      this.triggerEdgeProcessing();
       
       return job;
     } catch (error: any) {
@@ -710,6 +715,59 @@ class ProcessingQueueService {
     
     // TODO: Implement flush logic when online
     // This would upload local jobs to the server queue
+  }
+
+  /**
+   * Trigger Edge Function to process pending queue jobs
+   * Debounced to avoid excessive invocations when queueing multiple files
+   */
+  private triggerEdgeProcessing(): void {
+    // Clear any pending trigger
+    if (this.edgeTriggerTimeout) {
+      clearTimeout(this.edgeTriggerTimeout);
+    }
+
+    // Debounce: wait for more jobs to be queued before invoking
+    this.edgeTriggerTimeout = setTimeout(async () => {
+      try {
+        await this.invokeEdgeFunction();
+      } catch (error) {
+        logger.warn('Edge Function invocation failed (jobs will be processed on next poll)', { error });
+      }
+    }, this.edgeTriggerDebounceMs);
+  }
+
+  /**
+   * Invoke the process-ocr Edge Function to process pending jobs
+   * Can be called directly or via trigger
+   */
+  async invokeEdgeFunction(maxJobs: number = 5): Promise<{ processed: number; succeeded: number; failed: number } | null> {
+    if (!isSupabaseConfigured()) {
+      logger.warn('Cannot invoke Edge Function: Supabase not configured');
+      return null;
+    }
+
+    try {
+      logger.info('Invoking process-ocr Edge Function');
+      
+      const { data, error } = await supabase.functions.invoke('process-ocr', {
+        body: { maxJobs },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      logger.info('Edge Function response', data);
+      return {
+        processed: data?.processed ?? 0,
+        succeeded: data?.succeeded ?? 0,
+        failed: data?.failed ?? 0,
+      };
+    } catch (error: any) {
+      logger.error('Failed to invoke Edge Function', { error: error.message });
+      throw error;
+    }
   }
 
   /**
