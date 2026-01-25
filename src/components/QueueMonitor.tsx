@@ -124,15 +124,13 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       const diag = processingQueueService.getDiagnostics();
       setDiagnostics(diag);
       
-      // Count local unprocessed assets that have NOT been sent to server
+      // Count local unprocessed assets - ALL that are stuck, regardless of serverJobId
+      // We want to capture items where serverJobId might have been set but never processed
       const localAssets = await loadAssets();
       const unprocessed = localAssets.filter(a => 
-        // Only count as "local pending" if:
-        // 1. Status is PENDING (never processed)
-        // 2. Status is PROCESSING but NOT yet sent to server (no serverJobId)
-        // 3. Status is FAILED with no confidence score (needs retry)
-        (a.status === AssetStatus.PENDING && !a.serverJobId) ||
-        (a.status === AssetStatus.PROCESSING && !a.serverJobId) ||
+        // Count ALL items that haven't completed processing:
+        a.status === AssetStatus.PENDING ||
+        a.status === AssetStatus.PROCESSING ||
         (a.status === AssetStatus.FAILED && !a.sqlRecord?.CONFIDENCE_SCORE)
       );
       setLocalPendingCount(unprocessed.length);
@@ -164,18 +162,15 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       // Load all local assets
       const localAssets = await loadAssets();
       
-      // Filter for unprocessed ones that haven't been sent to server yet
+      // Filter for ALL unprocessed items - include those with serverJobId that might be stale
       const unprocessed = localAssets.filter(a => 
-        // Only queue if not already sent to server (no serverJobId)
-        !a.serverJobId && (
-          a.status === AssetStatus.PENDING || 
-          a.status === AssetStatus.PROCESSING ||
-          (a.status === AssetStatus.FAILED && !a.sqlRecord?.CONFIDENCE_SCORE)
-        )
+        a.status === AssetStatus.PENDING || 
+        a.status === AssetStatus.PROCESSING ||
+        (a.status === AssetStatus.FAILED && !a.sqlRecord?.CONFIDENCE_SCORE)
       );
       
       if (unprocessed.length === 0) {
-        alert('No pending local assets to re-queue.\n\nAll items may have already been uploaded to the server.');
+        alert('No pending local assets to re-queue.\n\nAll items have been processed.');
         setIsRequeuing(false);
         return;
       }
