@@ -74,3 +74,53 @@ export const deleteAsset = async (id: string) => {
 export const clearAllAssets = async () => {
     await db.assets.clear();
 };
+
+/**
+ * Clear assets stuck in PROCESSING or PENDING status.
+ * Optionally provide specific asset IDs to clear, or clear all stuck.
+ * @param assetIds - Optional specific IDs to clear. If empty, clears all stuck.
+ * @returns Number of assets cleared
+ */
+export const clearStuckAssets = async (assetIds?: string[]): Promise<number> => {
+    const allAssets = await db.assets.toArray();
+    const stuckAssets = allAssets.filter(a => {
+        const isStuck = a.status === 'PROCESSING' || a.status === 'PENDING';
+        if (assetIds && assetIds.length > 0) {
+            return isStuck && assetIds.includes(a.id);
+        }
+        return isStuck;
+    });
+    
+    for (const asset of stuckAssets) {
+        await db.assets.delete(asset.id);
+    }
+    
+    return stuckAssets.length;
+};
+
+/**
+ * Reset stuck assets back to PENDING status so they can be reprocessed.
+ * @param assetIds - Optional specific IDs to reset. If empty, resets all stuck.
+ * @returns Number of assets reset
+ */
+export const resetStuckAssets = async (assetIds?: string[]): Promise<number> => {
+    const allAssets = await db.assets.toArray();
+    const stuckAssets = allAssets.filter(a => {
+        const isStuck = a.status === 'PROCESSING';
+        if (assetIds && assetIds.length > 0) {
+            return isStuck && assetIds.includes(a.id);
+        }
+        return isStuck;
+    });
+    
+    for (const asset of stuckAssets) {
+        await db.assets.put({
+            ...asset,
+            status: 'PENDING' as any,
+            progress: 0,
+            errorMessage: undefined,
+        });
+    }
+    
+    return stuckAssets.length;
+};

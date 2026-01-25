@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS public.historical_documents_global (
     
     -- Licensing
     DATA_LICENSE TEXT DEFAULT 'GEOGRAPH_CORPUS_1.0',
-        IS_PUBLIC BOOLEAN DEFAULT false,    IS_PUBLIC BOOLEAN DEFAULT false,,    IS_PUBLIC BOOLEAN DEFAULT false,
+        IS_PUBLIC BOOLEAN DEFAULT false,    IS_PUBLIC BOOLEAN DEFAULT false of    IS_PUBLIC BOOLEAN DEFAULT false,
     
     -- Contributor info
     CONTRIBUTOR_ID TEXT,

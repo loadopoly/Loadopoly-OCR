@@ -38,7 +38,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { processingQueueService, QueueStats, QueueJob, JobStatus } from '../services/processingQueueService';
-import { loadAssets } from '../lib/indexeddb';
+import { loadAssets, clearStuckAssets, resetStuckAssets } from '../lib/indexeddb';
 import { AssetStatus, ScanType } from '../types';
 
 // ============================================
@@ -69,6 +69,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [connectionTest, setConnectionTest] = useState<ConnectionTestResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   
   // New state for detailed job list
   const [jobs, setJobs] = useState<QueueJob[]>([]);
@@ -243,6 +244,83 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       });
     } finally {
       setIsTesting(false);
+    }
+  };
+
+  /**
+   * Clear ALL stuck items from both server queue and local IndexedDB.
+   * This is the nuclear option when processing is permanently stuck.
+   */
+  const handleClearAllStuck = async () => {
+    const stuckCount = localPendingCount + (stats?.pending || 0) + (stats?.processing || 0);
+    
+    if (stuckCount === 0) {
+      alert('No stuck items to clear.');
+      return;
+    }
+    
+    const confirmed = confirm(
+      `⚠️ Clear ${stuckCount} stuck items?\n\n` +
+      `This will:\n` +
+      `• Cancel ${(stats?.pending || 0) + (stats?.processing || 0)} server queue jobs\n` +
+      `• Remove ${localPendingCount} local pending assets\n\n` +
+      `This action cannot be undone. The images will need to be re-captured.`
+    );
+    
+    if (!confirmed) return;
+    
+    setIsClearing(true);
+    
+    try {
+      let serverCancelled = 0;
+      let localCleared = 0;
+      
+      // 1. Cancel server queue jobs
+      if (userId) {
+        serverCancelled = await processingQueueService.cancelAllPendingJobs();
+        console.log(`[ClearStuck] Cancelled ${serverCancelled} server jobs`);
+      }
+      
+      // 2. Clear local IndexedDB stuck assets
+      localCleared = await clearStuckAssets();
+      console.log(`[ClearStuck] Cleared ${localCleared} local assets`);
+      
+      // 3. Refresh stats
+      await fetchStats();
+      await fetchJobs();
+      
+      alert(
+        `✓ Cleared ${serverCancelled + localCleared} stuck items:\n` +
+        `• ${serverCancelled} server jobs cancelled\n` +
+        `• ${localCleared} local assets removed`
+      );
+      
+      onRequeueComplete?.();
+    } catch (err) {
+      console.error('Failed to clear stuck items:', err);
+      alert('Failed to clear stuck items. Check console for details.');
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
+  /**
+   * Reset stuck PROCESSING items back to PENDING (local only).
+   * Use this to retry items without losing them.
+   */
+  const handleResetLocalStuck = async () => {
+    try {
+      const resetCount = await resetStuckAssets();
+      if (resetCount > 0) {
+        alert(`Reset ${resetCount} stuck items back to pending. You can now re-upload them.`);
+        await fetchStats();
+        onRequeueComplete?.();
+      } else {
+        alert('No stuck local items to reset.');
+      }
+    } catch (err) {
+      console.error('Failed to reset stuck items:', err);
+      alert('Failed to reset stuck items.');
     }
   };
 
@@ -771,17 +849,48 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       )}
 
       {/* Actions for stuck jobs */}
-      {(stats.processing > 0 || stats.failed > 0) && (
-        <div className="flex gap-2">
-          {stats.processing > 0 && (
+      {(stats.processing > 0 || stats.failed > 0 || localPendingCount > 0) && (
+        <div className="space-y-2">
+          <div className="flex gap-2">
+            {stats.processing > 0 && (
+              <button
+                onClick={handleReleaseStale}
+                className="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9px] rounded flex items-center justify-center gap-1 transition-colors"
+              >
+                <RotateCcw size={10} />
+                Release Stuck Jobs
+              </button>
+            )}
+          </div>
+          
+          {/* Clear All Stuck - Nuclear option */}
+          <div className="flex gap-2">
             <button
-              onClick={handleReleaseStale}
-              className="flex-1 py-1.5 px-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-[9px] rounded flex items-center justify-center gap-1 transition-colors"
+              onClick={handleResetLocalStuck}
+              disabled={isClearing || localPendingCount === 0}
+              className="flex-1 py-1.5 px-2 bg-amber-800 hover:bg-amber-700 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[9px] rounded flex items-center justify-center gap-1 transition-colors"
             >
               <RotateCcw size={10} />
-              Release Stuck Jobs
+              Reset Local Stuck
             </button>
-          )}
+            <button
+              onClick={handleClearAllStuck}
+              disabled={isClearing}
+              className="flex-1 py-1.5 px-2 bg-rose-800 hover:bg-rose-700 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[9px] rounded flex items-center justify-center gap-1 transition-colors"
+            >
+              {isClearing ? (
+                <>
+                  <RefreshCw size={10} className="animate-spin" />
+                  Clearing...
+                </>
+              ) : (
+                <>
+                  <Trash2 size={10} />
+                  Clear All Stuck
+                </>
+              )}
+            </button>
+          </div>
         </div>
       )}
     </div>
