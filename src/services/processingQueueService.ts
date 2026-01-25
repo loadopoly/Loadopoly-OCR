@@ -122,6 +122,103 @@ class ProcessingQueueService {
     
     // Subscribe to user's job updates
     await this.subscribeToUserJobs();
+    
+    // Sync local assets with server queue status (reconcile after app restart)
+    await this.syncLocalWithServerQueue();
+  }
+
+  /**
+   * Sync local IndexedDB assets with server queue status.
+   * Called on init to reconcile status after app restart.
+   * Updates local assets that have serverJobId with actual server status.
+   */
+  async syncLocalWithServerQueue(): Promise<{ synced: number; completed: number; failed: number }> {
+    if (!isSupabaseConfigured() || !this.userId || !supabase) {
+      logger.debug('Cannot sync with server: not configured or not logged in');
+      return { synced: 0, completed: 0, failed: 0 };
+    }
+
+    try {
+      // Load all local assets that have serverJobId (previously uploaded to queue)
+      const localAssets = await loadAssets();
+      const assetsWithServerJob = localAssets.filter(a => 
+        a.serverJobId && 
+        (a.status === AssetStatus.PROCESSING || a.status === AssetStatus.PENDING)
+      );
+
+      if (assetsWithServerJob.length === 0) {
+        logger.debug('No local assets with serverJobId need syncing');
+        return { synced: 0, completed: 0, failed: 0 };
+      }
+
+      logger.info(`Syncing ${assetsWithServerJob.length} local assets with server queue`);
+
+      // Get all jobs for this user (both by asset_id lookup)
+      const serverJobs = await this.getUserJobs({ limit: 500 });
+      const jobByAssetId = new Map(serverJobs.map(j => [j.assetId, j]));
+
+      let synced = 0;
+      let completed = 0;
+      let failed = 0;
+
+      for (const asset of assetsWithServerJob) {
+        // Look up by asset.id (since serverJobId === asset.id in requeueLocalAssets)
+        const serverJob = jobByAssetId.get(asset.id);
+        
+        if (!serverJob) {
+          // Job not found on server - may have expired, been deleted, or failed to create
+          // Reset to PENDING so user can re-upload
+          logger.warn(`Server job not found for asset ${asset.id}, resetting to PENDING`);
+          await saveAsset({
+            ...asset,
+            status: AssetStatus.PENDING,
+            serverJobId: undefined,
+            progress: 0,
+          });
+          synced++;
+          continue;
+        }
+
+        // Update local status based on server status
+        if (serverJob.status === 'COMPLETED') {
+          await saveAsset({
+            ...asset,
+            status: AssetStatus.MINTED,
+            progress: 100,
+            sqlRecord: serverJob.resultData as any,
+          });
+          synced++;
+          completed++;
+          logger.debug(`Asset ${asset.id} synced as COMPLETED from server`);
+        } else if (serverJob.status === 'FAILED') {
+          await saveAsset({
+            ...asset,
+            status: AssetStatus.FAILED,
+            errorMessage: serverJob.error || 'Server processing failed',
+            progress: 0,
+          });
+          synced++;
+          failed++;
+          logger.debug(`Asset ${asset.id} synced as FAILED from server`);
+        } else if (serverJob.status === 'CANCELLED') {
+          // Reset to PENDING so user can re-upload
+          await saveAsset({
+            ...asset,
+            status: AssetStatus.PENDING,
+            serverJobId: undefined,
+            progress: 0,
+          });
+          synced++;
+        }
+        // If still PENDING or PROCESSING on server, leave local status as-is
+      }
+
+      logger.info(`Sync complete: ${synced} local assets updated (${completed} completed, ${failed} failed)`);
+      return { synced, completed, failed };
+    } catch (error: any) {
+      logger.error('Failed to sync local assets with server queue', error);
+      return { synced: 0, completed: 0, failed: 0 };
+    }
   }
 
   /**
