@@ -1004,6 +1004,9 @@ export default function App() {
       // Add to local assets immediately for UI feedback
       setLocalAssets(prev => [newAsset, ...prev]);
       
+      // Save to IndexedDB to persist imageBlob for potential re-queueing
+      await saveAsset(newAsset);
+      
       onProgress(15, 'Getting location...');
       
       // Get location
@@ -1017,9 +1020,57 @@ export default function App() {
         } catch (e) {}
       }
       
+      // Check if we should use server-side processing
+      // Use server queue when online, logged in, and Supabase is configured
+      const diag = processingQueueService.getDiagnostics();
+      const useServerProcessing = diag.canProcessServer && isOnline;
+      
+      if (useServerProcessing) {
+        onProgress(20, 'Queueing for server processing...');
+        
+        try {
+          // Queue to server for processing - this uploads to storage and inserts into queue
+          const job = await processingQueueService.queueFile(compressionResult.file, {
+            scanType,
+            priority: 5,
+            location: location || undefined,
+            metadata: {
+              DOCUMENT_TITLE: file.name,
+              SOURCE_COLLECTION: 'AR Scanner / Batch Import'
+            }
+          }, itemId);
+          
+          // Update local asset to show it's been queued
+          const queuedAsset: DigitalAsset = {
+            ...newAsset,
+            status: AssetStatus.PROCESSING,
+            progress: 25,
+            serverJobId: job.id,
+          };
+          setLocalAssets(prev => prev.map(a => a.id === itemId ? queuedAsset : a));
+          await saveAsset(queuedAsset);
+          
+          onProgress(30, 'Queued for server processing');
+          
+          // Note: The actual processing result will come back via realtime subscription
+          // For now, return the asset ID - the batch processor will mark this as complete
+          // The asset status will update when the server finishes processing
+          debugLogger(`Asset ${itemId} queued for server processing (job: ${job.id})`);
+          
+          // Return early - server will handle the rest
+          onProgress(100, 'Queued (processing on server)');
+          return itemId;
+          
+        } catch (queueError: any) {
+          // Failed to queue to server - fall back to client-side processing
+          debugLogger(`Server queue failed, falling back to client processing: ${queueError.message}`, 'warn');
+          onProgress(25, 'Server unavailable, processing locally...');
+        }
+      }
+      
       onProgress(25, 'AI analysis...');
       
-      // Process with Gemini
+      // Process with Gemini (client-side fallback or when server not available)
       const analysis = await processImageWithGemini(file, location, scanType, debugMode);
       
       onProgress(70, 'Building metadata...');

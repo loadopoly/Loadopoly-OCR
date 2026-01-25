@@ -626,6 +626,110 @@ class ProcessingQueueService {
   }
 
   /**
+   * Cancel ALL pending/processing jobs for the current user.
+   * Use this to clear stuck queue items.
+   * @returns Number of jobs cancelled
+   */
+  async cancelAllPendingJobs(): Promise<number> {
+    if (!isSupabaseConfigured() || !this.userId || !supabase) {
+      // Clear local pending jobs
+      const localCount = this.pendingLocalJobs.length;
+      this.pendingLocalJobs = [];
+      return localCount;
+    }
+
+    try {
+      // First, get count of jobs to cancel
+      const { data: toCancel, error: countError } = await (supabase as any)
+        .from(QUEUE_TABLE)
+        .select('id')
+        .eq('user_id', this.userId)
+        .in('status', ['PENDING', 'PROCESSING']);
+
+      if (countError) {
+        logger.error('Failed to count jobs to cancel', countError);
+        return 0;
+      }
+
+      const count = toCancel?.length || 0;
+      if (count === 0) return 0;
+
+      // Cancel all pending/processing jobs
+      const { error } = await (supabase as any)
+        .from(QUEUE_TABLE)
+        .update({ 
+          status: 'CANCELLED', 
+          updated_at: new Date().toISOString(),
+          last_error: 'Cancelled by user'
+        })
+        .eq('user_id', this.userId)
+        .in('status', ['PENDING', 'PROCESSING']);
+
+      if (error) {
+        logger.error('Failed to cancel pending jobs', error);
+        return 0;
+      }
+
+      // Also clear local pending jobs
+      this.pendingLocalJobs = [];
+
+      logger.info(`Cancelled ${count} pending/processing jobs for user ${this.userId}`);
+      return count;
+    } catch (error) {
+      logger.error('Error cancelling pending jobs', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Delete ALL jobs for the current user (clears history).
+   * Use with caution - this removes completed jobs too.
+   * @returns Number of jobs deleted
+   */
+  async deleteAllJobs(): Promise<number> {
+    if (!isSupabaseConfigured() || !this.userId || !supabase) {
+      const localCount = this.pendingLocalJobs.length;
+      this.pendingLocalJobs = [];
+      return localCount;
+    }
+
+    try {
+      // Get count first
+      const { data: toDelete, error: countError } = await (supabase as any)
+        .from(QUEUE_TABLE)
+        .select('id')
+        .eq('user_id', this.userId);
+
+      if (countError) {
+        logger.error('Failed to count jobs to delete', countError);
+        return 0;
+      }
+
+      const count = toDelete?.length || 0;
+      if (count === 0) return 0;
+
+      // Delete all user jobs
+      const { error } = await (supabase as any)
+        .from(QUEUE_TABLE)
+        .delete()
+        .eq('user_id', this.userId);
+
+      if (error) {
+        logger.error('Failed to delete all jobs', error);
+        return 0;
+      }
+
+      this.pendingLocalJobs = [];
+
+      logger.info(`Deleted ${count} jobs for user ${this.userId}`);
+      return count;
+    } catch (error) {
+      logger.error('Error deleting all jobs', error);
+      return 0;
+    }
+  }
+
+  /**
    * Unsubscribe from all Realtime channels
    */
   destroy(): void {

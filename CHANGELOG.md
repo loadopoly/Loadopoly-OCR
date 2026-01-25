@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.9.3] - 2026-01-25
+
+### Added
+- **Clear Stuck Assets Feature**: New tools to recover from stuck processing/pending states on mobile.
+  - `clearStuckAssets()` - Deletes assets stuck in PROCESSING or PENDING from IndexedDB.
+  - `resetStuckAssets()` - Resets PROCESSING assets back to PENDING for retry without data loss.
+  - `cancelAllPendingJobs()` - Cancels all PENDING/PROCESSING jobs in Supabase queue.
+  - `deleteAllJobs()` - Nuclear option to delete all queue history for a user.
+  
+- **Queue Monitor UI Enhancements**:
+  - **Reset Local Stuck** button - Resets local PROCESSING items to PENDING for retry.
+  - **Clear All Stuck** button - Clears all stuck items from both server and local storage (with confirmation).
+  - Better visibility of actions when items are stuck.
+
+### Fixed
+- **Supabase Configuration**: Fixed `.env.local` having malformed anon key that was overriding correct credentials.
+- **Server-side Processing Path**: Batch processing now properly queues to server when online and logged in.
+- **Asset Persistence**: Assets are now saved to IndexedDB immediately after creation for reliable re-queueing.
+
 ## [2.9.2] - 2026-01-20
 
 ### Fixed
