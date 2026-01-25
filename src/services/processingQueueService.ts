@@ -913,7 +913,7 @@ class ProcessingQueueService {
    * Successfully queued assets are marked as PROCESSING in IndexedDB.
    */
   async requeueLocalAssets(
-    assets: Array<{ id: string; imageBlob?: Blob; scanType?: string }>,
+    assets: Array<{ id: string; imageBlob?: Blob; imageUrl?: string; scanType?: string }>,
     onProgress?: (completed: number, total: number, currentAssetId: string) => void
   ): Promise<{ queued: number; failed: number; errors: string[] }> {
     if (!isSupabaseConfigured() || !this.userId) {
@@ -934,16 +934,33 @@ class ProcessingQueueService {
       const asset = assets[i];
       
       try {
-        if (!asset.imageBlob) {
+        let imageBlob = asset.imageBlob;
+        
+        // If no blob, try to fetch from URL (including blob: URLs that may still be valid)
+        if (!imageBlob && asset.imageUrl) {
+          try {
+            logger.debug(`Fetching image for asset ${asset.id} from ${asset.imageUrl.substring(0, 50)}...`);
+            const response = await fetch(asset.imageUrl);
+            if (response.ok) {
+              imageBlob = await response.blob();
+              logger.debug(`Successfully fetched image blob for ${asset.id}: ${imageBlob.size} bytes`);
+            } else {
+              logger.warn(`Failed to fetch image for ${asset.id}: ${response.status}`);
+            }
+          } catch (fetchErr: any) {
+            logger.warn(`Cannot fetch image for ${asset.id}: ${fetchErr.message}`);
+          }
+        }
+        
+        if (!imageBlob) {
           results.failed++;
-          results.errors.push(`Asset ${asset.id}: No image blob available`);
-          // Still report progress even on failure
+          results.errors.push(`Asset ${asset.id}: No image available (blob missing and URL fetch failed)`);
           onProgress?.(i + 1, total, asset.id);
           continue;
         }
         
         // Create a File from the Blob
-        const file = new File([asset.imageBlob], `${asset.id}.jpg`, { type: asset.imageBlob.type || 'image/jpeg' });
+        const file = new File([imageBlob], `${asset.id}.jpg`, { type: imageBlob.type || 'image/jpeg' });
         
         // Upload to storage
         const imagePath = await this.uploadToStorage(asset.id, file);
@@ -979,6 +996,11 @@ class ProcessingQueueService {
       
       // Report progress AFTER each item (success or failure)
       onProgress?.(i + 1, total, asset.id);
+    }
+    
+    // Trigger edge function to start processing
+    if (results.queued > 0) {
+      this.triggerEdgeProcessing();
     }
     
     logger.info(`Re-queue complete: ${results.queued} queued, ${results.failed} failed`);

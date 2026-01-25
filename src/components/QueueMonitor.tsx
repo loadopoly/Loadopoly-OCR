@@ -186,6 +186,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
         unprocessed.map(a => ({ 
           id: a.id, 
           imageBlob: a.imageBlob, 
+          imageUrl: a.imageUrl,  // Pass URL as fallback for fetching
           scanType: a.scanType 
         })),
         (done, total) => setRequeueProgress({ done, total })
@@ -310,9 +311,21 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
    */
   const handleResetLocalStuck = async () => {
     try {
+      // Load assets and find stuck ones
+      const localAssets = await loadAssets();
+      const stuckAssets = localAssets.filter(a => 
+        a.status === AssetStatus.PROCESSING && !a.serverJobId
+      );
+      
+      if (stuckAssets.length === 0) {
+        alert('No stuck local items to reset.\n\nTip: Items that have already been uploaded to server won\'t appear here.');
+        return;
+      }
+      
+      // Reset their status to PENDING
       const resetCount = await resetStuckAssets();
       if (resetCount > 0) {
-        alert(`Reset ${resetCount} stuck items back to pending. You can now re-upload them.`);
+        alert(`Reset ${resetCount} stuck items back to pending.\n\nClick "Upload to Server" to process them.`);
         await fetchStats();
         onRequeueComplete?.();
       } else {
@@ -863,7 +876,28 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
             )}
           </div>
           
-          {/* Clear All Stuck - Nuclear option */}
+          {/* Force Requeue - Upload all stuck to server */}
+          <div className="flex gap-2">
+            <button
+              onClick={handleRequeueAll}
+              disabled={isRequeuing || localPendingCount === 0}
+              className="flex-1 py-2 px-2 bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[10px] font-medium rounded flex items-center justify-center gap-1.5 transition-colors"
+            >
+              {isRequeuing ? (
+                <>
+                  <RefreshCw size={12} className="animate-spin" />
+                  Uploading {requeueProgress.done}/{requeueProgress.total}...
+                </>
+              ) : (
+                <>
+                  <Upload size={12} />
+                  Upload All to Server ({localPendingCount})
+                </>
+              )}
+            </button>
+          </div>
+          
+          {/* Reset / Clear options */}
           <div className="flex gap-2">
             <button
               onClick={handleResetLocalStuck}
@@ -871,7 +905,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
               className="flex-1 py-1.5 px-2 bg-amber-800 hover:bg-amber-700 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[9px] rounded flex items-center justify-center gap-1 transition-colors"
             >
               <RotateCcw size={10} />
-              Reset Local Stuck
+              Reset Status
             </button>
             <button
               onClick={handleClearAllStuck}
@@ -886,7 +920,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
               ) : (
                 <>
                   <Trash2 size={10} />
-                  Clear All Stuck
+                  Delete All
                 </>
               )}
             </button>
