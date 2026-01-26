@@ -70,6 +70,10 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
   const [connectionTest, setConnectionTest] = useState<ConnectionTestResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [isClearing, setIsClearing] = useState(false);
+  const [isTriggering, setIsTriggering] = useState(false);
+  const [triggerResult, setTriggerResult] = useState<{ processed: number; succeeded: number; failed: number } | null>(null);
+  const [localNeedsUploadCount, setLocalNeedsUploadCount] = useState(0);
+  const [localOnServerCount, setLocalOnServerCount] = useState(0);
   
   // New state for detailed job list
   const [jobs, setJobs] = useState<QueueJob[]>([]);
@@ -124,15 +128,20 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       const diag = processingQueueService.getDiagnostics();
       setDiagnostics(diag);
       
-      // Count local unprocessed assets - ALL that are stuck, regardless of serverJobId
-      // We want to capture items where serverJobId might have been set but never processed
+      // Count local unprocessed assets - split into needs-upload vs on-server-queue
       const localAssets = await loadAssets();
       const unprocessed = localAssets.filter(a => 
-        // Count ALL items that haven't completed processing:
         a.status === AssetStatus.PENDING ||
         a.status === AssetStatus.PROCESSING ||
         (a.status === AssetStatus.FAILED && !a.sqlRecord?.CONFIDENCE_SCORE)
       );
+      
+      // Split: assets with serverJobId are already on server queue
+      const needsUpload = unprocessed.filter(a => !a.serverJobId);
+      const onServerQueue = unprocessed.filter(a => !!a.serverJobId);
+      
+      setLocalNeedsUploadCount(needsUpload.length);
+      setLocalOnServerCount(onServerQueue.length);
       setLocalPendingCount(unprocessed.length);
     } catch (err) {
       console.error('Failed to fetch queue stats', err);
@@ -162,18 +171,28 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       // Load all local assets
       const localAssets = await loadAssets();
       
-      // Filter for ALL unprocessed items - include those with serverJobId that might be stale
-      const unprocessed = localAssets.filter(a => 
-        a.status === AssetStatus.PENDING || 
-        a.status === AssetStatus.PROCESSING ||
-        (a.status === AssetStatus.FAILED && !a.sqlRecord?.CONFIDENCE_SCORE)
+      // Filter for items that need upload (don't have serverJobId yet)
+      const needsUpload = localAssets.filter(a => 
+        !a.serverJobId && (
+          a.status === AssetStatus.PENDING || 
+          a.status === AssetStatus.PROCESSING ||
+          (a.status === AssetStatus.FAILED && !a.sqlRecord?.CONFIDENCE_SCORE)
+        )
       );
       
-      if (unprocessed.length === 0) {
-        alert('No pending local assets to re-queue.\n\nAll items have been processed.');
+      if (needsUpload.length === 0) {
+        // Check if there are items on server that need processing
+        const onServer = localAssets.filter(a => a.serverJobId && a.status !== AssetStatus.MINTED);
+        if (onServer.length > 0) {
+          alert(`All items already uploaded to server queue (${onServer.length} waiting).\n\nTry "Trigger Processing" to start the OCR.`);
+        } else {
+          alert('No pending local assets to re-queue.\n\nAll items have been processed.');
+        }
         setIsRequeuing(false);
         return;
       }
+      
+      const unprocessed = needsUpload; // Rename for compatibility below
       
       setRequeueProgress({ done: 0, total: unprocessed.length });
       
@@ -240,6 +259,36 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       });
     } finally {
       setIsTesting(false);
+    }
+  };
+
+  /**
+   * Manually trigger the Edge Function to process the server queue.
+   * Use this when WAITLIST has items but ACTIVE is 0.
+   */
+  const handleTriggerProcessing = async () => {
+    setIsTriggering(true);
+    setTriggerResult(null);
+    try {
+      const result = await processingQueueService.invokeEdgeFunction(10); // Process up to 10 jobs
+      setTriggerResult(result);
+      if (result) {
+        if (result.succeeded > 0 || result.failed > 0) {
+          alert(`Edge Function processed ${result.processed} jobs:\n✓ ${result.succeeded} succeeded\n✗ ${result.failed} failed`);
+        } else if (result.processed === 0) {
+          alert('Edge Function responded but processed 0 jobs.\n\nCheck if GEMINI_API_KEY is set in Supabase Edge Function secrets.');
+        }
+      } else {
+        alert('Edge Function returned no response. It may not be deployed.');
+      }
+      // Refresh stats after processing
+      await fetchStats();
+      await fetchJobs();
+    } catch (err: any) {
+      console.error('Trigger processing failed:', err);
+      alert(`Failed to trigger processing:\n${err.message}\n\nThe Edge Function may not be deployed or may be missing the GEMINI_API_KEY secret.`);
+    } finally {
+      setIsTriggering(false);
     }
   };
 
@@ -777,13 +826,26 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
             </span>
             <Activity size={12} className="text-amber-500" />
           </div>
+          
+          {/* Split counts */}
+          <div className="flex gap-2 mb-2 text-[8px]">
+            {localNeedsUploadCount > 0 && (
+              <span className="text-rose-400">📤 {localNeedsUploadCount} need upload</span>
+            )}
+            {localOnServerCount > 0 && (
+              <span className="text-cyan-400">☁️ {localOnServerCount} on server queue</span>
+            )}
+          </div>
+          
           <p className="text-[8px] text-amber-600/80 mb-2">
-            These items are stored locally and need to be sent to server for OCR processing.
+            {localNeedsUploadCount > 0 
+              ? 'Upload items to server, then trigger processing.'
+              : 'All items uploaded. Trigger processing to start OCR.'}
           </p>
           <div className="flex gap-2">
             <button
               onClick={handleRequeueAll}
-              disabled={isRequeuing || isTesting}
+              disabled={isRequeuing || isTesting || localNeedsUploadCount === 0}
               className="flex-1 py-1.5 px-2 bg-amber-600 hover:bg-amber-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-[10px] font-medium rounded flex items-center justify-center gap-1.5 transition-colors"
             >
               {isRequeuing ? (
@@ -794,7 +856,25 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
               ) : (
                 <>
                   <Upload size={10} />
-                  Upload to Server
+                  Upload ({localNeedsUploadCount})
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleTriggerProcessing}
+              disabled={isTriggering || (stats?.pending || 0) === 0}
+              className="flex-1 py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:cursor-not-allowed text-white text-[10px] font-medium rounded flex items-center justify-center gap-1.5 transition-colors"
+              title="Trigger Edge Function to process server queue"
+            >
+              {isTriggering ? (
+                <>
+                  <RefreshCw size={10} className="animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Zap size={10} />
+                  Process Queue
                 </>
               )}
             </button>
@@ -811,6 +891,15 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
               )}
             </button>
           </div>
+          
+          {/* Trigger result */}
+          {triggerResult && (
+            <div className="mt-2 p-1.5 bg-slate-900 rounded text-[8px]">
+              <span className="text-slate-400">Last trigger: </span>
+              <span className="text-emerald-400">{triggerResult.succeeded} ✓</span>
+              {triggerResult.failed > 0 && <span className="text-rose-400"> {triggerResult.failed} ✗</span>}
+            </div>
+          )}
           
           {/* Connection test results */}
           {connectionTest && (
@@ -875,8 +964,8 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
           <div className="flex gap-2">
             <button
               onClick={handleRequeueAll}
-              disabled={isRequeuing || localPendingCount === 0}
-              className="flex-1 py-2 px-2 bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[10px] font-medium rounded flex items-center justify-center gap-1.5 transition-colors"
+              disabled={isRequeuing || localNeedsUploadCount === 0}
+              className="flex-1 py-2 px-2 bg-amber-700 hover:bg-amber-600 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[10px] font-medium rounded flex items-center justify-center gap-1.5 transition-colors"
             >
               {isRequeuing ? (
                 <>
@@ -886,7 +975,25 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
               ) : (
                 <>
                   <Upload size={12} />
-                  Upload All to Server ({localPendingCount})
+                  Upload to Server ({localNeedsUploadCount})
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleTriggerProcessing}
+              disabled={isTriggering || (stats?.pending || 0) === 0}
+              className="flex-1 py-2 px-2 bg-emerald-700 hover:bg-emerald-600 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[10px] font-medium rounded flex items-center justify-center gap-1.5 transition-colors"
+              title="Trigger Edge Function to process queue"
+            >
+              {isTriggering ? (
+                <>
+                  <RefreshCw size={12} className="animate-spin" />
+                  Processing...
+                </>
+              ) : (
+                <>
+                  <Zap size={12} />
+                  Process Queue ({stats?.pending || 0})
                 </>
               )}
             </button>
