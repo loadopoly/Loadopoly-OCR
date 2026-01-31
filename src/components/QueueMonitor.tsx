@@ -45,10 +45,21 @@ import { AssetStatus, ScanType } from '../types';
 // Types
 // ============================================
 
+/**
+ * Upload progress represents client-side upload state (syncing to cloud)
+ * This is separate from server-side queue processing stats
+ */
+interface UploadProgress {
+  current: number;
+  total: number;
+}
+
 interface QueueMonitorProps {
   userId?: string;
   onRequeueComplete?: () => void;
   compact?: boolean;
+  /** Client-side upload progress - shown separately from server queue */
+  uploadProgress?: UploadProgress;
 }
 
 interface ConnectionTestResult {
@@ -57,7 +68,7 @@ interface ConnectionTestResult {
   queueSelect: { success: boolean; error?: string };
 }
 
-export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueComplete, compact = false }) => {
+export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueComplete, compact = false, uploadProgress }) => {
   const [stats, setStats] = useState<QueueStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -416,6 +427,33 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
 
   return (
     <div className="space-y-3">
+      {/* ============================================
+          Client-Side Upload Progress (Syncing to Cloud)
+          This shows local → server upload status, separate from server processing
+          ============================================ */}
+      {uploadProgress && uploadProgress.total > 0 && (
+        <div className="p-3 bg-gradient-to-r from-blue-950/50 to-slate-900 border border-blue-800/50 rounded-lg">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2">
+              <Upload size={12} className="text-blue-400" />
+              <span className="text-[10px] font-semibold text-blue-300 uppercase tracking-wider">Syncing to Cloud</span>
+            </div>
+            <span className="text-[10px] font-mono text-blue-400">
+              {uploadProgress.current}/{uploadProgress.total}
+            </span>
+          </div>
+          <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
+              style={{ width: `${(uploadProgress.current / uploadProgress.total) * 100}%` }}
+            />
+          </div>
+          <p className="text-[8px] text-slate-500 mt-1.5">
+            Uploading files to server queue. Processing will continue in background.
+          </p>
+        </div>
+      )}
+
       {/* Header with prominent queue count */}
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-3">
@@ -483,6 +521,25 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
           <p className="text-[8px] text-slate-600 mt-1">Errors encountered</p>
         </div>
       </div>
+
+      {/* Background Processing Info */}
+      {stats.pending > 0 && stats.processing === 0 && (
+        <div className="px-2 py-1.5 bg-amber-950/30 rounded border border-amber-800/30 flex items-center gap-2">
+          <Clock size={10} className="text-amber-500 flex-shrink-0" />
+          <p className="text-[8px] text-amber-400/80">
+            Jobs queued but not processing. Use "Trigger Processing" or close app — server will auto-process.
+          </p>
+        </div>
+      )}
+
+      {stats.processing > 0 && (
+        <div className="px-2 py-1.5 bg-emerald-950/30 rounded border border-emerald-800/30 flex items-center gap-2">
+          <Zap size={10} className="text-emerald-500 flex-shrink-0 animate-pulse" />
+          <p className="text-[8px] text-emerald-400/80">
+            Processing active. You can close the app — server will continue in background.
+          </p>
+        </div>
+      )}
 
       {stats.avgProcessingTime > 0 && (
         <div className="px-2 py-1.5 bg-slate-800/30 rounded border border-slate-800/50 flex items-center justify-between">
