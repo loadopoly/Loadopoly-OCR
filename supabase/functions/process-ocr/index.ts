@@ -180,7 +180,7 @@ Deno.serve(async (req: Request) => {
       const { count: pendingCount, error: pendingErr } = await supabase
         .from('processing_queue')
         .select('*', { count: 'exact', head: true })
-        .eq('STATUS', 'PENDING');
+        .eq('status', 'PENDING');
 
       if (pendingErr) {
         console.warn(`[${workerId}] Failed to check pending count:`, pendingErr);
