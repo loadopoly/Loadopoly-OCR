@@ -3,6 +3,30 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.9.4] - 2026-01-31
+
+### Added
+- **Offline/Background Processing**: Processing now continues even when the app is closed.
+  - Edge Function auto-chains: checks for remaining PENDING jobs after each batch and self-invokes.
+  - Database trigger (`trg_invoke_processing_worker`) auto-invokes Edge Function on new job inserts.
+  - Processing queue clears without user interaction.
+
+- **Upload Progress Separation**: QueueMonitor now clearly separates:
+  - Client-side upload progress ("Syncing to Cloud") 
+  - Server-side queue stats (Waitlist, Active, Completed, Failed)
+  - Contextual status messages explaining background processing state.
+
+- **Production-Safe SQL Trigger**: New Vault-based trigger that reads service_role_key securely.
+  - `sql/QUICK_SETUP_AUTO_TRIGGER.sql` - Production-ready trigger using Vault.
+  - `supabase/migrations/20260131160000_enable_auto_processing.sql` - Migration file.
+
+### Fixed
+- **Column Case Mismatch**: Fixed Edge Function using uppercase `STATUS` when database uses lowercase `status`.
+- **Trigger Disabled**: Added `ENABLE TRIGGER` command to SQL setup scripts.
+
+### Security
+- Removed embedded service_role_key from SQL files - now uses Supabase Vault.
+
 ## [2.9.3] - 2026-01-25
 
 ### Added
