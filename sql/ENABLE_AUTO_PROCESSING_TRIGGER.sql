@@ -63,8 +63,8 @@ BEGIN
   END IF;
 
   -- Get Edge Function URL
-  -- Replace YOUR_PROJECT_REF with your actual Supabase project reference
-  edge_function_url := 'https://YOUR_PROJECT_REF.supabase.co/functions/v1/process-ocr';
+  -- Project ref: kuofzjhrrjgimtomgact
+  edge_function_url := 'https://kuofzjhrrjgimtomgact.supabase.co/functions/v1/process-ocr';
   
   -- Get service role key from vault
   -- You must store this in Supabase Vault first:
