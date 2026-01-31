@@ -172,6 +172,40 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[${workerId}] Completed: ${summary.succeeded}/${summary.processed}`);
 
+    // ============================================
+    // Auto-Chain: Continue processing if more jobs exist
+    // This enables offline/background processing without app interaction
+    // ============================================
+    try {
+      const { count: pendingCount, error: pendingErr } = await supabase
+        .from('processing_queue')
+        .select('*', { count: 'exact', head: true })
+        .eq('STATUS', 'PENDING');
+
+      if (pendingErr) {
+        console.warn(`[${workerId}] Failed to check pending count:`, pendingErr);
+      } else if ((pendingCount ?? 0) > 0) {
+        console.log(`[${workerId}] ${pendingCount} jobs remaining. Triggering next batch...`);
+        
+        // Fire-and-forget: invoke this function again to process the next batch
+        // We don't await to allow the current response to complete promptly
+        const functionUrl = `${supabaseUrl}/functions/v1/process-ocr`;
+        fetch(functionUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ maxJobs }),
+        }).catch((chainErr) => console.error(`[${workerId}] Chain invoke failed:`, chainErr));
+      } else {
+        console.log(`[${workerId}] Queue empty. Processing complete.`);
+      }
+    } catch (chainError) {
+      console.error(`[${workerId}] Chain check failed:`, chainError);
+      // Don't fail the response - chaining is best-effort
+    }
+
     return new Response(JSON.stringify(summary), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
