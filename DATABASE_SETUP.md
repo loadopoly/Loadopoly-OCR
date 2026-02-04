@@ -2,13 +2,28 @@
 
 Follow these steps to configure your Supabase backend for Loadopoly OCR.
 
+## � Documentation
+
+For comprehensive database documentation, see the `docs/` directory:
+
+| Document | Description |
+|----------|-------------|
+| [DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) | Complete table and column reference |
+| [DATA_LINEAGE.md](docs/DATA_LINEAGE.md) | Data flow and transformation documentation |
+| [SEMANTIC_MODEL.md](docs/SEMANTIC_MODEL.md) | Entity-Relationship diagrams (Mermaid) |
+
 ## 📂 SQL Migration Scripts
+
 All database migration and fix scripts are located in the `sql/` directory.
-- `sql/FIX_TABLE_RLS.sql`: Resets Row Level Security policies to allow public uploads (Fixes "new row violates RLS policy").
-- `sql/FIX_ALL_COLUMNS_TO_UPPERCASE.sql`: Renames all columns to UPPERCASE to match the application schema.
-- `sql/ADD_MISSING_COLUMNS.sql`: Adds any missing columns required by the latest version.
-- `sql/PROCESSING_QUEUE_SCHEMA.sql`: **Required for v2.8+** - Sets up background processing queue with Realtime support.
-- `sql/COMPLETE_SCHEMA_SETUP_V2.8.1.sql`: Complete idempotent schema setup for v2.8+.
+
+### Primary Schema (v3.0.0+)
+- **`sql/CONSOLIDATED_SCHEMA.sql`**: ⭐ **Single source of truth** - Complete idempotent schema setup
+
+### Legacy Scripts (for reference)
+- `sql/COMPLETE_SCHEMA_SETUP_V2.8.1.sql`: Complete idempotent schema setup for v2.8+
+- `sql/PROCESSING_QUEUE_SCHEMA.sql`: Background processing queue setup
+- `sql/FIX_ALL_SUPABASE_LINTER_ISSUES.sql`: Master fix for Supabase linter warnings
+- `sql/HEALTH_CHECK_V2.8.1.sql`: Schema verification queries
 
 ## ⚠️ Important: Processing Queue Setup (v2.8.1)
 
