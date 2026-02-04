@@ -142,11 +142,55 @@ BEGIN
     ALTER FUNCTION public.upsert_classification_mapping(TEXT, TEXT, TEXT, TEXT) SET search_path = '';
   EXCEPTION WHEN undefined_function THEN NULL;
   END;
+
+  -- update_job_progress
+  BEGIN
+    ALTER FUNCTION public.update_job_progress(UUID, INTEGER, TEXT) SET search_path = '';
+  EXCEPTION WHEN undefined_function THEN NULL;
+  END;
+
+  -- complete_processing_job
+  BEGIN
+    ALTER FUNCTION public.complete_processing_job(UUID, JSONB) SET search_path = '';
+  EXCEPTION WHEN undefined_function THEN NULL;
+  END;
+
+  -- release_stale_locks
+  BEGIN
+    ALTER FUNCTION public.release_stale_locks() SET search_path = '';
+  EXCEPTION WHEN undefined_function THEN NULL;
+  END;
+
+  -- fail_processing_job
+  BEGIN
+    ALTER FUNCTION public.fail_processing_job(UUID, TEXT, TEXT) SET search_path = '';
+  EXCEPTION WHEN undefined_function THEN NULL;
+  END;
   
 END $$;
 
 -- ============================================
--- 3. FIX RLS POLICIES WITH (select auth.uid())
+-- 3. FIX EXTENSION SCHEMA
+-- ============================================
+
+-- Move vector extension to extensions schema if it's in public
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_extension e 
+    JOIN pg_namespace n ON e.extnamespace = n.oid 
+    WHERE e.extname = 'vector' AND n.nspname = 'public'
+  ) THEN
+    CREATE SCHEMA IF NOT EXISTS extensions;
+    GRANT USAGE ON SCHEMA extensions TO authenticated;
+    GRANT USAGE ON SCHEMA extensions TO service_role;
+    GRANT USAGE ON SCHEMA extensions TO anon;
+    ALTER EXTENSION vector SET SCHEMA extensions;
+  END IF;
+END $$;
+
+-- ============================================
+-- 4. FIX RLS POLICIES WITH (select auth.uid())
 -- ============================================
 
 -- Helper: Only modify policies if table exists
@@ -171,6 +215,8 @@ BEGIN
     DROP POLICY IF EXISTS "Users view own documents" ON public.historical_documents_global;
     DROP POLICY IF EXISTS "Users update own documents" ON public.historical_documents_global;
     DROP POLICY IF EXISTS "Users delete own documents" ON public.historical_documents_global;
+    DROP POLICY IF EXISTS "Allow Public Insert" ON public.historical_documents_global;
+    DROP POLICY IF EXISTS "Allow Public Update" ON public.historical_documents_global;
     
     -- SELECT: Users can view their own documents OR public ones
     CREATE POLICY "Users view own documents"
@@ -291,6 +337,78 @@ BEGIN
     ON public.digital_asset_bundles FOR ALL
     USING (owner_id = (select auth.uid()))
     WITH CHECK (owner_id = (select auth.uid()));
+  END IF;
+
+  -- object_attributes
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'object_attributes') THEN
+    DROP POLICY IF EXISTS "Authenticated manage object_attributes" ON public.object_attributes;
+    DROP POLICY IF EXISTS "Anyone can view object attributes" ON public.object_attributes;
+    
+    CREATE POLICY "Anyone can view object attributes"
+    ON public.object_attributes FOR SELECT
+    USING (true);
+    
+    CREATE POLICY "Users manage own object_attributes"
+    ON public.object_attributes FOR ALL
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.historical_documents_global h
+        WHERE h."ASSET_ID" = "ASSET_ID" AND h."USER_ID" = (select auth.uid())
+      )
+    )
+    WITH CHECK (
+      EXISTS (
+        SELECT 1 FROM public.historical_documents_global h
+        WHERE h."ASSET_ID" = "ASSET_ID" AND h."USER_ID" = (select auth.uid())
+      )
+    );
+  END IF;
+
+  -- taxonomy
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'taxonomy') THEN
+    DROP POLICY IF EXISTS "Authenticated manage taxonomy" ON public.taxonomy;
+    DROP POLICY IF EXISTS "Anyone can view taxonomy" ON public.taxonomy;
+    
+    CREATE POLICY "Anyone can view taxonomy"
+    ON public.taxonomy FOR SELECT
+    USING (true);
+    
+    CREATE POLICY "Admins manage taxonomy"
+    ON public.taxonomy FOR ALL
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.user_profiles up 
+        WHERE up.id = (select auth.uid()) 
+        AND up.is_admin = true
+      )
+    );
+  END IF;
+
+  -- structured_classification_mappings
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'structured_classification_mappings') THEN
+    DROP POLICY IF EXISTS "Authenticated users can create mappings" ON public.structured_classification_mappings;
+    DROP POLICY IF EXISTS "Update own or validated mappings" ON public.structured_classification_mappings;
+    DROP POLICY IF EXISTS "Anyone can view mappings" ON public.structured_classification_mappings;
+    
+    CREATE POLICY "Anyone can view mappings"
+    ON public.structured_classification_mappings FOR SELECT
+    USING (true);
+    
+    CREATE POLICY "Authenticated users can create mappings"
+    ON public.structured_classification_mappings FOR INSERT
+    TO authenticated
+    WITH CHECK ((select auth.uid()) IS NOT NULL);
+    
+    CREATE POLICY "Admins can update mappings"
+    ON public.structured_classification_mappings FOR UPDATE
+    TO authenticated
+    USING (
+      EXISTS (
+        SELECT 1 FROM public.user_profiles up 
+        WHERE up.id = (select auth.uid()) 
+        AND up.is_admin = true
+      )
+    );
   END IF;
 
   -- archive_partnerships (admin only)
