@@ -70,10 +70,11 @@ BEGIN
     ALTER FUNCTION public.get_followup_queue() SET search_path = '';
   END IF;
   
-  -- get_sector_presence
-  IF EXISTS (SELECT 1 FROM pg_proc WHERE proname = 'get_sector_presence') THEN
-    ALTER FUNCTION public.get_sector_presence() SET search_path = '';
-  END IF;
+  -- get_sector_presence (takes TEXT parameter)
+  BEGIN
+    ALTER FUNCTION public.get_sector_presence(TEXT) SET search_path = '';
+  EXCEPTION WHEN undefined_function THEN NULL;
+  END;
   
   -- get_user_owned_assets - try common signatures
   BEGIN
