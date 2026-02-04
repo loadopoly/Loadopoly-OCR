@@ -232,6 +232,25 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
       batchProcessor.setCallbacks({});
     };
   }, [onProcessItem, maxConcurrent]);
+  
+  // Prevent accidental data loss when closing page during processing
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      // Only warn if there are active or pending items
+      const hasActiveWork = processorState === 'RUNNING' || 
+                            items.some(item => item.status === 'PROCESSING' || item.status === 'QUEUED');
+      
+      if (hasActiveWork) {
+        const message = 'You have files being processed. Leaving will lose your progress.';
+        e.preventDefault();
+        e.returnValue = message;
+        return message;
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [processorState, items]);
 
   const updateUI = useCallback(() => {
     setItems(batchProcessor.getItems());

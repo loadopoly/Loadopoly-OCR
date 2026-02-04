@@ -645,6 +645,11 @@ export default function WorldRenderer({
   // Force simulation state
   const [worldData, setWorldData] = useState<{ nodes: WorldNode[]; links: WorldLink[] }>({ nodes: [], links: [] });
   const simulationRef = useRef<number>();
+  const lastFrameTimeRef = useRef<number>(0);
+  
+  // Performance: Throttle simulation to 30fps to reduce CPU usage
+  const TARGET_FPS = 30;
+  const FRAME_INTERVAL = 1000 / TARGET_FPS; // ~33.33ms
 
   // Initialize world data when graph changes
   useEffect(() => {
@@ -652,14 +657,22 @@ export default function WorldRenderer({
     setWorldData(initial);
   }, [graphData]);
 
-  // Run force simulation
+  // Run force simulation (throttled to 30fps)
   useEffect(() => {
     if (!isSimulating || worldData.nodes.length === 0) return;
     
     let frameCount = 0;
     const maxFrames = 300; // Stop after stabilizing
     
-    const simulate = () => {
+    const simulate = (timestamp: number) => {
+      // Throttle to 30 FPS to reduce CPU usage
+      const elapsed = timestamp - lastFrameTimeRef.current;
+      if (elapsed < FRAME_INTERVAL) {
+        simulationRef.current = requestAnimationFrame(simulate);
+        return;
+      }
+      lastFrameTimeRef.current = timestamp - (elapsed % FRAME_INTERVAL);
+      
       if (frameCount >= maxFrames) {
         setIsSimulating(false);
         return;

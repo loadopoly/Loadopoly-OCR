@@ -3,6 +3,37 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.9.6] - 2026-02-05
+
+### Performance
+- **3D Force Simulation Throttling**: WorldRenderer now throttles to 30fps instead of uncapped 60fps.
+  - Reduces CPU usage by ~50% during knowledge graph visualization.
+  - Uses timestamp-based frame skipping for consistent performance.
+
+- **Size-Aware Batch Timeouts**: Batch processor now calculates dynamic timeouts based on file size.
+  - Minimum 30s timeout, maximum 5 minutes.
+  - Larger files get proportionally more processing time.
+  - Prevents premature timeout failures on large documents.
+
+### Network Reliability
+- **Exponential Backoff for Realtime Reconnection**: ProcessingQueueService now uses exponential backoff with jitter.
+  - Initial delay: 1s, max delay: 30s, max attempts: 10.
+  - Adds ±25% jitter to prevent thundering herd on server recovery.
+  - Prevents overwhelming server during reconnection storms.
+
+### Fixed
+- **Batch Processing Data Loss Prevention**: Added `beforeunload` event handler.
+  - Warns users before closing page with active batch processing.
+  - Prevents accidental data loss during long-running imports.
+
+- **AR Zoom Error Visibility**: Silent zoom constraint failures now show user-visible toast.
+  - Displays warning when camera doesn't support requested zoom level.
+  - Toast auto-dismisses after 3 seconds.
+
+- **Camera Memory Leaks**: Improved ARScene cleanup on unmount.
+  - Explicitly stops all media tracks with logging.
+  - Prevents camera staying active after navigating away.
+
 ## [2.9.5] - 2026-02-04
 
 ### Performance
