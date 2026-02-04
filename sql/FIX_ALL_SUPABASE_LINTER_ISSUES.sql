@@ -243,7 +243,6 @@ BEGIN
     ON public.historical_documents_global FOR SELECT
     USING (
       "USER_ID" = (select auth.uid())
-      OR "IS_PUBLIC" = true
       OR "USER_ID" IS NULL
     );
     
