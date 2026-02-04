@@ -96,6 +96,26 @@ class ProcessingQueueService {
   private pendingLocalJobs: QueueJob[] = [];
   private edgeTriggerTimeout: ReturnType<typeof setTimeout> | null = null;
   private edgeTriggerDebounceMs: number = 1000; // Debounce edge invocations
+  
+  // Exponential backoff for realtime reconnection
+  private reconnectAttempts: number = 0;
+  private readonly maxReconnectAttempts: number = 10;
+  private readonly baseReconnectDelay: number = 1000;
+  private readonly maxReconnectDelay: number = 30000;
+  
+  /**
+   * Calculate reconnect delay with exponential backoff and jitter
+   * Prevents thundering herd when many clients reconnect simultaneously
+   */
+  private calculateReconnectDelay(): number {
+    const exponentialDelay = Math.min(
+      this.maxReconnectDelay,
+      this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts)
+    );
+    // Add jitter (±25% randomization) to prevent synchronized reconnections
+    const jitter = exponentialDelay * 0.25 * (Math.random() * 2 - 1);
+    return Math.floor(exponentialDelay + jitter);
+  }
 
   constructor() {
     // Listen for online/offline events
@@ -1138,13 +1158,30 @@ class ProcessingQueueService {
         .subscribe((status: string) => {
           if (status === 'SUBSCRIBED') {
             logger.info(`Subscribed to job updates for user ${this.userId}`);
+            // Reset reconnect attempts on successful connection
+            this.reconnectAttempts = 0;
           } else if (status === 'CLOSED') {
-            logger.warn('Job subscription closed, resubscribing...');
             this.subscriptions.delete('user-jobs');
-            setTimeout(() => this.subscribeToUserJobs(), 5000);
+            
+            if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+              logger.error('Max reconnection attempts reached, giving up');
+              return;
+            }
+            
+            const delay = this.calculateReconnectDelay();
+            logger.warn(`Job subscription closed, reconnecting in ${delay}ms (attempt ${this.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
+            this.reconnectAttempts++;
+            setTimeout(() => this.subscribeToUserJobs(), delay);
           } else if (status === 'CHANNEL_ERROR') {
             logger.error('Job subscription channel error');
             this.subscriptions.delete('user-jobs');
+            
+            // Also apply backoff for channel errors
+            if (this.reconnectAttempts < this.maxReconnectAttempts) {
+              const delay = this.calculateReconnectDelay();
+              this.reconnectAttempts++;
+              setTimeout(() => this.subscribeToUserJobs(), delay);
+            }
           }
         });
       

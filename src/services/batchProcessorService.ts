@@ -84,10 +84,15 @@ const DEFAULT_CONFIG: BatchProcessorConfig = {
   maxConcurrent: 3,
   maxRetries: 3,
   retryDelayMs: 2000,
-  processingTimeoutMs: 60000, // 60 seconds per item
+  processingTimeoutMs: 60000, // Base timeout (60 seconds)
   autoStart: true,
   persistState: true,
 };
+
+// Size-aware timeout constants
+const MIN_TIMEOUT_MS = 30000; // 30 seconds minimum
+const MAX_TIMEOUT_MS = 300000; // 5 minutes maximum
+const BYTES_PER_SECOND_ESTIMATE = 50000; // ~50KB/s processing speed estimate
 
 // ============================================
 // Batch Processor Class
@@ -405,6 +410,20 @@ class BatchProcessorService {
   // Private Methods
   // ============================================
 
+  /**
+   * Calculate dynamic timeout based on file size
+   * Larger files get more time to process
+   */
+  private calculateTimeout(fileSize: number): number {
+    // Estimate processing time: base time + size-based time
+    const baseTIme = this.config.processingTimeoutMs;
+    const sizeBasedTime = Math.ceil(fileSize / BYTES_PER_SECOND_ESTIMATE) * 1000;
+    
+    // Calculate total but clamp within bounds
+    const calculatedTimeout = baseTIme + sizeBasedTime;
+    return Math.max(MIN_TIMEOUT_MS, Math.min(MAX_TIMEOUT_MS, calculatedTimeout));
+  }
+
   private scheduleNext(): void {
     if (this.state !== 'RUNNING') return;
     
@@ -476,9 +495,12 @@ class BatchProcessorService {
     this.log(`Processing: ${item.fileName}`, 'info');
     
     try {
-      // Create timeout promise
+      // Calculate dynamic timeout based on file size
+      const dynamicTimeout = this.calculateTimeout(file.size);
+      
+      // Create timeout promise with size-aware timeout
       const timeoutPromise = new Promise<never>((_, reject) => {
-        setTimeout(() => reject(new Error('Processing timeout')), this.config.processingTimeoutMs);
+        setTimeout(() => reject(new Error(`Processing timeout after ${Math.round(dynamicTimeout / 1000)}s`)), dynamicTimeout);
       });
       
       // Progress callback

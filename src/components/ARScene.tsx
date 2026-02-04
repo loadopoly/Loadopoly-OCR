@@ -21,6 +21,7 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [showSafetyWarning, setShowSafetyWarning] = useState(true);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [zoomWarning, setZoomWarning] = useState<string | null>(null);
 
   useEffect(() => {
     if (showSafetyWarning) return;
@@ -97,8 +98,19 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   useEffect(() => {
     return () => {
         if (stream) {
-            stream.getTracks().forEach(track => track.stop());
+            // Explicitly stop all tracks to release camera
+            stream.getTracks().forEach(track => {
+                track.stop();
+                console.log(`[ARScene] Stopped track: ${track.kind}`);
+            });
         }
+        // Clear video element to release resources
+        if (videoRef.current) {
+            videoRef.current.srcObject = null;
+        }
+        // Clear any warnings
+        setCameraError(null);
+        setZoomWarning(null);
     };
   }, [stream]);
 
@@ -108,7 +120,12 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
           if (track) {
               track.applyConstraints({
                   advanced: [{ zoom: zoom }]
-              } as any).catch(err => console.error("Failed to apply zoom in AR", err));
+              } as any).catch(err => {
+                  console.error("Failed to apply zoom in AR", err);
+                  // Surface zoom failure to user with auto-dismiss
+                  setZoomWarning("Zoom not supported on this device. Continuing without zoom.");
+                  setTimeout(() => setZoomWarning(null), 5000);
+              });
           }
       }
   }, [zoom, stream, zoomSupported]);
@@ -138,6 +155,14 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   return (
     <div className="relative w-full h-full bg-black overflow-hidden">
       {showSafetyWarning && <ARSafetyWarning onAccept={() => setShowSafetyWarning(false)} />}
+      
+      {/* Zoom Warning Toast */}
+      {zoomWarning && (
+        <div className="absolute top-4 left-4 right-4 bg-yellow-500/90 backdrop-blur-sm text-white px-4 py-2 rounded-lg text-sm z-50 flex items-center gap-2 animate-in slide-in-from-top-2 duration-300">
+          <ZoomOut size={16} />
+          {zoomWarning}
+        </div>
+      )}
       
       {/* Camera Error Display */}
       {cameraError && !showSafetyWarning && (
