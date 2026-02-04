@@ -11,6 +11,7 @@ See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent majo
   - Reduces schema size from 4,552 lines across files to 1,007 lines consolidated.
   - All tables, functions, triggers, RLS policies, and indexes in one file.
   - Unified uppercase column naming convention.
+- **Repository Cleanup**: Moved 27 redundant SQL files to `sql/legacy/` to reduce clutter and prevent schema confusion.
 
 - **Comprehensive Documentation**: Added `docs/` directory with:
   - [DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) - Complete table/column reference (523 lines)
