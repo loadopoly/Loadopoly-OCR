@@ -3,6 +3,29 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.9.7] - 2026-02-04
+
+### Database Schema Optimization
+- **Consolidated Schema**: Created single source of truth `sql/CONSOLIDATED_SCHEMA.sql`.
+  - Combines 27 fragmented SQL files into one idempotent schema.
+  - Reduces schema size from 4,552 lines across files to 1,007 lines consolidated.
+  - All tables, functions, triggers, RLS policies, and indexes in one file.
+  - Unified uppercase column naming convention.
+
+- **Comprehensive Documentation**: Added `docs/` directory with:
+  - [DATA_DICTIONARY.md](docs/DATA_DICTIONARY.md) - Complete table/column reference (523 lines)
+  - [DATA_LINEAGE.md](docs/DATA_LINEAGE.md) - Data flow documentation (467 lines)
+  - [SEMANTIC_MODEL.md](docs/SEMANTIC_MODEL.md) - Mermaid ERD diagrams (530 lines)
+
+### Improved
+- **DATABASE_SETUP.md**: Updated to reference new consolidated schema and documentation.
+- **Function Search Paths**: All functions now have `SET search_path = ''` for security.
+- **RLS Policy Performance**: All policies use `(select auth.uid())` pattern for better caching.
+
+### Technical Debt Reduction
+- **Schema Drift Prevention**: Single file prevents version inconsistencies.
+- **Documentation Parity**: Data Dictionary, Lineage, and Semantic Model now synchronized.
+
 ## [2.9.6] - 2026-02-05
 
 ### Performance
