@@ -11,16 +11,13 @@ CREATE SCHEMA IF NOT EXISTS extensions;
 -- Grant usage to authenticated users
 GRANT USAGE ON SCHEMA extensions TO authenticated;
 GRANT USAGE ON SCHEMA extensions TO service_role;
+GRANT USAGE ON SCHEMA extensions TO anon;
 
--- Note: Moving pgvector requires dropping and recreating
--- This will fail if columns use the vector type
--- Option 1: Keep in public but document the exception
--- Option 2: Full migration (requires table column changes)
+-- Move vector extension to extensions schema
+-- This is generally safe if columns use the type, as long as the schema is in search_path
+ALTER EXTENSION vector SET SCHEMA extensions;
 
--- For now, we'll document this as an accepted exception
--- since vector columns are used in historical_documents_global
-
--- If you want to fully migrate (CAUTION - requires downtime):
+-- Alternative: Full migration (requires table column changes if simple move fails)
 /*
 -- 1. Backup your data first!
 

@@ -225,6 +225,18 @@ export const WorldRendererLazy = withLazySuspense(LazyWorldRenderer, {
   componentName: 'World Renderer'
 });
 
+export const BatchImporterLazy = withLazySuspense(LazyBatchImporter, {
+  fallbackMessage: 'Loading batch importer...',
+  fallbackHeight: 'h-64',
+  componentName: 'Batch Importer'
+});
+
+export const AnnotationEditorLazy = withLazySuspense(LazyAnnotationEditor, {
+  fallbackMessage: 'Loading annotation editor...',
+  fallbackHeight: 'h-96',
+  componentName: 'Annotation Editor'
+});
+
 // ============================================
 // Viewport-Based Lazy Loading
 // ============================================

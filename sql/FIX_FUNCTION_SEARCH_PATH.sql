@@ -47,4 +47,16 @@ ALTER FUNCTION public.update_bundle_asset_count() SET search_path = '';
 -- Fix upsert_classification_mapping
 ALTER FUNCTION public.upsert_classification_mapping(TEXT, TEXT, TEXT, TEXT) SET search_path = '';
 
+-- Fix update_job_progress
+ALTER FUNCTION public.update_job_progress(UUID, INTEGER, TEXT) SET search_path = '';
+
+-- Fix complete_processing_job
+ALTER FUNCTION public.complete_processing_job(UUID, JSONB) SET search_path = '';
+
+-- Fix release_stale_locks
+ALTER FUNCTION public.release_stale_locks() SET search_path = '';
+
+-- Fix fail_processing_job
+ALTER FUNCTION public.fail_processing_job(UUID, TEXT, TEXT) SET search_path = '';
+
 SELECT '✅ Function search_path fixed for all functions' AS result;

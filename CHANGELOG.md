@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.9.5] - 2026-02-04
+
+### Performance
+- **Lazy Loading for Heavy Components**: Major bundle size reduction (~26KB from main bundle).
+  - `GraphVisualizer`, `ARScene`, `SemanticCanvas`, `BatchImporter`, `AnnotationEditor`, and `WorldRenderer` now lazy load.
+  - Added `BatchImporterLazy` and `AnnotationEditorLazy` wrappers to `lazyComponents.tsx`.
+  - Components only download when user navigates to their respective tabs.
+
+### Fixed
+- **AR Scanner Error Handling**: Camera now displays user-friendly error messages.
+  - HTTPS requirement check with clear messaging.
+  - Permission denied, camera not found, and camera in-use errors now displayed in UI.
+  - Added "Try Again" button for camera recovery.
+  - Better error state management with `cameraError` state.
+
+### Security
+- **SQL Security Improvements**:
+  - Added missing function search_path fixes for `update_job_progress`, `complete_processing_job`, `release_stale_locks`, `fail_processing_job`.
+  - Fixed extension schema migration for pgvector.
+  - Added additional RLS policy fixes for `object_attributes`, `taxonomy`, and `structured_classification_mappings`.
+  - Added `password_leaked_protection_enabled` to Supabase auth config.
+
 ## [2.9.4] - 2026-01-31
 
 ### Added

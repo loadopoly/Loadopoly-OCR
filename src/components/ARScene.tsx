@@ -20,15 +20,29 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1 });
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [showSafetyWarning, setShowSafetyWarning] = useState(true);
+  const [cameraError, setCameraError] = useState<string | null>(null);
 
   useEffect(() => {
     if (showSafetyWarning) return;
+
+    // Check for secure context (required for getUserMedia)
+    if (!window.isSecureContext) {
+      setCameraError('Camera requires HTTPS. Please access this page over a secure connection.');
+      return;
+    }
+
+    // Check if getUserMedia is available
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError('Camera API not available in this browser.');
+      return;
+    }
 
     // 1. Request camera + AR session
     navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
     }).then(newStream => {
       setStream(newStream);
+      setCameraError(null);
       
       const track = newStream.getVideoTracks()[0];
       const caps = track.getCapabilities() as any;
@@ -48,6 +62,15 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
       }
     }).catch(err => {
         console.error("Camera access denied or failed:", err);
+        if (err.name === 'NotAllowedError') {
+          setCameraError('Camera access denied. Please allow camera permissions in your browser settings.');
+        } else if (err.name === 'NotFoundError') {
+          setCameraError('No camera found. Please connect a camera and try again.');
+        } else if (err.name === 'NotReadableError') {
+          setCameraError('Camera is in use by another application. Please close other apps using the camera.');
+        } else {
+          setCameraError(`Camera error: ${err.message || 'Unknown error'}`);
+        }
     });
 
     // Simulate finding AR nodes nearby
@@ -115,6 +138,28 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   return (
     <div className="relative w-full h-full bg-black overflow-hidden">
       {showSafetyWarning && <ARSafetyWarning onAccept={() => setShowSafetyWarning(false)} />}
+      
+      {/* Camera Error Display */}
+      {cameraError && !showSafetyWarning && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-900/95 z-50">
+          <div className="text-center p-8 max-w-md">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center">
+              <Camera className="w-8 h-8 text-red-400" />
+            </div>
+            <h3 className="text-xl font-bold text-white mb-2">Camera Unavailable</h3>
+            <p className="text-slate-400 text-sm mb-4">{cameraError}</p>
+            <button 
+              onClick={() => {
+                setCameraError(null);
+                setShowSafetyWarning(true);
+              }}
+              className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-medium transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      )}
       
       <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
       
