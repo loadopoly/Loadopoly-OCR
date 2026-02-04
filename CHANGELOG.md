@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.9.9] - 2026-02-04
+
+### Universal Device Compatibility & Optimization
+- **Multi-Tier Camera Initialization**: Implemented a robust fallback sequence for `getUserMedia` (Pro -> Standard -> Compatibility).
+- **Device Capability Detection**: Added automatic detection of low-memory/low-CPU devices via `navigator.deviceMemory`.
+- **Lite Mode UI**: Automatically simplifies AR animations and scanning grids on less capable hardware to preserve battery and maintain frame rate.
+- **Throttled AR Simulation**: Reduced node generation frequency and quantity for "Lite" devices.
+- **Improved Error Recovery**: Graceful handling of camera negotiation failures across different browser engines.
+
 ## [2.9.8] - 2026-02-04
 
 ### Hardware Optimization & AR Scanner Pro

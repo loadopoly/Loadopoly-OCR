@@ -1,3 +1,17 @@
+# 🚀 GeoGraph Node: v2.9.9 Release Notes
+
+## 🧬 v2.9.9 - Universal Compatibility & Lite Mode (2026-02-04)
+
+### 🎯 Overview
+Following the "Pro" hardware optimizations, this release ensures that GeoGraph Node remains accessible and performant on older or less capable devices. It introduces "Lite Mode" auto-detection and multi-tier camera fallbacks.
+
+### ⚙️ Key Improvements
+- **Adaptive Camera Pipeline**: Gracefully falls back from 4K/8K to 1080p and basic streams if hardware constraints aren't met.
+- **Lite Mode UI**: Throttles complex AR animations and scanning overlays on devices with <4GB RAM or weak CPUs.
+- **Power Efficiency**: Reduced background processing for "Standard" devices to prevent overheating during long scanning sessions.
+
+---
+
 # 🚀 GeoGraph Node: v2.9.8 Release Notes
 
 ## 🧬 v2.9.8 - Hardware Optimization & AR Pro (2026-02-04)

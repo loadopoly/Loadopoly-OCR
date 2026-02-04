@@ -25,6 +25,16 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   const [isHighRes, setIsHighRes] = useState(false);
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchActive, setTorchActive] = useState(false);
+  const [isLowEndDevice, setIsLowEndDevice] = useState(false);
+
+  useEffect(() => {
+    // Detect low-end devices for UI optimization
+    const memory = (navigator as any).deviceMemory;
+    const cpu = navigator.hardwareConcurrency;
+    if ((memory && memory < 4) || (cpu && cpu < 4)) {
+      setIsLowEndDevice(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (showSafetyWarning) return;
@@ -41,91 +51,97 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
       return;
     }
 
-    // 1. Request camera + AR session with high-res constraints for Pro hardware
-    navigator.mediaDevices.getUserMedia({
-      video: { 
-        facingMode: 'environment', 
-        width: { ideal: 3840, max: 7680 }, 
-        height: { ideal: 2160, max: 4320 },
-        frameRate: { ideal: 60 }
-      }
-    }).then(newStream => {
-      setStream(newStream);
-      setCameraError(null);
-      
-      const track = newStream.getVideoTracks()[0];
-      const caps = track.getCapabilities() as any;
-      const settings = track.getSettings();
+    // Multi-tier camera initialization for universal compatibility
+    const initCamera = async () => {
+      const tiers = [
+        // 1. Pro Tier (4K/8K)
+        { video: { facingMode: 'environment', width: { ideal: 3840, max: 7680 }, height: { ideal: 2160, max: 4320 }, frameRate: { ideal: 60 } } },
+        // 2. Standard Tier (1080p)
+        { video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } },
+        // 3. Compatibility Tier (Basic)
+        { video: { facingMode: { ideal: 'environment' } } }
+      ];
 
-      // Check for High Resolution (4K or higher)
-      if (settings.width && settings.width >= 3840) {
-        setIsHighRes(true);
-      }
+      let lastError: any = null;
+      for (const constraints of tiers) {
+        try {
+          const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+          setStream(newStream);
+          setCameraError(null);
+          
+          const track = newStream.getVideoTracks()[0];
+          const caps = track.getCapabilities() as any;
+          const settings = track.getSettings();
 
-      // Hardware features for Pixel 10 Pro / High-end devices
-      const advancedConstraints: any = {};
-      
-      if (caps.focusMode?.includes('continuous')) advancedConstraints.focusMode = 'continuous';
-      if (caps.whiteBalanceMode?.includes('continuous')) advancedConstraints.whiteBalanceMode = 'continuous';
-      if (caps.exposureMode?.includes('continuous')) advancedConstraints.exposureMode = 'continuous';
-      
-      if (caps.zoom) {
-          setZoomSupported(true);
-          setZoomRange({
-              min: caps.zoom.min,
-              max: caps.zoom.max,
-              step: caps.zoom.step
-          });
-          setZoom(settings.zoom || caps.zoom.min);
-      }
+          // Check for High Resolution (4K or higher)
+          if (settings.width && settings.width >= 3840) {
+            setIsHighRes(true);
+          }
 
-      if (caps.torch) {
-          setTorchSupported(true);
-      }
+          // Hardware features
+          const advancedConstraints: any = {};
+          if (caps.focusMode?.includes('continuous')) advancedConstraints.focusMode = 'continuous';
+          if (caps.whiteBalanceMode?.includes('continuous')) advancedConstraints.whiteBalanceMode = 'continuous';
+          if (caps.exposureMode?.includes('continuous')) advancedConstraints.exposureMode = 'continuous';
+          
+          if (caps.zoom) {
+              setZoomSupported(true);
+              setZoomRange({
+                  min: caps.zoom.min,
+                  max: caps.zoom.max,
+                  step: caps.zoom.step
+              });
+              setZoom(settings.zoom || caps.zoom.min);
+          }
 
-      // Apply hardware optimizations if available
-      if (Object.keys(advancedConstraints).length > 0) {
-          track.applyConstraints({ advanced: [advancedConstraints] } as any)
-            .catch(e => console.warn("[ARScene] Hardware optimization constraints failed:", e));
-      }
+          if (caps.torch) setTorchSupported(true);
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = newStream;
-        videoRef.current.play();
-      }
-    }).catch(err => {
-        console.error("Camera access denied or failed:", err);
-        if (err.name === 'NotAllowedError') {
-          setCameraError('Camera access denied. Please allow camera permissions in your browser settings.');
-        } else if (err.name === 'NotFoundError') {
-          setCameraError('No camera found. Please connect a camera and try again.');
-        } else if (err.name === 'NotReadableError') {
-          setCameraError('Camera is in use by another application. Please close other apps using the camera.');
-        } else {
-          setCameraError(`Camera error: ${err.message || 'Unknown error'}`);
+          if (Object.keys(advancedConstraints).length > 0) {
+              track.applyConstraints({ advanced: [advancedConstraints] } as any)
+                .catch(e => console.warn("[ARScene] Advanced hardware controls failed:", e));
+          }
+
+          if (videoRef.current) {
+            videoRef.current.srcObject = newStream;
+            videoRef.current.play();
+          }
+          return; // Success
+        } catch (err) {
+          console.warn(`[ARScene] Camera tier failed, falling back...`, err);
+          lastError = err;
         }
-    });
+      }
 
-    // Simulate finding AR nodes nearby
+      // If all tiers fail
+      console.error("All camera tiers failed:", lastError);
+      if (lastError.name === 'NotAllowedError') {
+        setCameraError('Camera access denied. Please allow camera permissions in your browser settings.');
+      } else if (lastError.name === 'NotFoundError') {
+        setCameraError('No camera found. Please connect a camera and try again.');
+      } else {
+        setCameraError(`Camera error: ${lastError.message || 'Unknown error'}`);
+      }
+    };
+
+    initCamera();
+
+    // Simulate finding AR nodes nearby (Throttled on low-end devices)
     const interval = setInterval(() => {
-        if(Math.random() > 0.7) {
+        if(Math.random() > (isLowEndDevice ? 0.9 : 0.7)) {
             setSimulatedNodes(prev => [
-                ...prev.slice(-4), // Keep last 4
+                ...prev.slice(isLowEndDevice ? -2 : -4), // Fewer nodes on low-end
                 {
                     id: Date.now(),
-                    x: Math.random() * 80 + 10, // 10-90%
+                    x: Math.random() * 80 + 10,
                     y: Math.random() * 80 + 10,
                     label: Math.random() > 0.5 ? "Data Point" : "Artifact"
                 }
             ]);
         }
-    }, 2000);
+    }, isLowEndDevice ? 4000 : 2000);
 
-    return () => {
-        clearInterval(interval);
-        // We'll handle cleanup in a separate effect or just here if we don't depend on stream
-    };
-  }, [showSafetyWarning]);
+    return () => clearInterval(interval);
+  }, [showSafetyWarning, isLowEndDevice]);
 
   useEffect(() => {
     return () => {
@@ -270,16 +286,24 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
       ))}
 
       {/* Scanning Grid Animation */}
-      <div className="absolute inset-0 pointer-events-none opacity-20 bg-[linear-gradient(rgba(0,255,100,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,100,0.1)_1px,transparent_1px)] bg-[size:50px_50px]"></div>
-      <div className="absolute inset-0 pointer-events-none opacity-10 animate-pulse bg-gradient-to-b from-transparent via-emerald-500/10 to-transparent"></div>
+      <div className={`absolute inset-0 pointer-events-none ${isLowEndDevice ? 'opacity-10' : 'opacity-20'} bg-[linear-gradient(rgba(0,255,100,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(0,255,100,0.1)_1px,transparent_1px)] bg-[size:50px_50px]`}></div>
+      {!isLowEndDevice && (
+          <div className="absolute inset-0 pointer-events-none opacity-10 animate-pulse bg-gradient-to-b from-transparent via-emerald-500/10 to-transparent"></div>
+      )}
 
       <div className="absolute top-0 left-0 right-0 p-8 text-center bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-10">
-         <p className="text-xl font-bold text-white drop-shadow-md flex items-center justify-center gap-2">
-            <ScanLine className="animate-pulse text-emerald-400" /> AR Scanner Active
-            {isHighRes && (
-              <span className="ml-2 px-2 py-0.5 bg-blue-500 rounded text-[10px] uppercase tracking-tighter shadow-lg animate-in zoom-in">Ultra 4K+</span>
+         <div className="flex flex-col items-center gap-1">
+            <p className="text-xl font-bold text-white drop-shadow-md flex items-center justify-center gap-2">
+               <ScanLine className={`${isLowEndDevice ? '' : 'animate-pulse'} text-emerald-400`} /> 
+               AR Scanner {isLowEndDevice && <span className="text-xs font-normal text-slate-400">(Lite)</span>}
+               {isHighRes && (
+                 <span className="ml-2 px-2 py-0.5 bg-blue-500 rounded text-[10px] uppercase tracking-tighter shadow-lg animate-in zoom-in">Ultra 4K+</span>
+               )}
+            </p>
+            {isLowEndDevice && (
+              <span className="text-[10px] text-emerald-400/70 uppercase tracking-widest font-bold">Optimization Active</span>
             )}
-         </p>
+         </div>
          <p className="text-sm text-slate-300 mt-1">
              {isOnline ? 'Analyzing environment for nodes... Tap shutter to capture.' : 'Offline Mode: Captures will be processed when online.'}
          </p>
