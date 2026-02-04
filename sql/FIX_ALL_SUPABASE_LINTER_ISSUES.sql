@@ -266,19 +266,27 @@ BEGIN
     USING ("USER_ID" = (select auth.uid()));
   END IF;
 
-  -- user_profiles
+  -- user_profiles (dynamic column detection)
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_profiles') THEN
+    SELECT column_name INTO owner_col
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'user_profiles'
+      AND column_name IN ('id', 'ID', 'user_id', 'USER_ID')
+    LIMIT 1;
+
     DROP POLICY IF EXISTS "Users can view own profile" ON public.user_profiles;
     DROP POLICY IF EXISTS "Users can update own profile" ON public.user_profiles;
     
-    CREATE POLICY "Users can view own profile"
-    ON public.user_profiles FOR SELECT
-    USING (id = (select auth.uid()));
-    
-    CREATE POLICY "Users can update own profile"
-    ON public.user_profiles FOR UPDATE
-    USING (id = (select auth.uid()))
-    WITH CHECK (id = (select auth.uid()));
+    IF owner_col IS NOT NULL THEN
+      EXECUTE format(
+        'CREATE POLICY "Users can view own profile" ON public.user_profiles FOR SELECT USING (%I = (select auth.uid()))',
+        owner_col
+      );
+      EXECUTE format(
+        'CREATE POLICY "Users can update own profile" ON public.user_profiles FOR UPDATE USING (%I = (select auth.uid())) WITH CHECK (%I = (select auth.uid()))',
+        owner_col, owner_col
+      );
+    END IF;
   END IF;
 
   -- user_purchases
@@ -399,16 +407,41 @@ BEGIN
     ON public.taxonomy FOR SELECT
     USING (true);
     
-    CREATE POLICY "Admins manage taxonomy"
-    ON public.taxonomy FOR ALL
-    USING (
-      EXISTS (
-        SELECT 1 FROM public.user_profiles up 
-        WHERE up.id = (select auth.uid()) 
-        AND up.is_admin = true
-      )
-      OR (select auth.role()) = 'service_role'
-    );
+    -- Admins manage taxonomy (dynamic column detection for user_profiles)
+    BEGIN
+      DECLARE
+        up_id_col TEXT;
+        up_admin_col TEXT;
+        admin_check TEXT;
+      BEGIN
+        SELECT column_name INTO up_id_col
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'user_profiles'
+          AND column_name IN ('id', 'ID', 'user_id', 'USER_ID')
+        LIMIT 1;
+
+        SELECT column_name INTO up_admin_col
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'user_profiles'
+          AND column_name IN ('is_admin', 'IS_ADMIN', 'role', 'ROLE')
+        LIMIT 1;
+
+        IF up_id_col IS NOT NULL AND up_admin_col IS NOT NULL THEN
+          IF up_admin_col IN ('role', 'ROLE') THEN
+            admin_check := format('%I = ''ADMIN''', up_admin_col);
+          ELSE
+            admin_check := format('%I = true', up_admin_col);
+          END IF;
+
+          EXECUTE format(
+            'CREATE POLICY "Admins manage taxonomy" ON public.taxonomy FOR ALL USING (EXISTS (SELECT 1 FROM public.user_profiles up WHERE up.%I = (select auth.uid()) AND up.%s) OR (select auth.role()) = ''service_role'')',
+            up_id_col, admin_check
+          );
+        ELSE
+          CREATE POLICY "Admins manage taxonomy" ON public.taxonomy FOR ALL USING ((select auth.role()) = 'service_role');
+        END IF;
+      END;
+    END;
   END IF;
 
   -- structured_classification_mappings
@@ -428,17 +461,41 @@ BEGIN
     TO authenticated
     WITH CHECK ((select auth.uid()) IS NOT NULL);
     
-    CREATE POLICY "Admins can update mappings"
-    ON public.structured_classification_mappings FOR UPDATE
-    TO authenticated
-    USING (
-      EXISTS (
-        SELECT 1 FROM public.user_profiles up 
-        WHERE up.id = (select auth.uid()) 
-        AND up.is_admin = true
-      )
-      OR (select auth.role()) = 'service_role'
-    );
+    -- Admins can update mappings (dynamic column detection)
+    BEGIN
+      DECLARE
+        up_id_col TEXT;
+        up_admin_col TEXT;
+        admin_check TEXT;
+      BEGIN
+        SELECT column_name INTO up_id_col
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'user_profiles'
+          AND column_name IN ('id', 'ID', 'user_id', 'USER_ID')
+        LIMIT 1;
+
+        SELECT column_name INTO up_admin_col
+        FROM information_schema.columns
+        WHERE table_schema = 'public' AND table_name = 'user_profiles'
+          AND column_name IN ('is_admin', 'IS_ADMIN', 'role', 'ROLE')
+        LIMIT 1;
+
+        IF up_id_col IS NOT NULL AND up_admin_col IS NOT NULL THEN
+          IF up_admin_col IN ('role', 'ROLE') THEN
+            admin_check := format('%I = ''ADMIN''', up_admin_col);
+          ELSE
+            admin_check := format('%I = true', up_admin_col);
+          END IF;
+
+          EXECUTE format(
+            'CREATE POLICY "Admins can update mappings" ON public.structured_classification_mappings FOR UPDATE TO authenticated USING (EXISTS (SELECT 1 FROM public.user_profiles up WHERE up.%I = (select auth.uid()) AND up.%s) OR (select auth.role()) = ''service_role'')',
+            up_id_col, admin_check
+          );
+        ELSE
+          CREATE POLICY "Admins can update mappings" ON public.structured_classification_mappings FOR UPDATE TO authenticated USING ((select auth.role()) = 'service_role');
+        END IF;
+      END;
+    END;
   END IF;
 
   -- archive_partnerships (admin only)
