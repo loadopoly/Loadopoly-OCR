@@ -343,6 +343,8 @@ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'object_attributes') THEN
     DROP POLICY IF EXISTS "Authenticated manage object_attributes" ON public.object_attributes;
     DROP POLICY IF EXISTS "Anyone can view object attributes" ON public.object_attributes;
+    DROP POLICY IF EXISTS "Users manage own object_attributes" ON public.object_attributes;
+    DROP POLICY IF EXISTS "Service role manage object_attributes" ON public.object_attributes;
     
     CREATE POLICY "Anyone can view object attributes"
     ON public.object_attributes FOR SELECT
@@ -355,12 +357,14 @@ BEGIN
         SELECT 1 FROM public.historical_documents_global h
         WHERE h."ASSET_ID" = "ASSET_ID" AND h."USER_ID" = (select auth.uid())
       )
+      OR (select auth.role()) = 'service_role'
     )
     WITH CHECK (
       EXISTS (
         SELECT 1 FROM public.historical_documents_global h
         WHERE h."ASSET_ID" = "ASSET_ID" AND h."USER_ID" = (select auth.uid())
       )
+      OR (select auth.role()) = 'service_role'
     );
   END IF;
 
@@ -368,6 +372,9 @@ BEGIN
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'taxonomy') THEN
     DROP POLICY IF EXISTS "Authenticated manage taxonomy" ON public.taxonomy;
     DROP POLICY IF EXISTS "Anyone can view taxonomy" ON public.taxonomy;
+    DROP POLICY IF EXISTS "Public read taxonomy" ON public.taxonomy;
+    DROP POLICY IF EXISTS "Service role manage taxonomy" ON public.taxonomy;
+    DROP POLICY IF EXISTS "Admins manage taxonomy" ON public.taxonomy;
     
     CREATE POLICY "Anyone can view taxonomy"
     ON public.taxonomy FOR SELECT
@@ -381,6 +388,7 @@ BEGIN
         WHERE up.id = (select auth.uid()) 
         AND up.is_admin = true
       )
+      OR (select auth.role()) = 'service_role'
     );
   END IF;
 
@@ -389,6 +397,8 @@ BEGIN
     DROP POLICY IF EXISTS "Authenticated users can create mappings" ON public.structured_classification_mappings;
     DROP POLICY IF EXISTS "Update own or validated mappings" ON public.structured_classification_mappings;
     DROP POLICY IF EXISTS "Anyone can view mappings" ON public.structured_classification_mappings;
+    DROP POLICY IF EXISTS "Admins can update mappings" ON public.structured_classification_mappings;
+    DROP POLICY IF EXISTS "Authenticated users can update mappings" ON public.structured_classification_mappings;
     
     CREATE POLICY "Anyone can view mappings"
     ON public.structured_classification_mappings FOR SELECT
@@ -408,6 +418,7 @@ BEGIN
         WHERE up.id = (select auth.uid()) 
         AND up.is_admin = true
       )
+      OR (select auth.role()) = 'service_role'
     );
   END IF;
 
