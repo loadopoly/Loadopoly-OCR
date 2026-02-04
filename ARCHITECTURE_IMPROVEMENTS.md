@@ -151,14 +151,14 @@ src/
 
 ## Implementation Priority Matrix
 
-| Improvement | Impact | Effort | Priority |
-|-------------|--------|--------|----------|
-| Server-side queue | 5x speedup | Medium | 🔴 HIGH |
-| Parallel Gemini calls | 4x speedup | Low | 🔴 HIGH |
-| Image compression | 2x upload speed | Low | 🟡 MEDIUM |
-| Web Workers | 2x client perf | Medium | 🟡 MEDIUM |
-| pgvector dedup | 3x dedup speed | Medium | 🟡 MEDIUM |
-| Redis caching | 2x query speed | Medium | 🟢 LOW |
+| Improvement | Impact | Effort | Priority | Status |
+|-------------|--------|--------|----------|--------|
+| Server-side queue | 5x speedup | Medium | 🔴 HIGH | ✅ Done |
+| Parallel Gemini calls | 4x speedup | Low | 🔴 HIGH | ✅ Done |
+| Image compression | 2x upload speed | Low | 🟡 MEDIUM | ✅ Done |
+| Web Workers | 2x client perf | Medium | 🟡 MEDIUM | ✅ Done |
+| pgvector dedup | 3x dedup speed | Medium | 🟡 MEDIUM | ✅ Done |
+| Redis caching | 2x query speed | Medium | 🟢 LOW | ✅ Done |
 
 ---
 
@@ -207,9 +207,9 @@ Each phase is independently deployable and can be rolled back:
 7. ✅ Add Worker Pool manager (`src/lib/workerPool.ts`)
 8. ✅ Implement circuit breaker pattern (`src/lib/circuitBreaker.ts`)
 9. ✅ Create vector embeddings schema (`sql/VECTOR_EMBEDDINGS_SCHEMA.sql`)
-10. 🔲 Integrate queue service into App.tsx
-11. 🔲 Add monitoring dashboards
-12. 🔲 Deploy Edge Function to Supabase
+10. ✅ Integrate queue service into App.tsx
+11. ✅ Add monitoring dashboards (QueueMonitor component)
+12. ✅ Edge Function ready for deployment (`api/process-ocr/index.ts`)
 
 ---
 
@@ -228,6 +228,9 @@ Each phase is independently deployable and can be rolled back:
 | [src/lib/pwaUtils.ts](src/lib/pwaUtils.ts) | PWA utilities & install handling | ✅ Complete |
 | [src/lib/performanceMonitor.ts](src/lib/performanceMonitor.ts) | Web Vitals & adaptive settings | ✅ Complete |
 | [src/lib/lazyComponents.tsx](src/lib/lazyComponents.tsx) | Code-split lazy loading | ✅ Complete |
+| [sql/VECTOR_EMBEDDINGS_SCHEMA.sql](sql/VECTOR_EMBEDDINGS_SCHEMA.sql) | pgvector embeddings for O(n log n) dedup | ✅ Complete |
+| [src/services/deduplicationServiceV3.ts](src/services/deduplicationServiceV3.ts) | Vector-based deduplication | ✅ Complete |
+| [src/lib/cacheService.ts](src/lib/cacheService.ts) | Multi-tier caching (LRU + IndexedDB + Redis) | ✅ Complete |
 
 ---
 
@@ -293,5 +296,5 @@ Vite config enhancements:
 
 ---
 
-*Document Version: 1.2.0*
-*Last Updated: January 14, 2026*
+*Document Version: 1.3.0*
+*Last Updated: February 4, 2026*
