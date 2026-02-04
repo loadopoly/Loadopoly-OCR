@@ -196,14 +196,33 @@ END $$;
 
 -- Helper: Only modify policies if table exists
 DO $$
+DECLARE
+  owner_col TEXT;
 BEGIN
-  -- dataset_shares
+  -- dataset_shares (dynamic column detection)
   IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'dataset_shares') THEN
+    -- Find the owner column (try common names)
+    SELECT column_name INTO owner_col
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'dataset_shares'
+      AND column_name IN ('user_id', 'USER_ID', 'owner_id', 'OWNER_ID', 'shared_by', 'SHARED_BY', 'created_by', 'CREATED_BY')
+    LIMIT 1;
+    
     DROP POLICY IF EXISTS "Authenticated manage dataset_shares" ON public.dataset_shares;
-    CREATE POLICY "Users manage own dataset_shares"
-    ON public.dataset_shares FOR ALL
-    USING ((select auth.uid()) = user_id)
-    WITH CHECK ((select auth.uid()) = user_id);
+    DROP POLICY IF EXISTS "Users manage own dataset_shares" ON public.dataset_shares;
+    
+    IF owner_col IS NOT NULL THEN
+      EXECUTE format(
+        'CREATE POLICY "Users manage own dataset_shares" ON public.dataset_shares FOR ALL USING ((select auth.uid()) = %I OR (select auth.role()) = ''service_role'') WITH CHECK ((select auth.uid()) = %I OR (select auth.role()) = ''service_role'')',
+        owner_col, owner_col
+      );
+    ELSE
+      -- No owner column found, restrict to service_role only
+      CREATE POLICY "Service role manage dataset_shares"
+      ON public.dataset_shares FOR ALL
+      USING ((select auth.role()) = 'service_role')
+      WITH CHECK ((select auth.role()) = 'service_role');
+    END IF;
   END IF;
 
   -- historical_documents_global
