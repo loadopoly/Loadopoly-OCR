@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.9.8] - 2026-02-04
+
+### Hardware Optimization & AR Scanner Pro
+- **Google Pixel 10 Pro Support**: Optimized AR Scanner for high-end mobile hardware.
+- **4K/8K Resolution**: Enhanced `getUserMedia` constraints to request Ultra-HD video streams (up to 7680x4320).
+- **Pro Capture Logic**: Integrated `ImageCapture` API for full sensor-resolution still captures, falling back to 98% quality canvas blobs.
+- **Advanced Camera Controls**: 
+  - Continuous Focus, White Balance, and Exposure modes.
+  - Hardware Zoom range detection and support.
+  - Flashlight/Torch toggle for low-light scanning.
+- **Enhanced UI**: 
+  - "Ultra 4K+" badge for high-resolution active sessions.
+  - New Flashlight control in scanner HUD.
+  - Optimized viewport utilization for high-aspect ratio mobile displays.
+
 ## [2.9.7] - 2026-02-04
 
 ### Database Schema Optimization
