@@ -1,3 +1,32 @@
+# 🚀 GeoGraph Node: v2.9.8 Release Notes
+
+## 🧬 v2.9.8 - Hardware Optimization & AR Pro (2026-02-04)
+
+### 🎯 Overview
+Optimized the platform for high-end mobile hardware, specifically the Google Pixel 10 Pro. This release enables full sensor utilization for the AR Scanner, 4K/8K video streaming, and advanced hardware-level camera controls.
+
+### ⚙️ Key Improvements
+- **Ultra-HD Scanning**: Requests 4K/8K resolution constraints by default on supported devices.
+- **ImageCapture API**: Real-time high-resolution still capture bypassing standard canvas limitations.
+- **Advanced Controls**: Integrated continuous hardware focus, white balance, and torch support.
+- **Fluid UI**: Improved viewport scaling and "Pro Mode" indicators for high-res sessions.
+
+---
+
+# 🚀 GeoGraph Node: v2.9.7 Release Notes
+
+## 🧬 v2.9.7 - Schema Consolidation & Documentation (2026-02-04)
+
+### 🎯 Overview
+A massive maintenance release focusing on database stability and developer experience. Consolidated dozens of fragmented SQL scripts into a single, unified, and documented source of truth.
+
+### ⚙️ Key Improvements
+- **Consolidated Schema**: Unified 27 legacy SQL files into `sql/CONSOLIDATED_SCHEMA.sql`.
+- **Architectural Docs**: Added comprehensive Data Dictionary, Lineage, and Semantic Models.
+- **Convention Audit**: Applied universal UPPERCASE column naming across the entire database.
+
+---
+
 # 🚀 GeoGraph Node: v2.8.1 Release Notes
 
 ## 🧬 v2.8.1 - Optimized Realtime Feedback Loop (2026-01-14)

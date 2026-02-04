@@ -22,6 +22,9 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   const [showSafetyWarning, setShowSafetyWarning] = useState(true);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [zoomWarning, setZoomWarning] = useState<string | null>(null);
+  const [isHighRes, setIsHighRes] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
+  const [torchActive, setTorchActive] = useState(false);
 
   useEffect(() => {
     if (showSafetyWarning) return;
@@ -38,15 +41,34 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
       return;
     }
 
-    // 1. Request camera + AR session
+    // 1. Request camera + AR session with high-res constraints for Pro hardware
     navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+      video: { 
+        facingMode: 'environment', 
+        width: { ideal: 3840, max: 7680 }, 
+        height: { ideal: 2160, max: 4320 },
+        frameRate: { ideal: 60 }
+      }
     }).then(newStream => {
       setStream(newStream);
       setCameraError(null);
       
       const track = newStream.getVideoTracks()[0];
       const caps = track.getCapabilities() as any;
+      const settings = track.getSettings();
+
+      // Check for High Resolution (4K or higher)
+      if (settings.width && settings.width >= 3840) {
+        setIsHighRes(true);
+      }
+
+      // Hardware features for Pixel 10 Pro / High-end devices
+      const advancedConstraints: any = {};
+      
+      if (caps.focusMode?.includes('continuous')) advancedConstraints.focusMode = 'continuous';
+      if (caps.whiteBalanceMode?.includes('continuous')) advancedConstraints.whiteBalanceMode = 'continuous';
+      if (caps.exposureMode?.includes('continuous')) advancedConstraints.exposureMode = 'continuous';
+      
       if (caps.zoom) {
           setZoomSupported(true);
           setZoomRange({
@@ -54,7 +76,17 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
               max: caps.zoom.max,
               step: caps.zoom.step
           });
-          setZoom(caps.zoom.min);
+          setZoom(settings.zoom || caps.zoom.min);
+      }
+
+      if (caps.torch) {
+          setTorchSupported(true);
+      }
+
+      // Apply hardware optimizations if available
+      if (Object.keys(advancedConstraints).length > 0) {
+          track.applyConstraints({ advanced: [advancedConstraints] } as any)
+            .catch(e => console.warn("[ARScene] Hardware optimization constraints failed:", e));
       }
 
       if (videoRef.current) {
@@ -130,12 +162,43 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
       }
   }, [zoom, stream, zoomSupported]);
 
-  const handleCapture = () => {
-      if (videoRef.current) {
+  useEffect(() => {
+    if (stream && torchSupported) {
+        const track = stream.getVideoTracks()[0];
+        if (track) {
+            track.applyConstraints({
+                advanced: [{ torch: torchActive }]
+            } as any).catch(err => console.error("Failed to toggle torch", err));
+        }
+    }
+  }, [torchActive, stream, torchSupported]);
+
+  const toggleTorch = () => {
+      setTorchActive(prev => !prev);
+  };
+
+  const handleCapture = async () => {
+      if (videoRef.current && stream) {
           // Visual Flash Effect
           setFlash(true);
           setTimeout(() => setFlash(false), 150);
 
+          const track = stream.getVideoTracks()[0];
+          
+          // Use ImageCapture API if available for "Pro" quality (full sensor resolution)
+          if ('ImageCapture' in window) {
+              try {
+                  const imageCapture = new (window as any).ImageCapture(track);
+                  const blob = await imageCapture.takePhoto();
+                  const file = new File([blob], `AR_Pro_Session_${Date.now()}.jpg`, { type: 'image/jpeg' });
+                  onCapture(file);
+                  return;
+              } catch (err) {
+                  console.warn("ImageCapture photo failed, falling back to canvas capture", err);
+              }
+          }
+
+          // Fallback to highest quality Canvas capture
           const canvas = document.createElement('canvas');
           canvas.width = videoRef.current.videoWidth;
           canvas.height = videoRef.current.videoHeight;
@@ -147,7 +210,7 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
                       const file = new File([blob], `AR_Session_${Date.now()}.jpg`, { type: 'image/jpeg' });
                       onCapture(file);
                   }
-              }, 'image/jpeg', 0.95);
+              }, 'image/jpeg', 0.98); // High quality JPEG
           }
       }
   };
@@ -213,6 +276,9 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
       <div className="absolute top-0 left-0 right-0 p-8 text-center bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-10">
          <p className="text-xl font-bold text-white drop-shadow-md flex items-center justify-center gap-2">
             <ScanLine className="animate-pulse text-emerald-400" /> AR Scanner Active
+            {isHighRes && (
+              <span className="ml-2 px-2 py-0.5 bg-blue-500 rounded text-[10px] uppercase tracking-tighter shadow-lg animate-in zoom-in">Ultra 4K+</span>
+            )}
          </p>
          <p className="text-sm text-slate-300 mt-1">
              {isOnline ? 'Analyzing environment for nodes... Tap shutter to capture.' : 'Offline Mode: Captures will be processed when online.'}
@@ -234,10 +300,20 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
           {sessionCount > 0 && onFinishSession && (
               <button 
                 onClick={onFinishSession}
-                className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-3 rounded-full font-bold text-sm shadow-xl flex items-center gap-2 animate-in slide-in-from-right-10 transition-transform active:scale-95"
+                className="bg-primary-600 hover:bg-primary-500 text-white px-6 py-3 rounded-full font-bold text-sm shadow-xl flex items-center gap-2 animate-in slide-in-from-right-10 transition-transform active:scale-95 pointer-events-auto"
               >
                  <span>Process {sessionCount} Captures</span>
                  <ArrowRight size={16} />
+              </button>
+          )}
+
+          {torchSupported && (
+              <button 
+                onClick={toggleTorch}
+                className={`p-3 rounded-full shadow-lg transition-all animate-in slide-in-from-right-5 pointer-events-auto ${torchActive ? 'bg-yellow-400 text-black' : 'bg-black/40 text-white border border-white/20 backdrop-blur-md'}`}
+                title="Toggle Flash"
+              >
+                 <Zap size={20} className={torchActive ? 'fill-current' : ''} />
               </button>
           )}
       </div>
