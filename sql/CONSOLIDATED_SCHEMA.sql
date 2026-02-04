@@ -1,7 +1,7 @@
 -- =============================================
 -- LOADOPOLY-OCR CONSOLIDATED DATABASE SCHEMA
 -- =============================================
--- Version: 3.0.0
+-- Version: 3.1.0
 -- Last Updated: 2026-02-04
 --
 -- This is the SINGLE SOURCE OF TRUTH for the Loadopoly-OCR database schema.
@@ -15,7 +15,7 @@
 --   3. Classification System (structured_clusters, mappings)
 --   4. Avatar & Presence (user_avatars, presence_sessions, world_sectors)
 --   5. GARD Tokenization (royalty_transactions, shard_holdings, etc.)
---   6. Bundles (digital_asset_bundles)
+--   6. Bundles & Embeddings (digital_asset_bundles, document_embeddings, duplicate_clusters)
 --   7. Functions & Triggers
 --   8. Row Level Security Policies
 --   9. Performance Indexes
@@ -433,6 +433,72 @@ EXCEPTION WHEN undefined_table THEN
 END $$;
 
 -- ============================================
+-- 6.1 DOCUMENT EMBEDDINGS TABLE
+-- ============================================
+-- Dedicated table for vector embeddings enabling O(n log n) similarity search
+
+CREATE TABLE IF NOT EXISTS document_embeddings (
+    "ID" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "ASSET_ID" UUID NOT NULL UNIQUE,
+    "USER_ID" UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    
+    -- Text embeddings (768 dimensions for Gemini embeddings)
+    "TITLE_EMBEDDING" vector(768),
+    "CONTENT_EMBEDDING" vector(768),
+    "ENTITY_EMBEDDING" vector(768),
+    
+    -- Combined embedding for overall similarity
+    "COMBINED_EMBEDDING" vector(768),
+    
+    -- Metadata for filtering
+    "DOCUMENT_TITLE" TEXT,
+    "SOURCE_COLLECTION" TEXT,
+    "GIS_ZONE" TEXT,
+    "SCAN_TYPE" TEXT,
+    "CREATED_AT" TIMESTAMPTZ DEFAULT NOW(),
+    
+    -- Hash for quick exact-match detection
+    "CONTENT_HASH" TEXT,
+    
+    -- Cluster assignment (for pre-computed clusters)
+    "CLUSTER_ID" UUID,
+    "CLUSTER_CONFIDENCE" FLOAT DEFAULT 0
+);
+
+-- ============================================
+-- 6.2 DUPLICATE CLUSTERS TABLE
+-- ============================================
+-- Pre-computed similarity clusters for efficient deduplication workflow
+
+CREATE TABLE IF NOT EXISTS duplicate_clusters (
+    "ID" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "USER_ID" UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+    
+    -- Cluster metadata
+    "PRIMARY_ASSET_ID" UUID NOT NULL,
+    "DUPLICATE_ASSET_IDS" UUID[] DEFAULT '{}',
+    "MEMBER_COUNT" INT DEFAULT 1,
+    
+    -- Similarity scores
+    "AVG_SIMILARITY" FLOAT DEFAULT 0,
+    "MIN_SIMILARITY" FLOAT DEFAULT 0,
+    "MAX_SIMILARITY" FLOAT DEFAULT 1,
+    
+    -- Consolidated metadata from cluster
+    "CONSOLIDATED_TITLE" TEXT,
+    "CONSOLIDATED_ENTITIES" TEXT[],
+    "CONSOLIDATED_KEYWORDS" TEXT[],
+    
+    -- Status tracking
+    "STATUS" TEXT DEFAULT 'PENDING' CHECK ("STATUS" IN ('PENDING', 'REVIEWED', 'MERGED', 'SPLIT', 'DISMISSED')),
+    "REVIEWED_BY" UUID,
+    "REVIEWED_AT" TIMESTAMPTZ,
+    
+    "CREATED_AT" TIMESTAMPTZ DEFAULT NOW(),
+    "UPDATED_AT" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================
 -- 7. FUNCTIONS
 -- ============================================
 
@@ -711,6 +777,123 @@ END;
 $$;
 
 -- ============================================
+-- 7.7 VECTOR SEARCH FUNCTIONS
+-- ============================================
+
+-- Find similar documents using vector similarity
+CREATE OR REPLACE FUNCTION find_similar_documents(
+    p_embedding vector(768),
+    p_user_id UUID DEFAULT NULL,
+    p_threshold FLOAT DEFAULT 0.7,
+    p_limit INT DEFAULT 10,
+    p_exclude_asset_id UUID DEFAULT NULL
+)
+RETURNS TABLE (
+    asset_id UUID,
+    document_title TEXT,
+    similarity FLOAT,
+    source_collection TEXT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        de."ASSET_ID",
+        de."DOCUMENT_TITLE",
+        (1 - (de."COMBINED_EMBEDDING" <=> p_embedding))::FLOAT AS similarity,
+        de."SOURCE_COLLECTION"
+    FROM document_embeddings de
+    WHERE 
+        (p_user_id IS NULL OR de."USER_ID" = p_user_id)
+        AND (p_exclude_asset_id IS NULL OR de."ASSET_ID" != p_exclude_asset_id)
+        AND de."COMBINED_EMBEDDING" IS NOT NULL
+        AND 1 - (de."COMBINED_EMBEDDING" <=> p_embedding) >= p_threshold
+    ORDER BY de."COMBINED_EMBEDDING" <=> p_embedding
+    LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- Batch find duplicates within a user's corpus
+CREATE OR REPLACE FUNCTION find_duplicate_candidates(
+    p_user_id UUID,
+    p_threshold FLOAT DEFAULT 0.75,
+    p_limit INT DEFAULT 100
+)
+RETURNS TABLE (
+    asset_a UUID,
+    asset_b UUID,
+    similarity FLOAT,
+    title_a TEXT,
+    title_b TEXT
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        de1."ASSET_ID" AS asset_a,
+        de2."ASSET_ID" AS asset_b,
+        (1 - (de1."COMBINED_EMBEDDING" <=> de2."COMBINED_EMBEDDING"))::FLOAT AS similarity,
+        de1."DOCUMENT_TITLE" AS title_a,
+        de2."DOCUMENT_TITLE" AS title_b
+    FROM document_embeddings de1
+    CROSS JOIN LATERAL (
+        SELECT de2.*
+        FROM document_embeddings de2
+        WHERE de2."USER_ID" = p_user_id
+          AND de2."ASSET_ID" > de1."ASSET_ID"
+          AND de2."COMBINED_EMBEDDING" IS NOT NULL
+          AND 1 - (de1."COMBINED_EMBEDDING" <=> de2."COMBINED_EMBEDDING") >= p_threshold
+        ORDER BY de1."COMBINED_EMBEDDING" <=> de2."COMBINED_EMBEDDING"
+        LIMIT 5
+    ) de2
+    WHERE de1."USER_ID" = p_user_id
+      AND de1."COMBINED_EMBEDDING" IS NOT NULL
+    ORDER BY similarity DESC
+    LIMIT p_limit;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- Upsert embedding for a document
+CREATE OR REPLACE FUNCTION upsert_document_embedding(
+    p_asset_id UUID,
+    p_user_id UUID,
+    p_title_embedding vector(768),
+    p_content_embedding vector(768),
+    p_combined_embedding vector(768),
+    p_document_title TEXT,
+    p_source_collection TEXT DEFAULT NULL,
+    p_gis_zone TEXT DEFAULT NULL,
+    p_scan_type TEXT DEFAULT NULL,
+    p_content_hash TEXT DEFAULT NULL
+)
+RETURNS UUID AS $$
+DECLARE
+    v_id UUID;
+BEGIN
+    INSERT INTO document_embeddings (
+        "ASSET_ID", "USER_ID", 
+        "TITLE_EMBEDDING", "CONTENT_EMBEDDING", "COMBINED_EMBEDDING",
+        "DOCUMENT_TITLE", "SOURCE_COLLECTION", "GIS_ZONE", "SCAN_TYPE", "CONTENT_HASH"
+    )
+    VALUES (
+        p_asset_id, p_user_id,
+        p_title_embedding, p_content_embedding, p_combined_embedding,
+        p_document_title, p_source_collection, p_gis_zone, p_scan_type, p_content_hash
+    )
+    ON CONFLICT ("ASSET_ID") DO UPDATE SET
+        "TITLE_EMBEDDING" = EXCLUDED."TITLE_EMBEDDING",
+        "CONTENT_EMBEDDING" = EXCLUDED."CONTENT_EMBEDDING",
+        "COMBINED_EMBEDDING" = EXCLUDED."COMBINED_EMBEDDING",
+        "DOCUMENT_TITLE" = EXCLUDED."DOCUMENT_TITLE",
+        "SOURCE_COLLECTION" = EXCLUDED."SOURCE_COLLECTION",
+        "GIS_ZONE" = EXCLUDED."GIS_ZONE",
+        "SCAN_TYPE" = EXCLUDED."SCAN_TYPE",
+        "CONTENT_HASH" = EXCLUDED."CONTENT_HASH"
+    RETURNING "ID" INTO v_id;
+    
+    RETURN v_id;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================
 -- 8. TRIGGERS
 -- ============================================
 
@@ -754,6 +937,8 @@ ALTER TABLE social_return_projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE governance_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gard_tokenized_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pending_rewards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE document_embeddings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE duplicate_clusters ENABLE ROW LEVEL SECURITY;
 
 -- Processing Queue Policies
 DROP POLICY IF EXISTS "Users view own queue items" ON processing_queue;
@@ -774,6 +959,40 @@ CREATE POLICY "Public view bundles" ON digital_asset_bundles FOR SELECT USING (t
 
 DROP POLICY IF EXISTS "Users manage own bundles" ON digital_asset_bundles;
 CREATE POLICY "Users manage own bundles" ON digital_asset_bundles FOR ALL 
+USING ((select auth.uid()) = "USER_ID");
+
+-- Document Embeddings Policies
+DROP POLICY IF EXISTS "Users view own embeddings" ON document_embeddings;
+CREATE POLICY "Users view own embeddings" ON document_embeddings FOR SELECT
+USING ((select auth.uid()) = "USER_ID");
+
+DROP POLICY IF EXISTS "Users insert own embeddings" ON document_embeddings;
+CREATE POLICY "Users insert own embeddings" ON document_embeddings FOR INSERT
+WITH CHECK ((select auth.uid()) = "USER_ID");
+
+DROP POLICY IF EXISTS "Users update own embeddings" ON document_embeddings;
+CREATE POLICY "Users update own embeddings" ON document_embeddings FOR UPDATE
+USING ((select auth.uid()) = "USER_ID");
+
+DROP POLICY IF EXISTS "Users delete own embeddings" ON document_embeddings;
+CREATE POLICY "Users delete own embeddings" ON document_embeddings FOR DELETE
+USING ((select auth.uid()) = "USER_ID");
+
+-- Duplicate Clusters Policies
+DROP POLICY IF EXISTS "Users view own clusters" ON duplicate_clusters;
+CREATE POLICY "Users view own clusters" ON duplicate_clusters FOR SELECT
+USING ((select auth.uid()) = "USER_ID");
+
+DROP POLICY IF EXISTS "Users insert own clusters" ON duplicate_clusters;
+CREATE POLICY "Users insert own clusters" ON duplicate_clusters FOR INSERT
+WITH CHECK ((select auth.uid()) = "USER_ID");
+
+DROP POLICY IF EXISTS "Users update own clusters" ON duplicate_clusters;
+CREATE POLICY "Users update own clusters" ON duplicate_clusters FOR UPDATE
+USING ((select auth.uid()) = "USER_ID");
+
+DROP POLICY IF EXISTS "Users delete own clusters" ON duplicate_clusters;
+CREATE POLICY "Users delete own clusters" ON duplicate_clusters FOR DELETE
 USING ((select auth.uid()) = "USER_ID");
 
 -- Structured Clusters Policies
@@ -907,6 +1126,24 @@ CREATE INDEX IF NOT EXISTS idx_votes_project ON governance_votes("PROJECT_ID");
 -- Bundle Indexes
 CREATE INDEX IF NOT EXISTS idx_bundle_user ON digital_asset_bundles("USER_ID");
 
+-- Document Embeddings Indexes
+CREATE INDEX IF NOT EXISTS idx_embeddings_user_id ON document_embeddings("USER_ID");
+CREATE INDEX IF NOT EXISTS idx_embeddings_asset_id ON document_embeddings("ASSET_ID");
+CREATE INDEX IF NOT EXISTS idx_embeddings_cluster_id ON document_embeddings("CLUSTER_ID");
+CREATE INDEX IF NOT EXISTS idx_embeddings_content_hash ON document_embeddings("CONTENT_HASH");
+CREATE INDEX IF NOT EXISTS idx_embeddings_source_collection ON document_embeddings("SOURCE_COLLECTION");
+
+-- IVFFlat index for approximate nearest neighbor search on embeddings
+CREATE INDEX IF NOT EXISTS idx_embeddings_combined_ivfflat 
+ON document_embeddings 
+USING ivfflat ("COMBINED_EMBEDDING" vector_cosine_ops)
+WITH (lists = 100);
+
+-- Duplicate Clusters Indexes
+CREATE INDEX IF NOT EXISTS idx_dup_clusters_user_id ON duplicate_clusters("USER_ID");
+CREATE INDEX IF NOT EXISTS idx_dup_clusters_status ON duplicate_clusters("STATUS");
+CREATE INDEX IF NOT EXISTS idx_dup_clusters_primary_asset ON duplicate_clusters("PRIMARY_ASSET_ID");
+
 -- Add BRIN indexes for time-series data (if historical_documents_global exists)
 DO $$
 BEGIN
@@ -1003,5 +1240,5 @@ COMMIT;
 -- ============================================
 -- COMPLETION MESSAGE
 -- ============================================
-SELECT '✅ Loadopoly-OCR v3.0.0 Consolidated Schema Setup Complete!' as result,
+SELECT '✅ Loadopoly-OCR v3.1.0 Consolidated Schema Setup Complete!' as result,
        'All tables, functions, policies, and indexes created' as status;
