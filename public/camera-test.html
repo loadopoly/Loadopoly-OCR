@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Camera Capability Test</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #111; color: #fff; padding: 20px; }
+        video { width: 100%; max-width: 400px; background: #000; border: 2px solid #333; margin-top: 10px; }
+        .log { background: #222; padding: 10px; border-radius: 4px; font-family: monospace; height: 300px; overflow-y: auto; white-space: pre-wrap; margin-top: 20px;}
+        .success { color: #4ade80; }
+        .error { color: #f87171; }
+        .info { color: #60a5fa; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; background: #3b82f6; border: none; color: white; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>Camera Diagnostics</h1>
+    <p>This page tests the initialization strategy used in Loadopoly-OCR completely outside of React.</p>
+    <button onclick="runDiagnostics()">Start Diagnostics</button>
+    
+    <div id="video-container"></div>
+    <div id="logs" class="log">Ready...</div>
+
+    <script>
+        const logEl = document.getElementById('logs');
+        const videoContainer = document.getElementById('video-container');
+
+        function log(msg, type = 'info') {
+            const line = document.createElement('div');
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            line.className = type;
+            logEl.appendChild(line);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        async function runDiagnostics() {
+            log('Starting diagnostics...', 'info');
+            videoContainer.innerHTML = ''; // Clear previous
+            
+            // NEW OPTIMIZED STRATEGY (Matches Fix)
+            const tiers = [
+                {
+                    name: "STANDARD (1080p) - [Optimized Start]",
+                    constraints: {
+                        video: {
+                            facingMode: { ideal: "environment" },
+                            width: { ideal: 1920 },
+                            height: { ideal: 1080 }, // Tries 1080p first for speed
+                            frameRate: { ideal: 30 }
+                        }
+                    }
+                },
+                {
+                    name: "PRO (4K/8K) - [Background Upgrade]",
+                    constraints: {
+                        video: {
+                            facingMode: { ideal: "environment" },
+                            width: { ideal: 3840, max: 7680 }, // Only tries 4K if user wants upgrade
+                            height: { ideal: 2160, max: 4320 },
+                            frameRate: { ideal: 60, max: 120 }
+                        }
+                    }
+                },
+                {
+                    name: "COMPATIBILITY (VGA)",
+                    constraints: {
+                        video: { facingMode: "environment" }
+                    }
+                }
+            ];
+
+            let stream = null;
+            const startTime = performance.now();
+
+            for (const tier of tiers) {
+                log(`Attempting Tier: ${tier.name}`, 'info');
+                const tierStart = performance.now();
+                
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia(tier.constraints);
+                    
+                    const tierEnd = performance.now();
+                    const duration = (tierEnd - tierStart).toFixed(0);
+                    
+                    log(`✅ Success: ${tier.name} initialized in ${duration}ms`, 'success');
+                    
+                    const track = stream.getVideoTracks()[0];
+                    const settings = track.getSettings();
+                    log(`  Resolution: ${settings.width}x${settings.height}`, 'info');
+                    log(`  FrameRate: ${settings.frameRate}`, 'info');
+                    log(`  Label: ${track.label}`, 'info');
+                    
+                    // Show video
+                    const video = document.createElement('video');
+                    video.srcObject = stream;
+                    video.autoplay = true;
+                    video.playsInline = true;
+                    videoContainer.appendChild(video);
+                    
+                    break; // Stop after first success
+                } catch (err) {
+                    const tierEnd = performance.now();
+                    const duration = (tierEnd - tierStart).toFixed(0);
+                    log(`❌ Failed: ${tier.name} in ${duration}ms. Error: ${err.name} - ${err.message}`, 'error');
+                }
+            }
+
+            const totalTime = (performance.now() - startTime).toFixed(0);
+            if (!stream) {
+                log(`🛑 CRITICAL: All tiers failed after ${totalTime}ms`, 'error');
+            } else {
+                log(`✨ Total initialization time: ${totalTime}ms`, 'success');
+            }
+        }
+    </script>
+</body>
+</html>

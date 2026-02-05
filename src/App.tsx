@@ -1569,7 +1569,8 @@ export default function App() {
     
   }, [isOnline, selectedScanType, user, debugLogger]);
 
-  const getAggregatedGroups = () => {
+  // MEMOIZED: Prevent expensive aggregation on every render (e.g. tab switch)
+  const aggregatedGroups = useMemo(() => {
     const groups: Record<string, DigitalAsset[]> = {};
     assets.forEach(asset => {
         let key = 'Unknown';
@@ -1581,11 +1582,17 @@ export default function App() {
         groups[key].push(asset);
     });
     return groups;
-  };
+  }, [assets, groupBy]);
 
-  const aggregatedGroups = getAggregatedGroups();
-  const drillDownAssets = selectedGroupKey ? (aggregatedGroups[selectedGroupKey] || []) : assets;
-  const paginatedAssets = drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  // MEMOIZED: Prevent drilldown calculation on every render
+  const drillDownAssets = useMemo(() => 
+    selectedGroupKey ? (aggregatedGroups[selectedGroupKey] || []) : assets
+  , [aggregatedGroups, selectedGroupKey, assets]);
+
+  // MEMOIZED: Pagination only runs when page or assets change
+  const paginatedAssets = useMemo(() => 
+    drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+  , [drillDownAssets, currentPage]);
 
   const globalGraphData = useMemo<GraphData>(() => {
       const filteredAssets = assets.filter(asset => {

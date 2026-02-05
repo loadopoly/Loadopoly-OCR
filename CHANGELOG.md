@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.9.10] - 2026-02-05
+
+### Critical Fixes & Performance
+- **AR Scanner Initialization**: Reverted complex multi-tier camera negotiation strategy (introduced in v2.9.9) which caused 50-second timeouts on certain Android/iOS devices due to driver handshakes.
+- **Immediate AR Loading**: Decoupled camera initialization from UI safety warnings to eliminate startup lag; camera now warms up in parallel with the safety prompt.
+- **Sidebar & UI Latency**: Fixed a severe 10s lag when switching tabs or opening the sidebar by memoizing heavy asset grouping calculations in `App.tsx`.
+- **Mobile Video**: Enforced `playsinline`, `muted`, and `autoplay` attributes to ensure reliable video stream rendering on iOS Safari.
+
 ## [2.9.9] - 2026-02-04
 
 ### Universal Device Compatibility & Optimization

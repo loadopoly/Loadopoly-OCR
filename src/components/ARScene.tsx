@@ -37,7 +37,8 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   }, []);
 
   useEffect(() => {
-    if (showSafetyWarning) return;
+    // Note: Camera initialization now runs effectively in parallel with the Safety Warning
+    // reducing perceived latency.
 
     // Check for secure context (required for getUserMedia)
     if (!window.isSecureContext) {
@@ -51,75 +52,69 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
       return;
     }
 
-    // Multi-tier camera initialization for universal compatibility
+    // FIX: Reverted to v2.1-style simple initialization
+    // Removed complex multi-tier resolution negotiation which caused 50s timeouts
+    // on devices with strict hardware drivers (e.g. Android 14+ / iOS 17+)
     const initCamera = async () => {
-      const tiers = [
-        // 1. Pro Tier (4K/8K)
-        { video: { facingMode: 'environment', width: { ideal: 3840, max: 7680 }, height: { ideal: 2160, max: 4320 }, frameRate: { ideal: 60 } } },
-        // 2. Standard Tier (1080p)
-        { video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } } },
-        // 3. Compatibility Tier (Basic)
-        { video: { facingMode: { ideal: 'environment' } } }
-      ];
+      try {
+        console.log("[AR] Initializing camera (Legacy Fast Mode)...");
+        
+        // 1. Simple Constraints (No 'ideal' width/height)
+        const constraints = {
+          video: { facingMode: 'environment' }, // Just ask for rear camera
+          audio: false
+        };
 
-      let lastError: any = null;
-      for (const constraints of tiers) {
-        try {
-          const newStream = await navigator.mediaDevices.getUserMedia(constraints);
-          setStream(newStream);
-          setCameraError(null);
+        const newStream = await navigator.mediaDevices.getUserMedia(constraints);
+        setStream(newStream);
+        setCameraError(null);
+        
+        // 2. Mobile Optimization: Set attributes directly
+        if (videoRef.current) {
+          const video = videoRef.current;
+          video.srcObject = newStream;
+          video.setAttribute('playsinline', 'true'); // Critical for iOS
+          video.muted = true;
           
-          const track = newStream.getVideoTracks()[0];
-          const caps = track.getCapabilities() as any;
-          const settings = track.getSettings();
-
-          // Check for High Resolution (4K or higher)
-          if (settings.width && settings.width >= 3840) {
-            setIsHighRes(true);
+          try {
+            await video.play();
+            console.log("[AR] Playback started");
+          } catch (playErr) {
+            console.warn("[AR] Autoplay interrupted:", playErr);
           }
-
-          // Hardware features
-          const advancedConstraints: any = {};
-          if (caps.focusMode?.includes('continuous')) advancedConstraints.focusMode = 'continuous';
-          if (caps.whiteBalanceMode?.includes('continuous')) advancedConstraints.whiteBalanceMode = 'continuous';
-          if (caps.exposureMode?.includes('continuous')) advancedConstraints.exposureMode = 'continuous';
-          
-          if (caps.zoom) {
-              setZoomSupported(true);
-              setZoomRange({
-                  min: caps.zoom.min,
-                  max: caps.zoom.max,
-                  step: caps.zoom.step
-              });
-              setZoom(settings.zoom || caps.zoom.min);
-          }
-
-          if (caps.torch) setTorchSupported(true);
-
-          if (Object.keys(advancedConstraints).length > 0) {
-              track.applyConstraints({ advanced: [advancedConstraints] } as any)
-                .catch(e => console.warn("[ARScene] Advanced hardware controls failed:", e));
-          }
-
-          if (videoRef.current) {
-            videoRef.current.srcObject = newStream;
-            videoRef.current.play();
-          }
-          return; // Success
-        } catch (err) {
-          console.warn(`[ARScene] Camera tier failed, falling back...`, err);
-          lastError = err;
         }
-      }
+        
+        // Hardware features check (Basic)
+        const track = newStream.getVideoTracks()[0];
+        const caps = track.getCapabilities() as any;
+        const settings = track.getSettings();
+        
+        // Basic Zoom Support
+        if (caps.zoom) {
+            setZoomSupported(true);
+            setZoomRange({ min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step });
+            setZoom(settings.zoom || caps.zoom.min);
+        }
+        if (caps.torch) setTorchSupported(true);
 
-      // If all tiers fail
-      console.error("All camera tiers failed:", lastError);
-      if (lastError.name === 'NotAllowedError') {
-        setCameraError('Camera access denied. Please allow camera permissions in your browser settings.');
-      } else if (lastError.name === 'NotFoundError') {
-        setCameraError('No camera found. Please connect a camera and try again.');
-      } else {
-        setCameraError(`Camera error: ${lastError.message || 'Unknown error'}`);
+      } catch (err: any) {
+        console.error("[AR] Camera Init Failed:", err);
+        
+        // Fallback: Try generic video (laptops)
+        try {
+           const fallback = await navigator.mediaDevices.getUserMedia({ video: true });
+           setStream(fallback);
+           if (videoRef.current) {
+             videoRef.current.srcObject = fallback;
+             videoRef.current.play();
+           }
+        } catch (e) {
+           if (err.name === 'NotAllowedError') {
+             setCameraError('Camera access denied. Please allow permissions.');
+           } else {
+             setCameraError(`Camera unavailable: ${err.message}`);
+           }
+        }
       }
     };
 
@@ -141,7 +136,7 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
     }, isLowEndDevice ? 4000 : 2000);
 
     return () => clearInterval(interval);
-  }, [showSafetyWarning, isLowEndDevice]);
+  }, [isLowEndDevice]);
 
   useEffect(() => {
     return () => {
