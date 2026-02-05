@@ -17,11 +17,12 @@ import {
   StorageStats,
 } from '../types';
 import { DigitalAsset, GraphNode, GraphLink, AssetStatus } from '../../types';
-import { supabase, isSupabaseConfigured } from '../../lib/supabaseClient';
+import { supabase, masterSupabase, isSupabaseConfigured, isDualWriteRequired } from '../../lib/supabaseClient';
 import { encryptData, decryptData } from '../../lib/encryption';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../lib/logger';
 import { eventEmitter } from '../events';
+import { dualWriteInsert, dualWriteUpsert } from '../../services/dualWriteService';
 
 // ============================================
 // Row to Asset Mapper
@@ -138,19 +139,20 @@ export class SupabaseStorage extends BaseStorage {
 
   async uploadImage(file: File, metadata: UploadMetadata): Promise<UploadResult> {
     this.ensureInitialized();
-    
-    if (!supabase) {
+
+    const storageClient = masterSupabase || supabase;
+    if (!storageClient) {
       return { assetId: '', imageUrl: '', success: false, error: 'Supabase not available' };
     }
 
     const assetId = `asset_${uuidv4()}`;
     
     try {
-      // Upload to storage
+      // Upload image to master storage first
       const fileExt = file.name.split('.').pop() || 'jpg';
       const fileName = `${assetId}_${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await storageClient.storage
         .from(this.bucketName)
         .upload(fileName, file, {
           upsert: true,
@@ -159,13 +161,24 @@ export class SupabaseStorage extends BaseStorage {
 
       if (uploadError) throw uploadError;
 
-      const { data: publicUrlData } = supabase.storage
+      const { data: publicUrlData } = storageClient.storage
         .from(this.bucketName)
         .getPublicUrl(fileName);
 
       const publicUrl = publicUrlData.publicUrl;
 
-      // Create initial database record
+      // Mirror image to user storage if dual-write is active
+      if (isDualWriteRequired() && supabase) {
+        try {
+          await supabase.storage
+            .from(this.bucketName)
+            .upload(fileName, file, { upsert: true, contentType: file.type });
+        } catch (mirrorErr) {
+          logger.warn('Image mirror to user storage failed (non-fatal)', { error: mirrorErr });
+        }
+      }
+
+      // Create initial database record via dual-write
       const record = {
         ASSET_ID: assetId,
         ID: assetId,
@@ -183,11 +196,14 @@ export class SupabaseStorage extends BaseStorage {
         FILE_SIZE_BYTES: file.size,
       };
 
-      const { error: insertError } = await supabase
-        .from(this.tableName)
-        .insert(record as any);
+      const writeResult = await dualWriteInsert(
+        this.tableName,
+        record as Record<string, unknown>,
+      );
 
-      if (insertError) throw insertError;
+      if (!writeResult.master) {
+        throw new Error(`Master DB insert failed: ${writeResult.errors.master}`);
+      }
 
       eventEmitter.emit('asset:created', { assetId, imageUrl: publicUrl });
       
@@ -379,14 +395,16 @@ export class SupabaseStorage extends BaseStorage {
         Object.assign(record, updates.sqlRecord);
       }
 
-      // Use type-flexible update pattern for dynamic record structure
-      const client = supabase as any;
-      const { error } = await client
-        .from(this.tableName)
-        .update(record)
-        .eq('ASSET_ID', assetId);
+      // Dual-write: upsert the record with ASSET_ID so both DBs stay in sync
+      record.ASSET_ID = assetId;
+      const writeResult = await dualWriteUpsert(
+        this.tableName,
+        record as Record<string, unknown>,
+      );
 
-      if (error) throw error;
+      if (!writeResult.master) {
+        throw new Error(`Master DB update failed: ${writeResult.errors.master}`);
+      }
 
       eventEmitter.emit('asset:updated', { assetId, changes: updates });
     } catch (error) {
@@ -397,18 +415,35 @@ export class SupabaseStorage extends BaseStorage {
 
   async deleteAsset(assetId: string): Promise<void> {
     this.ensureInitialized();
-    
-    if (!supabase) {
-      throw new Error('Supabase not available');
+
+    if (!masterSupabase && !supabase) {
+      throw new Error('No Supabase client available');
     }
 
     try {
-      const { error } = await supabase
-        .from(this.tableName)
-        .delete()
-        .eq('ASSET_ID', assetId);
+      // Always delete from master DB first
+      if (masterSupabase) {
+        const { error } = await masterSupabase
+          .from(this.tableName)
+          .delete()
+          .eq('ASSET_ID', assetId);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
+
+      // Delete from user DB if it's a separate instance
+      if (isDualWriteRequired() && supabase) {
+        try {
+          const { error } = await supabase
+            .from(this.tableName)
+            .delete()
+            .eq('ASSET_ID', assetId);
+
+          if (error) throw error;
+        } catch (userErr) {
+          logger.warn('User-DB delete failed (non-fatal)', { assetId, error: userErr });
+        }
+      }
 
       eventEmitter.emit('asset:deleted', { assetId });
     } catch (error) {
@@ -419,37 +454,36 @@ export class SupabaseStorage extends BaseStorage {
 
   async batchUpsert(assets: DigitalAsset[]): Promise<BatchResult> {
     this.ensureInitialized();
-    
-    if (!supabase) {
-      return { succeeded: 0, failed: assets.length, errors: [{ assetId: '', error: 'Supabase not available' }] };
+
+    if (!masterSupabase && !supabase) {
+      return { succeeded: 0, failed: assets.length, errors: [{ assetId: '', error: 'No Supabase client available' }] };
     }
 
     const result: BatchResult = { succeeded: 0, failed: 0, errors: [] };
 
-    // Process in batches of 100
-    const batchSize = 100;
-    for (let i = 0; i < assets.length; i += batchSize) {
-      const batch = assets.slice(i, i + batchSize);
-      const records = await Promise.all(
-        batch.map(async (asset) => ({
-          ...asset.sqlRecord,
-          LAST_MODIFIED: new Date().toISOString(),
-        }))
-      );
+    // Dual-write each asset individually to guarantee master persistence
+    for (const asset of assets) {
+      const record = {
+        ...asset.sqlRecord,
+        LAST_MODIFIED: new Date().toISOString(),
+      };
 
       try {
-        const { error } = await supabase
-          .from(this.tableName)
-          .upsert(records as any);
+        const writeResult = await dualWriteUpsert(
+          this.tableName,
+          record as Record<string, unknown>,
+        );
 
-        if (error) throw error;
+        if (!writeResult.master) {
+          throw new Error(writeResult.errors.master || 'Master write failed');
+        }
 
-        result.succeeded += batch.length;
+        result.succeeded++;
       } catch (error) {
-        result.failed += batch.length;
+        result.failed++;
         result.errors.push({
-          assetId: batch.map(a => a.id).join(','),
-          error: error instanceof Error ? error.message : 'Batch upsert failed'
+          assetId: asset.id,
+          error: error instanceof Error ? error.message : 'Batch upsert failed',
         });
       }
     }

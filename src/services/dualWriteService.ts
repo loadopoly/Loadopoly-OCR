@@ -45,6 +45,12 @@ const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 /**
  * Attempt a single upsert against a given Supabase client with retries.
+ *
+ * @param client  - The Supabase client instance to write to.
+ * @param table   - Target table name (e.g. 'historical_documents_global').
+ * @param record  - The row to upsert, must include an ASSET_ID for conflict resolution.
+ * @param label   - Human-readable label for log messages ('Master' | 'User').
+ * @returns `{ ok: true }` on success, `{ ok: false, error }` after exhausting retries.
  */
 async function writeWithRetry(
   client: SupabaseClient,
@@ -88,9 +94,14 @@ async function writeWithRetry(
 /**
  * Upsert a record to both the Loadopoly master DB and the user's DB.
  *
- * - Master write always happens first with retries.
+ * - Master write always happens first with retries (3 attempts, linear backoff).
  * - If `isDualWriteRequired()` is false the two clients are identical and
  *   only one physical write occurs.
+ * - Master failure is CRITICAL; user-DB failure is non-fatal.
+ *
+ * @param table  - Target Supabase table name.
+ * @param record - Row data; must include ASSET_ID for conflict resolution.
+ * @returns {DualWriteResult} With per-target success flags and error details.
  */
 export async function dualWriteUpsert(
   table: string,
@@ -140,7 +151,11 @@ export async function dualWriteUpsert(
 
 /**
  * Insert a record to both DBs (no upsert / no conflict resolution).
- * Same dual-write semantics as `dualWriteUpsert`.
+ * Same dual-write semantics as `dualWriteUpsert`: master first, user second.
+ *
+ * @param table  - Target Supabase table name.
+ * @param record - Row data to insert.
+ * @returns {DualWriteResult} With per-target success flags and error details.
  */
 export async function dualWriteInsert(
   table: string,
