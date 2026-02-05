@@ -26,6 +26,7 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   const [torchSupported, setTorchSupported] = useState(false);
   const [torchActive, setTorchActive] = useState(false);
   const [isLowEndDevice, setIsLowEndDevice] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
 
   useEffect(() => {
     // Detect low-end devices for UI optimization
@@ -69,19 +70,45 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
         setStream(newStream);
         setCameraError(null);
         
-        // 2. Mobile Optimization: Set attributes directly
+        // 2. Mobile Optimization: Set attributes and force playback
         if (videoRef.current) {
           const video = videoRef.current;
           video.srcObject = newStream;
           video.setAttribute('playsinline', 'true'); // Critical for iOS
+          video.setAttribute('webkit-playsinline', 'true'); // Legacy iOS
           video.muted = true;
           
-          try {
-            await video.play();
-            console.log("[AR] Playback started");
-          } catch (playErr) {
-            console.warn("[AR] Autoplay interrupted:", playErr);
-          }
+          // Multiple play attempts with retry
+          const attemptPlay = async () => {
+            try {
+              await video.play();
+              console.log("[AR] Playback started, dimensions:", video.videoWidth, "x", video.videoHeight);
+              setVideoReady(true);
+            } catch (playErr) {
+              console.warn("[AR] Autoplay interrupted, retrying:", playErr);
+              setTimeout(async () => {
+                try {
+                  await video.play();
+                  setVideoReady(true);
+                } catch (e) {
+                  console.error("[AR] Retry play failed:", e);
+                }
+              }, 100);
+            }
+          };
+          
+          video.onloadedmetadata = () => {
+            console.log("[AR] Metadata loaded:", video.videoWidth, "x", video.videoHeight);
+            attemptPlay();
+          };
+          
+          video.oncanplay = () => {
+            console.log("[AR] Can play event");
+            attemptPlay();
+          };
+          
+          // Also try immediately
+          attemptPlay();
         }
         
         // Hardware features check (Basic)
@@ -137,6 +164,29 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
 
     return () => clearInterval(interval);
   }, [isLowEndDevice]);
+
+  // CRITICAL FIX: Re-attach stream when video element or stream changes
+  // This handles the case where the video ref wasn't ready when stream was acquired
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      const video = videoRef.current;
+      
+      // Only re-attach if not already attached
+      if (video.srcObject !== stream) {
+        console.log("[AR] Re-attaching stream to video element");
+        video.srcObject = stream;
+        video.muted = true;
+        video.playsInline = true;
+        
+        video.play().then(() => {
+          console.log("[AR] Play successful after re-attach");
+          setVideoReady(true);
+        }).catch(err => {
+          console.warn("[AR] Play after re-attach failed:", err);
+        });
+      }
+    }
+  }, [stream, showSafetyWarning]); // Re-run when stream arrives or safety warning dismissed
 
   useEffect(() => {
     return () => {
@@ -260,17 +310,42 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
         </div>
       )}
       
+      {/* Video Element - CRITICAL: Must be absolutely positioned to fill container */}
       <video 
         ref={videoRef} 
         autoPlay 
         playsInline 
-        muted 
-        onLoadedMetadata={(e) => {
-          // Robust auto-play ensure
-          e.currentTarget.play().catch(err => console.error("AutoPlay blocked:", err));
+        muted
+        onLoadedData={() => {
+          console.log("[AR] Video loaded data event");
+          setVideoReady(true);
+          videoRef.current?.play().catch(e => console.warn("Play on loadedData:", e));
         }}
-        className="w-full h-full object-cover relative z-0" 
+        onPlay={() => {
+          console.log("[AR] Video play event fired");
+          setVideoReady(true);
+        }}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          zIndex: 1,
+          backgroundColor: 'transparent'
+        }}
       />
+      
+      {/* Loading indicator while video initializes */}
+      {!videoReady && stream && !cameraError && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/60">
+          <div className="text-center text-white">
+            <div className="w-10 h-10 border-2 border-white border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <p className="text-sm">Initializing camera feed...</p>
+          </div>
+        </div>
+      )}
       
       {/* Flash Overlay */}
       <div className={`absolute inset-0 bg-white pointer-events-none transition-opacity duration-150 ${flash ? 'opacity-50' : 'opacity-0'}`}></div>
