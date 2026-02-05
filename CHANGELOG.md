@@ -6,10 +6,22 @@ See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent majo
 ## [2.9.10] - 2026-02-05
 
 ### Critical Fixes & Performance
-- **AR Scanner Initialization**: Reverted complex multi-tier camera negotiation strategy (introduced in v2.9.9) which caused 50-second timeouts on certain Android/iOS devices due to driver handshakes.
-- **Immediate AR Loading**: Decoupled camera initialization from UI safety warnings to eliminate startup lag; camera now warms up in parallel with the safety prompt.
-- **Sidebar & UI Latency**: Fixed a severe 10s lag when switching tabs or opening the sidebar by memoizing heavy asset grouping calculations in `App.tsx`.
-- **Mobile Video**: Enforced `playsinline`, `muted`, and `autoplay` attributes to ensure reliable video stream rendering on iOS Safari.
+This release resolves multiple severe regressions introduced in v2.9.8/v2.9.9 that caused the AR Scanner to display a black screen or timeout on many devices.
+
+#### AR Scanner Camera Fixes
+- **Reverted Multi-Tier Initialization**: The complex 4K/8K resolution negotiation strategy caused 50-second hardware driver timeouts on devices that couldn't meet the requested constraints. Reverted to simple `facingMode: 'environment'` constraints (v2.1-style) for instant camera acquisition.
+- **Absolute Video Positioning**: Changed `<video>` element from relative Tailwind classes to explicit inline styles with `position: absolute` and `z-index: 1` to ensure proper layering.
+- **Robust Stream Attachment**: Added a dedicated `useEffect` hook that re-attaches the MediaStream when the video element becomes available or when the Safety Warning is dismissed.
+- **Multiple Play Triggers**: Added `onloadedmetadata`, `oncanplay`, `onLoadedData`, and `onPlay` event handlers with automatic retry logic to force video playback across all browsers.
+- **Video Ready State**: Added `videoReady` state tracking with a loading indicator ("Initializing camera feed...") while the stream initializes.
+- **Legacy iOS Support**: Added `webkit-playsinline` attribute for older Safari versions.
+
+#### UI Performance Fixes
+- **Sidebar & Tab Latency**: Fixed a severe 10-second lag when switching tabs or opening the sidebar by wrapping `aggregatedGroups`, `drillDownAssets`, and `paginatedAssets` in `useMemo` hooks in `App.tsx`.
+- **Parallel Camera Loading**: Camera initialization now runs immediately on component mount (in parallel with the Safety Warning) rather than waiting for user acknowledgment.
+
+#### Tooling
+- **Camera Diagnostics**: Added `public/camera-test.html` standalone diagnostic tool for debugging camera initialization issues outside of React.
 
 ## [2.9.9] - 2026-02-04
 
