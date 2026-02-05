@@ -1,6 +1,22 @@
-# 🚀 GeoGraph Node: v2.9.10 Release Notes
+# 🚀 GeoGraph Node: v2.9.11 Release Notes
 
-## 🧬 v2.9.10 - Critical AR Scanner Fix (2026-02-05)
+## 🧬 v2.9.11 - Dual-Write Persistence & Refactoring (2026-02-05)
+
+### 🎯 Overview
+This release introduces a critical dual-write architectural layer to guarantee data persistence in the Loadopoly master corpus while supporting user-controlled database repositories. It also marks a significant milestone in repository organization and code modularity.
+
+### ✨ New Features
+- **Dual-Write Database Strategy**: Automatic replication of all OCR results, image uploads, and Web3 transactions to the canonical Loadopoly master database, regardless of user-provided Supabase credentials.
+- **Fail-Over Protection**: Implementation of a persistent retry mechanism (3x with backoff) for master database writes to prevent data loss due to transient network issues.
+
+### 🧹 Project Refactoring
+- **Consolidated Types**: Unified `src/types.ts` and `src/types/index.ts` for better developer experience and type safety.
+- **Clean Docs Hierarchy**: Moved sprawl from the root directory into a structured `docs/` hierarchy (Technical, Legal, Investment, Product).
+- **Service Decoupling**: Extracted database replication logic into a dedicated `dualWriteService.ts`.
+
+---
+
+# 🚀 GeoGraph Node: v2.9.10 Release Notes
 
 ### 🎯 Overview
 This hotfix release resolves critical regressions in the AR Scanner that caused black screens, 50-second timeouts, and video rendering failures introduced in v2.9.8/v2.9.9.

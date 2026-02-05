@@ -20,7 +20,7 @@ All database migration and fix scripts are located in the `sql/` directory.
 - **`sql/CONSOLIDATED_SCHEMA.sql`**: ⭐ **Single source of truth** - Complete idempotent schema setup
 
 ### Legacy Scripts (for reference)
-- `sql/COMPLETE_SCHEMA_SETUP_V2.8.1.sql`: Complete idempotent schema setup for v2.8+
+- `sql/COMPLETE_SCHEMA_SETUP_V2.8.1.sql`: Complete idempotent schema setup for v2.9+ (includes backward compatibility)
 - `sql/PROCESSING_QUEUE_SCHEMA.sql`: Background processing queue setup
 - `sql/FIX_ALL_SUPABASE_LINTER_ISSUES.sql`: Master fix for Supabase linter warnings
 - `sql/HEALTH_CHECK_V2.8.1.sql`: Schema verification queries

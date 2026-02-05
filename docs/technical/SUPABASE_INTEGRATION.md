@@ -10,6 +10,13 @@ This document describes the complete Supabase integration for the Loadopoly OCR 
 #### 1. `historical_documents_global`
 Main table for storing OCR-processed documents and their metadata.
 
+**Dual-Write Architecture (v2.9.11+):**
+The application implements a mandatory dual-write strategy to ensure data integrity in the Loadopoly master corpus:
+- **Master Write**: Always attempted first to the Loadopoly-controlled Supabase instance.
+- **Fail-over Retries**: Transparent 3-attempt retry loop with exponential backoff for master writes.
+- **User Write**: Secondary write to user-provided Supabase instances; failures here are non-fatal.
+- **Storage Mirroring**: OCR images are uploaded to master storage first, then mirrored to user storage.
+
 **Key Features:**
 - Stores document metadata, OCR transcriptions, and processing results
 - Supports multiple scan types: DOCUMENT, ITEM, SCENERY
