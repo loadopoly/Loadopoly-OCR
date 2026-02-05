@@ -26,15 +26,47 @@ const getEnvVar = (key: string): string => {
 const supabaseUrl = getEnvVar('VITE_SUPABASE_URL')
 const supabaseAnonKey = getEnvVar('VITE_SUPABASE_ANON_KEY')
 
-// Create typed Supabase client
+// Loadopoly master database credentials (always persists a copy)
+const masterUrl = getEnvVar('VITE_LOADOPOLY_SUPABASE_URL')
+const masterKey = getEnvVar('VITE_LOADOPOLY_SUPABASE_ANON_KEY')
+
+// Create typed Supabase client (may be user-provided or Loadopoly's own)
 export const supabase = 
   supabaseUrl && supabaseAnonKey
     ? createClient<Database>(supabaseUrl, supabaseAnonKey)
     : null;
 
+/**
+ * Master Loadopoly Supabase client.
+ * 
+ * If VITE_LOADOPOLY_SUPABASE_URL / VITE_LOADOPOLY_SUPABASE_ANON_KEY are set,
+ * this is a separate client that always points to the canonical Loadopoly DB.
+ * If they are NOT set, falls back to the primary `supabase` client (i.e. the
+ * user hasn't overridden the database and the primary already IS Loadopoly).
+ * 
+ * This guarantees every write is persisted to Loadopoly regardless of whether
+ * a user has configured their own Supabase instance.
+ */
+export const masterSupabase: SupabaseClient<Database> | null =
+  masterUrl && masterKey
+    ? createClient<Database>(masterUrl, masterKey)
+    : supabase; // fallback: primary client IS the master
+
+/**
+ * Returns true when the master client is a *different* instance from the
+ * user-facing client, meaning dual-write is required.
+ */
+export const isDualWriteRequired = (): boolean => {
+  return Boolean(masterUrl && masterKey && masterUrl !== supabaseUrl)
+}
+
 // Connection status helper
 export const isSupabaseConfigured = (): boolean => {
   return Boolean(supabaseUrl && supabaseAnonKey)
+}
+
+export const isMasterConfigured = (): boolean => {
+  return masterSupabase !== null
 }
 
 /**
