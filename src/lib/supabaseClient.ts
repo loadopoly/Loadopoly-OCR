@@ -1,10 +1,20 @@
 /**
  * Supabase Client Configuration
  * 
- * This module provides a typed Supabase client for database operations.
- * Environment variables must be set in .env.local:
- * - VITE_SUPABASE_URL
- * - VITE_SUPABASE_ANON_KEY
+ * This module provides typed Supabase clients for database operations.
+ * Supports dual-client mode: a user-facing client and a Loadopoly master client.
+ * 
+ * Environment variables (set in .env.local):
+ * - VITE_SUPABASE_URL             — Primary Supabase URL (may be user-provided)
+ * - VITE_SUPABASE_ANON_KEY        — Primary Supabase anon key
+ * - VITE_LOADOPOLY_SUPABASE_URL   — (Optional) Loadopoly master DB URL
+ * - VITE_LOADOPOLY_SUPABASE_ANON_KEY — (Optional) Loadopoly master DB anon key
+ * 
+ * When the LOADOPOLY_ vars are set and differ from the primary, dual-write mode
+ * activates: every mutation is persisted to both the master and user databases.
+ * When they are NOT set, the primary client is assumed to BE the Loadopoly DB.
+ * 
+ * @module supabaseClient
  */
 
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
@@ -65,6 +75,7 @@ export const isSupabaseConfigured = (): boolean => {
   return Boolean(supabaseUrl && supabaseAnonKey)
 }
 
+/** Returns true if the Loadopoly master client is available (always true unless no DB is configured at all). */
 export const isMasterConfigured = (): boolean => {
   return masterSupabase !== null
 }

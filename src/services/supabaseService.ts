@@ -1,9 +1,10 @@
 import { DigitalAsset, AssetStatus, GraphNode, GraphLink } from '../types';
 import { v4 as uuidv4 } from 'uuid';
-import { supabase, isSupabaseConfigured, testSupabaseConnection } from '../lib/supabaseClient';
+import { supabase, masterSupabase, isSupabaseConfigured, isMasterConfigured, isDualWriteRequired, testSupabaseConnection } from '../lib/supabaseClient';
 import { encryptData, decryptData } from '../lib/encryption';
 import type { Database } from '../lib/database.types';
 import { logger } from '../lib/logger';
+import { dualWriteUpsert } from './dualWriteService';
 
 // Re-export utilities for convenience
 export { supabase, isSupabaseConfigured, testSupabaseConnection };
@@ -177,20 +178,22 @@ export const contributeAssetToGlobalCorpus = async (
   licenseType: 'GEOGRAPH_CORPUS_1.0' | 'CC0' = 'GEOGRAPH_CORPUS_1.0',
   isAutoSave: boolean = false
 ) => {
-  if (!supabase) {
-    console.warn("Supabase not configured. Skipping cloud contribution.");
-    return { success: false, reason: "CONFIG_MISSING" };
+  // At minimum, the master Loadopoly DB must be reachable
+  if (!masterSupabase && !supabase) {
+    logger.warn('No Supabase client configured. Skipping cloud contribution.');
+    return { success: false, reason: 'CONFIG_MISSING' };
   }
 
   // Only anonymous users without auto-save need contributor ID
   const finalContributorId = userId || `anon_${uuidv4()}`;
 
   if (!asset.sqlRecord || !asset.imageUrl) {
-    throw new Error("Asset missing critical contribution data");
+    throw new Error('Asset missing critical contribution data');
   }
 
   try {
     // 1. Storage Upload: Only if it's a local blob
+    //    Always upload to master storage first, then mirror to user storage
     let publicUrl = asset.imageUrl;
     if (asset.imageUrl.startsWith('blob:')) {
       const response = await fetch(asset.imageUrl);
@@ -198,25 +201,43 @@ export const contributeAssetToGlobalCorpus = async (
       const fileExt = asset.sqlRecord.FILE_FORMAT.split('/').pop() || 'jpg';
       const fileName = `${asset.id}_${Date.now()}.${fileExt}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('corpus-images')
-        .upload(fileName, blob, {
-          upsert: true,
-          contentType: blob.type
-        });
+      // Upload to master storage (Loadopoly)
+      const storageClient = masterSupabase || supabase;
+      if (storageClient) {
+        const { error: uploadError } = await storageClient.storage
+          .from('corpus-images')
+          .upload(fileName, blob, {
+            upsert: true,
+            contentType: blob.type,
+          });
 
-      if (uploadError) throw uploadError;
+        if (uploadError) throw uploadError;
 
-      const { data: publicUrlData } = supabase.storage
-        .from('corpus-images')
-        .getPublicUrl(fileName);
-        
-      publicUrl = publicUrlData.publicUrl;
+        const { data: publicUrlData } = storageClient.storage
+          .from('corpus-images')
+          .getPublicUrl(fileName);
+
+        publicUrl = publicUrlData.publicUrl;
+      }
+
+      // Mirror to user storage if dual-write is active
+      if (isDualWriteRequired() && supabase) {
+        try {
+          await supabase.storage
+            .from('corpus-images')
+            .upload(fileName, blob, { upsert: true, contentType: blob.type });
+        } catch (mirrorErr) {
+          logger.warn('Image mirror to user storage failed (non-fatal)', {
+            module: 'supabaseService',
+            error: mirrorErr,
+          });
+        }
+      }
     }
 
-    // 2. Database Upsert
+    // 2. Database Upsert — via dual-write to guarantee master persistence
     let sqlRecord = { ...asset.sqlRecord };
-    
+
     // Encrypt sensitive data if user is authenticated
     if (userId && sqlRecord.RAW_OCR_TRANSCRIPTION) {
       sqlRecord.RAW_OCR_TRANSCRIPTION = await encryptData(sqlRecord.RAW_OCR_TRANSCRIPTION, userId);
@@ -225,26 +246,43 @@ export const contributeAssetToGlobalCorpus = async (
       }
     }
 
-    const { data, error } = await supabase
-      .from('historical_documents_global')
-      .upsert({
-        ...sqlRecord,
-        CONTRIBUTOR_ID: finalContributorId,
-        CONTRIBUTED_AT: new Date().toISOString(),
-        DATA_LICENSE: licenseType,
-        ORIGINAL_IMAGE_URL: publicUrl,
-        USER_ID: userId || null,
-        IS_ENTERPRISE: sqlRecord.IS_ENTERPRISE || false
-      } as any);
+    const upsertRecord = {
+      ...sqlRecord,
+      CONTRIBUTOR_ID: finalContributorId,
+      CONTRIBUTED_AT: new Date().toISOString(),
+      DATA_LICENSE: licenseType,
+      ORIGINAL_IMAGE_URL: publicUrl,
+      USER_ID: userId || null,
+      IS_ENTERPRISE: sqlRecord.IS_ENTERPRISE || false,
+    };
 
-    if (error) {
-      console.error("Supabase upsert error details:", error);
-      throw error;
+    const writeResult = await dualWriteUpsert(
+      'historical_documents_global',
+      upsertRecord as Record<string, unknown>,
+    );
+
+    if (!writeResult.master) {
+      logger.error('CRITICAL: Master DB write failed during contribution', {
+        module: 'supabaseService',
+        operation: 'contributeAssetToGlobalCorpus',
+        assetId: asset.id,
+        errors: writeResult.errors,
+      });
+      throw new Error(
+        `Master DB write failed: ${writeResult.errors.master ?? 'unknown error'}`,
+      );
     }
-    
+
+    if (writeResult.user === false) {
+      logger.warn('User-DB write failed during contribution (data safe in master)', {
+        module: 'supabaseService',
+        assetId: asset.id,
+      });
+    }
+
     return { success: true, publicUrl, contributorId: finalContributorId };
   } catch (err) {
-    console.error("Supabase sync failed:", err);
+    logger.error('Supabase sync failed', { module: 'supabaseService', error: err });
     throw err;
   }
 };
@@ -315,6 +353,7 @@ export const subscribeToAssetUpdates = (
 
 /**
  * Records a Web3 transaction in Supabase with optional encryption.
+ * Uses dual-write to ensure the transaction is persisted to the Loadopoly master DB.
  */
 export const recordWeb3Transaction = async (
   userId: string,
@@ -322,25 +361,55 @@ export const recordWeb3Transaction = async (
   txHash: string,
   details: any
 ) => {
-  if (!supabase) return;
+  if (!masterSupabase && !supabase) return;
 
   try {
     const detailsString = JSON.stringify(details);
     const encryptedDetails = await encryptData(detailsString, userId);
 
-    const insertData: any = {
+    const insertData: Record<string, unknown> = {
       USER_ID: userId,
       ASSET_ID: assetId,
       TX_HASH: txHash,
-      DETAILS: encryptedDetails
+      DETAILS: encryptedDetails,
     };
 
-    const { error } = await (supabase as any)
-      .from('web3_transactions')
-      .insert(insertData);
+    // Always write to master DB
+    if (masterSupabase) {
+      const { error } = await (masterSupabase as any)
+        .from('web3_transactions')
+        .insert(insertData);
 
-    if (error) throw error;
+      if (error) {
+        logger.error('Master DB web3 transaction insert failed', {
+          module: 'supabaseService',
+          assetId,
+          error,
+        });
+      }
+    }
+
+    // Mirror to user DB if dual-write is active
+    if (isDualWriteRequired() && supabase) {
+      try {
+        const { error } = await (supabase as any)
+          .from('web3_transactions')
+          .insert(insertData);
+
+        if (error) throw error;
+      } catch (userErr) {
+        logger.warn('User-DB web3 transaction insert failed (non-fatal)', {
+          module: 'supabaseService',
+          assetId,
+          error: userErr,
+        });
+      }
+    }
   } catch (err) {
-    console.error("Failed to record web3 transaction:", err);
+    logger.error('Failed to record web3 transaction', {
+      module: 'supabaseService',
+      assetId,
+      error: err,
+    });
   }
 };
