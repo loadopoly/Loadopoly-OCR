@@ -260,7 +260,17 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
         </div>
       )}
       
-      <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
+      <video 
+        ref={videoRef} 
+        autoPlay 
+        playsInline 
+        muted 
+        onLoadedMetadata={(e) => {
+          // Robust auto-play ensure
+          e.currentTarget.play().catch(err => console.error("AutoPlay blocked:", err));
+        }}
+        className="w-full h-full object-cover relative z-0" 
+      />
       
       {/* Flash Overlay */}
       <div className={`absolute inset-0 bg-white pointer-events-none transition-opacity duration-150 ${flash ? 'opacity-50' : 'opacity-0'}`}></div>
