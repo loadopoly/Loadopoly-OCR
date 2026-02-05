@@ -7,6 +7,52 @@
 
 > Advanced OCR-to-Graph platform with GIS metadata, semantic NLP, deduplication, and metaverse navigation.
 
+---
+
+## 💼 For Investors
+
+### The $1.2B Market Opportunity: AI Training Data Crisis
+
+Loadopoly-OCR solves the **structured historical data gap** that AI companies urgently need:
+
+**Three Converging Problems:**
+
+1. **AI Models Lack Historical Context** - LLMs trained on post-2010 web scrapes. "Data wall" expected 2026-2027.
+2. **80-90% of Pre-2010 Data Not Digitized** - 500+ billion historical documents remain physical.
+3. **Digitized Data Is Unstructured** - Major institutions have millions of items but no queryable knowledge.
+
+**Concrete Example: Smithsonian Open Access**
+
+The Smithsonian spent **20 years digitizing 11 million artifacts**. Researchers can find a 1920s building photo. But they can't query "who built it" or "what else did they design."
+
+| What Smithsonian Has | What's Missing |
+|---------------------|----------------|
+| 11M digitized items in JSON | No knowledge graphs |
+| Flat catalog metadata | No entity extraction |
+| 35+ inconsistent schemas | No GPS coordinates |
+| Download-and-process yourself | No semantic search |
+
+**Our Solution:**
+- Automatic entity extraction, temporal/spatial classification, knowledge graphs
+- **88-99% time savings** for researchers (40 hours → 5 minutes)
+- AI training data marketplace (archivists license structured datasets to OpenAI/Anthropic)
+- **User-generated data flywheel**: Users capture never-before-digital data (workplaces, estate sales, local archives)
+
+**Revenue Model:**
+- Freemium SaaS subscriptions ($29-199/month)
+- AI Training Data Marketplace (15-20% commission)
+- NFT fractionalization for data ownership
+- **Web3 Value-Return**: Users gain fractional ownership in corpus → earn passive income when AI companies license data → incentivized to capture more (visit museums, monuments) → "Get paid to live life"
+
+**Investment Ask:** $150K for 8-10% to structure the first 100 archival collections and prove the AI licensing model.
+
+📄 **Full Investment Thesis**: [DATA_OWNERSHIP_VALUE_PROPOSITION.md](./DATA_OWNERSHIP_VALUE_PROPOSITION.md)
+🎯 **Demo Script**: [DEMO_SCRIPT_INVESTOR.md](./DEMO_SCRIPT_INVESTOR.md)
+❓ **Technical Q&A**: [TECHNICAL_QA_INVESTOR.md](./TECHNICAL_QA_INVESTOR.md)
+📋 **Pitch Checklist**: [INVESTOR_PITCH_CHECKLIST.md](./INVESTOR_PITCH_CHECKLIST.md)
+
+---
+
 ## ✨ Features
 
 ### 🔍 AI-Powered OCR
