@@ -1,3 +1,27 @@
+# 🚀 GeoGraph Node: v2.9.10 Release Notes
+
+## 🧬 v2.9.10 - Critical AR Scanner Fix (2026-02-05)
+
+### 🎯 Overview
+This hotfix release resolves critical regressions in the AR Scanner that caused black screens, 50-second timeouts, and video rendering failures introduced in v2.9.8/v2.9.9.
+
+### 🐛 Issues Fixed
+- **Black Screen on Camera**: The `<video>` element was not rendering frames despite the camera being active (LED on). Fixed by using absolute positioning with inline styles and adding robust stream re-attachment logic.
+- **50-Second Timeout**: The multi-tier 4K/8K resolution negotiation caused hardware driver hangs on devices that couldn't meet the constraints. Reverted to simple, instant camera acquisition.
+- **10-Second UI Lag**: Sidebar and tab switching were frozen due to expensive un-memoized calculations running on every render. Fixed with `useMemo` optimizations.
+
+### ⚙️ Technical Changes
+- Reverted `getUserMedia` constraints to v2.1-style simplicity: `{ video: { facingMode: 'environment' } }`
+- Added `videoReady` state with loading indicator
+- Multiple play triggers (`onloadedmetadata`, `oncanplay`, `onLoadedData`) with retry logic
+- Stream re-attachment `useEffect` for cases where video ref isn't ready when stream arrives
+- Memoized `aggregatedGroups`, `drillDownAssets`, `paginatedAssets` in App.tsx
+
+### 📦 New Files
+- `public/camera-test.html` - Standalone camera diagnostic tool
+
+---
+
 # 🚀 GeoGraph Node: v2.9.9 Release Notes
 
 ## 🧬 v2.9.9 - Universal Compatibility & Lite Mode (2026-02-04)
