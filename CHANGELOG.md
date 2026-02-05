@@ -6,6 +6,7 @@ See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent majo
 ## [2.9.11] - 2026-02-05
 
 ### Architecture & Project Organization
+- **Dual-Write Database Persistence**: Implemented a mandatory dual-write strategy to ensure all data is persisted to the Loadopoly master database even when users connect their own Supabase instances.
 - **Documentation Restructuring**: Organized root-level documentation into a structured `docs/` directory with `investment/`, `technical/`, `product/`, and `legal/` subcategories to improve repository maintainability.
 - **Source Code Consolidation**: Merged `src/types.ts` into `src/types/index.ts` to eliminate redundancy and enforce a consistent modular architecture.
 - **Root Directory Cleanup**: Reduced clutter by moving non-code assets and historical research documents to appropriate documentation folders.
