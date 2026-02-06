@@ -1,0 +1,130 @@
+name: Fork Reset (Force Sync)
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'Type "RESET" to confirm (WARNING: This will discard all local changes)'
+        required: true
+        type: string
+      branch:
+        description: 'Branch to reset (default: main)'
+        required: false
+        default: 'main'
+        type: string
+
+jobs:
+  reset-fork:
+    name: Reset Fork to Upstream
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Validate confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirmation }}" != "RESET" ]; then
+            echo "❌ Error: Confirmation must be 'RESET' (case-sensitive)"
+            echo "You entered: '${{ github.event.inputs.confirmation }}'"
+            exit 1
+          fi
+          echo "✅ Confirmation validated"
+      
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.event.inputs.branch }}
+      
+      - name: Configure Git
+        run: |
+          git config user.name "Fork Reset Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Backup current state
+        run: |
+          BACKUP_BRANCH="backup-$(date +%Y%m%d-%H%M%S)"
+          git checkout -b "$BACKUP_BRANCH"
+          git push origin "$BACKUP_BRANCH"
+          echo "✅ Created backup branch: $BACKUP_BRANCH"
+          echo "BACKUP_BRANCH=$BACKUP_BRANCH" >> $GITHUB_ENV
+          git checkout ${{ github.event.inputs.branch }}
+      
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/loadopoly/Loadopoly-OCR.git || true
+          git remote set-url upstream https://github.com/loadopoly/Loadopoly-OCR.git
+          git fetch upstream
+      
+      - name: Reset to upstream
+        run: |
+          git reset --hard upstream/${{ github.event.inputs.branch }}
+          echo "✅ Reset ${{ github.event.inputs.branch }} to upstream/${{ github.event.inputs.branch }}"
+      
+      - name: Force push to origin
+        run: |
+          git push --force origin ${{ github.event.inputs.branch }}
+          echo "✅ Force pushed reset branch to origin"
+      
+      - name: Create reset notification issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🔄 Fork Reset Completed',
+              body: \`## Fork Reset Summary
+              
+              Your fork has been successfully reset to match the upstream repository.
+              
+              ### Details:
+              - **Branch reset:** \\\`${{ github.event.inputs.branch }}\\\`
+              - **Backup created:** \\\`${{ env.BACKUP_BRANCH }}\\\`
+              - **Reset by:** @${{ github.actor }}
+              - **Timestamp:** ${{ github.event.repository.updated_at }}
+              
+              ### What happened:
+              1. ✅ Created backup branch: \\\`${{ env.BACKUP_BRANCH }}\\\`
+              2. ✅ Reset \\\`${{ github.event.inputs.branch }}\\\` to \\\`upstream/${{ github.event.inputs.branch }}\\\`
+              3. ✅ Force pushed changes to your fork
+              
+              ### Next Steps:
+              
+              **If you had local changes you want to recover:**
+              \\\`\\\`\\\`bash
+              git fetch origin
+              git checkout ${{ env.BACKUP_BRANCH }}
+              git cherry-pick <commit-hash>  # Cherry-pick specific commits
+              \\\`\\\`\\\`
+              
+              **To update your local clone:**
+              \\\`\\\`\\\`bash
+              git fetch origin
+              git reset --hard origin/${{ github.event.inputs.branch }}
+              \\\`\\\`\\\`
+              
+              **To delete the backup branch (after verifying everything works):**
+              \\\`\\\`\\\`bash
+              git push origin --delete ${{ env.BACKUP_BRANCH }}
+              \\\`\\\`\\\`
+              
+              See [Fork Management Guide](docs/technical/FORK_MANAGEMENT.md) for more information.
+              
+              ---
+              *This issue was automatically created by the Fork Reset workflow.*\`,
+              labels: ['fork-reset', 'completed']
+            });
+            console.log(\`Created issue #\${issue.data.number}\`);
+      
+      - name: Summary
+        run: |
+          echo "## Fork Reset Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **Status:** Fork successfully reset" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Details:" >> $GITHUB_STEP_SUMMARY
+          echo "- **Branch:** \`${{ github.event.inputs.branch }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Backup:** \`${{ env.BACKUP_BRANCH }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Reset to:** \`upstream/${{ github.event.inputs.branch }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "⚠️  **Important:** Update your local clone with \`git fetch origin && git reset --hard origin/${{ github.event.inputs.branch }}\`" >> $GITHUB_STEP_SUMMARY
