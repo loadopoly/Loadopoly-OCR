@@ -1489,6 +1489,7 @@ class ProcessingQueueService {
   /**
    * Flush pending local jobs to server when coming back online
    * Completes the TODO at line 970 - implements local job flush logic
+   * Made public to allow manual triggering and use by continuous processing
    */
   async flushPendingJobs(): Promise<{ success: number; failed: number }> {
     if (!this.isOnline || !isSupabaseConfigured() || this.pendingLocalJobs.length === 0) {

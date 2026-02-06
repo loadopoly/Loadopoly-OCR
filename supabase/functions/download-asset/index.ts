@@ -15,7 +15,7 @@
  */
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SIGNED_URL_EXPIRY_SECONDS = 3600; // 1 hour
 const STORAGE_BUCKETS = ['processing-uploads', 'corpus-images'];
@@ -161,7 +161,7 @@ serve(async (req: Request) => {
  * Checks both storage buckets and verifies user access
  */
 async function getSignedUrlForAsset(
-  supabase: any,
+  supabase: SupabaseClient,
   userId: string,
   assetId: string,
   expiresIn: number
