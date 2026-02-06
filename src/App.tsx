@@ -71,6 +71,7 @@ import { redeemPhygitalCertificate } from './services/web3Service';
 import { getCurrentUser } from './lib/auth';
 import { fetchGlobalCorpus, contributeAssetToGlobalCorpus, fetchUserAssets, subscribeToAssetUpdates } from './services/supabaseService';
 import { processingQueueService } from './services/processingQueueService';
+import { downloadService } from './services/downloadService';
 import { compressImage } from './lib/imageCompression';
 import { WorkerPool } from './lib/workerPool';
 import { GraphVisualizerLazy as GraphVisualizer, ARSceneLazy as ARScene, SemanticCanvasLazy as SemanticCanvas, BatchImporterLazy as BatchImporter, AnnotationEditorLazy as AnnotationEditor } from './lib/lazyComponents';
@@ -2934,13 +2935,37 @@ export default function App() {
   );
 }
 
+async function downloadAsset(asset: DigitalAsset, format: 'json' | 'image' = 'image') {
+  if (format === 'json') {
+    // Export JSON metadata
+    if (!asset.sqlRecord) return;
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(asset.sqlRecord, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", `GEOGRAPH_DB_${asset.id}.json`);
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+  } else {
+    // Download binary image using download service
+    await downloadService.downloadAsset(asset, {
+      onProgress: (loaded, total) => {
+        console.log(`Download progress: ${loaded}/${total} bytes`);
+      },
+      onComplete: () => {
+        console.log(`Downloaded asset ${asset.id}`);
+      },
+      onError: (error) => {
+        console.error(`Failed to download asset ${asset.id}:`, error);
+        alert(`Failed to download image: ${error.message}\n\nTrying JSON export instead...`);
+        // Fallback to JSON export
+        downloadAsset(asset, 'json');
+      }
+    });
+  }
+}
+
+// Legacy function for backwards compatibility
 function downloadJSON(asset: DigitalAsset) {
-  if (!asset.sqlRecord) return;
-  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(asset.sqlRecord, null, 2));
-  const downloadAnchorNode = document.createElement('a');
-  downloadAnchorNode.setAttribute("href", dataStr);
-  downloadAnchorNode.setAttribute("download", `GEOGRAPH_DB_${asset.id}.json`);
-  document.body.appendChild(downloadAnchorNode);
-  downloadAnchorNode.click();
-  downloadAnchorNode.remove();
+  downloadAsset(asset, 'json');
 }
