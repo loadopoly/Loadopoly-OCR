@@ -202,6 +202,7 @@ src/
 - [WEB3_ARCHITECTURE.md](./WEB3_ARCHITECTURE.md) - Blockchain integration guide
 - [DATABASE_SETUP.md](./DATABASE_SETUP.md) - Database schema and setup
 - [PRIVACY-POLICY.md](./PRIVACY-POLICY.md) - Privacy policy
+- [FORK_MANAGEMENT.md](./docs/technical/FORK_MANAGEMENT.md) - Fork sync and reset guide
 
 ## 🔧 Key Technologies
 
@@ -222,6 +223,29 @@ src/
 3. Commit your changes (`git commit -m 'Add amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
+
+### 🔄 Managing Your Fork
+
+Keep your fork synchronized with the upstream repository using our automated tools:
+
+**Automated (GitHub Actions):**
+- **Fork Sync Workflow**: Runs weekly automatically or trigger manually from Actions tab
+- **Fork Reset Workflow**: Force reset to upstream when needed (creates backup first)
+
+**Manual (Local Scripts):**
+```bash
+# Check fork health and sync status
+bash scripts/health-check.sh
+
+# Sync with upstream (preserves local changes)
+bash scripts/sync-fork.sh
+
+# Reset to upstream (⚠️ discards local changes)
+bash scripts/reset-fork.sh
+```
+
+📖 **Full Guide:** [Fork Management Documentation](./docs/technical/FORK_MANAGEMENT.md)  
+⚡ **Quick Reference:** [Fork Management Quick Ref](./docs/technical/FORK_MANAGEMENT_QUICKREF.md)
 
 ## 📄 License
 
