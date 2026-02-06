@@ -314,14 +314,14 @@ class ProcessingQueueService {
       const { data, error } = await (supabase as any)
         .from('processing_queue')
         .insert({
-          user_id: this.userId,
-          asset_id: testId,
-          image_path: 'test/path.jpg',
-          scan_type: 'document',
-          status: 'CANCELLED', // Mark as cancelled so it won't be processed
-          priority: 1,
+          USER_ID: this.userId,
+          ASSET_ID: testId,
+          IMAGE_PATH: 'test/path.jpg',
+          SCAN_TYPE: 'document',
+          STATUS: 'CANCELLED', // Mark as cancelled so it won't be processed
+          PRIORITY: 1,
         })
-        .select('id')
+        .select('ID')
         .single();
 
       if (error) {
@@ -329,8 +329,8 @@ class ProcessingQueueService {
       } else {
         results.queueInsert = { success: true, error: undefined };
         // Clean up test record
-        if (data?.id) {
-          await (supabase as any).from('processing_queue').delete().eq('id', data.id);
+        if (data?.ID) {
+          await (supabase as any).from('processing_queue').delete().eq('ID', data.ID);
         }
       }
     } catch (e: any) {
@@ -341,8 +341,8 @@ class ProcessingQueueService {
     try {
       const { error } = await (supabase as any)
         .from('processing_queue')
-        .select('id')
-        .eq('user_id', this.userId)
+        .select('ID')
+        .eq('USER_ID', this.userId)
         .limit(1);
 
       if (error) {
@@ -479,8 +479,8 @@ class ProcessingQueueService {
       // The queue_stats view doesn't filter by user and has case issues
       const { data, error } = await (supabase as any)
         .from(QUEUE_TABLE)
-        .select('status, created_at, started_at, completed_at')
-        .eq('user_id', this.userId);
+        .select('STATUS, CREATED_AT, STARTED_AT, COMPLETED_AT')
+        .eq('USER_ID', this.userId);
       
       if (error) throw error;
       
@@ -556,11 +556,11 @@ class ProcessingQueueService {
     let query = (supabase as any)
       .from(QUEUE_TABLE)
       .select('*')
-      .eq('user_id', this.userId)
-      .order('created_at', { ascending: false });
+      .eq('USER_ID', this.userId)
+      .order('CREATED_AT', { ascending: false });
     
     if (options.status?.length) {
-      query = query.in('status', options.status);
+      query = query.in('STATUS', options.status);
     }
     if (options.limit) {
       query = query.limit(options.limit);
@@ -590,7 +590,7 @@ class ProcessingQueueService {
     const { data, error } = await (supabase as any)
       .from(QUEUE_TABLE)
       .select('*')
-      .eq('id', jobId)
+      .eq('ID', jobId)
       .single();
     
     if (error) {
@@ -618,9 +618,9 @@ class ProcessingQueueService {
     
     const { error } = await  (supabase as any)
       .from(QUEUE_TABLE)
-      .update({ status: 'CANCELLED', updated_at: new Date().toISOString() })
-      .eq('id', jobId)
-      .eq('status', 'PENDING');
+      .update({ STATUS: 'CANCELLED', UPDATED_AT: new Date().toISOString() })
+      .eq('ID', jobId)
+      .eq('STATUS', 'PENDING');
     
     if (error) {
       logger.error('Failed to cancel job', error);
@@ -641,14 +641,14 @@ class ProcessingQueueService {
     const { error } = await  (supabase as any)
       .from(QUEUE_TABLE)
       .update({
-        status: 'PENDING',
-        retry_count: 0,
-        last_error: null,
-        error_code: null,
-        updated_at: new Date().toISOString(),
+        STATUS: 'PENDING',
+        RETRY_COUNT: 0,
+        LAST_ERROR: null,
+        ERROR_CODE: null,
+        UPDATED_AT: new Date().toISOString(),
       })
-      .eq('id', jobId)
-      .eq('status', 'FAILED');
+      .eq('ID', jobId)
+      .eq('STATUS', 'FAILED');
     
     if (error) {
       logger.error('Failed to retry job', error);
@@ -700,15 +700,15 @@ class ProcessingQueueService {
       const { error } = await (supabase as any)
         .from(QUEUE_TABLE)
         .update({
-          status: 'PENDING',
-          worker_id: null,
-          locked_at: null,
-          progress: 0,
-          stage: 'FORCE_RESET',
-          updated_at: new Date().toISOString(),
+          STATUS: 'PENDING',
+          WORKER_ID: null,
+          LOCKED_AT: null,
+          PROGRESS: 0,
+          STAGE: 'FORCE_RESET',
+          UPDATED_AT: new Date().toISOString(),
         })
-        .eq('id', jobId)
-        .in('status', ['PROCESSING', 'PENDING']);
+        .eq('ID', jobId)
+        .in('STATUS', ['PROCESSING', 'PENDING']);
       
       if (error) {
         logger.error('Failed to force reset job', error);
@@ -759,9 +759,9 @@ class ProcessingQueueService {
       // First, get count of jobs to cancel
       const { data: toCancel, error: countError } = await (supabase as any)
         .from(QUEUE_TABLE)
-        .select('id')
-        .eq('user_id', this.userId)
-        .in('status', ['PENDING', 'PROCESSING']);
+        .select('ID')
+        .eq('USER_ID', this.userId)
+        .in('STATUS', ['PENDING', 'PROCESSING']);
 
       if (countError) {
         logger.error('Failed to count jobs to cancel', countError);
@@ -775,12 +775,12 @@ class ProcessingQueueService {
       const { error } = await (supabase as any)
         .from(QUEUE_TABLE)
         .update({ 
-          status: 'CANCELLED', 
-          updated_at: new Date().toISOString(),
-          last_error: 'Cancelled by user'
+          STATUS: 'CANCELLED', 
+          UPDATED_AT: new Date().toISOString(),
+          LAST_ERROR: 'Cancelled by user'
         })
-        .eq('user_id', this.userId)
-        .in('status', ['PENDING', 'PROCESSING']);
+        .eq('USER_ID', this.userId)
+        .in('STATUS', ['PENDING', 'PROCESSING']);
 
       if (error) {
         logger.error('Failed to cancel pending jobs', error);
@@ -814,8 +814,8 @@ class ProcessingQueueService {
       // Get count first
       const { data: toDelete, error: countError } = await (supabase as any)
         .from(QUEUE_TABLE)
-        .select('id')
-        .eq('user_id', this.userId);
+        .select('ID')
+        .eq('USER_ID', this.userId);
 
       if (countError) {
         logger.error('Failed to count jobs to delete', countError);
@@ -829,7 +829,7 @@ class ProcessingQueueService {
       const { error } = await (supabase as any)
         .from(QUEUE_TABLE)
         .delete()
-        .eq('user_id', this.userId);
+        .eq('USER_ID', this.userId);
 
       if (error) {
         logger.error('Failed to delete all jobs', error);
@@ -915,15 +915,15 @@ class ProcessingQueueService {
     const { data, error } = await  (supabase as any)
       .from(QUEUE_TABLE)
       .insert({
-        user_id: this.userId,
-        asset_id: params.assetId,
-        image_path: params.imagePath,
-        scan_type: params.scanType,
-        priority: params.priority,
-        latitude: params.location?.lat,
-        longitude: params.location?.lng,
-        metadata: params.metadata || {},
-        status: 'PENDING',
+        USER_ID: this.userId,
+        ASSET_ID: params.assetId,
+        IMAGE_PATH: params.imagePath,
+        SCAN_TYPE: params.scanType,
+        PRIORITY: params.priority,
+        LATITUDE: params.location?.lat,
+        LONGITUDE: params.location?.lng,
+        METADATA: params.metadata || {},
+        STATUS: 'PENDING',
       })
       .select()
       .single();
@@ -1144,12 +1144,12 @@ class ProcessingQueueService {
             event: '*',
             schema: 'public',
             table: QUEUE_TABLE,
-            filter: `user_id=eq.${this.userId}`,
+            filter: `USER_ID=eq.${this.userId}`,
           },
           (payload: any) => {
             logger.debug('Job update received', { 
-              jobId: payload.new?.id, 
-              status: payload.new?.status,
+              jobId: payload.new?.ID, 
+              status: payload.new?.STATUS,
               event: payload.eventType
             });
             this.handleJobUpdate(payload);
@@ -1264,12 +1264,12 @@ class ProcessingQueueService {
           event: '*', // Listen to INSERT, UPDATE, DELETE
           schema: 'public',
           table: QUEUE_TABLE,
-          filter: `user_id=eq.${userId}`
+          filter: `USER_ID=eq.${userId}`
         },
         (payload: any) => {
           logger.debug('Realtime job update received', { 
             event: payload.eventType, 
-            jobId: payload.new?.id 
+            jobId: payload.new?.ID 
           });
           
           if (payload.new) {
@@ -1310,7 +1310,7 @@ class ProcessingQueueService {
       const { data, error } = await (supabase as any)
         .from(QUEUE_TABLE)
         .select('*')
-        .eq('id', jobId)
+        .eq('ID', jobId)
         .single();
 
       if (error) {
@@ -1338,9 +1338,9 @@ class ProcessingQueueService {
       const { data, error } = await (supabase as any)
         .from(QUEUE_TABLE)
         .select('*')
-        .eq('user_id', this.userId)
-        .in('status', ['PENDING', 'PROCESSING'])
-        .order('created_at', { ascending: false });
+        .eq('USER_ID', this.userId)
+        .in('STATUS', ['PENDING', 'PROCESSING'])
+        .order('CREATED_AT', { ascending: false });
 
       if (error) {
         logger.error('Failed to poll active jobs', error);
