@@ -324,6 +324,8 @@ Or use the automated GitHub Actions workflow (runs weekly automatically).
 
 ## Troubleshooting
 
+For comprehensive troubleshooting, see: [Fork Troubleshooting Guide](./FORK_TROUBLESHOOTING.md)
+
 ### Issue: "Not in a git repository"
 
 **Error:**
@@ -577,6 +579,9 @@ gh run view <run-id> --log
 
 ## Related Documentation
 
+- [Fork Troubleshooting Guide](./FORK_TROUBLESHOOTING.md) - Comprehensive troubleshooting for fork issues
+- [Fork Management Diagrams](./FORK_MANAGEMENT_DIAGRAMS.md) - Visual workflow diagrams
+- [Quick Reference Guide](./FORK_MANAGEMENT_QUICKREF.md) - Quick command reference
 - [GitHub Forking Guide](https://docs.github.com/en/get-started/quickstart/fork-a-repo)
 - [Git Branching and Merging](https://git-scm.com/book/en/v2/Git-Branching-Basic-Branching-and-Merging)
 - [Loadopoly-OCR Contributing Guide](../README.md#contributing)
