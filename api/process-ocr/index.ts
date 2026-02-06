@@ -133,7 +133,18 @@ Deno.serve(async (req: Request) => {
       });
 
       if (error || !data?.length) break;
-      jobs.push(data[0]);
+      // Normalize: SQL RETURNS TABLE may use 'job_id' or 'id'
+      const row = data[0];
+      jobs.push({
+        id: row.id || row.job_id,
+        asset_id: row.asset_id || row.ASSET_ID,
+        image_path: row.image_path || row.IMAGE_PATH,
+        scan_type: row.scan_type || row.SCAN_TYPE,
+        user_id: row.user_id || row.USER_ID,
+        latitude: row.latitude || row.LATITUDE,
+        longitude: row.longitude || row.LONGITUDE,
+        metadata: row.metadata || row.METADATA,
+      });
     }
 
     if (jobs.length === 0) {

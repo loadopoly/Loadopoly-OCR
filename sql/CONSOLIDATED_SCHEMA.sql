@@ -439,7 +439,7 @@ END $$;
 -- 7.1 Claim Processing Job
 CREATE OR REPLACE FUNCTION claim_processing_job(p_worker_id TEXT)
 RETURNS TABLE (
-    job_id UUID,
+    id UUID,
     asset_id TEXT,
     image_path TEXT,
     scan_type TEXT,
