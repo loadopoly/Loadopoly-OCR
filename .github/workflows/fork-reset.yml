@@ -18,6 +18,10 @@ jobs:
     name: Reset Fork to Upstream
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write
+      issues: write
+    
     steps:
       - name: Validate confirmation
         run: |

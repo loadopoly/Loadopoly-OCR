@@ -16,6 +16,10 @@ jobs:
     name: Sync Fork with Upstream
     runs-on: ubuntu-latest
     
+    permissions:
+      contents: write
+      issues: write
+    
     steps:
       - name: Checkout fork
         uses: actions/checkout@v4
