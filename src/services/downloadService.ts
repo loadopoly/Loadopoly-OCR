@@ -223,8 +223,10 @@ class DownloadService {
     }
 
     // Create ZIP (using JSZip if available, otherwise download individually)
-    if (typeof window !== 'undefined' && (window as any).JSZip) {
-      const JSZip = (window as any).JSZip;
+    // Check if JSZip is loaded globally (via CDN or module)
+    const JSZip = (window as any).JSZip;
+    
+    if (typeof JSZip !== 'undefined') {
       const zip = new JSZip();
 
       files.forEach(file => {
@@ -351,6 +353,8 @@ class DownloadService {
       onProgress?.(loaded, total);
     }
 
+    // Type assertion needed: Uint8Array<ArrayBufferLike> is not directly assignable to BlobPart
+    // but is compatible at runtime
     return new Blob(chunks as BlobPart[]);
   }
 
