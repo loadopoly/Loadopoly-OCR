@@ -1,0 +1,131 @@
+name: Fork Sync with Upstream
+
+on:
+  # Allow manual trigger
+  workflow_dispatch:
+  # Automatically check for updates weekly
+  schedule:
+    - cron: '0 0 * * 0' # Every Sunday at midnight UTC
+  # Trigger on push to main branch (for testing)
+  push:
+    branches:
+      - main
+
+jobs:
+  sync-fork:
+    name: Sync Fork with Upstream
+    runs-on: ubuntu-latest
+    
+    permissions:
+      contents: write
+      issues: write
+    
+    steps:
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Configure Git
+        run: |
+          git config user.name "Fork Sync Bot"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      
+      - name: Add upstream remote
+        run: |
+          git remote add upstream https://github.com/loadopoly/Loadopoly-OCR.git || true
+          git remote set-url upstream https://github.com/loadopoly/Loadopoly-OCR.git
+      
+      - name: Fetch upstream changes
+        run: |
+          git fetch upstream
+          echo "✅ Fetched latest changes from upstream"
+      
+      - name: Check for conflicts
+        id: check_conflicts
+        run: |
+          # Check if merge would create conflicts
+          git merge-tree $(git merge-base HEAD upstream/main) HEAD upstream/main > /tmp/merge-check.txt
+          if grep -q "^<<<<<" /tmp/merge-check.txt; then
+            echo "conflicts=true" >> $GITHUB_OUTPUT
+            echo "⚠️  Merge conflicts detected"
+          else
+            echo "conflicts=false" >> $GITHUB_OUTPUT
+            echo "✅ No merge conflicts detected"
+          fi
+      
+      - name: Merge upstream changes (if no conflicts)
+        if: steps.check_conflicts.outputs.conflicts == 'false'
+        run: |
+          git merge upstream/main --no-edit
+          echo "✅ Successfully merged upstream/main"
+      
+      - name: Push changes
+        if: steps.check_conflicts.outputs.conflicts == 'false'
+        run: |
+          git push origin main
+          echo "✅ Pushed updated fork to origin/main"
+      
+      - name: Create conflict resolution issue
+        if: steps.check_conflicts.outputs.conflicts == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '⚠️ Fork Sync: Manual Conflict Resolution Required',
+              body: `## Fork Sync Conflict Detected
+              
+              The automated fork sync detected merge conflicts that require manual resolution.
+              
+              ### Resolution Steps:
+              
+              1. **Clone your fork locally:**
+                 \`\`\`bash
+                 git clone https://github.com/${context.repo.owner}/${context.repo.repo}.git
+                 cd ${context.repo.repo}
+                 \`\`\`
+              
+              2. **Add upstream remote:**
+                 \`\`\`bash
+                 git remote add upstream https://github.com/loadopoly/Loadopoly-OCR.git
+                 git fetch upstream
+                 \`\`\`
+              
+              3. **Merge and resolve conflicts:**
+                 \`\`\`bash
+                 git merge upstream/main
+                 # Resolve conflicts in your editor
+                 git add .
+                 git commit -m "Resolve merge conflicts with upstream"
+                 git push origin main
+                 \`\`\`
+              
+              4. **Or use the reset script (WARNING: loses local changes):**
+                 \`\`\`bash
+                 bash scripts/reset-fork.sh
+                 \`\`\`
+              
+              See [Fork Management Guide](docs/technical/FORK_MANAGEMENT.md) for detailed instructions.
+              
+              ---
+              *This issue was automatically created by the Fork Sync workflow.*`,
+              labels: ['fork-sync', 'needs-resolution']
+            });
+            console.log(\`Created issue #\${issue.data.number}\`);
+      
+      - name: Summary
+        run: |
+          echo "## Fork Sync Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ steps.check_conflicts.outputs.conflicts }}" == "true" ]; then
+            echo "⚠️  **Status:** Conflicts detected - manual resolution required" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "An issue has been created with resolution instructions." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "✅ **Status:** Successfully synced with upstream" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Your fork is now up to date with \`loadopoly/Loadopoly-OCR\`" >> $GITHUB_STEP_SUMMARY
+          fi
