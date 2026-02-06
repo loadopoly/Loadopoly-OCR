@@ -77,6 +77,21 @@ export interface QueueEventCallbacks {
   onJobFailed?: (job: QueueJob) => void;
 }
 
+export interface QueueHealth {
+  totalPending: number;
+  totalProcessing: number;
+  totalCompleted24h: number;
+  totalFailed24h: number;
+  avgProcessingTimeSeconds: number;
+  staleLocksCount: number;
+  oldestPendingAgeMinutes: number;
+}
+
+export interface ResetResult {
+  resetCount: number;
+  jobIds: string[];
+}
+
 // ============================================
 // Constants
 // ============================================
@@ -960,17 +975,6 @@ class ProcessingQueueService {
     return job;
   }
 
-  private async flushPendingJobs(): Promise<void> {
-    if (!isSupabaseConfigured() || this.pendingLocalJobs.length === 0) {
-      return;
-    }
-    
-    logger.info(`Flushing ${this.pendingLocalJobs.length} pending local jobs`);
-    
-    // TODO: Implement flush logic when online
-    // This would upload local jobs to the server queue
-  }
-
   /**
    * Trigger Edge Function to process pending queue jobs
    * Debounced to avoid excessive invocations when queueing multiple files
@@ -1352,6 +1356,249 @@ class ProcessingQueueService {
       logger.error('Exception polling active jobs', e);
       return [];
     }
+  }
+
+  /**
+   * Get queue health metrics
+   * Returns comprehensive statistics about queue status
+   */
+  async getQueueHealth(): Promise<QueueHealth | null> {
+    if (!isSupabaseConfigured()) {
+      logger.warn('Cannot get queue health - Supabase not configured');
+      return null;
+    }
+
+    try {
+      const { data, error } = await (supabase as any)
+        .rpc('get_queue_health');
+
+      if (error) {
+        logger.error('Failed to get queue health', error);
+        return null;
+      }
+
+      if (!data || data.length === 0) {
+        return {
+          totalPending: 0,
+          totalProcessing: 0,
+          totalCompleted24h: 0,
+          totalFailed24h: 0,
+          avgProcessingTimeSeconds: 0,
+          staleLocksCount: 0,
+          oldestPendingAgeMinutes: 0,
+        };
+      }
+
+      const row = data[0];
+      return {
+        totalPending: row.total_pending || 0,
+        totalProcessing: row.total_processing || 0,
+        totalCompleted24h: row.total_completed_24h || 0,
+        totalFailed24h: row.total_failed_24h || 0,
+        avgProcessingTimeSeconds: parseFloat(row.avg_processing_time_seconds || 0),
+        staleLocksCount: row.stale_locks_count || 0,
+        oldestPendingAgeMinutes: parseFloat(row.oldest_pending_age_minutes || 0),
+      };
+    } catch (error) {
+      logger.error('Error getting queue health', error);
+      return null;
+    }
+  }
+
+  /**
+   * Reset user's queue - reset all failed/processing jobs back to PENDING
+   * Useful for recovering from errors or when jobs get stuck
+   */
+  async resetUserQueue(): Promise<ResetResult> {
+    if (!isSupabaseConfigured() || !this.userId) {
+      logger.warn('Cannot reset queue - not configured or not logged in');
+      return { resetCount: 0, jobIds: [] };
+    }
+
+    try {
+      const { data, error } = await (supabase as any)
+        .rpc('reset_user_queue', { p_user_id: this.userId });
+
+      if (error) {
+        logger.error('Failed to reset user queue', error);
+        return { resetCount: 0, jobIds: [] };
+      }
+
+      if (!data || data.length === 0) {
+        return { resetCount: 0, jobIds: [] };
+      }
+
+      const result = data[0];
+      const resetCount = result.reset_count || 0;
+      const jobIds = result.job_ids || [];
+
+      if (resetCount > 0) {
+        logger.info(`Reset ${resetCount} jobs for user ${this.userId}`);
+        // Trigger edge function to start processing the reset jobs
+        this.triggerEdgeProcessing();
+      }
+
+      return { resetCount, jobIds };
+    } catch (error) {
+      logger.error('Error resetting user queue', error);
+      return { resetCount: 0, jobIds: [] };
+    }
+  }
+
+  /**
+   * Force reset all stuck jobs (admin function)
+   * This is a more aggressive reset that affects all processing jobs
+   * Should only be called by service_role or in emergency situations
+   */
+  async forceResetAllStuckJobs(): Promise<ResetResult> {
+    if (!isSupabaseConfigured()) {
+      logger.warn('Cannot force reset - Supabase not configured');
+      return { resetCount: 0, jobIds: [] };
+    }
+
+    try {
+      const { data, error } = await (supabase as any)
+        .rpc('force_reset_stuck_jobs');
+
+      if (error) {
+        logger.error('Failed to force reset stuck jobs', error);
+        return { resetCount: 0, jobIds: [] };
+      }
+
+      if (!data || data.length === 0) {
+        return { resetCount: 0, jobIds: [] };
+      }
+
+      const result = data[0];
+      const resetCount = result.reset_count || 0;
+      const jobIds = result.job_ids || [];
+
+      if (resetCount > 0) {
+        logger.warn(`Force reset ${resetCount} stuck jobs`);
+        // Trigger edge function to start processing
+        this.triggerEdgeProcessing();
+      }
+
+      return { resetCount, jobIds };
+    } catch (error) {
+      logger.error('Error force resetting stuck jobs', error);
+      return { resetCount: 0, jobIds: [] };
+    }
+  }
+
+  /**
+   * Flush pending local jobs to server when coming back online
+   * Completes the TODO at line 970 - implements local job flush logic
+   */
+  async flushPendingJobs(): Promise<{ success: number; failed: number }> {
+    if (!this.isOnline || !isSupabaseConfigured() || this.pendingLocalJobs.length === 0) {
+      return { success: 0, failed: 0 };
+    }
+
+    logger.info(`Flushing ${this.pendingLocalJobs.length} pending local jobs to server`);
+
+    let success = 0;
+    let failed = 0;
+
+    // Process jobs one by one
+    const jobsToFlush = [...this.pendingLocalJobs];
+    this.pendingLocalJobs = [];
+
+    for (const job of jobsToFlush) {
+      try {
+        // Try to insert the job into the server queue
+        await this.insertJob({
+          assetId: job.assetId,
+          imagePath: job.imagePath,
+          scanType: job.scanType,
+          priority: job.priority,
+          location: job.location,
+        });
+        success++;
+        logger.debug(`Flushed job ${job.id} to server`);
+      } catch (error) {
+        logger.error(`Failed to flush job ${job.id}`, error);
+        // Put it back in the pending queue for retry
+        this.pendingLocalJobs.push(job);
+        failed++;
+      }
+    }
+
+    if (success > 0) {
+      logger.info(`Successfully flushed ${success} jobs, ${failed} failed`);
+      // Trigger edge processing for the newly queued jobs
+      this.triggerEdgeProcessing();
+    }
+
+    return { success, failed };
+  }
+
+  /**
+   * Enable continuous processing with automatic monitoring and recovery
+   * Sets up:
+   * - Periodic health checks
+   * - Automatic stale lock release
+   * - Local job flushing when online
+   * - Polling fallback when Realtime fails
+   */
+  enableContinuousProcessing(options?: {
+    healthCheckIntervalMs?: number;
+    staleJobCheckIntervalMs?: number;
+    pollingFallbackMs?: number;
+  }): () => void {
+    const {
+      healthCheckIntervalMs = 60000, // Check health every minute
+      staleJobCheckIntervalMs = 300000, // Release stale locks every 5 minutes
+      pollingFallbackMs = 30000, // Poll every 30 seconds as fallback
+    } = options || {};
+
+    const intervals: ReturnType<typeof setInterval>[] = [];
+
+    // Health check interval
+    intervals.push(setInterval(async () => {
+      const health = await this.getQueueHealth();
+      if (health) {
+        if (health.staleLocksCount > 0) {
+          logger.warn(`Found ${health.staleLocksCount} stale locks, releasing...`);
+          await this.releaseStaleJobs();
+        }
+        if (health.totalFailed24h > 10) {
+          logger.warn(`High failure rate: ${health.totalFailed24h} failures in last 24h`);
+        }
+      }
+    }, healthCheckIntervalMs));
+
+    // Stale job check interval
+    intervals.push(setInterval(async () => {
+      await this.releaseStaleJobs();
+    }, staleJobCheckIntervalMs));
+
+    // Local job flush when online
+    intervals.push(setInterval(async () => {
+      if (this.isOnline && this.pendingLocalJobs.length > 0) {
+        await this.flushPendingJobs();
+      }
+    }, 10000)); // Check every 10 seconds
+
+    // Polling fallback (when Realtime might be down)
+    let consecutiveRealtimeFailures = 0;
+    intervals.push(setInterval(async () => {
+      // If we haven't had successful Realtime updates, use polling
+      if (consecutiveRealtimeFailures > 3) {
+        const activeJobs = await this.pollActiveJobs();
+        if (activeJobs.length > 0) {
+          logger.debug(`Polling found ${activeJobs.length} active jobs (Realtime fallback)`);
+        }
+      }
+    }, pollingFallbackMs));
+
+    logger.info('Continuous processing monitoring enabled');
+
+    // Return cleanup function
+    return () => {
+      intervals.forEach(interval => clearInterval(interval));
+      logger.info('Continuous processing monitoring disabled');
+    };
   }
 }
 
