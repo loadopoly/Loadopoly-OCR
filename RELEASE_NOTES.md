@@ -1,3 +1,36 @@
+# 🚀 GeoGraph Node: v2.10.1 Release Notes
+
+## 🔧 v2.10.1 — Queue Processing & Upload Fix (2026-02-11)
+
+### 🎯 Overview
+This patch resolves three compounding issues that caused 121/150 asset uploads to fail, Edge Function processing to silently return 0 jobs, and queue counts to be inflated by duplicate rows.
+
+### 🐛 Issues Fixed
+- **"The resource already exists" (121 failures)**: `uploadToStorage()` used `upsert: false`, causing re-queued assets to fail on storage upload. Switched to `upsert: true` with a 409 fallback.
+- **"Processed 0 jobs" (Edge Function)**: The claim loop merged RPC errors with empty-queue into a single `break`, silently hiding the real error. Now logs errors distinctly and returns `claimError` to the client.
+- **157 vs 150 count mismatch**: Duplicate PENDING rows were created when `requeueLocalAssets()` succeeded server-side but failed to update IndexedDB locally, causing the asset to retry and insert again. Fixed with optimistic local writes and cancel-before-insert logic.
+
+### ⚙️ Technical Changes
+- `processingQueueService.uploadToStorage()` — `upsert: true`, 409 graceful fallback
+- `processingQueueService.insertJob()` — cancels existing active jobs before inserting
+- `processingQueueService.requeueLocalAssets()` — writes IndexedDB before server calls
+- `processingQueueService.getStats()` — deduplicates by ASSET_ID per status
+- `processingQueueService.invokeEdgeFunction()` — returns `claimError` field
+- `supabase/functions/process-ocr/index.ts` — split error/empty-data handling, log+propagate claim errors
+- `api/process-ocr/index.ts` — same claim loop fix (mirror copy)
+- `QueueMonitor.tsx` — actionable error alerts, stale-lock release dialog, grouped error display
+
+### 📦 New Files
+- `sql/FIX_QUEUE_DUPLICATES.sql` — run in Supabase SQL Editor to clean existing duplicates, add partial unique index, reduce lock timeout, release stale locks
+
+### 🚀 Deployment Checklist
+1. Push to main (Vercel auto-deploys frontend)
+2. Run `sql/FIX_QUEUE_DUPLICATES.sql` in Supabase SQL Editor
+3. Run `supabase functions deploy process-ocr`
+4. Test upload + processing on mobile
+
+---
+
 # 🚀 GeoGraph Node: v2.10.0 Release Notes
 
 ## 🧬 v2.10.0 - Fork Management & Download Services (2026-02-11)

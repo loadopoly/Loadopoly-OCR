@@ -510,16 +510,27 @@ class ProcessingQueueService {
       let totalProcessingTime = 0;
       let completedCount = 0;
       
+      // Track unique ASSET_IDs per active status to avoid counting duplicates
+      const seenPendingAssets = new Set<string>();
+      const seenProcessingAssets = new Set<string>();
+      
       data?.forEach((row: any) => {
         // Handle both lowercase and uppercase column names
         const status = (row.status || row.STATUS || '').toUpperCase();
+        const assetId = row.asset_id || row.ASSET_ID || '';
         
         switch (status) {
           case 'PENDING':
-            stats.pending++;
+            if (!seenPendingAssets.has(assetId)) {
+              seenPendingAssets.add(assetId);
+              stats.pending++;
+            }
             break;
           case 'PROCESSING':
-            stats.processing++;
+            if (!seenProcessingAssets.has(assetId)) {
+              seenProcessingAssets.add(assetId);
+              stats.processing++;
+            }
             break;
           case 'COMPLETED':
             stats.completed++;
@@ -881,7 +892,7 @@ class ProcessingQueueService {
     
     const uploadOptions: any = {
       cacheControl: '3600',
-      upsert: false,
+      upsert: true,
     };
     
     // Add duplex option for larger files to handle streaming properly
@@ -901,9 +912,15 @@ class ProcessingQueueService {
           return path;
         }
         
+        // If file already exists (409), treat as success — re-queue scenario
+        if (error.statusCode === 409 || error.message?.includes('already exists')) {
+          logger.debug(`Storage file already exists for ${assetId}, continuing with existing path`);
+          return path;
+        }
+        
         lastError = new Error(`Storage upload failed: ${error.message}`);
         
-        // Don't retry on 4xx errors (client errors)
+        // Don't retry on other 4xx errors (client errors)
         if (error.statusCode && error.statusCode >= 400 && error.statusCode < 500) {
           break;
         }
@@ -927,7 +944,30 @@ class ProcessingQueueService {
     location?: { lat: number; lng: number };
     metadata?: Record<string, unknown>;
   }): Promise<QueueJob> {
-    const { data, error } = await  (supabase as any)
+    // Cancel any existing PENDING/PROCESSING jobs for the same asset to prevent duplicates
+    try {
+      const { data: existing } = await (supabase as any)
+        .from(QUEUE_TABLE)
+        .select('ID, STATUS')
+        .eq('USER_ID', this.userId)
+        .eq('ASSET_ID', params.assetId)
+        .in('STATUS', ['PENDING', 'PROCESSING']);
+      
+      if (existing && existing.length > 0) {
+        logger.debug(`Cancelling ${existing.length} existing active job(s) for asset ${params.assetId}`);
+        await (supabase as any)
+          .from(QUEUE_TABLE)
+          .update({ STATUS: 'CANCELLED', LAST_ERROR: 'Superseded by re-queue' })
+          .eq('USER_ID', this.userId)
+          .eq('ASSET_ID', params.assetId)
+          .in('STATUS', ['PENDING', 'PROCESSING']);
+      }
+    } catch (cancelErr: any) {
+      logger.warn(`Failed to cancel existing jobs for ${params.assetId}: ${cancelErr.message}`);
+      // Continue with insert — duplicate is better than no job
+    }
+
+    const { data, error } = await (supabase as any)
       .from(QUEUE_TABLE)
       .insert({
         USER_ID: this.userId,
@@ -999,7 +1039,7 @@ class ProcessingQueueService {
    * Invoke the process-ocr Edge Function to process pending jobs
    * Can be called directly or via trigger
    */
-  async invokeEdgeFunction(maxJobs: number = 5): Promise<{ processed: number; succeeded: number; failed: number } | null> {
+  async invokeEdgeFunction(maxJobs: number = 5): Promise<{ processed: number; succeeded: number; failed: number; claimError?: string } | null> {
     if (!isSupabaseConfigured() || !supabase) {
       logger.warn('Cannot invoke Edge Function: Supabase not configured');
       return null;
@@ -1021,6 +1061,7 @@ class ProcessingQueueService {
         processed: data?.processed ?? 0,
         succeeded: data?.succeeded ?? 0,
         failed: data?.failed ?? 0,
+        claimError: data?.claimError,
       };
     } catch (error: any) {
       logger.error('Failed to invoke Edge Function', { error: error.message });
@@ -1083,18 +1124,9 @@ class ProcessingQueueService {
         // Create a File from the Blob
         const file = new File([imageBlob], `${asset.id}.jpg`, { type: imageBlob.type || 'image/jpeg' });
         
-        // Upload to storage
-        const imagePath = await this.uploadToStorage(asset.id, file);
-        
-        // Insert job into queue (will be picked up by Edge Function)
-        await this.insertJob({
-          assetId: asset.id,
-          imagePath,
-          scanType: (asset.scanType as ScanType) || ScanType.DOCUMENT,
-          priority: 5,
-        });
-        
-        // Update local IndexedDB to mark as PROCESSING (queued on server)
+        // Mark local asset as PROCESSING optimistically BEFORE server calls
+        // This prevents the partial-success window where server insert succeeds
+        // but local update fails, causing duplicate queue rows on retry
         const localAsset = assetMap.get(asset.id);
         if (localAsset) {
           const updatedAsset: DigitalAsset = {
@@ -1104,8 +1136,20 @@ class ProcessingQueueService {
             progress: 5, // Initial progress to show it's been sent
           };
           await saveAsset(updatedAsset);
-          logger.debug(`Updated local asset ${asset.id} to PROCESSING`);
         }
+        
+        // Upload to storage (upsert: true handles re-uploads gracefully)
+        const imagePath = await this.uploadToStorage(asset.id, file);
+        
+        // Insert job into queue (cancels any existing active jobs for same asset)
+        await this.insertJob({
+          assetId: asset.id,
+          imagePath,
+          scanType: (asset.scanType as ScanType) || ScanType.DOCUMENT,
+          priority: 5,
+        });
+        
+        logger.debug(`Updated local asset ${asset.id} to PROCESSING`);
         
         results.queued++;
         logger.debug(`Re-queued asset ${asset.id}`);

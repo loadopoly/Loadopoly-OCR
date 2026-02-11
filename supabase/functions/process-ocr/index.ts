@@ -127,12 +127,18 @@ Deno.serve(async (req: Request) => {
 
     // Claim jobs from queue
     const jobs: ProcessingJob[] = [];
+    let claimError: string | null = null;
     for (let i = 0; i < maxJobs; i++) {
       const { data, error } = await supabase.rpc('claim_processing_job', {
         p_worker_id: workerId,
       });
 
-      if (error || !data?.length) break;
+      if (error) {
+        console.error(`[${workerId}] claim_processing_job RPC error:`, error);
+        claimError = error.message || 'Unknown RPC error';
+        break;
+      }
+      if (!data?.length) break;
       // Normalize: SQL RETURNS TABLE may use 'job_id' or 'id'
       const row = data[0];
       jobs.push({
@@ -148,8 +154,20 @@ Deno.serve(async (req: Request) => {
     }
 
     if (jobs.length === 0) {
+      // Distinguish between "no pending jobs" and "claim failed"
+      const reason = claimError
+        ? `claim_processing_job failed: ${claimError}`
+        : 'No pending jobs in queue';
+      console.log(`[${workerId}] ${reason}`);
       return new Response(
-        JSON.stringify({ message: 'No pending jobs', workerId }),
+        JSON.stringify({ 
+          message: reason, 
+          workerId, 
+          processed: 0, 
+          succeeded: 0, 
+          failed: 0,
+          claimError: claimError || undefined,
+        }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
