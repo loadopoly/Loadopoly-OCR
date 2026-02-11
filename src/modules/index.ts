@@ -59,7 +59,7 @@ import { openAIProvider } from './llm/openai';
 import { MockLLMProvider } from './llm/abstract';
 import { supabaseStorage } from './storage/supabase';
 import { InMemoryStorage } from './storage/abstract';
-import { featureFlags, LocalStorageFeatureFlagProvider } from './featureFlags';
+import { featureFlags, LocalStorageFeatureFlagProvider, EnvironmentFeatureFlagProvider } from './featureFlags';
 import { loadBuiltinPlugins, loadConfiguredPlugins } from './plugins';
 import { logger } from '../lib/logger';
 
@@ -91,7 +91,7 @@ export async function initializeModuleSystem(config: ModuleSystemConfig = {}): P
 
   // Initialize feature flags first
   const ffProvider = config.featureFlagProvider === 'environment'
-    ? new (await import('./featureFlags')).EnvironmentFeatureFlagProvider()
+    ? new EnvironmentFeatureFlagProvider()
     : new LocalStorageFeatureFlagProvider();
   
   await featureFlags.init(ffProvider);
