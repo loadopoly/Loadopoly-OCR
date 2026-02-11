@@ -19,6 +19,15 @@ All database migration and fix scripts are located in the `sql/` directory.
 ### Primary Schema (v3.0.0+)
 - **`sql/CONSOLIDATED_SCHEMA.sql`**: ⭐ **Single source of truth** - Complete idempotent schema setup
 
+### Verification & Repair Scripts
+- **`sql/FIX_SCHEMA_AND_TRIGGERS.sql`**: Schema verification and repair tool (v1.2.0)
+  - Verifies uppercase column naming consistency
+  - Repairs missing avatar records for existing users
+  - Validates and fixes RLS policies
+  - **NEW**: Detects queue_stats view discrepancies (global vs user-filtered counts)
+  - **NEW**: Creates `get_queue_stats_for_user(user_id)` function for accurate user-specific statistics
+  - Safe to run multiple times (idempotent)
+
 ### Legacy Scripts (for reference)
 - `sql/COMPLETE_SCHEMA_SETUP_V2.8.1.sql`: Complete idempotent schema setup for v2.9+ (includes backward compatibility)
 - `sql/PROCESSING_QUEUE_SCHEMA.sql`: Background processing queue setup
@@ -84,6 +93,33 @@ $$ LANGUAGE plpgsql;
 ```
 
 This enables the edge function to save `USER_ID` to `historical_documents_global`, which is required for Realtime subscription filtering.
+
+## ⚠️ Important: Queue Statistics Accuracy (v2.10.0+)
+
+### Known Issue: queue_stats View Returns Global Counts
+
+The `queue_stats` view in CONSOLIDATED_SCHEMA.sql returns **global counts** across all users without USER_ID filtering. This can cause confusion when comparing with application-side statistics that correctly filter by user.
+
+**Example Discrepancy:**
+- `queue_stats` view shows: 157 total jobs (all users)
+- App UI shows: 150 jobs (current user only)
+- Difference: 7 jobs belong to other users
+
+**Solution:**
+
+Run `sql/FIX_SCHEMA_AND_TRIGGERS.sql` which:
+1. Creates a new `get_queue_stats_for_user(user_id)` function for accurate user-specific stats
+2. Provides verification queries showing both global and per-user counts
+3. Detects orphaned jobs (NULL USER_ID) and jobs referencing deleted users
+4. Displays automatic warnings when discrepancies are found
+
+**Usage:**
+```sql
+-- Get accurate stats for a specific user
+SELECT * FROM get_queue_stats_for_user('your-user-id-uuid');
+```
+
+**Note:** The application code (`processingQueueService.ts`) already uses direct queries with USER_ID filtering, so this is primarily a verification and debugging tool.
 
 ## 1. Create a Storage Bucket
 1. Log in to your Supabase Dashboard.

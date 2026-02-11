@@ -1,8 +1,13 @@
 -- =============================================
 -- SCHEMA AND TRIGGER VERIFICATION/REPAIR SCRIPT
 -- =============================================
--- Version: 1.1.0
+-- Version: 1.2.0
 -- Updated: 2026-02-11
+-- Compatible with: CONSOLIDATED_SCHEMA.sql v3.0.0+
+--
+-- PREREQUISITES:
+-- - Run CONSOLIDATED_SCHEMA.sql first to set up base schema
+-- - This script verifies and repairs schema-specific issues
 --
 -- This script verifies and repairs:
 -- 1. Uppercase column naming consistency
@@ -13,9 +18,13 @@
 -- 6. Orphaned processing queue jobs
 --
 -- IMPORTANT NOTES:
--- - The queue_stats VIEW returns GLOBAL counts without USER_ID filtering
--- - Client-side code correctly uses direct queries with USER_ID filtering
+-- - The queue_stats VIEW (in CONSOLIDATED_SCHEMA.sql) returns GLOBAL counts 
+--   without USER_ID filtering
+-- - Client-side code (processingQueueService.ts) correctly uses direct queries 
+--   with USER_ID filtering
 -- - Use get_queue_stats_for_user(user_id) for accurate user-specific stats
+-- - This function is created by this script and can be added to 
+--   CONSOLIDATED_SCHEMA.sql in future versions
 --
 -- SAFE TO RUN MULTIPLE TIMES (Idempotent)
 -- =============================================
