@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.10.2] - 2026-02-11
+
+### Bug Fixes — Database Functions
+- **Edge Function "relation processing_queue does not exist"**: All 5 queue functions (`claim_processing_job`, `complete_processing_job`, `fail_processing_job`, `update_job_progress`, `release_stale_locks`) used bare `processing_queue` table references with `SET search_path = ''`, making PostgreSQL unable to resolve the table. Recreated with fully-qualified `public.processing_queue` and double-quoted uppercase column names (`"STATUS"`, `"WORKER_ID"`, etc.) to match the actual table schema.
+- **Trigger "record new has no field bundle_id"**: `update_bundle_asset_count` trigger on `historical_documents_global` used unquoted `NEW.BUNDLE_ID` (folded to lowercase by PostgreSQL) but actual column is `"BUNDLE_ID"` (uppercase). Fixed with `NEW."BUNDLE_ID"`.
+- **Auto-trigger never firing**: `invoke_processing_worker` trigger on `processing_queue` INSERT silently failed (caught by `EXCEPTION WHEN OTHERS`) because it accessed `NEW.status` instead of `NEW."STATUS"`. Fixed with quoted uppercase column names.
+- **Partnership timestamp trigger**: `update_partnership_timestamp` used unquoted `NEW.UPDATED_AT` → fixed to `NEW."UPDATED_AT"`.
+
+### Root Cause
+The Supabase linter fix script (`FIX_FUNCTION_SEARCH_PATH.sql`) correctly applied `SET search_path = ''` to all functions for security, but the function bodies were never updated to use schema-qualified table names (`public.tablename`) or double-quoted uppercase column names. This created a systemic mismatch where functions compiled fine but failed at runtime.
+
+### New Files
+- **`sql/FIX_FUNCTION_SEARCH_PATH_V2.sql`**: Recreates all 8 affected functions with correct schema qualification and column quoting.
+
 ## [2.10.1] - 2026-02-11
 
 ### Bug Fixes — Processing Queue
