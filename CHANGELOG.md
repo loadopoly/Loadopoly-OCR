@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.10.0] - 2026-02-11
+
+### Infrastructure & Operations
+- **Fork Management Implementation**: Deployed automated GitHub workflows, `health-check.sh`, `sync-fork.sh`, and `reset-fork.sh` scripts to streamline remote repository synchronization and troubleshooting.
+- **Download Service Implementation**: Added support for binary downloads, real-time progress tracking, and on-the-fly ZIP archive generation for processed datasets.
+- **Queue Management Enhancements**: Introduced remote reset RPCs, queue health metrics, and continuous retry logic to ensure reliable long-running OCR processing.
+
 ## [2.9.11] - 2026-02-05
 
 ### Architecture & Project Organization
