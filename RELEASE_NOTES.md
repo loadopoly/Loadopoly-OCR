@@ -1,4 +1,34 @@
-# 🚀 GeoGraph Node: v2.10.1 Release Notes
+# 🚀 GeoGraph Node: v2.10.2 Release Notes
+
+## 🔧 v2.10.2 — Database Function Search Path Fix (2026-02-11)
+
+### 🎯 Overview
+This patch fixes a systemic bug where ALL queue processing functions and triggers were broken due to a mismatch between `SET search_path = ''` (applied by the Supabase linter fix) and unqualified table references / unquoted column names in the function bodies. The Edge Function can now successfully claim, process, complete, and fail jobs.
+
+### 🐛 Issues Fixed
+- **"relation processing_queue does not exist"** — 5 queue functions used bare `processing_queue` with `search_path = ''`, making PostgreSQL unable to resolve the table. Fixed with `public.processing_queue`.
+- **"record new has no field bundle_id"** — `update_bundle_asset_count` trigger used `NEW.BUNDLE_ID` (PostgreSQL folds to lowercase `bundle_id`) but actual column is `"BUNDLE_ID"` (uppercase). Fixed with `NEW."BUNDLE_ID"`.
+- **Auto-trigger silently failing** — `invoke_processing_worker` caught the column casing error via `EXCEPTION WHEN OTHERS`, meaning the DB webhook to invoke the Edge Function never actually fired. Now works correctly.
+
+### ⚙️ Functions Fixed (8 total)
+1. `claim_processing_job` — `public.processing_queue` + quoted columns
+2. `complete_processing_job` — same
+3. `fail_processing_job` — same
+4. `update_job_progress` — same (also changed return type VOID → BOOLEAN)
+5. `release_stale_locks` — same
+6. `update_bundle_asset_count` — `public.digital_asset_bundles` + `NEW."BUNDLE_ID"`
+7. `invoke_processing_worker` — `public.processing_queue` + `NEW."STATUS"`
+8. `update_partnership_timestamp` — `NEW."UPDATED_AT"`
+
+### 📦 New Files
+- `sql/FIX_FUNCTION_SEARCH_PATH_V2.sql` — complete function recreation script
+
+### ✅ Verified
+- Edge Function successfully claimed and processed a job end-to-end
+- Auto-chaining processed multiple batches after initial trigger
+- `processed: 1, succeeded: 1, failed: 0` confirmed via curl
+
+---
 
 ## 🔧 v2.10.1 — Queue Processing & Upload Fix (2026-02-11)
 
