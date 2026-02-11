@@ -241,20 +241,6 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
     }
   };
 
-  const handleReleaseStale = async () => {
-    try {
-      const released = await processingQueueService.releaseStaleJobs();
-      if (released > 0) {
-        alert(`Released ${released} stale jobs back to pending queue.`);
-        await fetchStats();
-      } else {
-        alert('No stale jobs to release.');
-      }
-    } catch (err) {
-      console.error('Failed to release stale jobs:', err);
-    }
-  };
-
   const handleTestConnection = async () => {
     setIsTesting(true);
     setConnectionTest(null);
@@ -389,6 +375,65 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
     } catch (err) {
       console.error('Failed to reset stuck items:', err);
       alert('Failed to reset stuck items.');
+    }
+  };
+
+  /**
+   * Remote reset - resets server-side queue jobs back to PENDING
+   * This affects jobs that have been uploaded to the server
+   */
+  const handleRemoteReset = async () => {
+    const confirmed = window.confirm(
+      'This will reset all failed and stuck processing jobs back to PENDING on the server.\n\n' +
+      'The jobs will be reprocessed automatically.\n\n' +
+      'Continue?'
+    );
+    
+    if (!confirmed) return;
+    
+    try {
+      setLoading(true);
+      const result = await processingQueueService.resetUserQueue();
+      
+      if (result.resetCount > 0) {
+        alert(
+          `✅ Successfully reset ${result.resetCount} server jobs.\n\n` +
+          'These jobs will be reprocessed automatically by the queue.'
+        );
+        await fetchStats();
+        await fetchJobs();
+        onRequeueComplete?.();
+      } else {
+        alert('No server jobs needed resetting.');
+      }
+    } catch (err) {
+      console.error('Failed to reset server queue:', err);
+      alert('❌ Failed to reset server queue. Check console for details.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Release stale locks - frees jobs stuck in PROCESSING state
+   */
+  const handleReleaseStale = async () => {
+    try {
+      setLoading(true);
+      const released = await processingQueueService.releaseStaleJobs();
+      
+      if (released > 0) {
+        alert(`✅ Released ${released} stale locks.\n\nThese jobs are now available for processing.`);
+        await fetchStats();
+        await fetchJobs();
+      } else {
+        alert('No stale locks found.');
+      }
+    } catch (err) {
+      console.error('Failed to release stale locks:', err);
+      alert('❌ Failed to release stale locks.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1064,7 +1109,16 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
               className="flex-1 py-1.5 px-2 bg-amber-800 hover:bg-amber-700 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[9px] rounded flex items-center justify-center gap-1 transition-colors"
             >
               <RotateCcw size={10} />
-              Reset Status
+              Reset Local
+            </button>
+            <button
+              onClick={handleRemoteReset}
+              disabled={loading || (stats?.failed || 0) === 0}
+              className="flex-1 py-1.5 px-2 bg-blue-800 hover:bg-blue-700 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[9px] rounded flex items-center justify-center gap-1 transition-colors"
+              title="Reset failed/stuck jobs on server"
+            >
+              <Server size={10} />
+              Reset Server
             </button>
             <button
               onClick={handleClearAllStuck}
