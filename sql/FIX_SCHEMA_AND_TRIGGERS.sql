@@ -320,7 +320,7 @@ WITH schema_check AS (
         EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'processing_queue' AND column_name = 'ID') AS id_column_correct,
         EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'processing_queue' AND column_name = 'USER_ID') AS user_id_column_correct,
         -- Verify STATUS column exists (key for queue filtering)
-        EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'processing_queue' AND column_name = 'STATUS') AS status_column_correct
+        EXISTS (SELECT FROM information_schema.columns WHERE table_name = 'processing_queue' AND column_name = 'STATUS') AS status_column_exists
 ),
 trigger_check AS (
     SELECT
@@ -410,15 +410,11 @@ BEGIN
     FROM public.processing_queue
     WHERE "STATUS" IN ('PENDING', 'PROCESSING', 'FAILED');
     
-    -- Get user-filtered count (sum of all users)
-    SELECT COALESCE(SUM(cnt), 0) INTO user_filtered_count
-    FROM (
-        SELECT COUNT(*) as cnt
-        FROM public.processing_queue
-        WHERE "STATUS" IN ('PENDING', 'PROCESSING', 'FAILED')
-        AND "USER_ID" IS NOT NULL
-        GROUP BY "USER_ID"
-    ) AS user_counts;
+    -- Get user-filtered count (direct count is more efficient than grouping and summing)
+    SELECT COUNT(*) INTO user_filtered_count
+    FROM public.processing_queue
+    WHERE "STATUS" IN ('PENDING', 'PROCESSING', 'FAILED')
+    AND "USER_ID" IS NOT NULL;
     
     -- Get number of unique users
     SELECT COUNT(DISTINCT "USER_ID") INTO user_count
