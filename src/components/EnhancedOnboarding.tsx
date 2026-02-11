@@ -235,7 +235,16 @@ export function EnhancedOnboarding({ onComplete, forceShow = false }: EnhancedOn
     setAuthLoading(false);
     
     if (error) {
-      setAuthError(error.message);
+      const { formatAuthError, isNonBlockingError, getErrorCode } = await import('../lib/errorMapper');
+      const userFriendlyError = formatAuthError(error);
+      setAuthError(userFriendlyError);
+      
+      // If error is non-blocking (e.g., avatar initialization failure), allow user to proceed
+      if (isNonBlockingError(error)) {
+        console.warn(`[Auth] Non-blocking error (${getErrorCode(error)}): User can proceed`, error);
+        setAuthSuccess(true);
+        setCompletedSteps(prev => new Set([...prev, 'account']));
+      }
     } else {
       setAuthSuccess(true);
       setCompletedSteps(prev => new Set([...prev, 'account']));

@@ -20,7 +20,16 @@ export default function AuthModal({ onClose }: { onClose: () => void }) {
         onClose();
         window.location.reload(); // Refresh to update user state across app
     } else {
-        setError(error.message);
+        const { formatAuthError, isNonBlockingError } = await import('../lib/errorMapper');
+        const userFriendlyError = formatAuthError(error);
+        setError(userFriendlyError);
+        
+        // If error is non-blocking (e.g., avatar initialization failure), allow user to proceed
+        if (isNonBlockingError(error)) {
+          console.warn('[AuthModal] Non-blocking error: User can proceed', error);
+          onClose();
+          window.location.reload();
+        }
     }
   };
 

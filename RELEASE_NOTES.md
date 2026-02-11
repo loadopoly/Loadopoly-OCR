@@ -6,6 +6,7 @@
 This release focuses on enterprise-readiness with robust fork management tools, a production-grade download service for processed data, and significant enhancements to the background processing queue.
 
 ### ✨ New Features
+- **Schema Recovery & Verification**: Added `sql/FIX_SCHEMA_AND_TRIGGERS.sql` which provides an idempotent mechanism to verify column naming conventions, repair missing avatar records, and validate RLS policies.
 - **Fork Management System**: Automated workflows and scripts for synchronizing user forks with upstream, including remote reset capabilities.
 - **Advanced Download Service**: Binary export support with progress tracking and ZIP bundling for exported datasets.
 - **Queue Performance Metrics**: New health monitoring for background tasks with automated remote reset functionality.
