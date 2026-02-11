@@ -1,6 +1,18 @@
-# 🚀 GeoGraph Node: v2.9.11 Release Notes
+# 🚀 GeoGraph Node: v2.10.0 Release Notes
 
-## 🧬 v2.9.11 - Dual-Write Persistence & Refactoring (2026-02-05)
+## 🧬 v2.10.0 - Fork Management & Download Services (2026-02-11)
+
+### 🎯 Overview
+This release focuses on enterprise-readiness with robust fork management tools, a production-grade download service for processed data, and significant enhancements to the background processing queue.
+
+### ✨ New Features
+- **Fork Management System**: Automated workflows and scripts for synchronizing user forks with upstream, including remote reset capabilities.
+- **Advanced Download Service**: Binary export support with progress tracking and ZIP bundling for exported datasets.
+- **Queue Performance Metrics**: New health monitoring for background tasks with automated remote reset functionality.
+
+---
+
+# 🚀 GeoGraph Node: v2.9.11 Release Notes
 
 ### 🎯 Overview
 This release introduces a critical dual-write architectural layer to guarantee data persistence in the Loadopoly master corpus while supporting user-controlled database repositories. It also marks a significant milestone in repository organization and code modularity.
