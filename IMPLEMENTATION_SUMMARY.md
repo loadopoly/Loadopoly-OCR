@@ -135,6 +135,6 @@ The application code (`processingQueueService.ts`) already uses direct queries w
 
 ## 📝 Version History
 
-- **v1.2.0** (2026-02-11): Added compatibility documentation and updated header
-- **v1.1.0** (2026-02-11): Enhanced queue stats verification and discrepancy detection
-- **v1.0.0** (2026-02-11): Initial schema verification and repair script
+- **v1.2.0** (2026-02-11): Added v3.0.0 compatibility documentation and enhanced header with prerequisites
+- **v1.1.0** (2026-02-11): Enhanced queue stats verification with discrepancy detection and per-user breakdowns
+- **v1.0.0** (2026-02-11): Initial schema verification and repair script (avatar triggers, RLS policies, column naming)
