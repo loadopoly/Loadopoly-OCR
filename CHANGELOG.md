@@ -6,6 +6,7 @@ See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent majo
 ## [2.10.0] - 2026-02-11
 
 ### Infrastructure & Operations
+- **Schema & Trigger Repair**: Introduced `sql/FIX_SCHEMA_AND_TRIGGERS.sql` to verify and repair table column naming consistency, automate avatar initialization for auth users, and ensure RLS policy integrity.
 - **Fork Management Implementation**: Deployed automated GitHub workflows, `health-check.sh`, `sync-fork.sh`, and `reset-fork.sh` scripts to streamline remote repository synchronization and troubleshooting.
 - **Download Service Implementation**: Added support for binary downloads, real-time progress tracking, and on-the-fly ZIP archive generation for processed datasets.
 - **Queue Management Enhancements**: Introduced remote reset RPCs, queue health metrics, and continuous retry logic to ensure reliable long-running OCR processing.

@@ -81,6 +81,7 @@ class AvatarService {
 
   /**
    * Initialize or fetch user avatar on login
+   * Includes defensive repair logic for missing avatar records
    */
   async initializeAvatar(userId: string): Promise<AvatarState | null> {
     if (!isSupabaseConfigured() || !db) {
@@ -108,7 +109,44 @@ class AvatarService {
         return this.mapRowToAvatar(existing);
       }
 
-      // Create new avatar for first-time user
+      // DEFENSIVE REPAIR LOGIC
+      // If user exists but avatar doesn't (trigger failed during signup),
+      // proactively create the missing avatar record
+      if (fetchError?.code === 'PGRST116') {
+        // PGRST116 = no rows found
+        console.warn('🔧 [Avatar Repair] User missing avatar record, creating now...', userId);
+        
+        const { data: created, error: createError } = await db
+          .from('user_avatars')
+          .insert({
+            USER_ID: userId,
+            DISPLAY_NAME: `Explorer_${userId.slice(0, 6)}`,
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          // Check if it's a duplicate (race condition)
+          if (createError.code === '23505') {
+            console.log('✓ [Avatar Repair] Avatar was created by another process, fetching...');
+            const { data: retry } = await db
+              .from('user_avatars')
+              .select('*')
+              .eq('USER_ID', userId)
+              .single();
+            return retry ? this.mapRowToAvatar(retry) : null;
+          }
+          
+          console.error('❌ [Avatar Repair] Failed to create missing avatar:', createError);
+          return null;
+        }
+
+        console.log('✓ [Avatar Repair] Successfully created missing avatar for user');
+        return this.mapRowToAvatar(created);
+      }
+
+      // For first-time users (normal path)
+      // This will typically be handled by the database trigger
       const { data: created, error: createError } = await db
         .from('user_avatars')
         .insert({

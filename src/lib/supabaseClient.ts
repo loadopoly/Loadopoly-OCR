@@ -81,12 +81,13 @@ export const isMasterConfigured = (): boolean => {
 }
 
 /**
- * Test the Supabase connection
+ * Test the Supabase connection and perform pre-flight schema validation
  * Returns true if connection is successful, false otherwise
  */
 export async function testSupabaseConnection(): Promise<{ 
   connected: boolean
-  error?: string 
+  error?: string
+  schemaIssues?: string[]
 }> {
   if (!supabase) {
     return { 
@@ -96,19 +97,65 @@ export async function testSupabaseConnection(): Promise<{
   }
 
   try {
-    // Try to query the database - even if table doesn't exist, connection works
-    const { error } = await supabase
+    const schemaIssues: string[] = [];
+
+    // Test 1: Basic connection with historical_documents_global
+    const { error: docError } = await supabase
       .from('historical_documents_global')
       .select('ASSET_ID')
       .limit(1)
 
-    if (error && error.code !== 'PGRST116' && error.code !== '42P01') {
+    if (docError && docError.code !== 'PGRST116' && docError.code !== '42P01') {
       // PGRST116 = no rows, 42P01 = table doesn't exist - both mean connection works
-      console.error('Supabase query error:', error.message)
-      return { connected: false, error: error.message }
+      console.error('Supabase query error:', docError.message)
+      return { connected: false, error: docError.message }
     }
 
-    return { connected: true }
+    // Test 2: Pre-flight check - Verify user_avatars table structure
+    const { data: avatarCheck, error: avatarError } = await supabase
+      .from('user_avatars')
+      .select('ID, USER_ID')
+      .limit(0) // Don't fetch actual data, just test the schema
+
+    if (avatarError) {
+      if (avatarError.code === '42P01') {
+        // Table doesn't exist
+        schemaIssues.push('⚠️ CRITICAL: user_avatars table missing. Run migration: sql/CONSOLIDATED_SCHEMA.sql');
+        console.error('🔴 [Schema Check] user_avatars table does not exist');
+      } else if (avatarError.message?.includes('column') || avatarError.code === '42703') {
+        // Column mismatch (likely lowercase vs uppercase issue)
+        schemaIssues.push('⚠️ CRITICAL: user_avatars schema mismatch detected. Expected columns: "ID", "USER_ID" (quoted uppercase). Run migration: FIX_SCHEMA_AND_TRIGGERS.sql');
+        console.error('🔴 [Schema Check] user_avatars column mismatch:', avatarError.message);
+      } else if (avatarError.code !== 'PGRST116') {
+        // Some other error
+        schemaIssues.push(`⚠️ user_avatars table check failed: ${avatarError.message}`);
+      }
+    }
+
+    // Test 3: Verify processing_queue table exists (core functionality)
+    const { error: queueError } = await supabase
+      .from('processing_queue')
+      .select('ID')
+      .limit(0)
+
+    if (queueError && queueError.code === '42P01') {
+      schemaIssues.push('⚠️ WARNING: processing_queue table missing. Background OCR will not work. Run: sql/CONSOLIDATED_SCHEMA.sql');
+      console.warn('🟡 [Schema Check] processing_queue table does not exist');
+    }
+
+    // Log schema issues prominently
+    if (schemaIssues.length > 0) {
+      console.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.warn('🔧 DATABASE SCHEMA ISSUES DETECTED');
+      console.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      schemaIssues.forEach(issue => console.warn(issue));
+      console.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }
+
+    return { 
+      connected: true,
+      schemaIssues: schemaIssues.length > 0 ? schemaIssues : undefined
+    }
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Unknown error'
     console.error('❌ Supabase connection failed:', errorMessage)
