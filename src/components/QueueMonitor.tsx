@@ -222,7 +222,18 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       
       // Show result with more context
       if (result.failed > 0) {
-        alert(`Uploaded ${result.queued} to server queue. ${result.failed} failed.\n\nErrors:\n${result.errors.slice(0, 5).join('\n')}`);
+        // Group errors by type for cleaner display instead of listing each UUID
+        const errorGroups = new Map<string, number>();
+        result.errors.forEach((err: string) => {
+          // Extract the error type after the asset ID prefix
+          const match = err.match(/Asset [^:]+: (.+)/);
+          const errorType = match ? match[1] : err;
+          errorGroups.set(errorType, (errorGroups.get(errorType) || 0) + 1);
+        });
+        const groupedSummary = Array.from(errorGroups.entries())
+          .map(([type, count]) => `  ${count}x: ${type}`)
+          .join('\n');
+        alert(`Uploaded ${result.queued} to server queue. ${result.failed} failed.\n\nError summary:\n${groupedSummary}`);
       } else if (result.queued > 0) {
         alert(`✓ Successfully uploaded ${result.queued} items to server queue!\n\nCheck the "Waitlist" counter above - it should increase.\nJobs will be processed by the Edge Function.`);
       } else {
@@ -273,7 +284,20 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
         if (result.succeeded > 0 || result.failed > 0) {
           alert(`Edge Function processed ${result.processed} jobs:\n✓ ${result.succeeded} succeeded\n✗ ${result.failed} failed`);
         } else if (result.processed === 0) {
-          alert('Edge Function responded but processed 0 jobs.\n\nCheck if GEMINI_API_KEY is set in Supabase Edge Function secrets.');
+          if ((result as any).claimError) {
+            alert(`Edge Function could not claim jobs:\n${(result as any).claimError}\n\nThe claim_processing_job function may need to be deployed. Run CONSOLIDATED_SCHEMA.sql in the Supabase SQL editor.`);
+          } else if ((stats?.processing || 0) > 0) {
+            // Jobs are stuck in PROCESSING — offer to release locks
+            const shouldRelease = confirm(
+              `Edge Function found 0 PENDING jobs, but ${stats?.processing} jobs are stuck in PROCESSING.\n\n` +
+              `These are likely from a previous failed attempt. Release them so they can be retried?`
+            );
+            if (shouldRelease) {
+              await handleReleaseStale();
+            }
+          } else {
+            alert('Edge Function found 0 pending jobs.\n\nAll jobs may already be processed, or the queue may be empty.');
+          }
         }
       } else {
         alert('Edge Function returned no response. It may not be deployed.');

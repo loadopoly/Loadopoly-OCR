@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.10.1] - 2026-02-11
+
+### Bug Fixes — Processing Queue
+- **Storage Upload Conflict**: Changed `upsert: false` to `upsert: true` in `uploadToStorage()` to prevent "The resource already exists" errors when re-queuing assets. Added 409 fallback to gracefully handle duplicate uploads.
+- **Edge Function Silent Failures**: Split `if (error || !data?.length) break` in the claim loop into separate error handling and empty-data checks. RPC errors are now logged (`console.error`) and propagated as `claimError` in the response instead of being silently swallowed.
+- **Duplicate Queue Rows**: `insertJob()` now cancels existing PENDING/PROCESSING rows for the same ASSET_ID+USER_ID before inserting a new one. Added optimistic IndexedDB write in `requeueLocalAssets()` to close the partial-success window that created orphaned duplicates.
+- **Inflated Queue Counts (157 vs 150)**: `getStats()` now deduplicates PENDING/PROCESSING counts using a `Set<string>` per ASSET_ID so duplicate rows don't inflate the displayed count.
+- **Misleading "Check GEMINI_API_KEY" Alert**: `QueueMonitor` now differentiates between claim errors, stuck PROCESSING jobs, and an empty queue — offering a confirm dialog to release stale locks when jobs are stuck.
+- **Error Display Noise**: Requeue error alerts now group errors by type with counts instead of listing individual asset UUIDs.
+
+### New Files
+- **`sql/FIX_QUEUE_DUPLICATES.sql`**: Idempotent migration that diagnoses/cancels duplicate active rows, adds a partial unique index `idx_pq_active_asset_per_user`, reduces default `LOCK_TIMEOUT_SECONDS` to 120s, and releases stale locks.
+
 ## [2.10.0] - 2026-02-11
 
 ### Infrastructure & Operations
