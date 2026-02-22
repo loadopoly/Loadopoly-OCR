@@ -1,4 +1,13 @@
-import { ethers } from 'ethers';
+// PERF FIX: Lazy-import ethers (~400KB) — only loaded when user actually
+// triggers a Web3 action. Previously this was parsed at page load even
+// though Web3 is an opt-in localStorage flag.
+let _ethers: typeof import('ethers') | null = null;
+const getEthers = async () => {
+  if (!_ethers) {
+    _ethers = await import('ethers');
+  }
+  return _ethers;
+};
 import { recordWeb3Transaction } from './supabaseService';
 import { getCurrentUser } from '../lib/auth';
 
@@ -42,6 +51,7 @@ export const connectWallet = async () => {
   // Prefer window.ethereum (MetaMask, Coinbase Wallet Extension, etc.)
   if (window.ethereum) {
       try {
+        const { ethers } = await getEthers();
         const provider = new ethers.BrowserProvider(window.ethereum);
         // Force permission request
         await provider.send("eth_requestAccounts", []);
@@ -64,7 +74,7 @@ export const connectWallet = async () => {
   }
 };
 
-export const switchNetworkToPolygon = async (provider: ethers.BrowserProvider) => {
+export const switchNetworkToPolygon = async (provider: any) => {
     // Polygon Mainnet Chain ID
     const chainId = '0x89'; 
     try {
@@ -96,6 +106,7 @@ export const mintShardClientSide = async (assetId: string) => {
         await switchNetworkToPolygon(wallet.provider);
     }
 
+    const { ethers } = await getEthers();
     const contract = new ethers.Contract(DCC1_ADDRESS, DCC1_ABI, wallet.signer);
     
     // Hash Asset ID for Solidity (uint256)
@@ -143,6 +154,7 @@ export const mintShardClientSide = async (assetId: string) => {
 
 // Fetch real balance from chain
 export const getShardBalance = async (assetId: string, userAddress: string) => {
+    const { ethers } = await getEthers();
     const provider = new ethers.BrowserProvider(window.ethereum);
     const contract = new ethers.Contract(DCC1_ADDRESS, DCC1_ABI, provider);
     const numericAssetId = ethers.toBigInt(ethers.id(assetId));
@@ -159,6 +171,7 @@ export const redeemPhygitalCertificate = async (assetId: string) => {
     const wallet = await connectWallet();
     if (!wallet) throw new Error("Wallet not connected");
 
+    const { ethers } = await getEthers();
     const contract = new ethers.Contract(DCC1_ADDRESS, DCC1_ABI, wallet.signer);
     const numericAssetId = ethers.toBigInt(ethers.id(assetId));
 

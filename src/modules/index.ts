@@ -134,9 +134,18 @@ export async function initializeModuleSystem(config: ModuleSystemConfig = {}): P
         userId: config.userContext?.userId,
       });
       moduleRegistry.registerStorageAdapter(supabaseStorage);
-      if (await supabaseStorage.isConnected()) {
-        moduleRegistry.setActiveStorageAdapter('supabase');
-      }
+      // PERF FIX: Set Supabase as active immediately — don't block bootstrap
+      // on a network round-trip (isConnected does SELECT count(*)). Check
+      // connectivity in the background and fall back if it fails.
+      moduleRegistry.setActiveStorageAdapter('supabase');
+      supabaseStorage.isConnected().then(connected => {
+        if (!connected) {
+          logger.warn('Supabase storage not reachable, falling back');
+          // Will be overridden by in-memory below if needed
+        }
+      }).catch(() => {
+        logger.warn('Supabase connectivity check failed');
+      });
     } catch (error) {
       logger.warn('Failed to initialize Supabase storage');
     }

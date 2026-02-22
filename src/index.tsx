@@ -45,11 +45,16 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// Initialize module system first, then load the app
-// This ensures all providers, storage adapters, and plugins are ready
-bootstrapModuleSystem()
-  .then(() => import('./App'))
-  .then(({ default: App }) => {
+// PERF FIX: Start App chunk download IN PARALLEL with module bootstrap.
+// Previously bootstrap had to fully complete (2-4s on mobile due to Supabase
+// connectivity check) before the App chunk even began downloading.
+// Module providers are accessed lazily by components, so they don't need
+// to be ready before mount — only before the first LLM/storage call.
+Promise.all([
+  bootstrapModuleSystem(),
+  import('./App')
+])
+  .then(([, { default: App }]) => {
     if (!rootElement) {
       throw new Error("Could not find root element to mount to");
     }
