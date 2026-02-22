@@ -587,6 +587,20 @@ export function calculateSimilarityV2(
 // ============================================
 
 /**
+ * H2 FIX: Module-level pair cache for calculateSimilarityV2 results.
+ * Key format: "min(idA,idB)|max(idA,idB)" → { score, matchReasons, breakdown }.
+ * Evicted when the asset set changes (tracked via sorted-ID fingerprint).
+ * This avoids recomputing 74K+ similarity pairs when only 1-2 assets change.
+ */
+let _pairCacheFingerprint = '';
+const _pairCache = new Map<string, SimilarityMatch>();
+const MAX_PAIR_CACHE_SIZE = 100_000;
+
+function getPairCacheKey(idA: string, idB: string): string {
+  return idA < idB ? `${idA}|${idB}` : `${idB}|${idA}`;
+}
+
+/**
  * Find duplicate clusters using enhanced similarity
  */
 export function findDuplicateClustersV2(
@@ -599,18 +613,50 @@ export function findDuplicateClustersV2(
     assetCount: assets.length,
     threshold: config.threshold 
   });
+
+  // H2: Invalidate pair cache when the asset set changes
+  const fingerprint = assets.map(a => a.id).sort().join(',');
+  if (fingerprint !== _pairCacheFingerprint) {
+    // Asset set changed — selectively keep valid pairs, drop stale ones
+    const currentIds = new Set(assets.map(a => a.id));
+    for (const key of _pairCache.keys()) {
+      const [idA, idB] = key.split('|');
+      if (!currentIds.has(idA) || !currentIds.has(idB)) {
+        _pairCache.delete(key);
+      }
+    }
+    _pairCacheFingerprint = fingerprint;
+  }
   
   const matches: SimilarityMatch[] = [];
+  let cacheHits = 0;
   
-  // Compare all pairs
+  // Compare all pairs (with pair-level caching)
   for (let i = 0; i < assets.length; i++) {
     for (let j = i + 1; j < assets.length; j++) {
-      const match = calculateSimilarityV2(assets[i], assets[j], config);
+      const cacheKey = getPairCacheKey(assets[i].id, assets[j].id);
+      let match = _pairCache.get(cacheKey);
+
+      if (!match) {
+        match = calculateSimilarityV2(assets[i], assets[j], config);
+        if (_pairCache.size < MAX_PAIR_CACHE_SIZE) {
+          _pairCache.set(cacheKey, match);
+        }
+      } else {
+        cacheHits++;
+      }
+
       if (match.score >= config.threshold) {
         matches.push(match);
       }
     }
   }
+
+  logger.debug('Pair cache stats', {
+    hits: cacheHits,
+    total: (assets.length * (assets.length - 1)) / 2,
+    cacheSize: _pairCache.size,
+  });
   
   // Build clusters using Union-Find with path compression
   const parent = new Map<string, string>();

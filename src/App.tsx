@@ -142,10 +142,10 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
   <button
     onClick={onClick}
     style={{ touchAction: 'manipulation' }}
-    className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors ${
+    className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all duration-75 ${
       active 
         ? 'bg-primary-600/10 text-primary-500 border-r-2 border-primary-500' 
-        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
+        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800 active:bg-slate-700 active:scale-[0.97]'
     }`}
   >
     <Icon size={18} />
@@ -223,8 +223,9 @@ const MobileNavigation = ({ activeTab, switchTab }: { activeTab: string; switchT
     <>
       <button
         onClick={() => setIsOpen(true)}
-        className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg"
+        className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 active:bg-slate-700 active:scale-90 transition-transform duration-75 rounded-lg"
         style={{ touchAction: 'manipulation' }}
+        aria-label="Open navigation menu"
       >
         <List size={24} />
       </button>
@@ -321,23 +322,21 @@ export default function App() {
   // Explore tab sub-view (merges Knowledge Graph + 3D World into one tab)
   const [exploreSubTab, setExploreSubTab] = useState<'graph' | '3d' | 'semantic'>('graph');
 
-  // Preload heavy component JS chunks only when the browser is genuinely idle
-  // (never at cold-start where main-thread contention causes 20-second sidebar delays)
-  useEffect(() => {
-    const preload = () => {
-      import('./components/ARScene');
-      import('./components/GraphVisualizer');
-    };
-    if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(preload, { timeout: 10000 });
-    } else {
-      // Fallback: 8s delay on devices that don't support requestIdleCallback
-      setTimeout(preload, 8000);
-    }
-  }, []);
+  // H3 FIX: Removed eager preload of ARScene + GraphVisualizer.
+  // These are already wrapped in React.lazy/Suspense and will load on-demand
+  // when the user actually navigates to the Explore or AR tab.
+  // Removing this stops ~200KB+ of chunk downloads from competing with the
+  // critical auth + data path during cold start.
 
-  // Initialize Worker Pool for parallel processing
-  const workerPool = useMemo(() => new WorkerPool('../workers/parallelWorker.ts', { maxWorkers: 4 }), []);
+  // H1 FIX: Lazy-init WorkerPool — pass minWorkers: 0 so no workers are
+  // spawned at mount. Workers are created on-demand when first task is queued.
+  const workerPoolRef = useRef<WorkerPool | null>(null);
+  const getWorkerPool = useCallback(() => {
+    if (!workerPoolRef.current) {
+      workerPoolRef.current = new WorkerPool('../workers/parallelWorker.ts', { maxWorkers: 4, minWorkers: 0 });
+    }
+    return workerPoolRef.current;
+  }, []);
 
   // Initialize Processing Queue Service with simplified callbacks
   // The heavy lifting is done by the direct Realtime subscription below
@@ -528,6 +527,14 @@ export default function App() {
     const handleNewFile = (event: CustomEvent<File>) => ingestFile(event.detail, "Auto-Sync");
     window.addEventListener('geograph-new-file', handleNewFile as any);
 
+    // PHASE 0: Load from IndexedDB IMMEDIATELY — no network dependency (~5ms).
+    // This gives the user instant content while auth + cloud sync happen in background.
+    let localSnapshot: DigitalAsset[] = [];
+    const localReady = loadAssets().then((cached) => {
+      localSnapshot = cached;
+      setLocalAssets(cached);
+    });
+
     getCurrentUser().then(async ({ data }) => { 
       if(data.user) { 
         setUser(data.user); 
@@ -536,16 +543,15 @@ export default function App() {
         const isSuperUser = data.user.email === 'loadopoly@gmail.com';
         setIsAdmin(isSuperUser);
         setIsEnterprise(true); // Authenticated users are treated as enterprise-tier
-        
-        // C2 FIX — PHASE 1: Show local data IMMEDIATELY (IndexedDB is ~5ms)
-        const localImmediate = await loadAssets();
-        setLocalAssets(localImmediate);
 
-        // C2 FIX — PHASE 2: Defer cloud sync to idle so UI is interactive first
+        // Ensure Phase 0 is complete before using localSnapshot
+        await localReady;
+
+        // PHASE 2: Defer cloud sync to idle so UI is interactive first
         const deferredSync = async () => {
           try {
             // Sync unsynced local assets to cloud
-            const syncPromises = localImmediate
+            const syncPromises = localSnapshot
               .filter(asset => asset.status === AssetStatus.MINTED && !asset.sqlRecord?.USER_ID)
               .map(async (asset) => {
                 try {
@@ -562,7 +568,7 @@ export default function App() {
             // Fetch remote assets and merge
             const remoteAssets = await fetchUserAssets(data.user.id);
             const assetMap = new Map<string, DigitalAsset>();
-            localImmediate.forEach(a => assetMap.set(a.id, a));
+            localSnapshot.forEach(a => assetMap.set(a.id, a));
             remoteAssets.forEach(a => assetMap.set(a.id, a));
             
             const mergedAssets = Array.from(assetMap.values()).sort((a, b) => 
@@ -588,17 +594,13 @@ export default function App() {
           setTimeout(deferredSync, 2000);
         }
       } else {
-        // Unauthenticated: load from IndexedDB only
-        loadAssets().then(setLocalAssets);
-        
-        // Clear session data when page unloads for unauthenticated users
+        // Unauthenticated: local data already loaded in Phase 0.
+        // Handle cleanup for sessions that expired.
         const handleUnload = () => {
-          // Mark for cleanup on next load if still unauthenticated
           sessionStorage.setItem('geograph-cleanup-needed', 'true');
         };
         window.addEventListener('beforeunload', handleUnload);
         
-        // Cleanup from previous session if needed
         if (sessionStorage.getItem('geograph-cleanup-needed') === 'true') {
           import('./lib/indexeddb').then(({ clearAllAssets }) => {
             clearAllAssets().then(() => {
@@ -609,7 +611,7 @@ export default function App() {
       }
     }).catch(err => {
       console.error("Auth check failed (likely offline):", err);
-      loadAssets().then(setLocalAssets);
+      // Local data already loaded in Phase 0 — no action needed
     });
 
     return () => {

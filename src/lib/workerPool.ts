@@ -102,16 +102,22 @@ export class WorkerPool {
       circuitResetTime: options.circuitResetTime ?? 30000,
     };
 
-    // Initialize minimum workers
-    for (let i = 0; i < this.options.minWorkers; i++) {
-      this.createWorker();
+    // H1 FIX: Only create initial workers when minWorkers > 0.
+    // When minWorkers === 0, workers are created on-demand in processQueue().
+    if (this.options.minWorkers > 0) {
+      for (let i = 0; i < this.options.minWorkers; i++) {
+        this.createWorker();
+      }
     }
 
-    // Start idle worker cleanup
-    this.idleCheckInterval = window.setInterval(
-      () => this.cleanupIdleWorkers(),
-      10000
-    );
+    // H1 FIX: Only start the idle-cleanup interval once we actually have workers.
+    // For minWorkers === 0, we defer this to the first execute() call.
+    if (this.options.minWorkers > 0) {
+      this.idleCheckInterval = window.setInterval(
+        () => this.cleanupIdleWorkers(),
+        10000
+      );
+    }
   }
 
   /**
@@ -304,6 +310,14 @@ export class WorkerPool {
 
   private processQueue(): void {
     if (this.taskQueue.length === 0) return;
+
+    // H1 FIX: Start idle-cleanup interval on first task if not yet running
+    if (this.idleCheckInterval === null) {
+      this.idleCheckInterval = window.setInterval(
+        () => this.cleanupIdleWorkers(),
+        10000
+      );
+    }
 
     // Find available worker
     let availableWorker: [number, WorkerState] | null = null;
