@@ -2,6 +2,9 @@
 -- Knowledge Graph Nodes & Edges Migration
 -- Persistent entity graph derived from OCR content and spatial anchors.
 -- Enables entity deduplication, cross-asset relationships, and backfill.
+--
+-- IDEMPOTENT — safe to run multiple times.
+-- PostGIS and pgvector columns are added conditionally after CREATE TABLE.
 -- =============================================================================
 
 -- =============================================================================
@@ -32,7 +35,6 @@ CREATE TABLE IF NOT EXISTS graph_nodes (
   "LAT"               DOUBLE PRECISION,
   "LNG"               DOUBLE PRECISION,
   "ALT_M"             DOUBLE PRECISION,
-  "GEO_POINT"         extensions.geometry(Point, 4326),       -- PostGIS column
 
   -- Provenance & statistics
   "ASSET_COUNT"       INTEGER NOT NULL DEFAULT 0,             -- # assets mentioning this node
@@ -48,7 +50,6 @@ CREATE TABLE IF NOT EXISTS graph_nodes (
 
   -- Backfill processing state
   "GRAPH_PROCESSED"   BOOLEAN NOT NULL DEFAULT false,         -- used by backfill Edge Function
-  "EMBEDDING"         VECTOR(768),                            -- optional semantic embedding
 
   -- Owner (null = global/shared node)
   "USER_ID"           UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -56,6 +57,32 @@ CREATE TABLE IF NOT EXISTS graph_nodes (
   -- Constraints
   UNIQUE ("NODE_TYPE", "CANONICAL_ID")
 );
+
+-- PostGIS geometry column — added separately so migration works without PostGIS
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'postgis') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'graph_nodes' AND column_name = 'GEO_POINT'
+    ) THEN
+      ALTER TABLE graph_nodes ADD COLUMN "GEO_POINT" extensions.geometry(Point, 4326);
+    END IF;
+  END IF;
+END $$;
+
+-- pgvector embedding column — added separately so migration works without pgvector
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'graph_nodes' AND column_name = 'EMBEDDING'
+    ) THEN
+      ALTER TABLE graph_nodes ADD COLUMN "EMBEDDING" VECTOR(768);
+    END IF;
+  END IF;
+END $$;
 
 -- =============================================================================
 -- TABLE: graph_edges
@@ -105,7 +132,17 @@ CREATE INDEX IF NOT EXISTS idx_graph_nodes_canonical   ON graph_nodes("CANONICAL
 CREATE INDEX IF NOT EXISTS idx_graph_nodes_user        ON graph_nodes("USER_ID") WHERE "USER_ID" IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_graph_nodes_processed   ON graph_nodes("GRAPH_PROCESSED") WHERE "GRAPH_PROCESSED" = false;
 CREATE INDEX IF NOT EXISTS idx_graph_nodes_assets      ON graph_nodes("ASSET_COUNT" DESC);
-CREATE INDEX IF NOT EXISTS idx_graph_nodes_geo         ON graph_nodes USING GIST ("GEO_POINT") WHERE "GEO_POINT" IS NOT NULL;
+-- GEO_POINT GIST index (conditional on PostGIS column existing)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'graph_nodes' AND column_name = 'GEO_POINT'
+  ) THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_graph_nodes_geo
+      ON graph_nodes USING GIST ("GEO_POINT") WHERE "GEO_POINT" IS NOT NULL';
+  END IF;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_graph_edges_from        ON graph_edges("FROM_NODE_ID");
 CREATE INDEX IF NOT EXISTS idx_graph_edges_to          ON graph_edges("TO_NODE_ID");
@@ -128,10 +165,14 @@ BEGIN
   NEW."UPDATED_AT" := now();
   -- Sync PostGIS geometry if lat/lng set
   IF NEW."LAT" IS NOT NULL AND NEW."LNG" IS NOT NULL THEN
-    NEW."GEO_POINT" := extensions.ST_SetSRID(
-      extensions.ST_MakePoint(NEW."LNG", NEW."LAT"),
-      4326
-    );
+    BEGIN
+      NEW."GEO_POINT" := extensions.ST_SetSRID(
+        extensions.ST_MakePoint(NEW."LNG", NEW."LAT"),
+        4326
+      );
+    EXCEPTION WHEN undefined_column OR undefined_function THEN
+      NULL; -- PostGIS or GEO_POINT column not available — skip silently
+    END;
   END IF;
   RETURN NEW;
 END;
@@ -191,16 +232,24 @@ ALTER TABLE graph_edges        ENABLE ROW LEVEL SECURITY;
 ALTER TABLE asset_graph_nodes  ENABLE ROW LEVEL SECURITY;
 
 -- Graph nodes: public read (global entities), own write
+DROP POLICY IF EXISTS "graph_nodes_read_all"   ON graph_nodes;
+DROP POLICY IF EXISTS "graph_nodes_insert_own" ON graph_nodes;
+DROP POLICY IF EXISTS "graph_nodes_update_own" ON graph_nodes;
+DROP POLICY IF EXISTS "graph_nodes_service"    ON graph_nodes;
 CREATE POLICY "graph_nodes_read_all"    ON graph_nodes FOR SELECT TO authenticated USING (true);
 CREATE POLICY "graph_nodes_insert_own"  ON graph_nodes FOR INSERT TO authenticated WITH CHECK (auth.uid() = "USER_ID" OR "USER_ID" IS NULL);
 CREATE POLICY "graph_nodes_update_own"  ON graph_nodes FOR UPDATE TO authenticated USING (auth.uid() = "USER_ID" OR "USER_ID" IS NULL);
 CREATE POLICY "graph_nodes_service"     ON graph_nodes FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Edges: public read, service_role write (Edge Function populates)
+DROP POLICY IF EXISTS "graph_edges_read_all" ON graph_edges;
+DROP POLICY IF EXISTS "graph_edges_service"  ON graph_edges;
 CREATE POLICY "graph_edges_read_all"    ON graph_edges FOR SELECT TO authenticated USING (true);
 CREATE POLICY "graph_edges_service"     ON graph_edges FOR ALL TO service_role USING (true) WITH CHECK (true);
 
 -- Junction: users can see their own asset links
+DROP POLICY IF EXISTS "asset_graph_nodes_read"    ON asset_graph_nodes;
+DROP POLICY IF EXISTS "asset_graph_nodes_service" ON asset_graph_nodes;
 CREATE POLICY "asset_graph_nodes_read"  ON asset_graph_nodes FOR SELECT TO authenticated USING (true);
 CREATE POLICY "asset_graph_nodes_service" ON asset_graph_nodes FOR ALL TO service_role USING (true) WITH CHECK (true);
 
