@@ -16,6 +16,8 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
   const [zoom, setZoom] = useState(1);
   const [zoomSupported, setZoomSupported] = useState(false);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1 });
+  const [isCapturing, setIsCapturing] = useState(false);
+  const [stagedPhotos, setStagedPhotos] = useState<File[]>([]);
 
   useEffect(() => {
     return () => {
@@ -87,6 +89,7 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
       setStream(null);
     }
     setIsOpen(false);
+    setStagedPhotos([]);
     announce('Camera closed.');
   };
 
@@ -132,8 +135,10 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
   };
 
   const takePhoto = () => {
+    if (isCapturing) return;
     if (!videoRef.current) return;
     
+    setIsCapturing(true);
     const canvas = document.createElement('canvas');
     canvas.width = videoRef.current.videoWidth;
     canvas.height = videoRef.current.videoHeight;
@@ -150,12 +155,20 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
         canvas.toBlob(blob => {
             if (blob) {
                 const file = new File([blob], `cam_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
-                announce('Photo taken and processing.');
-                onCapture(file);
-                stopCamera();
+                announce('Photo taken and staged.');
+                setStagedPhotos(prev => [...prev, file]);
             }
+            setIsCapturing(false);
         }, 'image/jpeg', 0.9);
+    } else {
+        setIsCapturing(false);
     }
+  };
+
+  const commitPhotos = () => {
+      stagedPhotos.forEach(photo => onCapture(photo));
+      setStagedPhotos([]);
+      announce(`${stagedPhotos.length} photos committed.`);
   };
 
   if (!isOpen) {
@@ -220,7 +233,7 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
       )}
 
       {/* Controls */}
-      <div className="h-32 bg-slate-900 flex items-center justify-around pb-6 pt-4">
+      <div className="h-32 bg-slate-900 flex items-center justify-around pb-6 pt-4 relative">
           <button onClick={switchCamera} aria-label="Switch camera" className="p-4 rounded-full bg-slate-800 text-white hover:bg-slate-700">
              <RefreshCw size={24} aria-hidden="true" />
           </button>
@@ -233,7 +246,17 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
               <div className="w-16 h-16 bg-white rounded-full"></div>
           </button>
           
-          <div className="w-12"></div> {/* Spacer for alignment */}
+          <div className="w-12">
+              {stagedPhotos.length > 0 && (
+                  <button 
+                      onClick={commitPhotos}
+                      className="absolute right-6 top-1/2 -translate-y-1/2 flex flex-col items-center justify-center bg-primary-600 hover:bg-primary-500 text-white rounded-full w-16 h-16 shadow-lg transition-transform active:scale-95"
+                  >
+                      <span className="text-lg font-bold">{stagedPhotos.length}</span>
+                      <span className="text-[10px] uppercase font-bold">Commit</span>
+                  </button>
+              )}
+          </div> {/* Spacer for alignment */}
       </div>
     </div>
   );

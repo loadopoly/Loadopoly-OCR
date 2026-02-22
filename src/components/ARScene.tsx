@@ -19,7 +19,10 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   const [zoomSupported, setZoomSupported] = useState(false);
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1 });
   const [stream, setStream] = useState<MediaStream | null>(null);
-  const [showSafetyWarning, setShowSafetyWarning] = useState(true);
+  // Only show warning if user hasn't agreed this session
+  const [showSafetyWarning, setShowSafetyWarning] = useState<boolean>(
+    () => sessionStorage.getItem('ar-safety-agreed') !== 'true'
+  );
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [zoomWarning, setZoomWarning] = useState<string | null>(null);
   const [isHighRes, setIsHighRes] = useState(false);
@@ -27,6 +30,7 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   const [torchActive, setTorchActive] = useState(false);
   const [isLowEndDevice, setIsLowEndDevice] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
+  const [isCapturing, setIsCapturing] = useState(false);
 
   useEffect(() => {
     // Detect low-end devices for UI optimization
@@ -38,8 +42,10 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   }, []);
 
   useEffect(() => {
-    // Note: Camera initialization now runs effectively in parallel with the Safety Warning
-    // reducing perceived latency.
+    // CRITICAL: Do NOT initialize the camera until the user has accepted the safety warning.
+    // This is the primary cause of the 90-second freeze — the camera stream, WebGL context,
+    // and permission dialogs must not start until the user explicitly proceeds.
+    if (showSafetyWarning) return;
 
     // Check for secure context (required for getUserMedia)
     if (!window.isSecureContext) {
@@ -163,7 +169,7 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
     }, isLowEndDevice ? 4000 : 2000);
 
     return () => clearInterval(interval);
-  }, [isLowEndDevice]);
+  }, [isLowEndDevice, showSafetyWarning]);
 
   // CRITICAL FIX: Re-attach stream when video element or stream changes
   // This handles the case where the video ref wasn't ready when stream was acquired
@@ -239,7 +245,9 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   };
 
   const handleCapture = async () => {
+      if (isCapturing) return;
       if (videoRef.current && stream) {
+          setIsCapturing(true);
           // Visual Flash Effect
           setFlash(true);
           setTimeout(() => setFlash(false), 150);
@@ -253,6 +261,7 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
                   const blob = await imageCapture.takePhoto();
                   const file = new File([blob], `AR_Pro_Session_${Date.now()}.jpg`, { type: 'image/jpeg' });
                   onCapture(file);
+                  setIsCapturing(false);
                   return;
               } catch (err) {
                   console.warn("ImageCapture photo failed, falling back to canvas capture", err);
@@ -271,14 +280,22 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
                       const file = new File([blob], `AR_Session_${Date.now()}.jpg`, { type: 'image/jpeg' });
                       onCapture(file);
                   }
+                  setIsCapturing(false);
               }, 'image/jpeg', 0.98); // High quality JPEG
+          } else {
+              setIsCapturing(false);
           }
       }
   };
 
   return (
     <div className="relative w-full h-full bg-black overflow-hidden">
-      {showSafetyWarning && <ARSafetyWarning onAccept={() => setShowSafetyWarning(false)} />}
+      {showSafetyWarning && (
+        <ARSafetyWarning onAccept={() => {
+          sessionStorage.setItem('ar-safety-agreed', 'true');
+          setShowSafetyWarning(false);
+        }} />
+      )}
       
       {/* Zoom Warning Toast */}
       {zoomWarning && (
