@@ -2,6 +2,10 @@
 -- Spatial Anchors Migration
 -- Stores GPS + compass data captured at photo time for each recognized object.
 -- Enables cross-session triangulation and GIS-based Knowledge Graph enrichment.
+--
+-- IDEMPOTENT — safe to run multiple times.
+-- PostGIS geometry columns are added separately so the CREATE TABLE succeeds
+-- even when the PostGIS extension is not yet available.
 -- =============================================================================
 
 -- Enable PostGIS extension for geospatial operations (idempotent)
@@ -45,9 +49,9 @@ CREATE TABLE IF NOT EXISTS spatial_anchors (
   "BBOX_H"                DOUBLE PRECISION,    -- height
 
   -- OCR / AI recognition result for this object
-  "RECOGNIZED_TEXT"       TEXT,
-  "RECOGNIZED_LABEL"      TEXT,               -- e.g. "Hoover Dam", "Exit Sign", "License Plate"
-  "RECOGNITION_CONFIDENCE"DOUBLE PRECISION,   -- 0-1
+  "RECOGNIZED_TEXT"        TEXT,
+  "RECOGNIZED_LABEL"       TEXT,               -- e.g. "Hoover Dam", "Exit Sign", "License Plate"
+  "RECOGNITION_CONFIDENCE" DOUBLE PRECISION,   -- 0-1
 
   -- Computed subject coordinates (filled by Edge Function after raycast)
   "SUBJECT_LAT"           DOUBLE PRECISION,
@@ -60,14 +64,34 @@ CREATE TABLE IF NOT EXISTS spatial_anchors (
   "TRIANGULATION_COUNT"   INTEGER DEFAULT 0,  -- how many sessions contributed to this fix
   "TRIANGULATION_RMSE_M"  DOUBLE PRECISION,   -- root-mean-square error of triangulation
 
-  -- PostGIS geometry columns for efficient spatial queries
-  "DEVICE_POINT"          extensions.geometry(Point, 4326),  -- device position
-  "SUBJECT_POINT"         extensions.geometry(Point, 4326),  -- estimated subject position
-
   -- Metadata
   "GRAPH_NODE_ID"         UUID,               -- link to graph_nodes once entity is resolved
-  "PROCESSING_STATUS"     TEXT DEFAULT 'pending' CHECK ("PROCESSING_STATUS" IN ('pending', 'processed', 'triangulated', 'failed'))
+  "PROCESSING_STATUS"     TEXT DEFAULT 'pending'
+                          CHECK ("PROCESSING_STATUS" IN ('pending', 'processed', 'triangulated', 'failed'))
 );
+
+-- PostGIS geometry columns — added separately so the table can be created even
+-- if PostGIS is not yet loaded.  `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+-- prevents errors on re-runs.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'postgis') THEN
+    -- Device position point
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'spatial_anchors' AND column_name = 'DEVICE_POINT'
+    ) THEN
+      ALTER TABLE spatial_anchors ADD COLUMN "DEVICE_POINT" extensions.geometry(Point, 4326);
+    END IF;
+    -- Estimated subject position point
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'spatial_anchors' AND column_name = 'SUBJECT_POINT'
+    ) THEN
+      ALTER TABLE spatial_anchors ADD COLUMN "SUBJECT_POINT" extensions.geometry(Point, 4326);
+    END IF;
+  END IF;
+END $$;
 
 -- =============================================================================
 -- INDEXES
@@ -79,12 +103,23 @@ CREATE INDEX IF NOT EXISTS idx_spatial_anchors_status  ON spatial_anchors("PROCE
 CREATE INDEX IF NOT EXISTS idx_spatial_anchors_label   ON spatial_anchors("RECOGNIZED_LABEL") WHERE "RECOGNIZED_LABEL" IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_spatial_anchors_node    ON spatial_anchors("GRAPH_NODE_ID") WHERE "GRAPH_NODE_ID" IS NOT NULL;
 
--- Spatial indexes (only if PostGIS is enabled)
-CREATE INDEX IF NOT EXISTS idx_spatial_anchors_device_geo  ON spatial_anchors USING GIST ("DEVICE_POINT")  WHERE "DEVICE_POINT" IS NOT NULL;
-CREATE INDEX IF NOT EXISTS idx_spatial_anchors_subject_geo ON spatial_anchors USING GIST ("SUBJECT_POINT") WHERE "SUBJECT_POINT" IS NOT NULL;
+-- Spatial indexes (only created when PostGIS geometry columns exist)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'spatial_anchors' AND column_name = 'DEVICE_POINT'
+  ) THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_spatial_anchors_device_geo
+      ON spatial_anchors USING GIST ("DEVICE_POINT") WHERE "DEVICE_POINT" IS NOT NULL';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_spatial_anchors_subject_geo
+      ON spatial_anchors USING GIST ("SUBJECT_POINT") WHERE "SUBJECT_POINT" IS NOT NULL';
+  END IF;
+END $$;
 
 -- =============================================================================
 -- TRIGGER: auto-populate PostGIS geometry columns from lat/lng on insert/update
+-- Only creates the trigger when PostGIS geometry columns are present.
 -- =============================================================================
 CREATE OR REPLACE FUNCTION sync_spatial_anchor_geometry()
 RETURNS TRIGGER
@@ -95,17 +130,26 @@ AS $$
 BEGIN
   -- Device position
   IF NEW."DEVICE_LAT" IS NOT NULL AND NEW."DEVICE_LNG" IS NOT NULL THEN
-    NEW."DEVICE_POINT" := extensions.ST_SetSRID(
-      extensions.ST_MakePoint(NEW."DEVICE_LNG", NEW."DEVICE_LAT"),
-      4326
-    );
+    BEGIN
+      NEW."DEVICE_POINT" := extensions.ST_SetSRID(
+        extensions.ST_MakePoint(NEW."DEVICE_LNG", NEW."DEVICE_LAT"),
+        4326
+      );
+    EXCEPTION WHEN undefined_column OR undefined_function THEN
+      -- PostGIS or geometry columns not available — skip silently
+      NULL;
+    END;
   END IF;
   -- Subject position (computed async by Edge Function)
   IF NEW."SUBJECT_LAT" IS NOT NULL AND NEW."SUBJECT_LNG" IS NOT NULL THEN
-    NEW."SUBJECT_POINT" := extensions.ST_SetSRID(
-      extensions.ST_MakePoint(NEW."SUBJECT_LNG", NEW."SUBJECT_LAT"),
-      4326
-    );
+    BEGIN
+      NEW."SUBJECT_POINT" := extensions.ST_SetSRID(
+        extensions.ST_MakePoint(NEW."SUBJECT_LNG", NEW."SUBJECT_LAT"),
+        4326
+      );
+    EXCEPTION WHEN undefined_column OR undefined_function THEN
+      NULL;
+    END;
   END IF;
   RETURN NEW;
 END;

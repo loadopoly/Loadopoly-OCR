@@ -153,7 +153,6 @@ function estimateDistanceFromAngularSize(
  * Uses vertical tilt and an assumed typical subject altitude.
  */
 function estimateDistanceFromPitch(
-  compassHeadingDeg: number,
   devicePitchDeg: number,
   bboxCentreY: number,  // 0–1 (0=top, 1=bottom)
   fovVerticalDeg: number,
@@ -259,7 +258,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
     }
     if (distanceM == null) {
       const d = estimateDistanceFromPitch(
-        compassHeadingDeg, devicePitchDeg, bboxCentreY, fovVerticalDeg, deviceAltM
+        devicePitchDeg, bboxCentreY, fovVerticalDeg, deviceAltM
       );
       if (!isNaN(d) && d > 0 && d < 100_000) distanceM = d;
     }
@@ -276,58 +275,64 @@ Deno.serve(async (req: Request): Promise<Response> => {
     // --- Upsert graph_node for this entity ---
     let graphNodeId: string | null = null;
     if (obj.label) {
-      const normalizedLabel = obj.label.trim();
-      const nodeType = (subjectLat != null) ? 'spatial' : 'entity';
+      try {
+        const normalizedLabel = obj.label.trim();
+        const nodeType = (subjectLat != null) ? 'spatial' : 'entity';
 
-      // Try to find existing node by label + type
-      const { data: existing } = await supabase
-        .from('graph_nodes')
-        .select('ID, LAT, LNG, ANCHOR_COUNT')
-        .eq('LABEL', normalizedLabel)
-        .eq('NODE_TYPE', nodeType)
-        .maybeSingle();
-
-      if (existing) {
-        graphNodeId = existing.ID;
-        // Update position if we got a better fix (triangulation improvement)
-        if (subjectLat != null) {
-          const count = (existing.ANCHOR_COUNT ?? 0) + 1;
-          // Incremental average of position over N fixes
-          const newLat = existing.LAT != null
-            ? (existing.LAT * (count - 1) + subjectLat) / count
-            : subjectLat;
-          const newLng = existing.LNG != null
-            ? (existing.LNG * (count - 1) + subjectLng!) / count
-            : subjectLng;
-          await supabase
-            .from('graph_nodes')
-            .update({
-              LAT: newLat,
-              LNG: newLng,
-              ANCHOR_COUNT: count,
-              LAST_SEEN_AT: new Date().toISOString(),
-            })
-            .eq('ID', graphNodeId);
-        }
-      } else {
-        const { data: inserted } = await supabase
+        // Try to find existing node by label + type
+        const { data: existing, error: selectErr } = await supabase
           .from('graph_nodes')
-          .insert({
-            LABEL: normalizedLabel,
-            NODE_TYPE: nodeType,
-            LAT: subjectLat,
-            LNG: subjectLng,
-            ANCHOR_COUNT: subjectLat != null ? 1 : 0,
-            USER_ID: user.id,
-          })
-          .select('ID')
-          .single();
-        if (inserted) graphNodeId = inserted.ID;
+          .select('"ID", "LAT", "LNG", "ANCHOR_COUNT"')
+          .eq('LABEL', normalizedLabel)
+          .eq('NODE_TYPE', nodeType)
+          .maybeSingle();
+
+        if (selectErr) {
+          console.warn(`graph_nodes lookup failed (table may not exist): ${selectErr.message}`);
+        } else if (existing) {
+          graphNodeId = existing.ID;
+          // Update position if we got a better fix (triangulation improvement)
+          if (subjectLat != null) {
+            const count = (existing.ANCHOR_COUNT ?? 0) + 1;
+            // Incremental average of position over N fixes
+            const newLat = existing.LAT != null
+              ? (existing.LAT * (count - 1) + subjectLat) / count
+              : subjectLat;
+            const newLng = existing.LNG != null
+              ? (existing.LNG * (count - 1) + subjectLng!) / count
+              : subjectLng;
+            await supabase
+              .from('graph_nodes')
+              .update({
+                LAT: newLat,
+                LNG: newLng,
+                ANCHOR_COUNT: count,
+                LAST_SEEN_AT: new Date().toISOString(),
+              })
+              .eq('ID', graphNodeId);
+          }
+        } else {
+          const { data: inserted } = await supabase
+            .from('graph_nodes')
+            .insert({
+              LABEL: normalizedLabel,
+              NODE_TYPE: nodeType,
+              LAT: subjectLat,
+              LNG: subjectLng,
+              ANCHOR_COUNT: subjectLat != null ? 1 : 0,
+              USER_ID: user.id,
+            })
+            .select('"ID"')
+            .single();
+          if (inserted) graphNodeId = inserted.ID;
+        }
+      } catch (graphErr) {
+        console.warn(`graph_nodes upsert skipped: ${graphErr}`);
       }
     }
 
     // --- Insert spatial_anchor row ---
-    const { data: anchor } = await supabase
+    const { data: anchor, error: anchorErr } = await supabase
       .from('spatial_anchors')
       .insert({
         USER_ID: user.id,
@@ -358,8 +363,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
         GRAPH_NODE_ID: graphNodeId,
         PROCESSING_STATUS: 'processed',
       })
-      .select('ID')
+      .select('"ID"')
       .single();
+
+    if (anchorErr) {
+      console.error(`spatial_anchors insert failed: ${anchorErr.message}`);
+    }
 
     results.push({
       id: anchor?.ID ?? '',
