@@ -1,8 +1,8 @@
 -- =============================================
 -- LOADOPOLY-OCR CONSOLIDATED DATABASE SCHEMA
 -- =============================================
--- Version: 3.0.0
--- Last Updated: 2026-02-04
+-- Version: 3.1.0
+-- Last Updated: 2026-02-22
 --
 -- This is the SINGLE SOURCE OF TRUTH for the Loadopoly-OCR database schema.
 -- Run this script to set up a fresh Supabase project or verify existing schema.
@@ -10,16 +10,19 @@
 -- This script is IDEMPOTENT - safe to run multiple times.
 --
 -- MODULES:
---   1. Extensions
---   2. Core Tables (historical_documents_global, processing_queue)
---   3. Classification System (structured_clusters, mappings)
---   4. Avatar & Presence (user_avatars, presence_sessions, world_sectors)
---   5. GARD Tokenization (royalty_transactions, shard_holdings, etc.)
---   6. Bundles (digital_asset_bundles)
---   7. Functions & Triggers
---   8. Row Level Security Policies
---   9. Performance Indexes
---   10. Monitoring Views
+--   1.  Extensions (vector, PostGIS, pg_net, pg_cron)
+--   2.  Core Tables (historical_documents_global, processing_queue)
+--   3.  Classification System (structured_clusters, mappings)
+--   4.  Avatar & Presence (user_avatars, presence_sessions, world_sectors)
+--   5.  GARD Tokenization (royalty_transactions, shard_holdings, etc.)
+--   6.  Bundles (digital_asset_bundles)
+--   7.  Spatial Anchors (GPS + compass captures)
+--   8.  Knowledge Graph (graph_nodes, graph_edges, asset_graph_nodes)
+--   9.  Functions & Triggers
+--   10. Row Level Security Policies (incl. DELETE lockdown)
+--   11. Performance Indexes
+--   12. Monitoring Views
+--   13. Storage Bucket Policies
 -- =============================================
 
 BEGIN;
@@ -46,6 +49,12 @@ BEGIN
 EXCEPTION WHEN OTHERS THEN
   NULL; -- Ignore if can't move
 END $$;
+
+-- PostGIS for geospatial operations (spatial anchors, graph nodes)
+CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA extensions;
+
+-- pg_net for async HTTP calls (auto-processing trigger)
+CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;
 
 GRANT USAGE ON SCHEMA extensions TO authenticated, service_role, anon;
 
@@ -89,7 +98,7 @@ CREATE TABLE IF NOT EXISTS processing_queue (
     -- Worker Assignment
     "WORKER_ID" TEXT,
     "LOCKED_AT" TIMESTAMPTZ,
-    "LOCK_TIMEOUT_SECONDS" INTEGER DEFAULT 300,
+    "LOCK_TIMEOUT_SECONDS" INTEGER DEFAULT 120,
     
     -- Timestamps
     "CREATED_AT" TIMESTAMPTZ DEFAULT NOW(),
@@ -400,7 +409,158 @@ CREATE TABLE IF NOT EXISTS pending_rewards (
 );
 
 -- ============================================
--- 6. EXTEND HISTORICAL_DOCUMENTS_GLOBAL
+-- 6. SPATIAL ANCHORS
+-- ============================================
+-- GPS + compass data captured at photo time for each recognized object.
+-- Enables cross-session triangulation and GIS-based Knowledge Graph enrichment.
+
+CREATE TABLE IF NOT EXISTS spatial_anchors (
+  "ID"                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "CREATED_AT"            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "USER_ID"               UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  "ASSET_ID"              UUID,
+  "CAPTURE_SESSION_ID"    TEXT,
+  "DEVICE_LAT"            DOUBLE PRECISION NOT NULL,
+  "DEVICE_LNG"            DOUBLE PRECISION NOT NULL,
+  "DEVICE_ALT_M"          DOUBLE PRECISION DEFAULT 0,
+  "DEVICE_ACCURACY_M"     DOUBLE PRECISION,
+  "COMPASS_HEADING_DEG"   DOUBLE PRECISION NOT NULL,
+  "DEVICE_PITCH_DEG"      DOUBLE PRECISION DEFAULT 0,
+  "DEVICE_ROLL_DEG"       DOUBLE PRECISION DEFAULT 0,
+  "FOV_HORIZONTAL_DEG"    DOUBLE PRECISION DEFAULT 60,
+  "FOV_VERTICAL_DEG"      DOUBLE PRECISION DEFAULT 45,
+  "IMAGE_WIDTH_PX"        INTEGER DEFAULT 1920,
+  "IMAGE_HEIGHT_PX"       INTEGER DEFAULT 1080,
+  "BBOX_X"                DOUBLE PRECISION,
+  "BBOX_Y"                DOUBLE PRECISION,
+  "BBOX_W"                DOUBLE PRECISION,
+  "BBOX_H"                DOUBLE PRECISION,
+  "RECOGNIZED_TEXT"        TEXT,
+  "RECOGNIZED_LABEL"       TEXT,
+  "RECOGNITION_CONFIDENCE" DOUBLE PRECISION,
+  "SUBJECT_LAT"           DOUBLE PRECISION,
+  "SUBJECT_LNG"           DOUBLE PRECISION,
+  "SUBJECT_ALT_M"         DOUBLE PRECISION,
+  "SUBJECT_BEARING_DEG"   DOUBLE PRECISION,
+  "SUBJECT_DISTANCE_M"    DOUBLE PRECISION,
+  "TRIANGULATION_COUNT"   INTEGER DEFAULT 0,
+  "TRIANGULATION_RMSE_M"  DOUBLE PRECISION,
+  "GRAPH_NODE_ID"         UUID,
+  "PROCESSING_STATUS"     TEXT DEFAULT 'pending'
+                          CHECK ("PROCESSING_STATUS" IN ('pending', 'processed', 'triangulated', 'failed'))
+);
+
+-- PostGIS geometry columns (conditional — table works without PostGIS)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'postgis') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'spatial_anchors' AND column_name = 'DEVICE_POINT'
+    ) THEN
+      ALTER TABLE spatial_anchors ADD COLUMN "DEVICE_POINT" extensions.geometry(Point, 4326);
+    END IF;
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'spatial_anchors' AND column_name = 'SUBJECT_POINT'
+    ) THEN
+      ALTER TABLE spatial_anchors ADD COLUMN "SUBJECT_POINT" extensions.geometry(Point, 4326);
+    END IF;
+  END IF;
+END $$;
+
+COMMENT ON TABLE spatial_anchors IS
+  'GPS + compass + FOV data captured per recognized object. Subject coordinates computed by spatial-coordinates Edge Function.';
+
+-- ============================================
+-- 7. KNOWLEDGE GRAPH
+-- ============================================
+-- Persistent entity graph derived from OCR content and spatial anchors.
+
+CREATE TABLE IF NOT EXISTS graph_nodes (
+  "ID"                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "CREATED_AT"        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "UPDATED_AT"        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "LABEL"             TEXT NOT NULL,
+  "CANONICAL_ID"      TEXT,
+  "NODE_TYPE"         TEXT NOT NULL DEFAULT 'entity'
+                      CHECK ("NODE_TYPE" IN (
+                        'entity', 'location', 'person', 'organization',
+                        'concept', 'document', 'spatial'
+                      )),
+  "LAT"               DOUBLE PRECISION,
+  "LNG"               DOUBLE PRECISION,
+  "ALT_M"             DOUBLE PRECISION,
+  "ASSET_COUNT"       INTEGER NOT NULL DEFAULT 0,
+  "ANCHOR_COUNT"      INTEGER NOT NULL DEFAULT 0,
+  "FIRST_SEEN_AT"     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "LAST_SEEN_AT"      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "DESCRIPTION"       TEXT,
+  "ALIASES"           TEXT[],
+  "WIKIPEDIA_URL"     TEXT,
+  "WIKIDATA_QID"      TEXT,
+  "GRAPH_PROCESSED"   BOOLEAN NOT NULL DEFAULT false,
+  "USER_ID"           UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  UNIQUE ("NODE_TYPE", "CANONICAL_ID")
+);
+
+-- PostGIS geometry column (conditional)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'postgis') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'graph_nodes' AND column_name = 'GEO_POINT'
+    ) THEN
+      ALTER TABLE graph_nodes ADD COLUMN "GEO_POINT" extensions.geometry(Point, 4326);
+    END IF;
+  END IF;
+END $$;
+
+-- pgvector embedding column (conditional)
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
+    IF NOT EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'graph_nodes' AND column_name = 'EMBEDDING'
+    ) THEN
+      ALTER TABLE graph_nodes ADD COLUMN "EMBEDDING" VECTOR(768);
+    END IF;
+  END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS graph_edges (
+  "ID"                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "CREATED_AT"        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "FROM_NODE_ID"      UUID NOT NULL REFERENCES graph_nodes("ID") ON DELETE CASCADE,
+  "TO_NODE_ID"        UUID NOT NULL REFERENCES graph_nodes("ID") ON DELETE CASCADE,
+  "RELATIONSHIP"      TEXT NOT NULL,
+  "WEIGHT"            DOUBLE PRECISION DEFAULT 1.0,
+  "CONFIDENCE"        DOUBLE PRECISION DEFAULT 0.5,
+  "IS_SPATIAL"        BOOLEAN DEFAULT false,
+  "ASSET_IDS"         UUID[] DEFAULT '{}',
+  UNIQUE ("FROM_NODE_ID", "TO_NODE_ID", "RELATIONSHIP")
+);
+
+CREATE TABLE IF NOT EXISTS asset_graph_nodes (
+  "ASSET_ID"          UUID NOT NULL,
+  "NODE_ID"           UUID NOT NULL REFERENCES graph_nodes("ID") ON DELETE CASCADE,
+  "CREATED_AT"        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  "CONFIDENCE"        DOUBLE PRECISION DEFAULT 1.0,
+  "CONTEXT_SNIPPET"   TEXT,
+  PRIMARY KEY ("ASSET_ID", "NODE_ID")
+);
+
+COMMENT ON TABLE graph_nodes IS
+  'Persistent entity graph nodes. NODE_TYPE=location nodes carry PostGIS geometry. GRAPH_PROCESSED=false rows are picked up by kg-backfill.';
+COMMENT ON TABLE graph_edges IS
+  'Directed relationships between graph_nodes. IS_SPATIAL=true indicates triangulation-derived edge.';
+COMMENT ON TABLE asset_graph_nodes IS
+  'Junction table linking digital assets to graph nodes they mention.';
+
+-- ============================================
+-- 8. EXTEND HISTORICAL_DOCUMENTS_GLOBAL
 -- ============================================
 -- Add columns if the table exists (created externally)
 
@@ -433,10 +593,10 @@ EXCEPTION WHEN undefined_table THEN
 END $$;
 
 -- ============================================
--- 7. FUNCTIONS
+-- 9. FUNCTIONS
 -- ============================================
 
--- 7.1 Claim Processing Job
+-- 9.1 Claim Processing Job
 CREATE OR REPLACE FUNCTION claim_processing_job(p_worker_id TEXT)
 RETURNS TABLE (
     id UUID,
@@ -710,8 +870,219 @@ BEGIN
 END;
 $$;
 
+-- 9.11 Sync Spatial Anchor Geometry (Trigger Function)
+CREATE OR REPLACE FUNCTION sync_spatial_anchor_geometry()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+BEGIN
+  IF NEW."DEVICE_LAT" IS NOT NULL AND NEW."DEVICE_LNG" IS NOT NULL THEN
+    BEGIN
+      NEW."DEVICE_POINT" := extensions.ST_SetSRID(
+        extensions.ST_MakePoint(NEW."DEVICE_LNG", NEW."DEVICE_LAT"), 4326);
+    EXCEPTION WHEN undefined_column OR undefined_function THEN NULL;
+    END;
+  END IF;
+  IF NEW."SUBJECT_LAT" IS NOT NULL AND NEW."SUBJECT_LNG" IS NOT NULL THEN
+    BEGIN
+      NEW."SUBJECT_POINT" := extensions.ST_SetSRID(
+        extensions.ST_MakePoint(NEW."SUBJECT_LNG", NEW."SUBJECT_LAT"), 4326);
+    EXCEPTION WHEN undefined_column OR undefined_function THEN NULL;
+    END;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- 9.12 Update Graph Node Timestamps + Sync Geo (Trigger Function)
+CREATE OR REPLACE FUNCTION update_graph_node_timestamps()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+BEGIN
+  NEW."UPDATED_AT" := now();
+  IF NEW."LAT" IS NOT NULL AND NEW."LNG" IS NOT NULL THEN
+    BEGIN
+      NEW."GEO_POINT" := extensions.ST_SetSRID(
+        extensions.ST_MakePoint(NEW."LNG", NEW."LAT"), 4326);
+    EXCEPTION WHEN undefined_column OR undefined_function THEN NULL;
+    END;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- 9.13 Increment Node Asset Count (Trigger Function)
+CREATE OR REPLACE FUNCTION increment_node_asset_count()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE graph_nodes
+  SET "ASSET_COUNT" = "ASSET_COUNT" + 1,
+      "LAST_SEEN_AT" = now()
+  WHERE "ID" = NEW."NODE_ID";
+  RETURN NEW;
+END;
+$$;
+
+-- 9.14 Decrement Node Asset Count (Trigger Function)
+CREATE OR REPLACE FUNCTION decrement_node_asset_count()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  UPDATE graph_nodes
+  SET "ASSET_COUNT" = GREATEST(0, "ASSET_COUNT" - 1)
+  WHERE "ID" = OLD."NODE_ID";
+  RETURN OLD;
+END;
+$$;
+
+-- 9.15 Invoke Processing Worker (Trigger Function — auto-processing)
+CREATE OR REPLACE FUNCTION invoke_processing_worker()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+DECLARE
+  processing_count INTEGER;
+  service_role_key TEXT;
+  edge_function_url TEXT;
+BEGIN
+  IF NEW."STATUS" != 'PENDING' THEN
+    RETURN NEW;
+  END IF;
+  SELECT COUNT(*) INTO processing_count
+  FROM public.processing_queue WHERE "STATUS" = 'PROCESSING';
+  IF processing_count > 0 THEN
+    RETURN NEW;
+  END IF;
+  edge_function_url := 'https://kuofzjhrrjgimtomgact.supabase.co/functions/v1/process-ocr';
+  SELECT decrypted_secret INTO service_role_key
+  FROM vault.decrypted_secrets
+  WHERE name = 'supabase_service_role_key' LIMIT 1;
+  IF service_role_key IS NULL THEN
+    RAISE WARNING 'No service role key in vault, skipping auto-invoke';
+    RETURN NEW;
+  END IF;
+  PERFORM extensions.http_post(
+    url := edge_function_url,
+    body := json_build_object('maxJobs', 5, 'triggeredBy', 'database_trigger')::text,
+    headers := json_build_object(
+      'Content-Type', 'application/json',
+      'Authorization', 'Bearer ' || service_role_key
+    )::jsonb
+  );
+  RETURN NEW;
+EXCEPTION WHEN OTHERS THEN
+  RAISE WARNING 'Auto-trigger failed: %', SQLERRM;
+  RETURN NEW;
+END;
+$$;
+
+-- 9.16 Cleanup Completed Jobs
+CREATE OR REPLACE FUNCTION cleanup_completed_jobs(p_days_old INTEGER DEFAULT 7)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE deleted_count INTEGER;
+BEGIN
+    DELETE FROM public.processing_queue
+    WHERE "STATUS" IN ('COMPLETED', 'FAILED', 'CANCELLED')
+      AND "COMPLETED_AT" < NOW() - (p_days_old || ' days')::INTERVAL;
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    RETURN deleted_count;
+END;
+$$;
+
+-- 9.17 Reset User Queue
+CREATE OR REPLACE FUNCTION reset_user_queue(p_user_id UUID)
+RETURNS TABLE (reset_count INTEGER, job_ids UUID[])
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE v_reset_count INTEGER; v_job_ids UUID[];
+BEGIN
+    SELECT ARRAY_AGG("ID") INTO v_job_ids
+    FROM public.processing_queue
+    WHERE "USER_ID" = p_user_id AND "STATUS" IN ('PROCESSING', 'FAILED');
+    UPDATE public.processing_queue
+    SET "STATUS" = 'PENDING', "WORKER_ID" = NULL, "LOCKED_AT" = NULL,
+        "PROGRESS" = 0, "STAGE" = 'RESET_BY_USER', "RETRY_COUNT" = 0,
+        "LAST_ERROR" = NULL, "ERROR_CODE" = NULL, "UPDATED_AT" = NOW()
+    WHERE "USER_ID" = p_user_id AND "STATUS" IN ('PROCESSING', 'FAILED');
+    GET DIAGNOSTICS v_reset_count = ROW_COUNT;
+    RETURN QUERY SELECT v_reset_count, COALESCE(v_job_ids, ARRAY[]::UUID[]);
+END;
+$$;
+
+-- 9.18 Get Queue Health
+CREATE OR REPLACE FUNCTION get_queue_health()
+RETURNS TABLE (
+    total_pending INTEGER, total_processing INTEGER,
+    total_completed_24h INTEGER, total_failed_24h INTEGER,
+    avg_processing_time_seconds NUMERIC, stale_locks_count INTEGER,
+    oldest_pending_age_minutes INTEGER
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+BEGIN
+    RETURN QUERY
+    SELECT
+        COUNT(*) FILTER (WHERE "STATUS" = 'PENDING')::INTEGER,
+        COUNT(*) FILTER (WHERE "STATUS" = 'PROCESSING')::INTEGER,
+        COUNT(*) FILTER (WHERE "STATUS" = 'COMPLETED' AND "COMPLETED_AT" > NOW() - INTERVAL '24 hours')::INTEGER,
+        COUNT(*) FILTER (WHERE "STATUS" = 'FAILED' AND "COMPLETED_AT" > NOW() - INTERVAL '24 hours')::INTEGER,
+        AVG(EXTRACT(EPOCH FROM ("COMPLETED_AT" - "STARTED_AT"))) FILTER (WHERE "STATUS" = 'COMPLETED' AND "COMPLETED_AT" > NOW() - INTERVAL '24 hours'),
+        COUNT(*) FILTER (WHERE "STATUS" = 'PROCESSING' AND "LOCKED_AT" < NOW() - ("LOCK_TIMEOUT_SECONDS" || ' seconds')::INTERVAL)::INTEGER,
+        (EXTRACT(EPOCH FROM (NOW() - MIN("CREATED_AT") FILTER (WHERE "STATUS" = 'PENDING'))) / 60)::INTEGER
+    FROM public.processing_queue;
+END;
+$$;
+
+-- 9.19 Force Reset Stuck Jobs
+CREATE OR REPLACE FUNCTION force_reset_stuck_jobs()
+RETURNS TABLE (reset_count INTEGER, job_ids UUID[])
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = ''
+AS $$
+DECLARE v_reset_count INTEGER; v_job_ids UUID[];
+BEGIN
+    SELECT ARRAY_AGG("ID") INTO v_job_ids
+    FROM public.processing_queue WHERE "STATUS" = 'PROCESSING';
+    UPDATE public.processing_queue
+    SET "STATUS" = 'PENDING', "WORKER_ID" = NULL, "LOCKED_AT" = NULL,
+        "PROGRESS" = 0, "STAGE" = 'FORCE_RESET_ALL', "UPDATED_AT" = NOW()
+    WHERE "STATUS" = 'PROCESSING';
+    GET DIAGNOSTICS v_reset_count = ROW_COUNT;
+    RETURN QUERY SELECT v_reset_count, COALESCE(v_job_ids, ARRAY[]::UUID[]);
+END;
+$$;
+
+-- Grant execute permissions for queue management
+GRANT EXECUTE ON FUNCTION cleanup_completed_jobs TO service_role;
+GRANT EXECUTE ON FUNCTION reset_user_queue TO authenticated;
+GRANT EXECUTE ON FUNCTION get_queue_health TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION force_reset_stuck_jobs TO service_role;
+
 -- ============================================
--- 8. TRIGGERS
+-- 10. TRIGGERS
 -- ============================================
 
 -- Bundle asset count trigger
@@ -731,8 +1102,37 @@ CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
     FOR EACH ROW EXECUTE FUNCTION initialize_user_avatar();
 
+-- Spatial anchor geometry sync trigger
+DROP TRIGGER IF EXISTS trg_spatial_anchor_geometry ON spatial_anchors;
+CREATE TRIGGER trg_spatial_anchor_geometry
+  BEFORE INSERT OR UPDATE ON spatial_anchors
+  FOR EACH ROW EXECUTE FUNCTION sync_spatial_anchor_geometry();
+
+-- Graph node timestamps + geo sync trigger
+DROP TRIGGER IF EXISTS trg_graph_node_timestamps ON graph_nodes;
+CREATE TRIGGER trg_graph_node_timestamps
+  BEFORE INSERT OR UPDATE ON graph_nodes
+  FOR EACH ROW EXECUTE FUNCTION update_graph_node_timestamps();
+
+-- Graph node asset count triggers
+DROP TRIGGER IF EXISTS trg_increment_node_asset_count ON asset_graph_nodes;
+CREATE TRIGGER trg_increment_node_asset_count
+  AFTER INSERT ON asset_graph_nodes
+  FOR EACH ROW EXECUTE FUNCTION increment_node_asset_count();
+
+DROP TRIGGER IF EXISTS trg_decrement_node_asset_count ON asset_graph_nodes;
+CREATE TRIGGER trg_decrement_node_asset_count
+  AFTER DELETE ON asset_graph_nodes
+  FOR EACH ROW EXECUTE FUNCTION decrement_node_asset_count();
+
+-- Auto-invoke processing Edge Function on queue insert
+DROP TRIGGER IF EXISTS trg_invoke_processing_worker ON processing_queue;
+CREATE TRIGGER trg_invoke_processing_worker
+  AFTER INSERT ON processing_queue
+  FOR EACH ROW EXECUTE FUNCTION invoke_processing_worker();
+
 -- ============================================
--- 9. ROW LEVEL SECURITY
+-- 11. ROW LEVEL SECURITY
 -- ============================================
 
 -- Enable RLS on all tables
@@ -754,6 +1154,10 @@ ALTER TABLE social_return_projects ENABLE ROW LEVEL SECURITY;
 ALTER TABLE governance_votes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE gard_tokenized_assets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pending_rewards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE spatial_anchors ENABLE ROW LEVEL SECURITY;
+ALTER TABLE graph_nodes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE graph_edges ENABLE ROW LEVEL SECURITY;
+ALTER TABLE asset_graph_nodes ENABLE ROW LEVEL SECURITY;
 
 -- Processing Queue Policies
 DROP POLICY IF EXISTS "Users view own queue items" ON processing_queue;
@@ -768,13 +1172,27 @@ DROP POLICY IF EXISTS "Users update own queue items" ON processing_queue;
 CREATE POLICY "Users update own queue items" ON processing_queue FOR UPDATE
 USING ((select auth.uid()) = "USER_ID" OR (select auth.role()) = 'service_role');
 
--- Digital Asset Bundles Policies
-DROP POLICY IF EXISTS "Public view bundles" ON digital_asset_bundles;
-CREATE POLICY "Public view bundles" ON digital_asset_bundles FOR SELECT USING (true);
+-- Processing Queue DELETE lockdown — service_role only
+DROP POLICY IF EXISTS "Service role delete queue items" ON processing_queue;
+CREATE POLICY "Service role delete queue items" ON processing_queue FOR DELETE
+TO service_role USING (true);
 
+-- Digital Asset Bundles Policies (DELETE locked to service_role)
+DROP POLICY IF EXISTS "Public view bundles" ON digital_asset_bundles;
 DROP POLICY IF EXISTS "Users manage own bundles" ON digital_asset_bundles;
-CREATE POLICY "Users manage own bundles" ON digital_asset_bundles FOR ALL 
+DROP POLICY IF EXISTS "Users view own bundles" ON digital_asset_bundles;
+DROP POLICY IF EXISTS "Users insert own bundles" ON digital_asset_bundles;
+DROP POLICY IF EXISTS "Users update own bundles" ON digital_asset_bundles;
+DROP POLICY IF EXISTS "Service role delete bundles" ON digital_asset_bundles;
+
+CREATE POLICY "Users view own bundles" ON digital_asset_bundles FOR SELECT
+USING ((select auth.uid()) = "USER_ID" OR (select auth.role()) = 'service_role');
+CREATE POLICY "Users insert own bundles" ON digital_asset_bundles FOR INSERT
+WITH CHECK ((select auth.uid()) = "USER_ID");
+CREATE POLICY "Users update own bundles" ON digital_asset_bundles FOR UPDATE
 USING ((select auth.uid()) = "USER_ID");
+CREATE POLICY "Service role delete bundles" ON digital_asset_bundles FOR DELETE
+TO service_role USING (true);
 
 -- Structured Clusters Policies
 DROP POLICY IF EXISTS "Anyone can view clusters" ON structured_clusters;
@@ -860,8 +1278,91 @@ DROP POLICY IF EXISTS "Users view own rewards" ON pending_rewards;
 CREATE POLICY "Users view own rewards" ON pending_rewards FOR SELECT 
 USING ((select auth.uid()) = "USER_ID");
 
+-- Spatial Anchors Policies
+DROP POLICY IF EXISTS "spatial_anchors_select_own" ON spatial_anchors;
+CREATE POLICY "spatial_anchors_select_own" ON spatial_anchors FOR SELECT TO authenticated
+USING (auth.uid() = "USER_ID");
+
+DROP POLICY IF EXISTS "spatial_anchors_insert_own" ON spatial_anchors;
+CREATE POLICY "spatial_anchors_insert_own" ON spatial_anchors FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = "USER_ID");
+
+DROP POLICY IF EXISTS "spatial_anchors_update_own" ON spatial_anchors;
+CREATE POLICY "spatial_anchors_update_own" ON spatial_anchors FOR UPDATE TO authenticated
+USING (auth.uid() = "USER_ID");
+
+DROP POLICY IF EXISTS "spatial_anchors_service_role" ON spatial_anchors;
+CREATE POLICY "spatial_anchors_service_role" ON spatial_anchors FOR ALL TO service_role
+USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Service role delete spatial_anchors" ON spatial_anchors;
+CREATE POLICY "Service role delete spatial_anchors" ON spatial_anchors FOR DELETE
+TO service_role USING (true);
+
+-- Graph Nodes Policies
+DROP POLICY IF EXISTS "graph_nodes_read_all" ON graph_nodes;
+DROP POLICY IF EXISTS "graph_nodes_insert_own" ON graph_nodes;
+DROP POLICY IF EXISTS "graph_nodes_update_own" ON graph_nodes;
+DROP POLICY IF EXISTS "graph_nodes_service" ON graph_nodes;
+CREATE POLICY "graph_nodes_read_all" ON graph_nodes FOR SELECT TO authenticated USING (true);
+CREATE POLICY "graph_nodes_insert_own" ON graph_nodes FOR INSERT TO authenticated
+WITH CHECK (auth.uid() = "USER_ID" OR "USER_ID" IS NULL);
+CREATE POLICY "graph_nodes_update_own" ON graph_nodes FOR UPDATE TO authenticated
+USING (auth.uid() = "USER_ID" OR "USER_ID" IS NULL);
+CREATE POLICY "graph_nodes_service" ON graph_nodes FOR ALL TO service_role
+USING (true) WITH CHECK (true);
+
+-- Graph Edges Policies
+DROP POLICY IF EXISTS "graph_edges_read_all" ON graph_edges;
+DROP POLICY IF EXISTS "graph_edges_service" ON graph_edges;
+CREATE POLICY "graph_edges_read_all" ON graph_edges FOR SELECT TO authenticated USING (true);
+CREATE POLICY "graph_edges_service" ON graph_edges FOR ALL TO service_role
+USING (true) WITH CHECK (true);
+
+-- Asset Graph Nodes (junction) Policies
+DROP POLICY IF EXISTS "asset_graph_nodes_read" ON asset_graph_nodes;
+DROP POLICY IF EXISTS "asset_graph_nodes_service" ON asset_graph_nodes;
+CREATE POLICY "asset_graph_nodes_read" ON asset_graph_nodes FOR SELECT TO authenticated USING (true);
+CREATE POLICY "asset_graph_nodes_service" ON asset_graph_nodes FOR ALL TO service_role
+USING (true) WITH CHECK (true);
+
+-- DELETE Lockdown — service_role only on historical_documents_global
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables
+             WHERE table_schema = 'public' AND table_name = 'historical_documents_global') THEN
+    DROP POLICY IF EXISTS "Public Anonymous Delete" ON historical_documents_global;
+    DROP POLICY IF EXISTS "Service role delete documents" ON historical_documents_global;
+    EXECUTE 'CREATE POLICY "Service role delete documents"
+      ON historical_documents_global FOR DELETE TO service_role USING (true)';
+  END IF;
+END $$;
+
+-- DELETE Lockdown — service_role only on shard & token tables
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables
+             WHERE table_schema = 'public' AND table_name = 'shard_holdings') THEN
+    DROP POLICY IF EXISTS "Service role delete shard_holdings" ON shard_holdings;
+    EXECUTE 'CREATE POLICY "Service role delete shard_holdings"
+      ON shard_holdings FOR DELETE TO service_role USING (true)';
+  END IF;
+  IF EXISTS (SELECT FROM information_schema.tables
+             WHERE table_schema = 'public' AND table_name = 'gard_tokenized_assets') THEN
+    DROP POLICY IF EXISTS "Service role delete gard_tokenized_assets" ON gard_tokenized_assets;
+    EXECUTE 'CREATE POLICY "Service role delete gard_tokenized_assets"
+      ON gard_tokenized_assets FOR DELETE TO service_role USING (true)';
+  END IF;
+  IF EXISTS (SELECT FROM information_schema.tables
+             WHERE table_schema = 'public' AND table_name = 'pending_rewards') THEN
+    DROP POLICY IF EXISTS "Service role delete pending_rewards" ON pending_rewards;
+    EXECUTE 'CREATE POLICY "Service role delete pending_rewards"
+      ON pending_rewards FOR DELETE TO service_role USING (true)';
+  END IF;
+END $$;
+
 -- ============================================
--- 10. PERFORMANCE INDEXES
+-- 12. PERFORMANCE INDEXES
 -- ============================================
 
 -- Processing Queue Indexes
@@ -907,6 +1408,68 @@ CREATE INDEX IF NOT EXISTS idx_votes_project ON governance_votes("PROJECT_ID");
 -- Bundle Indexes
 CREATE INDEX IF NOT EXISTS idx_bundle_user ON digital_asset_bundles("USER_ID");
 
+-- Queue Duplicate Prevention & Cleanup Indexes
+CREATE UNIQUE INDEX IF NOT EXISTS idx_pq_active_asset_per_user
+    ON processing_queue ("ASSET_ID", "USER_ID")
+    WHERE "STATUS" IN ('PENDING', 'PROCESSING');
+CREATE INDEX IF NOT EXISTS idx_processing_queue_completed_at_status
+    ON processing_queue("COMPLETED_AT", "STATUS")
+    WHERE "STATUS" IN ('COMPLETED', 'FAILED', 'CANCELLED');
+CREATE INDEX IF NOT EXISTS idx_processing_queue_status_created
+    ON processing_queue("STATUS", "CREATED_AT");
+
+-- Spatial Anchors Indexes
+CREATE INDEX IF NOT EXISTS idx_spatial_anchors_user    ON spatial_anchors("USER_ID");
+CREATE INDEX IF NOT EXISTS idx_spatial_anchors_asset   ON spatial_anchors("ASSET_ID") WHERE "ASSET_ID" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_spatial_anchors_session ON spatial_anchors("CAPTURE_SESSION_ID") WHERE "CAPTURE_SESSION_ID" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_spatial_anchors_status  ON spatial_anchors("PROCESSING_STATUS");
+CREATE INDEX IF NOT EXISTS idx_spatial_anchors_label   ON spatial_anchors("RECOGNIZED_LABEL") WHERE "RECOGNIZED_LABEL" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_spatial_anchors_node    ON spatial_anchors("GRAPH_NODE_ID") WHERE "GRAPH_NODE_ID" IS NOT NULL;
+
+-- Spatial GIST indexes (conditional on PostGIS geometry columns)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'spatial_anchors' AND column_name = 'DEVICE_POINT'
+  ) THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_spatial_anchors_device_geo
+      ON spatial_anchors USING GIST ("DEVICE_POINT") WHERE "DEVICE_POINT" IS NOT NULL';
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_spatial_anchors_subject_geo
+      ON spatial_anchors USING GIST ("SUBJECT_POINT") WHERE "SUBJECT_POINT" IS NOT NULL';
+  END IF;
+END $$;
+
+-- Graph Nodes Indexes
+CREATE INDEX IF NOT EXISTS idx_graph_nodes_label       ON graph_nodes("LABEL");
+CREATE INDEX IF NOT EXISTS idx_graph_nodes_type        ON graph_nodes("NODE_TYPE");
+CREATE INDEX IF NOT EXISTS idx_graph_nodes_canonical   ON graph_nodes("CANONICAL_ID") WHERE "CANONICAL_ID" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_graph_nodes_user        ON graph_nodes("USER_ID") WHERE "USER_ID" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_graph_nodes_processed   ON graph_nodes("GRAPH_PROCESSED") WHERE "GRAPH_PROCESSED" = false;
+CREATE INDEX IF NOT EXISTS idx_graph_nodes_assets      ON graph_nodes("ASSET_COUNT" DESC);
+
+-- GEO_POINT GIST index (conditional on PostGIS column)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'graph_nodes' AND column_name = 'GEO_POINT'
+  ) THEN
+    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_graph_nodes_geo
+      ON graph_nodes USING GIST ("GEO_POINT") WHERE "GEO_POINT" IS NOT NULL';
+  END IF;
+END $$;
+
+-- Graph Edges Indexes
+CREATE INDEX IF NOT EXISTS idx_graph_edges_from        ON graph_edges("FROM_NODE_ID");
+CREATE INDEX IF NOT EXISTS idx_graph_edges_to          ON graph_edges("TO_NODE_ID");
+CREATE INDEX IF NOT EXISTS idx_graph_edges_rel         ON graph_edges("RELATIONSHIP");
+CREATE INDEX IF NOT EXISTS idx_graph_edges_spatial     ON graph_edges("IS_SPATIAL") WHERE "IS_SPATIAL" = true;
+
+-- Asset Graph Nodes Indexes
+CREATE INDEX IF NOT EXISTS idx_asset_graph_nodes_asset ON asset_graph_nodes("ASSET_ID");
+CREATE INDEX IF NOT EXISTS idx_asset_graph_nodes_node  ON asset_graph_nodes("NODE_ID");
+
 -- Add BRIN indexes for time-series data (if historical_documents_global exists)
 DO $$
 BEGIN
@@ -926,7 +1489,7 @@ BEGIN
 END $$;
 
 -- ============================================
--- 11. MONITORING VIEWS
+-- 13. MONITORING VIEWS
 -- ============================================
 
 -- Queue Statistics View
@@ -998,10 +1561,78 @@ GRANT SELECT ON queue_health TO authenticated;
 GRANT SELECT ON index_usage_stats TO authenticated;
 GRANT SELECT ON cache_hit_stats TO authenticated;
 
+-- ============================================
+-- 14. STORAGE BUCKET POLICIES
+-- ============================================
+
+-- Ensure the processing-uploads bucket exists
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'processing-uploads',
+  'processing-uploads',
+  false,
+  52428800,   -- 50 MB
+  ARRAY['image/jpeg','image/png','image/webp','image/heic','application/pdf']
+)
+ON CONFLICT (id) DO UPDATE SET
+  file_size_limit   = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types,
+  public            = EXCLUDED.public;
+
+-- Drop stale / conflicting policies
+DROP POLICY IF EXISTS "Users can upload to own folder"         ON storage.objects;
+DROP POLICY IF EXISTS "Users can update own uploads"           ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete own uploads"           ON storage.objects;
+DROP POLICY IF EXISTS "Users can read own uploads"             ON storage.objects;
+DROP POLICY IF EXISTS "Service role full access to processing" ON storage.objects;
+
+-- Authenticated users: INSERT into own folder ({user_id}/{asset_id}/{filename})
+CREATE POLICY "Users can upload to own folder"
+ON storage.objects FOR INSERT
+TO authenticated
+WITH CHECK (
+  bucket_id = 'processing-uploads'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Authenticated users: SELECT own uploads
+CREATE POLICY "Users can read own uploads"
+ON storage.objects FOR SELECT
+TO authenticated
+USING (
+  bucket_id = 'processing-uploads'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Authenticated users: UPDATE own uploads
+CREATE POLICY "Users can update own uploads"
+ON storage.objects FOR UPDATE
+TO authenticated
+USING (
+  bucket_id = 'processing-uploads'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Authenticated users: DELETE own uploads
+CREATE POLICY "Users can delete own uploads"
+ON storage.objects FOR DELETE
+TO authenticated
+USING (
+  bucket_id = 'processing-uploads'
+  AND (storage.foldername(name))[1] = auth.uid()::text
+);
+
+-- Service role: full access (Edge Functions use service_role key for OCR)
+CREATE POLICY "Service role full access to processing"
+ON storage.objects FOR ALL
+TO service_role
+USING (bucket_id = 'processing-uploads')
+WITH CHECK (bucket_id = 'processing-uploads');
+
 COMMIT;
 
 -- ============================================
 -- COMPLETION MESSAGE
 -- ============================================
-SELECT '✅ Loadopoly-OCR v3.0.0 Consolidated Schema Setup Complete!' as result,
-       'All tables, functions, policies, and indexes created' as status;
+SELECT '✅ Loadopoly-OCR v3.1.0 Consolidated Schema Setup Complete!' as result,
+       'All tables, functions, policies, indexes, and storage buckets created' as status;
