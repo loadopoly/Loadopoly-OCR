@@ -122,14 +122,17 @@ CREATE TRIGGER trg_spatial_anchor_geometry
 ALTER TABLE spatial_anchors ENABLE ROW LEVEL SECURITY;
 
 -- Users can read/write their own anchors
+DROP POLICY IF EXISTS "spatial_anchors_select_own" ON spatial_anchors;
 CREATE POLICY "spatial_anchors_select_own" ON spatial_anchors
   FOR SELECT TO authenticated
   USING (auth.uid() = "USER_ID");
 
+DROP POLICY IF EXISTS "spatial_anchors_insert_own" ON spatial_anchors;
 CREATE POLICY "spatial_anchors_insert_own" ON spatial_anchors
   FOR INSERT TO authenticated
   WITH CHECK (auth.uid() = "USER_ID");
 
+DROP POLICY IF EXISTS "spatial_anchors_update_own" ON spatial_anchors;
 CREATE POLICY "spatial_anchors_update_own" ON spatial_anchors
   FOR UPDATE TO authenticated
   USING (auth.uid() = "USER_ID");
@@ -138,6 +141,7 @@ CREATE POLICY "spatial_anchors_update_own" ON spatial_anchors
 -- Users must submit explicit deletion requests; mass deletes only from Supabase dashboard.
 
 -- Edge Functions / service_role can read/write all anchors for triangulation
+DROP POLICY IF EXISTS "spatial_anchors_service_role" ON spatial_anchors;
 CREATE POLICY "spatial_anchors_service_role" ON spatial_anchors
   FOR ALL TO service_role
   USING (true)
