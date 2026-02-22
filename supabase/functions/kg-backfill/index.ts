@@ -39,7 +39,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.2.0';
+import { GoogleGenAI } from 'https://esm.sh/@google/genai@1';
 
 // ============================================
 // Types
@@ -112,15 +112,17 @@ TEXT:
 `;
 
 async function extractEntities(
-  gemini: GoogleGenerativeAI,
+  genAI: GoogleGenAI,
   text: string
 ): Promise<ExtractionResult> {
-  const model = gemini.getGenerativeModel({ model: 'gemini-1.5-flash' });
   const prompt = EXTRACTION_PROMPT + text.slice(0, 8000); // limit to avoid token overflow
   
   try {
-    const result = await model.generateContent(prompt);
-    const raw = result.response.text().trim();
+    const response = await genAI.models.generateContent({
+      model: 'gemini-2.0-flash',
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    });
+    const raw = (response.text ?? '').trim();
     // Strip markdown code blocks if present
     const cleaned = raw.replace(/^```json\n?/, '').replace(/\n?```$/, '');
     return JSON.parse(cleaned) as ExtractionResult;
@@ -229,7 +231,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const geminiApiKey = Deno.env.get('GEMINI_API_KEY')!;
 
   const supabase = createClient(supabaseUrl, serviceRoleKey);
-  const gemini = new GoogleGenerativeAI(geminiApiKey);
+  const genAI = new GoogleGenAI({ apiKey: geminiApiKey });
 
   let body: BackfillRequest = {};
   try {
@@ -247,15 +249,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
   // ---- Fetch unprocessed assets ----
   // "Unprocessed" = assets that have no rows in asset_graph_nodes
   // We find them via a NOT EXISTS subquery on asset_graph_nodes.
-  // Assets store their text in processing_queue.extracted_data->>'raw_text'
-  // or in the SQL record's structured columns depending on version.
-  // We query processing_queue for assets with PROCESSING_STATUS='COMPLETE'.
+  // Assets store their processed OCR results in processing_queue.result_data
+  // We query processing_queue for assets with STATUS='COMPLETED'.
 
   let query = supabase
     .from('processing_queue')
-    .select('id, asset_id, user_id, extracted_data, created_at')
-    .eq('PROCESSING_STATUS', 'COMPLETE')
-    .not('extracted_data', 'is', null)
+    .select('id, asset_id, user_id, result_data')
+    .eq('STATUS', 'COMPLETED')
+    .not('result_data', 'is', null)
     .limit(batchSize);
 
   if (userId) {
@@ -302,83 +303,105 @@ Deno.serve(async (req: Request): Promise<Response> => {
     jobs.splice(0, jobs.length, ...unprocessedJobs);
   }
 
-  // ---- Process each asset ----
-  let processedCount = 0;
-  let errorCount = 0;
+  // ---- Process each asset (parallelised) ----
+  const processAllJobs = async (): Promise<{ processed: number; skipped: number; errors: number }> => {
+    const jobResults = await Promise.allSettled(
+      jobs.map(async (job): Promise<boolean> => {
+        const resultData = job.result_data as Record<string, unknown> | null;
+        if (!resultData) return false;
 
-  for (const job of jobs) {
-    try {
-      const extractedData = job.extracted_data as Record<string, unknown> | null;
-      if (!extractedData) continue;
+        // Gather text from the OCR result stored by process-ocr function
+        const rawText = [
+          resultData['ocrText'],
+          resultData['documentTitle'],
+          resultData['documentDescription'],
+          resultData['entities'] ? JSON.stringify(resultData['entities']) : null,
+        ]
+          .filter(Boolean)
+          .join('\n\n');
 
-      // Gather text from the extraction result
-      const rawText = [
-        extractedData['raw_text'],
-        extractedData['DOCUMENT_TITLE'],
-        extractedData['extracted_text'],
-        extractedData['entities'] ? JSON.stringify(extractedData['entities']) : null,
-      ]
-        .filter(Boolean)
-        .join('\n\n');
+        if (!rawText.trim()) return false;
 
-      if (!rawText.trim()) continue;
+        const ownerUserId = job.user_id ?? userId ?? 'system';
 
-      const ownerUserId = job.user_id ?? userId ?? 'system';
+        // Extract entities with Gemini
+        const { entities, relationships } = await extractEntities(genAI, rawText);
 
-      // Extract entities with Gemini
-      const { entities, relationships } = await extractEntities(gemini, rawText);
+        // Build a map of label → nodeId for this asset
+        const labelToNodeId = new Map<string, string>();
 
-      // Build a map of label → nodeId for this asset
-      const labelToNodeId = new Map<string, string>();
+        for (const entity of entities) {
+          if (entity.confidence < 0.5) continue;
+          const nodeId = await upsertGraphNode(supabase, entity, ownerUserId);
+          if (nodeId) {
+            labelToNodeId.set(entity.label, nodeId);
 
-      for (const entity of entities) {
-        if (entity.confidence < 0.5) continue;
-        const nodeId = await upsertGraphNode(supabase, entity, ownerUserId);
-        if (nodeId) {
-          labelToNodeId.set(entity.label, nodeId);
-
-          // Link asset → node
-          await supabase
-            .from('asset_graph_nodes')
-            .upsert(
-              {
-                ASSET_ID: job.asset_id,
-                NODE_ID: nodeId,
-                CONFIDENCE: entity.confidence,
-                CONTEXT_SNIPPET: entity.contextSnippet ?? null,
-              },
-              { onConflict: 'ASSET_ID,NODE_ID', ignoreDuplicates: true }
-            );
+            // Link asset → node
+            await supabase
+              .from('asset_graph_nodes')
+              .upsert(
+                {
+                  ASSET_ID: job.asset_id,
+                  NODE_ID: nodeId,
+                  CONFIDENCE: entity.confidence,
+                  CONTEXT_SNIPPET: entity.contextSnippet ?? null,
+                },
+                { onConflict: 'ASSET_ID,NODE_ID', ignoreDuplicates: true }
+              );
+          }
         }
-      }
 
-      // Create edges
-      for (const rel of relationships) {
-        const fromId = labelToNodeId.get(rel.fromLabel);
-        const toId = labelToNodeId.get(rel.toLabel);
-        if (!fromId || !toId || fromId === toId) continue;
-        await upsertGraphEdge(
-          supabase,
-          fromId,
-          toId,
-          rel.relationship,
-          rel.confidence,
-          job.asset_id
-        );
-      }
+        // Create edges
+        for (const rel of relationships) {
+          const fromId = labelToNodeId.get(rel.fromLabel);
+          const toId = labelToNodeId.get(rel.toLabel);
+          if (!fromId || !toId || fromId === toId) continue;
+          await upsertGraphEdge(
+            supabase,
+            fromId,
+            toId,
+            rel.relationship,
+            rel.confidence,
+            job.asset_id
+          );
+        }
+        return true;
+      })
+    );
 
-      processedCount++;
-    } catch (err) {
-      console.error(`Error processing asset ${job.asset_id}:`, err);
-      errorCount++;
-    }
+    return {
+      processed: jobResults.filter(r => r.status === 'fulfilled' && r.value === true).length,
+      skipped: jobResults.filter(r => r.status === 'fulfilled' && r.value === false).length,
+      errors: jobResults.filter(r => r.status === 'rejected').length,
+    };
+  };
+
+  // Use EdgeRuntime.waitUntil for instantaneous response — processing continues
+  // in the background after the HTTP response is returned.
+  // deno-lint-ignore no-explicit-any
+  const runtime = (globalThis as any).EdgeRuntime;
+  if (runtime?.waitUntil) {
+    runtime.waitUntil(processAllJobs());
+    return new Response(
+      JSON.stringify({ success: true, queued: jobs.length, message: 'Processing started in background' }),
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*',
+        },
+      }
+    );
   }
+
+  // Fallback: synchronous processing for local/non-edge environments
+  const { processed, skipped, errors } = await processAllJobs();
 
   return new Response(
     JSON.stringify({
       success: true,
-      processed: processedCount,
-      errors: errorCount,
+      processed,
+      skipped,
+      errors,
       total: jobs.length,
     }),
     {

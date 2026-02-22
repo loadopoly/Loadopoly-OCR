@@ -240,9 +240,8 @@ Deno.serve(async (req: Request): Promise<Response> => {
     );
   }
 
-  const results: SpatialAnchorResult[] = [];
-
-  for (const obj of detectedObjects) {
+  const settled = await Promise.allSettled(
+    detectedObjects.map(async (obj): Promise<SpatialAnchorResult> => {
     const bbox = obj.bbox ?? { x: 0.5, y: 0.5, w: 0.1, h: 0.1 };
     const bboxCentreX = bbox.x + bbox.w / 2;
     const bboxCentreY = bbox.y + bbox.h / 2;
@@ -282,7 +281,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
         // Try to find existing node by label + type
         const { data: existing, error: selectErr } = await supabase
           .from('graph_nodes')
-          .select('"ID", "LAT", "LNG", "ANCHOR_COUNT"')
+          .select('ID, LAT, LNG, ANCHOR_COUNT')
           .eq('LABEL', normalizedLabel)
           .eq('NODE_TYPE', nodeType)
           .maybeSingle();
@@ -322,7 +321,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
               ANCHOR_COUNT: subjectLat != null ? 1 : 0,
               USER_ID: user.id,
             })
-            .select('"ID"')
+            .select('ID')
             .single();
           if (inserted) graphNodeId = inserted.ID;
         }
@@ -363,14 +362,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
         GRAPH_NODE_ID: graphNodeId,
         PROCESSING_STATUS: 'processed',
       })
-      .select('"ID"')
+      .select('ID')
       .single();
 
     if (anchorErr) {
       console.error(`spatial_anchors insert failed: ${anchorErr.message}`);
     }
 
-    results.push({
+    return {
       id: anchor?.ID ?? '',
       label: obj.label,
       subjectLat,
@@ -378,8 +377,12 @@ Deno.serve(async (req: Request): Promise<Response> => {
       subjectBearingDeg: bearing,
       subjectDistanceM: distanceM,
       graphNodeId,
-    });
-  }
+    };
+  }));
+
+  const results: SpatialAnchorResult[] = settled
+    .filter((r): r is PromiseFulfilledResult<SpatialAnchorResult> => r.status === 'fulfilled')
+    .map(r => r.value);
 
   return new Response(
     JSON.stringify({ success: true, anchors: results }),
