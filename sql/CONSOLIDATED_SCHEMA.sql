@@ -1526,6 +1526,7 @@ SELECT
 FROM metrics;
 
 -- Index Usage Stats View (without SECURITY DEFINER)
+DROP VIEW IF EXISTS index_usage_stats;
 CREATE OR REPLACE VIEW index_usage_stats AS
 SELECT
     schemaname,
@@ -1540,6 +1541,7 @@ WHERE schemaname = 'public'
 ORDER BY idx_scan DESC;
 
 -- Cache Hit Stats View (without SECURITY DEFINER)
+DROP VIEW IF EXISTS cache_hit_stats;
 CREATE OR REPLACE VIEW cache_hit_stats AS
 SELECT
     schemaname,
