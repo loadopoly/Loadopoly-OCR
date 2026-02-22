@@ -14,7 +14,6 @@
  * - Signed URLs expire after configurable time (default: 1 hour)
  */
 
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SIGNED_URL_EXPIRY_SECONDS = 3600; // 1 hour
@@ -34,7 +33,7 @@ interface DownloadResponse {
   error?: string;
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   // CORS headers
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
@@ -88,16 +87,19 @@ serve(async (req: Request) => {
       const signedUrls: Record<string, string> = {};
       const errors: string[] = [];
 
-      for (const assetId of body.assetIds) {
-        try {
-          const url = await getSignedUrlForAsset(supabase, user.id, assetId, expiresIn);
-          if (url) {
-            signedUrls[assetId] = url;
-          } else {
-            errors.push(`Asset ${assetId} not found`);
-          }
-        } catch (error) {
-          errors.push(`Failed to get URL for ${assetId}: ${error.message}`);
+      const batchResults = await Promise.allSettled(
+        body.assetIds.map(assetId => getSignedUrlForAsset(supabase, user.id, assetId, expiresIn))
+      );
+      for (let i = 0; i < body.assetIds.length; i++) {
+        const assetId = body.assetIds[i];
+        const result = batchResults[i];
+        if (result.status === 'fulfilled' && result.value) {
+          signedUrls[assetId] = result.value;
+        } else if (result.status === 'rejected') {
+          const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
+          errors.push(`Failed to get URL for ${assetId}: ${reason}`);
+        } else {
+          errors.push(`Asset ${assetId} not found`);
         }
       }
 
