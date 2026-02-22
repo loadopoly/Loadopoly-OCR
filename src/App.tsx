@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Camera, 
   Map as MapIcon, 
@@ -140,6 +141,7 @@ async function calculateSHA256(file: File): Promise<string> {
 const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
   <button
     onClick={onClick}
+    style={{ touchAction: 'manipulation' }}
     className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors ${
       active 
         ? 'bg-primary-600/10 text-primary-500 border-r-2 border-primary-500' 
@@ -166,49 +168,67 @@ const StatCard = ({ label, value, icon: Icon, color, onClick }: any) => (
   </div>
 );
 
-// MobileNavigation component — pure nav links, zero data fetching, zero state toggles
+// MobileNavigation — portals to document.body so it escapes the <header>'s
+// backdrop-blur containing block (which was clipping position:fixed children).
 const MobileNavigation = ({ activeTab, switchTab }: { activeTab: string; switchTab: (tab: string) => void }) => {
   const [isOpen, setIsOpen] = useState(false);
+
+  // Portal target — always document.body so sidebar is never clipped
+  const overlay = isOpen ? createPortal(
+    <div className="fixed inset-0 z-[9999] lg:hidden" role="dialog" aria-modal="true">
+      {/* Scrim */}
+      <div
+        className="absolute inset-0 bg-black/60"
+        onClick={() => setIsOpen(false)}
+        style={{ touchAction: 'none' }}
+      />
+      {/* Sidebar panel */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 border-r border-slate-800 flex flex-col shadow-2xl"
+        style={{ animation: 'slideInLeft 200ms ease-out' }}
+      >
+        <div className="p-6 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2 text-primary-500">
+            <Database size={24} />
+            <h1 className="text-xl font-bold tracking-tight text-white">GeoGraph</h1>
+          </div>
+          <button
+            onClick={() => setIsOpen(false)}
+            className="p-2 -mr-2 text-slate-400 hover:text-white rounded-lg"
+            style={{ touchAction: 'manipulation' }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <nav className="flex-1 px-2 space-y-1 overflow-y-auto">
+          <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { switchTab('dashboard'); setIsOpen(false); }} />
+          <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => { switchTab('batch'); setIsOpen(false); }} />
+          <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => { switchTab('ar'); setIsOpen(false); }} />
+          <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => { switchTab('assets'); setIsOpen(false); }} />
+          <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => { switchTab('curator'); setIsOpen(false); }} />
+          <SidebarItem icon={Network} label="Explore" active={activeTab === 'explore'} onClick={() => { switchTab('explore'); setIsOpen(false); }} />
+          <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsOpen(false); }} />
+          <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => { switchTab('social'); setIsOpen(false); }} />
+          <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { switchTab('market'); setIsOpen(false); }} />
+          <div className="pt-4 mt-4 border-t border-slate-800">
+            <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsOpen(false); }} />
+          </div>
+        </nav>
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
   return (
     <>
-      <button 
+      <button
         onClick={() => setIsOpen(true)}
-        className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+        className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg"
+        style={{ touchAction: 'manipulation' }}
       >
         <List size={24} />
       </button>
-      {isOpen && (
-        <div className="fixed inset-0 z-[60] lg:hidden">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 border-r border-slate-800 flex flex-col animate-in slide-in-from-left duration-300">
-            <div className="p-6 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-primary-500">
-                <Database size={24} />
-                <h1 className="text-xl font-bold tracking-tight text-white">GeoGraph</h1>
-              </div>
-              <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white">
-                <X size={20} />
-              </button>
-            </div>
-            <nav className="flex-1 px-2 space-y-1 overflow-y-auto custom-scrollbar">
-              <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { switchTab('dashboard'); setIsOpen(false); }} />
-              <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => { switchTab('batch'); setIsOpen(false); }} />
-              <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => { switchTab('ar'); setIsOpen(false); }} />
-              <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => { switchTab('assets'); setIsOpen(false); }} />
-              <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => { switchTab('curator'); setIsOpen(false); }} />
-              <SidebarItem icon={Network} label="Explore" active={activeTab === 'explore'} onClick={() => { switchTab('explore'); setIsOpen(false); }} />
-              <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsOpen(false); }} />
-              <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => { switchTab('social'); setIsOpen(false); }} />
-              <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { switchTab('market'); setIsOpen(false); }} />
-              <div className="pt-4 mt-4 border-t border-slate-800">
-                <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsOpen(false); }} />
-              </div>
-            </nav>
-            {/* View Mode toggle removed from mobile sidebar — use header toggle instead.
-                Toggling isGlobalView here triggered O(n²) createBundles during slide animation. */}
-          </div>
-        </div>
-      )}
+      {overlay}
     </>
   );
 };
