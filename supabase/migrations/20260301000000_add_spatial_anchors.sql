@@ -134,9 +134,8 @@ CREATE POLICY "spatial_anchors_update_own" ON spatial_anchors
   FOR UPDATE TO authenticated
   USING (auth.uid() = "USER_ID");
 
-CREATE POLICY "spatial_anchors_delete_own" ON spatial_anchors
-  FOR DELETE TO authenticated
-  USING (auth.uid() = "USER_ID");
+-- DELETE restricted to service_role only (via spatial_anchors_service_role policy).
+-- Users must submit explicit deletion requests; mass deletes only from Supabase dashboard.
 
 -- Edge Functions / service_role can read/write all anchors for triangulation
 CREATE POLICY "spatial_anchors_service_role" ON spatial_anchors

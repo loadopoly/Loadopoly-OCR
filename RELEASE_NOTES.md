@@ -1,4 +1,21 @@
-# 🚀 GeoGraph Node: v2.11.1 Release Notes
+# 🚀 GeoGraph Node: v2.11.2 Release Notes
+
+## 🔒 v2.11.2 — Deletion Lockdown & Governance Enforcement (2026-02-22)
+
+### 🎯 Overview
+This patch enforces strict deletion governance across the UI and database. Destructive actions are now constrained to local-only operations in Settings for normal users, while server-side deletes are restricted to service-role execution paths for approved requests.
+
+### 🛡️ Security & Governance Changes
+- **Settings-Only Local Clear**: The clear-data action now presents an explicit local-only warning and confirms that server records are not affected.
+- **Queue Safety Controls**: Removed client-facing `Delete All` and `Reset Server` actions from the processing queue UI.
+- **RLS Delete Lockdown**: Added a dedicated migration to harden DELETE policies so mass/server-side deletions are service-role only.
+- **Spatial Anchor Protection**: Removed authenticated user DELETE policy for `spatial_anchors` and restricted deletion to service role.
+
+### 📦 Technical Changes
+- `src/components/QueueMonitor.tsx`: Removed server-destructive queue controls and related handlers.
+- `src/components/SettingsPanel.tsx`: Improved confirmation messaging for local data deletion.
+- `supabase/migrations/20260222000000_lockdown_delete_policies.sql`: New policy-hardening migration.
+- `supabase/migrations/20260301000000_add_spatial_anchors.sql`: Removed user-level DELETE policy.
 
 ## 🔧 v2.11.1 — Cold-Start Elimination & Mobile Interactivity (2026-02-22)
 

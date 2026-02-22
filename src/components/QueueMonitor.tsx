@@ -32,13 +32,10 @@ import {
   FileText,
   Image,
   Mountain,
-  X,
-  Pause,
-  Play,
-  Trash2
+  X
 } from 'lucide-react';
 import { processingQueueService, QueueStats, QueueJob, JobStatus } from '../services/processingQueueService';
-import { loadAssets, clearStuckAssets, resetStuckAssets } from '../lib/indexeddb';
+import { loadAssets, resetStuckAssets } from '../lib/indexeddb';
 import { AssetStatus, ScanType } from '../types';
 
 // ============================================
@@ -80,7 +77,6 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
   const [showDiagnostics, setShowDiagnostics] = useState(false);
   const [connectionTest, setConnectionTest] = useState<ConnectionTestResult | null>(null);
   const [isTesting, setIsTesting] = useState(false);
-  const [isClearing, setIsClearing] = useState(false);
   const [isTriggering, setIsTriggering] = useState(false);
   const [triggerResult, setTriggerResult] = useState<{ processed: number; succeeded: number; failed: number } | null>(null);
   const [localNeedsUploadCount, setLocalNeedsUploadCount] = useState(0);
@@ -313,62 +309,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
     }
   };
 
-  /**
-   * Clear ALL stuck items from both server queue and local IndexedDB.
-   * This is the nuclear option when processing is permanently stuck.
-   */
-  const handleClearAllStuck = async () => {
-    const stuckCount = localPendingCount + (stats?.pending || 0) + (stats?.processing || 0);
-    
-    if (stuckCount === 0) {
-      alert('No stuck items to clear.');
-      return;
-    }
-    
-    const confirmed = confirm(
-      `⚠️ Clear ${stuckCount} stuck items?\n\n` +
-      `This will:\n` +
-      `• Cancel ${(stats?.pending || 0) + (stats?.processing || 0)} server queue jobs\n` +
-      `• Remove ${localPendingCount} local pending assets\n\n` +
-      `This action cannot be undone. The images will need to be re-captured.`
-    );
-    
-    if (!confirmed) return;
-    
-    setIsClearing(true);
-    
-    try {
-      let serverCancelled = 0;
-      let localCleared = 0;
-      
-      // 1. Cancel server queue jobs
-      if (userId) {
-        serverCancelled = await processingQueueService.cancelAllPendingJobs();
-        console.log(`[ClearStuck] Cancelled ${serverCancelled} server jobs`);
-      }
-      
-      // 2. Clear local IndexedDB stuck assets
-      localCleared = await clearStuckAssets();
-      console.log(`[ClearStuck] Cleared ${localCleared} local assets`);
-      
-      // 3. Refresh stats
-      await fetchStats();
-      await fetchJobs();
-      
-      alert(
-        `✓ Cleared ${serverCancelled + localCleared} stuck items:\n` +
-        `• ${serverCancelled} server jobs cancelled\n` +
-        `• ${localCleared} local assets removed`
-      );
-      
-      onRequeueComplete?.();
-    } catch (err) {
-      console.error('Failed to clear stuck items:', err);
-      alert('Failed to clear stuck items. Check console for details.');
-    } finally {
-      setIsClearing(false);
-    }
-  };
+
 
   /**
    * Reset stuck PROCESSING items back to PENDING (local only).
@@ -402,41 +343,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
     }
   };
 
-  /**
-   * Remote reset - resets server-side queue jobs back to PENDING
-   * This affects jobs that have been uploaded to the server
-   */
-  const handleRemoteReset = async () => {
-    const confirmed = window.confirm(
-      'This will reset all failed and stuck processing jobs back to PENDING on the server.\n\n' +
-      'The jobs will be reprocessed automatically.\n\n' +
-      'Continue?'
-    );
-    
-    if (!confirmed) return;
-    
-    try {
-      setLoading(true);
-      const result = await processingQueueService.resetUserQueue();
-      
-      if (result.resetCount > 0) {
-        alert(
-          `✅ Successfully reset ${result.resetCount} server jobs.\n\n` +
-          'These jobs will be reprocessed automatically by the queue.'
-        );
-        await fetchStats();
-        await fetchJobs();
-        onRequeueComplete?.();
-      } else {
-        alert('No server jobs needed resetting.');
-      }
-    } catch (err) {
-      console.error('Failed to reset server queue:', err);
-      alert('❌ Failed to reset server queue. Check console for details.');
-    } finally {
-      setLoading(false);
-    }
-  };
+
 
   /**
    * Release stale locks - frees jobs stuck in PROCESSING state
@@ -1125,41 +1032,15 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
             </button>
           </div>
           
-          {/* Reset / Clear options */}
+          {/* Reset local stuck items */}
           <div className="flex gap-2">
             <button
               onClick={handleResetLocalStuck}
-              disabled={isClearing || localPendingCount === 0}
+              disabled={localPendingCount === 0}
               className="flex-1 py-1.5 px-2 bg-amber-800 hover:bg-amber-700 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[9px] rounded flex items-center justify-center gap-1 transition-colors"
             >
               <RotateCcw size={10} />
               Reset Local
-            </button>
-            <button
-              onClick={handleRemoteReset}
-              disabled={loading || (stats?.failed || 0) === 0}
-              className="flex-1 py-1.5 px-2 bg-blue-800 hover:bg-blue-700 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[9px] rounded flex items-center justify-center gap-1 transition-colors"
-              title="Reset failed/stuck jobs on server"
-            >
-              <Server size={10} />
-              Reset Server
-            </button>
-            <button
-              onClick={handleClearAllStuck}
-              disabled={isClearing}
-              className="flex-1 py-1.5 px-2 bg-rose-800 hover:bg-rose-700 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[9px] rounded flex items-center justify-center gap-1 transition-colors"
-            >
-              {isClearing ? (
-                <>
-                  <RefreshCw size={10} className="animate-spin" />
-                  Clearing...
-                </>
-              ) : (
-                <>
-                  <Trash2 size={10} />
-                  Delete All
-                </>
-              )}
             </button>
           </div>
         </div>
