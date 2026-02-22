@@ -473,7 +473,9 @@ export default function App() {
   // Avatar & Metaverse state
   const { avatar, nearbyUsers, currentSector, updatePosition } = useAvatar(user?.id || null);
 
-  const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
+  // Memoized to avoid re-computing on every render (can be large with 387+ assets)
+  const totalTokens = useMemo(() => assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0), [assets]);
+  const knowledgeNodeCount = useMemo(() => assets.reduce((a, c) => a + (c.graphData?.nodes?.length || 0), 0), [assets]);
   const pendingLocalCount = localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
   const pendingGlobalCount = globalAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
   const totalPendingCount = pendingLocalCount + pendingGlobalCount;
@@ -506,8 +508,14 @@ export default function App() {
   }, [isGlobalView]);
 
   useEffect(() => {
-    navigator.permissions.query({ name: 'geolocation' }).then((result) => setGeoPermission(result.state === 'granted'));
-    
+    // Defer geo permission check — no need to block render for a status dot
+    const checkGeo = () => navigator.permissions.query({ name: 'geolocation' }).then((result) => setGeoPermission(result.state === 'granted'));
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(checkGeo, { timeout: 5000 });
+    } else {
+      setTimeout(checkGeo, 3000);
+    }
+
     initSync();
     isSyncEnabled().then(setSyncOn);
     setWeb3Enabled(localStorage.getItem('geograph-web3-enabled') === 'true');
@@ -1789,20 +1797,7 @@ export default function App() {
                     : activeTab === 'explore' ? (exploreSubTab === 'graph' ? 'Knowledge Graph' : exploreSubTab === '3d' ? '3D World' : 'Semantic Canvas')
                     : activeTab}
                 </h2>
-                <div className="flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800 ml-2">
-                    <button 
-                        onClick={() => setIsGlobalView(false)}
-                        className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${!isGlobalView ? 'bg-primary-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                        LOCAL
-                    </button>
-                    <button 
-                        onClick={() => setIsGlobalView(true)}
-                        className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${isGlobalView ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
-                    >
-                        MASTER
-                    </button>
-                </div>
+                {/* LOCAL/MASTER toggle is in the sidebar — not duplicated here */}
             </div>
           <div className="flex items-center gap-2">
              {/* Queue Status Button - ALWAYS VISIBLE */}
@@ -1922,7 +1917,7 @@ export default function App() {
               
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <StatCard label="Total Assets" value={assets.length} icon={FileText} color="text-blue-500" onClick={() => setActiveTab('assets')} />
-                <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} icon={Network} color="text-purple-500" onClick={() => { setActiveTab('explore'); setExploreSubTab('graph'); }} />
+                <StatCard label="Knowledge Nodes" value={knowledgeNodeCount} icon={Network} color="text-purple-500" onClick={() => { setActiveTab('explore'); setExploreSubTab('graph'); }} />
                 <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" onClick={() => setActiveTab('database')} />
                 <StatCard label="Active Bundles" value={displayItems.filter(i => 'bundleId' in i).length} icon={Package} color="text-amber-500" onClick={() => setActiveTab('market')} />
               </div>
