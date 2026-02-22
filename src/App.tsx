@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Camera, 
@@ -72,16 +72,19 @@ import { getCurrentUser } from './lib/auth';
 import { fetchGlobalCorpus, contributeAssetToGlobalCorpus, fetchUserAssets, subscribeToAssetUpdates } from './services/supabaseService';
 import { processingQueueService } from './services/processingQueueService';
 import { downloadService } from './services/downloadService';
-import { compressImage } from './lib/imageCompression';
+// PERF FIX: compressImage dynamically imported inside ingestFile() to avoid
+// pulling 445-line imageCompression module into the critical parse path.
 import { WorkerPool } from './lib/workerPool';
 import { GraphVisualizerLazy as GraphVisualizer, ARSceneLazy as ARScene, SemanticCanvasLazy as SemanticCanvas, BatchImporterLazy as BatchImporter, AnnotationEditorLazy as AnnotationEditor, SocialAppLazy as SocialApp, IntegrationsHubLazy as IntegrationsHub, QueueMonitorLazy as QueueMonitor, ClusterSyncStatsPanelLazy as ClusterSyncStatsPanel, BatchProcessingPanelLazy as BatchProcessingPanel, SmartSuggestionsLazy as SmartSuggestions } from './lib/lazyComponents';
-import ContributeButton from './components/ContributeButton';
-import BundleCard from './components/BundleCard';
+// PERF FIX: Lazy-load components not needed at first paint.
+// ContributeButton and BundleCard pull in web3Service → ethers (400KB).
+// SettingsPanel and PurchaseModal are only shown on specific tabs/modals.
+const ContributeButton = React.lazy(() => import('./components/ContributeButton'));
+const BundleCard = React.lazy(() => import('./components/BundleCard'));
+const SettingsPanel = React.lazy(() => import('./components/SettingsPanel'));
+const PurchaseModal = React.lazy(() => import('./components/PurchaseModal'));
 import CameraCapture from './components/CameraCapture';
-import SettingsPanel from './components/SettingsPanel';
-import SmartUploadSelector from './components/SmartUploadSelector';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
-import PurchaseModal from './components/PurchaseModal';
 import StatusBar from './components/StatusBar';
 import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/KeyboardShortcuts';
 import { announce } from './lib/accessibility';
@@ -1115,7 +1118,8 @@ export default function App() {
     try {
       onProgress(5, 'Creating asset...');
       
-      // Create local asset
+      // Create local asset — dynamically import compressImage to keep it off critical path
+      const { compressImage } = await import('./lib/imageCompression');
       const compressionResult = await compressImage(file);
       const imageUrl = URL.createObjectURL(compressionResult.file);
       
@@ -2447,6 +2451,7 @@ export default function App() {
                    </div>
                  )}
                  
+                 <Suspense fallback={<div className="p-4 text-slate-500 text-sm">Loading...</div>}>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
                      {displayItems.map(item => ('bundleId' in item) ? <BundleCard key={item.bundleId} bundle={item as ImageBundle} onAssetUpdated={handleAssetUpdate} /> : (
                         <div 
@@ -2487,6 +2492,7 @@ export default function App() {
                         </div>
                      ))}
                  </div>
+                 </Suspense>
              </div>
           )}
 
@@ -2669,6 +2675,7 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
+                  <Suspense fallback={<div className="p-4 text-slate-500 text-sm">Loading bundles...</div>}>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {displayItems
                       .filter((item): item is ImageBundle => 'bundleId' in item)
@@ -2683,6 +2690,7 @@ export default function App() {
                         />
                       ))}
                   </div>
+                  </Suspense>
                 )}
               </div>
             </div>
@@ -2754,6 +2762,7 @@ export default function App() {
           )}
 
           {activeTab === 'settings' && (
+            <Suspense fallback={<div className="p-8 text-slate-500">Loading settings...</div>}>
             <SettingsPanel 
               onOpenPrivacy={() => setShowPrivacyPolicy(true)} 
               syncOn={syncOn}
@@ -2769,6 +2778,7 @@ export default function App() {
               selectedLLM={selectedLLM}
               setSelectedLLM={setSelectedLLM}
             />
+            </Suspense>
           )}
         </div>
         
@@ -2780,6 +2790,7 @@ export default function App() {
         )}
 
         {purchaseModalData && (
+          <Suspense fallback={null}>
           <PurchaseModal 
             bundleTitle={purchaseModalData.title}
             assets={purchaseModalData.assets}
@@ -2787,6 +2798,7 @@ export default function App() {
             onClose={() => setPurchaseModalData(null)}
             onConfirm={handlePurchase}
           />
+          </Suspense>
         )}
 
         {showPrivacyPolicy && (
