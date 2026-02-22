@@ -100,6 +100,7 @@ DO $$
 BEGIN
   IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'spatial_anchors') THEN
     DROP POLICY IF EXISTS "spatial_anchors_delete_own" ON spatial_anchors;
+    DROP POLICY IF EXISTS "Service role delete spatial_anchors" ON spatial_anchors;
 
     EXECUTE 'CREATE POLICY "Service role delete spatial_anchors" ON spatial_anchors FOR DELETE TO service_role USING (true)';
   END IF;
