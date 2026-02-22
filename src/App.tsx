@@ -272,6 +272,8 @@ export default function App() {
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showProcessingPanel, setShowProcessingPanel] = useState(false);
   const [showNewBatchPanel, setShowNewBatchPanel] = useState(false);
+  const [isLocalDataLoaded, setIsLocalDataLoaded] = useState(false);
+  const [isAppReady, setIsAppReady] = useState(false);
   
   // Batch processing concurrency control (legacy - kept for compatibility)
   const [activeBatchJobs, setActiveBatchJobs] = useState(0);
@@ -536,6 +538,7 @@ export default function App() {
     const localReady = loadAssets().then((cached) => {
       localSnapshot = cached;
       setLocalAssets(cached);
+      setIsLocalDataLoaded(true);
     });
 
     getCurrentUser().then(async ({ data }) => { 
@@ -647,9 +650,12 @@ export default function App() {
   const bundleIdleRef = useRef<any>(null);
 
   useEffect(() => {
+    if (!isLocalDataLoaded) return;
+
     if (assets.length === 0) {
       setDisplayItems([]);
       bundleCacheRef.current = null;
+      setIsAppReady(true);
       return;
     }
 
@@ -661,6 +667,7 @@ export default function App() {
     if (bundleCacheRef.current?.fingerprint === fingerprint) {
       // Asset set unchanged — reuse cached bundles, just update processing assets
       setDisplayItems([...processingAssets, ...bundleCacheRef.current.items]);
+      setIsAppReady(true);
       return;
     }
 
@@ -680,13 +687,19 @@ export default function App() {
       const bundles = createBundles(processedAssets);
       bundleCacheRef.current = { fingerprint, items: bundles };
       setDisplayItems([...processingAssets, ...bundles]);
+      setIsAppReady(true);
     };
 
-    // Defer to idle so the sidebar / tab switch animation isn't blocked
-    if ('requestIdleCallback' in window) {
-      bundleIdleRef.current = (window as any).requestIdleCallback(runBundling, { timeout: 5000 });
+    if (!isAppReady) {
+      // First render: run synchronously so we can drop the loading screen immediately
+      runBundling();
     } else {
-      bundleIdleRef.current = setTimeout(runBundling, 300);
+      // Defer to idle so the sidebar / tab switch animation isn't blocked
+      if ('requestIdleCallback' in window) {
+        bundleIdleRef.current = (window as any).requestIdleCallback(runBundling, { timeout: 5000 });
+      } else {
+        bundleIdleRef.current = setTimeout(runBundling, 300);
+      }
     }
 
     return () => {
@@ -698,7 +711,7 @@ export default function App() {
         }
       }
     };
-  }, [assets]);
+  }, [assets, isLocalDataLoaded, isAppReady]);
 
   const handleAssetUpdate = async (updatedAsset: DigitalAsset) => {
     if (isGlobalView) {
@@ -1770,6 +1783,16 @@ export default function App() {
       });
       return { nodes: [...docNodes, ...Array.from(entityNodesMap.values())], links };
   }, [assets, graphFilters]);
+
+  if (!isAppReady) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#020617', color: '#f8fafc', fontFamily: 'system-ui, sans-serif' }}>
+        <div style={{ width: '48px', height: '48px', border: '3px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+        <p style={{ marginTop: '16px', color: '#94a3b8', fontSize: '14px' }}>Loading GeoGraph...</p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   return (
     <FilterProvider initialAssets={assets} initialGraphData={globalGraphData}>
