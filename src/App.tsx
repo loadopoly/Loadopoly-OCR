@@ -67,14 +67,13 @@ import { processImageWithGemini } from './services/geminiService';
 import { createBundles, createUserBundle } from './services/bundleService';
 import { initSync, isSyncEnabled } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
-import { redeemPhygitalCertificate } from './services/web3Service';
 import { getCurrentUser } from './lib/auth';
 import { fetchGlobalCorpus, contributeAssetToGlobalCorpus, fetchUserAssets, subscribeToAssetUpdates } from './services/supabaseService';
 import { processingQueueService } from './services/processingQueueService';
 import { downloadService } from './services/downloadService';
 import { compressImage } from './lib/imageCompression';
 import { WorkerPool } from './lib/workerPool';
-import { GraphVisualizerLazy as GraphVisualizer, ARSceneLazy as ARScene, SemanticCanvasLazy as SemanticCanvas, BatchImporterLazy as BatchImporter, AnnotationEditorLazy as AnnotationEditor } from './lib/lazyComponents';
+import { GraphVisualizerLazy as GraphVisualizer, ARSceneLazy as ARScene, SemanticCanvasLazy as SemanticCanvas, BatchImporterLazy as BatchImporter, AnnotationEditorLazy as AnnotationEditor, SocialAppLazy as SocialApp, IntegrationsHubLazy as IntegrationsHub, QueueMonitorLazy as QueueMonitor, ClusterSyncStatsPanelLazy as ClusterSyncStatsPanel, BatchProcessingPanelLazy as BatchProcessingPanel, SmartSuggestionsLazy as SmartSuggestions } from './lib/lazyComponents';
 import ContributeButton from './components/ContributeButton';
 import BundleCard from './components/BundleCard';
 import CameraCapture from './components/CameraCapture';
@@ -82,20 +81,14 @@ import SettingsPanel from './components/SettingsPanel';
 import SmartUploadSelector from './components/SmartUploadSelector';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import PurchaseModal from './components/PurchaseModal';
-import SmartSuggestions from './components/SmartSuggestions';
-import SocialApp from './components/SocialApp';
 import StatusBar from './components/StatusBar';
 import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/KeyboardShortcuts';
 import { announce } from './lib/accessibility';
 import { WorldRendererLazy as WorldRenderer } from './lib/lazyComponents';
 import { useAvatar } from './hooks/useAvatar';
-import IntegrationsHub from './components/IntegrationsHub';
 import { FilterProvider, useFilterContext } from './contexts/FilterContext';
 import UnifiedFilterPanel, { InlineFilterBar, FilterBadge } from './components/UnifiedFilterPanel';
-import { ClusterSyncStatsPanel, ClusterSyncButton } from './components/ClusterSyncStatsPanel';
-import { QueueMonitor } from './components/QueueMonitor';
-import BatchProcessingPanel from './components/BatchProcessingPanel';
-import { batchProcessor } from './services/batchProcessorService';
+import { ClusterSyncButton } from './components/ClusterSyncStatsPanel';
 
 // --- Custom Hooks ---
 function useOnlineStatus() {
@@ -173,6 +166,74 @@ const StatCard = ({ label, value, icon: Icon, color, onClick }: any) => (
   </div>
 );
 
+// MobileNavigation component extracted to prevent App re-renders
+const MobileNavigation = ({ activeTab, switchTab, isGlobalView, setIsGlobalView }: any) => {
+  const [isOpen, setIsOpen] = useState(false);
+  return (
+    <>
+      <button 
+        onClick={() => setIsOpen(true)}
+        className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+      >
+        <List size={24} />
+      </button>
+      {isOpen && (
+        <div className="fixed inset-0 z-[60] lg:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsOpen(false)} />
+          <div className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 border-r border-slate-800 flex flex-col animate-in slide-in-from-left duration-300">
+            <div className="p-6 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-primary-500">
+                <Database size={24} />
+                <h1 className="text-xl font-bold tracking-tight text-white">GeoGraph</h1>
+              </div>
+              <button onClick={() => setIsOpen(false)} className="text-slate-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+            <nav className="flex-1 px-2 space-y-1 overflow-y-auto custom-scrollbar">
+              <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { switchTab('dashboard'); setIsOpen(false); }} />
+              <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => { switchTab('batch'); setIsOpen(false); }} />
+              <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => { switchTab('ar'); setIsOpen(false); }} />
+              <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => { switchTab('assets'); setIsOpen(false); }} />
+              <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => { switchTab('curator'); setIsOpen(false); }} />
+              <SidebarItem icon={Network} label="Explore" active={activeTab === 'explore'} onClick={() => { switchTab('explore'); setIsOpen(false); }} />
+              <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsOpen(false); }} />
+              <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => { switchTab('social'); setIsOpen(false); }} />
+              <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { switchTab('market'); setIsOpen(false); }} />
+              <div className="pt-4 mt-4 border-t border-slate-800">
+                <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsOpen(false); }} />
+              </div>
+            </nav>
+
+            <div className="p-4 border-t border-slate-800">
+                <div className={`p-3 rounded-xl border transition-all ${isGlobalView ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-900 border-slate-800'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold uppercase text-slate-400">View Mode</span>
+                        <div className="flex items-center gap-1">
+                            {isGlobalView && <Globe size={12} className="text-indigo-400" />}
+                            {isGlobalView ? <span className="text-[10px] text-indigo-400 font-bold">GLOBAL</span> : <span className="text-[10px] text-slate-500">LOCAL</span>}
+                        </div>
+                    </div>
+                    
+                    <button 
+                        onClick={() => { setIsGlobalView(!isGlobalView); setIsOpen(false); }}
+                        className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${
+                            isGlobalView 
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50' 
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+                        }`}
+                    >
+                        {isGlobalView ? <>Switch to Local <Lock size={12}/></> : <>Switch to Master <Globe size={12}/></>}
+                    </button>
+                </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [localAssets, setLocalAssets] = useState<DigitalAsset[]>([]);
@@ -248,7 +309,6 @@ export default function App() {
       }
     }
   }, [selectedLLM]);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { isOpen: isShortcutsOpen, setIsOpen: setIsShortcutsOpen } = useKeyboardShortcutsHelp() as any;
   const isOnline = useOnlineStatus();
   const [syncOn, setSyncOn] = useState(false);
@@ -257,7 +317,25 @@ export default function App() {
   const [showIntegrationsHub, setShowIntegrationsHub] = useState(false);
   const [showUnifiedFilters, setShowUnifiedFilters] = useState(false);
   const [showClusterSyncStats, setShowClusterSyncStats] = useState(false);
-  const [worldViewMode, setWorldViewMode] = useState<'3d' | 'semantic'>('3d');
+  // Dashboard queue monitor is hidden by default to avoid Supabase calls on cold start
+  const [showDashboardQueue, setShowDashboardQueue] = useState(false);
+  // Explore tab sub-view (merges Knowledge Graph + 3D World into one tab)
+  const [exploreSubTab, setExploreSubTab] = useState<'graph' | '3d' | 'semantic'>('graph');
+
+  // Preload heavy component JS chunks only when the browser is genuinely idle
+  // (never at cold-start where main-thread contention causes 20-second sidebar delays)
+  useEffect(() => {
+    const preload = () => {
+      import('./components/ARScene');
+      import('./components/GraphVisualizer');
+    };
+    if ('requestIdleCallback' in window) {
+      (window as any).requestIdleCallback(preload, { timeout: 10000 });
+    } else {
+      // Fallback: 8s delay on devices that don't support requestIdleCallback
+      setTimeout(preload, 8000);
+    }
+  }, []);
 
   // Initialize Worker Pool for parallel processing
   const workerPool = useMemo(() => new WorkerPool('../workers/parallelWorker.ts', { maxWorkers: 4 }), []);
@@ -412,13 +490,13 @@ export default function App() {
         case '2': setActiveTab('batch'); break;
         case '3': setActiveTab('ar'); break;
         case '4': setActiveTab('assets'); break;
-        case '5': setActiveTab('graph'); break;
+        case '5': setActiveTab('explore'); setExploreSubTab('graph'); break;
         case '6': setActiveTab('database'); break;
         case '7': if (isAdmin) setActiveTab('review'); break;
         case 's': setActiveTab('settings'); break;
         case 'g': setIsGlobalView(prev => !prev); break;
         case 'r': if (isGlobalView) refreshGlobalData(); break;
-        case 'w': setActiveTab('world'); break;
+        case 'w': setActiveTab('explore'); setExploreSubTab('3d'); break;
         case 'q': setShowProcessingPanel(prev => !prev); break; // Queue panel toggle
       }
     };
@@ -590,12 +668,14 @@ export default function App() {
           if (window.confirm(`Process ${arSessionQueue.length} items from your AR Session?`)) {
               handleBatchFiles(arSessionQueue);
               setArSessionQueue([]);
+              setActiveTab('batch');
           } else {
               // If user cancels, stay on AR tab and keep the queue
               return;
           }
+      } else {
+          setActiveTab(newTab);
       }
-      setActiveTab(newTab);
   };
 
   const createInitialAsset = async (file: File): Promise<DigitalAsset> => {
@@ -914,7 +994,7 @@ export default function App() {
     }
   }, [isOnline, localAssets.length]);
 
-  const ingestFile = async (file: File, source: string = "Upload") => {
+  const ingestFile = async (file: File, source: string = "Upload", shouldSwitchTab: boolean = true) => {
     setIsProcessing(true);
     try {
       const newAsset = await createInitialAsset(file);
@@ -929,7 +1009,7 @@ export default function App() {
       // Save locally as fallback
       await saveAsset(newAsset);
 
-      if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
+      if (shouldSwitchTab && source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
       
       if (!isOnline) {
         announce("Offline: Asset saved locally. Processing will resume when online.");
@@ -1157,8 +1237,9 @@ export default function App() {
   }, [user?.id, debugMode, selectedLLM, isPublicBroadcast]);
 
   // Legacy batch handler - now delegates to new system
-  const handleBatchFiles = (files: File[]) => {
-    // Add files to new batch processor
+  const handleBatchFiles = async (files: File[]) => {
+    // Dynamically load the batch processor only when needed
+    const { batchProcessor } = await import('./services/batchProcessorService');
     batchProcessor.addFiles(files, selectedScanType || ScanType.DOCUMENT);
     
     // Show the new batch panel
@@ -1645,8 +1726,7 @@ export default function App() {
           <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => switchTab('ar')} />
           <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => switchTab('assets')} />
           <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => switchTab('curator')} />
-          <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => switchTab('graph')} />
-          <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => switchTab('world')} />
+          <SidebarItem icon={Network} label="Explore" active={activeTab === 'explore'} onClick={() => switchTab('explore')} />
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => switchTab('database')} />
           <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => switchTab('social')} />
           <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => switchTab('market')} />
@@ -1694,74 +1774,20 @@ export default function App() {
         </div>
       </div>
 
-      {/* Mobile Sidebar Overlay */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-[60] lg:hidden">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 border-r border-slate-800 flex flex-col animate-in slide-in-from-left duration-300">
-            <div className="p-6 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-primary-500">
-                <Database size={24} />
-                <h1 className="text-xl font-bold tracking-tight text-white">GeoGraph</h1>
-              </div>
-              <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 hover:text-white">
-                <X size={20} />
-              </button>
-            </div>
-            <nav className="flex-1 px-2 space-y-1 overflow-y-auto custom-scrollbar">
-              <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { switchTab('dashboard'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => { switchTab('batch'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => { switchTab('ar'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => { switchTab('assets'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => { switchTab('curator'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => { switchTab('graph'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => { switchTab('world'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => { switchTab('social'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { switchTab('market'); setIsMobileMenuOpen(false); }} />
-              <div className="pt-4 mt-4 border-t border-slate-800">
-                <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsMobileMenuOpen(false); }} />
-              </div>
-            </nav>
-
-            <div className="p-4 border-t border-slate-800">
-                <div className={`p-3 rounded-xl border transition-all ${isGlobalView ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-900 border-slate-800'}`}>
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold uppercase text-slate-400">View Mode</span>
-                        <div className="flex items-center gap-1">
-                            {isGlobalView && <Globe size={12} className="text-indigo-400" />}
-                            {isGlobalView ? <span className="text-[10px] text-indigo-400 font-bold">GLOBAL</span> : <span className="text-[10px] text-slate-500">LOCAL</span>}
-                        </div>
-                    </div>
-                    
-                    <button 
-                        onClick={() => { setIsGlobalView(!isGlobalView); setIsMobileMenuOpen(false); }}
-                        className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${
-                            isGlobalView 
-                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50' 
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
-                        }`}
-                    >
-                        {isGlobalView ? <>Switch to Local <Lock size={12}/></> : <>Switch to Master <Globe size={12}/></>}
-                    </button>
-                </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         <header className="h-16 border-b border-slate-800 flex items-center justify-between px-4 lg:px-8 bg-slate-950/80 backdrop-blur z-10">
             <div className="flex items-center gap-4">
-                <button 
-                  onClick={() => setIsMobileMenuOpen(true)}
-                  className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                >
-                  <List size={24} />
-                </button>
+                <MobileNavigation 
+                  activeTab={activeTab} 
+                  switchTab={switchTab} 
+                  isGlobalView={isGlobalView} 
+                  setIsGlobalView={setIsGlobalView} 
+                />
                 <h2 className="text-lg font-semibold text-white capitalize hidden sm:block">
-                  {activeTab === 'database' ? (isGlobalView ? 'CLOUD DATAFRAMES' : 'LOCAL DATAFRAMES') : activeTab}
+                  {activeTab === 'database' ? (isGlobalView ? 'CLOUD DATAFRAMES' : 'LOCAL DATAFRAMES')
+                    : activeTab === 'explore' ? (exploreSubTab === 'graph' ? 'Knowledge Graph' : exploreSubTab === '3d' ? '3D World' : 'Semantic Canvas')
+                    : activeTab}
                 </h2>
                 <div className="flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800 ml-2">
                     <button 
@@ -1808,7 +1834,7 @@ export default function App() {
              {activeTab !== 'batch' && activeTab !== 'ar' && (
                 <>
                   <CameraCapture 
-                    onCapture={(file) => ingestFile(file, isGlobalView ? "Global Contribution" : "Mobile Camera")} 
+                    onCapture={(file) => ingestFile(file, isGlobalView ? "Global Contribution" : "Mobile Camera", false)} 
                     isOnline={isOnline}
                     zoomEnabled={zoomEnabled}
                   />
@@ -1842,7 +1868,7 @@ export default function App() {
           
           {activeTab === 'dashboard' && (
             <div className="space-y-8 max-w-6xl mx-auto">
-              {/* Processing Queue Status - ALWAYS VISIBLE on Dashboard */}
+              {/* Processing Queue Status - deferred to prevent cold-start Supabase calls */}
               <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-white font-bold flex items-center gap-2">
@@ -1857,9 +1883,26 @@ export default function App() {
                   </button>
                 </div>
                 {user?.id ? (
-                  <QueueMonitor userId={user.id} onRequeueComplete={() => {
-                    loadAssets().then(loaded => setLocalAssets(loaded));
-                  }} />
+                  showDashboardQueue ? (
+                    <QueueMonitor userId={user.id} onRequeueComplete={() => {
+                      loadAssets().then(loaded => setLocalAssets(loaded));
+                    }} />
+                  ) : (
+                    <div className="flex items-center justify-between py-3 px-1">
+                      <span className="text-sm text-slate-400">
+                        {totalPendingCount > 0
+                          ? `${totalPendingCount} item${totalPendingCount !== 1 ? 's' : ''} pending`
+                          : 'Queue is clear'}
+                      </span>
+                      <button
+                        onClick={() => setShowDashboardQueue(true)}
+                        className="text-xs text-primary-400 hover:text-primary-300 flex items-center gap-1 px-3 py-1.5 bg-slate-800 rounded-lg"
+                      >
+                        <Activity size={12} />
+                        Expand Queue
+                      </button>
+                    </div>
+                  )
                 ) : (
                   <div className="text-center py-6 text-slate-400">
                     <User size={32} className="mx-auto mb-2 text-slate-600" />
@@ -1879,7 +1922,7 @@ export default function App() {
               
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <StatCard label="Total Assets" value={assets.length} icon={FileText} color="text-blue-500" onClick={() => setActiveTab('assets')} />
-                <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} icon={Network} color="text-purple-500" onClick={() => setActiveTab('graph')} />
+                <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} icon={Network} color="text-purple-500" onClick={() => { setActiveTab('explore'); setExploreSubTab('graph'); }} />
                 <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" onClick={() => setActiveTab('database')} />
                 <StatCard label="Active Bundles" value={displayItems.filter(i => 'bundleId' in i).length} icon={Package} color="text-amber-500" onClick={() => setActiveTab('market')} />
               </div>
@@ -2377,7 +2420,7 @@ export default function App() {
                             <div className="p-4">
                                 <h4 className="font-bold text-white text-sm mb-1 truncate">{item.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
                                 <div className="flex gap-2 mt-4">
-                                    <button onClick={() => { setSelectedAssetId(item.id); setActiveTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700">View Graph</button>
+                                    <button onClick={() => { setSelectedAssetId(item.id); setActiveTab('explore'); setExploreSubTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700">View Graph</button>
                                     <ContributeButton asset={item} onAssetUpdated={handleAssetUpdate} />
                                 </div>
                             </div>
@@ -2387,114 +2430,121 @@ export default function App() {
              </div>
           )}
 
-          {activeTab === 'graph' && (
-            <div className="flex gap-6 h-full flex-col">
-               <div className="flex items-center justify-between">
-                 <h3 className="text-lg font-bold text-white">Knowledge Graph</h3>
-                 <div className="flex items-center gap-3">
-                   <FilterBadge count={graphFilters.category !== 'all' || graphFilters.era !== 'all' || graphFilters.contested ? 1 : 0} onClick={() => setShowUnifiedFilters(true)} />
-                   <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
-                      <button 
-                        onClick={() => setGraphViewMode('SINGLE')} 
-                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'SINGLE' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                      >
-                        Single Asset
-                      </button>
-                      <button 
-                        onClick={() => setGraphViewMode('GLOBAL')} 
-                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'GLOBAL' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                      >
-                        Global Corpus
-                      </button>
+          {activeTab === 'explore' && (
+            <div className="h-full flex flex-col gap-0">
+              {/* Sub-tab selector */}
+              <div className="flex items-center gap-1 px-1 pb-3 flex-shrink-0">
+                <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800 gap-1">
+                  <button
+                    onClick={() => setExploreSubTab('graph')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${exploreSubTab === 'graph' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    <Network size={13} />
+                    Knowledge Graph
+                  </button>
+                  <button
+                    onClick={() => setExploreSubTab('3d')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${exploreSubTab === '3d' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    <Globe size={13} />
+                    3D World
+                  </button>
+                  <button
+                    onClick={() => setExploreSubTab('semantic')}
+                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${exploreSubTab === 'semantic' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    <Zap size={13} />
+                    Semantic Canvas
+                  </button>
+                </div>
+                <div className="ml-auto">
+                  <FilterBadge count={graphFilters.category !== 'all' || graphFilters.era !== 'all' || graphFilters.contested ? 1 : 0} onClick={() => setShowUnifiedFilters(true)} />
+                </div>
+              </div>
+
+              {/* Knowledge Graph sub-view */}
+              {exploreSubTab === 'graph' && (
+                <div className="flex gap-6 h-full flex-col flex-1 min-h-0">
+                   <div className="flex items-center justify-between flex-shrink-0">
+                     <h3 className="text-lg font-bold text-white">Knowledge Graph</h3>
+                     <div className="flex items-center gap-3">
+                       <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
+                          <button 
+                            onClick={() => setGraphViewMode('SINGLE')} 
+                            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'SINGLE' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                          >
+                            Single Asset
+                          </button>
+                          <button 
+                            onClick={() => setGraphViewMode('GLOBAL')} 
+                            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'GLOBAL' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                          >
+                            Global Corpus
+                          </button>
+                       </div>
+                     </div>
                    </div>
-                 </div>
-               </div>
-               
-               {/* Inline Filter Bar for Knowledge Graph */}
-               <InlineFilterBar activeView="graph" />
-               
-               {graphViewMode === 'SINGLE' && (
-                 <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
-                   {selectedAssetId ? (
-                     <>
-                       <div className="flex justify-between items-center mb-4">
-                         <h4 className="text-sm font-bold text-slate-400 uppercase">Asset: {assets.find(a => a.id === selectedAssetId)?.sqlRecord?.DOCUMENT_TITLE || selectedAssetId}</h4>
-                         <button onClick={() => setSelectedAssetId(null)} className="text-xs text-primary-500 hover:underline">Clear Selection</button>
-                       </div>
-                       <div className="flex-1 relative">
-                         <GraphVisualizer 
-                           data={assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] }} 
-                           width={1000} 
-                           height={600} 
-                         />
-                       </div>
-                     </>
-                   ) : (
-                     <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
-                       <Network size={48} className="opacity-20" />
-                       <p>Select an asset from the Assets tab to view its specific graph.</p>
-                       <button onClick={() => setActiveTab('assets')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Go to Assets</button>
+                   <InlineFilterBar activeView="graph" />
+                   {graphViewMode === 'SINGLE' && (
+                     <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col min-h-0">
+                       {selectedAssetId ? (
+                         <>
+                           <div className="flex justify-between items-center mb-4">
+                             <h4 className="text-sm font-bold text-slate-400 uppercase">Asset: {assets.find(a => a.id === selectedAssetId)?.sqlRecord?.DOCUMENT_TITLE || selectedAssetId}</h4>
+                             <button onClick={() => setSelectedAssetId(null)} className="text-xs text-primary-500 hover:underline">Clear Selection</button>
+                           </div>
+                           <div className="flex-1 relative">
+                             <GraphVisualizer 
+                               data={assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] }} 
+                               width={1000} 
+                               height={600} 
+                             />
+                           </div>
+                         </>
+                       ) : (
+                         <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
+                           <Network size={48} className="opacity-20" />
+                           <p>Select an asset from the Assets tab to view its specific graph.</p>
+                           <button onClick={() => setActiveTab('assets')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Go to Assets</button>
+                         </div>
+                       )}
                      </div>
                    )}
-                 </div>
-               )}
+                   {graphViewMode === 'GLOBAL' && (
+                      <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col min-h-0">
+                          <div className="flex-1 relative"><GraphVisualizer data={globalGraphData} width={1000} height={600} /></div>
+                      </div>
+                   )}
+                </div>
+              )}
 
-               {graphViewMode === 'GLOBAL' && (
-                  <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
-                      <div className="flex-1 relative"><GraphVisualizer data={globalGraphData} width={1000} height={600} /></div>
-                  </div>
-               )}
-            </div>
-          )}
-
-          {activeTab === 'world' && (
-            <div className="h-full flex flex-col bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
-              {/* Header with view mode toggle and filter integration */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
-                <div className="flex items-center gap-4">
-                  <h3 className="text-lg font-bold text-white">{worldViewMode === '3d' ? '3D World' : 'Semantic Canvas'}</h3>
-                  <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
-                    <button 
-                      onClick={() => setWorldViewMode('3d')} 
-                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${worldViewMode === '3d' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                    >
-                      <Globe size={14} />
-                      3D View
-                    </button>
-                    <button 
-                      onClick={() => setWorldViewMode('semantic')} 
-                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${worldViewMode === 'semantic' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                    >
-                      <Zap size={14} />
-                      Semantic
-                    </button>
+              {/* 3D World sub-view — only mounts when selected to avoid eager WebGL context claim */}
+              {exploreSubTab === '3d' && (
+                <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 overflow-hidden min-h-0">
+                  <InlineFilterBar activeView="world" />
+                  <div className="h-full">
+                    <WorldRenderer
+                      graphData={graphViewMode === 'GLOBAL' ? globalGraphData : (assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] })}
+                      nearbyUsers={nearbyUsers}
+                      currentUserId={user?.id}
+                      onNodeSelect={(node) => {
+                        const asset = assets.find(a => a.id === node.id);
+                        if (asset) setSelectedAssetId(asset.id);
+                      }}
+                      onPositionChange={(pos) => {
+                        if (avatar) updatePosition(pos, [0, 0, 0, 1], avatar.lastSector);
+                      }}
+                    />
                   </div>
                 </div>
-                <FilterBadge count={0} onClick={() => setShowUnifiedFilters(true)} />
-              </div>
-              <InlineFilterBar activeView="world" />
-              <div className="flex-1">
-                {worldViewMode === '3d' ? (
-                  <WorldRenderer
-                    graphData={graphViewMode === 'GLOBAL' ? globalGraphData : (assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] })}
-                    nearbyUsers={nearbyUsers}
-                    currentUserId={user?.id}
-                    onNodeSelect={(node) => {
-                      const asset = assets.find(a => a.id === node.id);
-                      if (asset) {
-                        setSelectedAssetId(asset.id);
-                      }
-                    }}
-                    onPositionChange={(pos) => {
-                      if (avatar) {
-                        updatePosition(pos, [0, 0, 0, 1], avatar.lastSector);
-                      }
-                    }}
-                  />
-                ) : (
+              )}
+
+              {/* Semantic Canvas sub-view */}
+              {exploreSubTab === 'semantic' && (
+                <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 overflow-hidden min-h-0">
                   <SemanticCanvas assets={assets} />
-                )}
-              </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -2502,7 +2552,13 @@ export default function App() {
             <div className="h-full rounded-xl overflow-hidden border border-slate-800 bg-black relative">
               <ARScene 
                 onCapture={(file) => setArSessionQueue(prev => [...prev, file])} 
-                onFinishSession={() => switchTab('batch')}
+                onFinishSession={() => {
+                  if (arSessionQueue.length > 0) {
+                    handleBatchFiles(arSessionQueue);
+                    setArSessionQueue([]);
+                  }
+                  // Do not switch tab, stay in AR view
+                }}
                 sessionCount={arSessionQueue.length}
                 isOnline={isOnline}
                 zoomEnabled={zoomEnabled}

@@ -168,6 +168,36 @@ export const LazyAnnotationEditor = lazyWithRetry(
   () => import('../components/AnnotationEditor')
 );
 
+// Social App - Community messaging (heavy state + realtime subscriptions)
+export const LazySocialApp = lazyWithRetry(
+  () => import('../components/SocialApp')
+);
+
+// Integrations Hub - Web3/external service connections
+export const LazyIntegrationsHub = lazyWithRetry(
+  () => import('../components/IntegrationsHub')
+);
+
+// Queue Monitor - Processing queue with Supabase calls on mount
+export const LazyQueueMonitor = lazyWithRetry(
+  () => import('../components/QueueMonitor').then(m => ({ default: m.QueueMonitor }))
+);
+
+// Cluster Sync Stats Panel - Cluster sync UI
+export const LazyClusterSyncStatsPanel = lazyWithRetry(
+  () => import('../components/ClusterSyncStatsPanel').then(m => ({ default: m.ClusterSyncStatsPanel }))
+);
+
+// Batch Processing Panel - Full batch processing UI
+export const LazyBatchProcessingPanel = lazyWithRetry(
+  () => import('../components/BatchProcessingPanel')
+);
+
+// Smart Suggestions - AI-powered upload suggestions
+export const LazySmartSuggestions = lazyWithRetry(
+  () => import('../components/SmartSuggestions')
+);
+
 // ============================================
 // Wrapped Components with Suspense
 // ============================================
@@ -235,6 +265,42 @@ export const AnnotationEditorLazy = withLazySuspense(LazyAnnotationEditor, {
   fallbackMessage: 'Loading annotation editor...',
   fallbackHeight: 'h-96',
   componentName: 'Annotation Editor'
+});
+
+export const SocialAppLazy = withLazySuspense(LazySocialApp, {
+  fallbackMessage: 'Loading social features...',
+  fallbackHeight: 'h-full',
+  componentName: 'Social App'
+});
+
+export const IntegrationsHubLazy = withLazySuspense(LazyIntegrationsHub, {
+  fallbackMessage: 'Loading integrations...',
+  fallbackHeight: 'h-64',
+  componentName: 'Integrations Hub'
+});
+
+export const QueueMonitorLazy = withLazySuspense(LazyQueueMonitor, {
+  fallbackMessage: 'Loading queue status...',
+  fallbackHeight: 'h-32',
+  componentName: 'Queue Monitor'
+});
+
+export const ClusterSyncStatsPanelLazy = withLazySuspense(LazyClusterSyncStatsPanel, {
+  fallbackMessage: 'Loading cluster stats...',
+  fallbackHeight: 'h-64',
+  componentName: 'Cluster Sync Stats'
+});
+
+export const BatchProcessingPanelLazy = withLazySuspense(LazyBatchProcessingPanel, {
+  fallbackMessage: 'Loading batch processor...',
+  fallbackHeight: 'h-full',
+  componentName: 'Batch Processing'
+});
+
+export const SmartSuggestionsLazy = withLazySuspense(LazySmartSuggestions, {
+  fallbackMessage: 'Loading suggestions...',
+  fallbackHeight: 'h-32',
+  componentName: 'Smart Suggestions'
 });
 
 // ============================================

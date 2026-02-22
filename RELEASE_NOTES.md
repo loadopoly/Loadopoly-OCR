@@ -1,3 +1,27 @@
+# 🚀 GeoGraph Node: v2.11.0 Release Notes
+
+## 🌟 v2.11.0 — Performance Refactor & Spatial Tracking (2026-02-22)
+
+### 🎯 Overview
+This major release focuses on two critical areas: drastically improving the application's cold-start performance and laying the foundation for advanced spatial tracking and knowledge graph backfilling.
+
+### ⚡ Performance Improvements
+- **Lazy Loading Architecture**: Converted 7 heavy components (including `SocialApp`, `IntegrationsHub`, `QueueMonitor`, `ClusterSyncStatsPanel`, `BatchProcessingPanel`, `SmartSuggestions`, and `batchProcessorService`) to lazy imports. This removes massive dependencies like `@google/genai` and `ethers.js` from the initial bundle parse, reducing the cold-start JS burden by over 1MB.
+- **Dashboard Optimization**: The `QueueMonitor` component, which makes eager Supabase calls on mount, is now hidden behind an "Expand Queue" button on the Dashboard. This prevents unnecessary network requests during initial load.
+- **Tab Consolidation**: Merged the "Knowledge Graph" and "3D World" tabs into a single "Explore" tab with sub-views. This prevents the `WorldRenderer` (Three.js) from eagerly claiming a WebGL context when switching tabs, saving GPU memory and preventing UI freezes.
+- **AR Scanner Enhancements**: Added an `isCapturing` lock to prevent duplicate captures, implemented multi-shot staging with a floating "Commit" button, and gated the camera initialization behind a once-per-session Safety Warning to fix a 90-second freeze on low-end devices.
+
+### 🗺️ Spatial Tracking & Knowledge Graph
+- **New Database Schema**: Introduced `spatial_anchors`, `graph_nodes`, `graph_edges`, and `asset_graph_nodes` tables to support persistent entity tracking and spatial triangulation.
+- **Spatial Coordinates Edge Function**: A new Supabase Edge Function (`spatial-coordinates`) that computes estimated subject GPS coordinates for recognized objects using device GPS, compass heading, device pitch, and haversine bearing raycasts.
+- **Knowledge Graph Backfill**: A new idempotent Edge Function (`kg-backfill`) designed to run via `pg_cron`. It retroactively processes existing assets using Gemini Flash to extract named entities and populate the graph tables.
+
+### 🐛 Bug Fixes
+- Fixed a bug where the camera would close immediately after committing staged photos.
+- Fixed an issue where capturing a photo would forcefully switch the active tab away from the AR Scanner.
+- Created `sql/FIX_PROCESSING_UPLOADS_STORAGE_RLS.sql` to resolve Row-Level Security (RLS) violations when uploading to the `processing-uploads` bucket.
+- Fixed a syntax error (`NULLS NOT DISTINCT`) in the `graph_nodes` unique constraint migration.
+
 # 🚀 GeoGraph Node: v2.10.2 Release Notes
 
 ## 🔧 v2.10.2 — Database Function Search Path Fix (2026-02-11)
