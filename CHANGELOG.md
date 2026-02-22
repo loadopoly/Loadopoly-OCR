@@ -3,6 +3,17 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.11.2] - 2026-02-22
+
+### Security & Data Governance — Deletion Lockdown
+- **Settings-Only Local Delete**: Updated `SettingsPanel` confirmation text to explicitly state that local clear operations affect only device storage and never delete server data.
+- **Queue Deletion Controls Removed**: Removed `Delete All` and `Reset Server` actions from `QueueMonitor`, leaving only local reset/retry actions available in the client.
+- **RLS Delete Hardening**: Added `supabase/migrations/20260222000000_lockdown_delete_policies.sql` to enforce service-role-only DELETE policies for queue and related data domains.
+- **Spatial Anchors Policy Tightening**: Removed authenticated user DELETE policy from `spatial_anchors`; deletion now requires service-role authorization.
+
+### Operational Note
+- **Explicit-Request Deletions**: User data deletions are now constrained to explicit deletion requests and backend-authorized execution paths.
+
 ## [2.11.1] - 2026-02-22
 
 ### Performance — Cold-Start Elimination (H1-H3)

@@ -113,7 +113,13 @@ export default function SettingsPanel({
   };
 
   const handleClearData = async () => {
-      if (window.confirm("WARNING: This will delete ALL locally stored assets and graph data. This action cannot be undone. Are you sure?")) {
+      if (window.confirm(
+        "⚠️ WARNING: This will delete ALL locally stored assets and graph data from THIS DEVICE ONLY.\n\n" +
+        "• Your data on the server will NOT be affected.\n" +
+        "• This action cannot be undone.\n" +
+        "• You will need to re-sync from the server to restore local data.\n\n" +
+        "Are you sure you want to clear all local data?"
+      )) {
           await clearAllAssets();
           window.location.reload();
       }
@@ -423,7 +429,7 @@ export default function SettingsPanel({
       </div>
 
       <div className="text-center text-xs text-slate-600 mt-8 pb-4 flex flex-col gap-2 items-center">
-        <p>GeoGraph Node v2.9.11 • Local-First Architecture</p>
+        <p>GeoGraph Node v2.11.2 • Local-First Architecture</p>
         <button 
           onClick={onOpenPrivacy}
           className="text-slate-500 hover:text-slate-300 underline transition-colors"
