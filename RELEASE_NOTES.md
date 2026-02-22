@@ -1,3 +1,28 @@
+# 🚀 GeoGraph Node: v2.11.1 Release Notes
+
+## 🔧 v2.11.1 — Cold-Start Elimination & Mobile Interactivity (2026-02-22)
+
+### 🎯 Overview
+This patch completes the performance mission by eliminating the 8-second "dead zone" on cold load. By parallelizing the boot sequence and lazily loading the massive Web3 stack, we've reduced the time-to-interactive (TTI) significantly. We've also resolved critical mobile sidebar visibility and touch-response issues.
+
+### ⚡ Performance Improvements
+- **Parallelized Boot Chain**: The application now downloads the main UI chunk while the backend module system initializes, instead of waiting for one to finish before starting the other.
+- **Web3 Dependency Splitting**: `ethers.js` (a ~400KB parse-bomb) has been moved to a dynamic on-demand chunk. It no longer blocks the initial app load.
+- **Phase-0 Instant UI**: The app now displays user data from IndexedDB immediately, reaching an interactive state even before external network connectivity is confirmed.
+- **O(1) Deduplication**: Replaced an $O(n^2)$ render-time deduplication loop with a Map-based pair-caching system. This fixes the severe lag when scrolling large asset sidebars.
+- **Deferred Workers**: Background OCR workers are no longer spawned on mount, saving CPU cycles for the critical rendering path.
+
+### 📱 Mobile & UI Improvements
+- **Sidebar Visibility**: Fixed a CSS containment bug where the `sidebar-mask` was becoming invisible due to `backdrop-blur` on parent elements. The sidebar now correctly portals to the document body.
+- **Haptic UI Feedback**: Added active touch states (`scale-95`) to the navigation menu for better physical feedback on mobile devices.
+- **Interactive Hamburger**: Fixed a bug where the hamburger menu button was non-responsive for the first 8 seconds of load.
+
+### 📦 Technical Changes
+- `src/index.tsx`: Implemented `Promise.all` boot strategy.
+- `src/services/web3Service.ts`: Replaced static imports with `getEthers()` dynamic loader.
+- `src/App.tsx`: Added `React.lazy` boundaries for performance-heavy modals and panels.
+- `src/lib/workerPool.ts`: Optimized worker lifecycle for lower startup overhead.
+
 # 🚀 GeoGraph Node: v2.11.0 Release Notes
 
 ## 🌟 v2.11.0 — Performance Refactor & Spatial Tracking (2026-02-22)

@@ -3,6 +3,32 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.11.1] - 2026-02-22
+
+### Performance — Cold-Start Elimination (H1-H3)
+- **Parallel Boot Sequence**: Refactored `index.tsx` to trigger the `App` JS bundle download in parallel with the `bootstrapModuleSystem` initialization. This eliminates 2-3 seconds of sequential blocking on the main thread.
+- **Lazy Web3 Dependencies**: Removed static `ethers.js` imports from the main bundle. The 400KB+ library is now dynamically fetched via `getEthers()` only when a Web3 transaction is initiated, drastically reducing initial parse time.
+- **Component Code-Splitting**: Wrapped major UI components including `SettingsPanel`, `PurchaseModal`, `BundleCard`, and `ContributeButton` in `React.lazy` with `<Suspense>` boundaries.
+- **Non-Blocking Connectivity**: Decoupled `isConnected()` network checks from the module system boot chain, allowing the app to reach "Phase-0" (IndexedDB-driven UI) even with high network latency.
+- **Deferred Worker Initialization**: Updated `WorkerPool` to support `minWorkers: 0`, deferring worker thread creation until actual OCR tasks are queued.
+- **O(n²) Render Optimization**: Implemented Map-based fingerprint caching for pair-wise asset deduplication, reducing sidebar render computation from 74,000+ comparisons to $O(1)$ lookups per item.
+
+### Mobile UI & Sidebar
+- **Sidebar Rendering Fix**: Solved the "invisible sidebar" bug on mobile by using `ReactDOM.createPortal` to move the sidebar outside of the `backdrop-blur` containing block.
+- **Touch Interaction**: Added `active:scale-95` and touch-specific haptic feedback hints to sidebar navigation items for better tactile response.
+
+## [2.11.0] - 2026-02-22
+
+### Performance — Lazy Loading & GPU Optimization
+- **Major Dependency Splitting**: Converted `SocialApp`, `IntegrationsHub`, `QueueMonitor`, `ClusterSyncStatsPanel`, and `BatchProcessingPanel` to lazy imports, removing `@google/genai` from the initial bundle.
+- **Tab Consolidation**: Unified "Knowledge Graph" and "3D World" into an "Explore" tab to prevent premature WebGL context creation and save GPU VRAM.
+- **Dashboard Shaving**: Gated the `QueueMonitor` behind an explicit expander to avoid eager network polls on startup.
+
+### Database & Spatial Intelligence
+- **Persistent Entity Graph**: Deployed `graph_nodes`, `graph_edges`, and `asset_graph_nodes` to track real-world entity relationships across the dataset.
+- **Spatial Triangulation**: Launched the `spatial-coordinates` Edge Function to calculate target coordinates from device orientation and GPS telemetry.
+- **KG Backfill Service**: Implemented an automated agentic backfill that extracts semantic relationships from existing OCR text using Gemini Flash.
+
 ## [2.10.2] - 2026-02-11
 
 ### Bug Fixes — Database Functions
