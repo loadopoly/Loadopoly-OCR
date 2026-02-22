@@ -166,8 +166,8 @@ const StatCard = ({ label, value, icon: Icon, color, onClick }: any) => (
   </div>
 );
 
-// MobileNavigation component extracted to prevent App re-renders
-const MobileNavigation = ({ activeTab, switchTab, isGlobalView, setIsGlobalView }: any) => {
+// MobileNavigation component — pure nav links, zero data fetching, zero state toggles
+const MobileNavigation = ({ activeTab, switchTab }: { activeTab: string; switchTab: (tab: string) => void }) => {
   const [isOpen, setIsOpen] = useState(false);
   return (
     <>
@@ -204,29 +204,8 @@ const MobileNavigation = ({ activeTab, switchTab, isGlobalView, setIsGlobalView 
                 <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsOpen(false); }} />
               </div>
             </nav>
-
-            <div className="p-4 border-t border-slate-800">
-                <div className={`p-3 rounded-xl border transition-all ${isGlobalView ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-900 border-slate-800'}`}>
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold uppercase text-slate-400">View Mode</span>
-                        <div className="flex items-center gap-1">
-                            {isGlobalView && <Globe size={12} className="text-indigo-400" />}
-                            {isGlobalView ? <span className="text-[10px] text-indigo-400 font-bold">GLOBAL</span> : <span className="text-[10px] text-slate-500">LOCAL</span>}
-                        </div>
-                    </div>
-                    
-                    <button 
-                        onClick={() => { setIsGlobalView(!isGlobalView); setIsOpen(false); }}
-                        className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${
-                            isGlobalView 
-                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50' 
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
-                        }`}
-                    >
-                        {isGlobalView ? <>Switch to Local <Lock size={12}/></> : <>Switch to Master <Globe size={12}/></>}
-                    </button>
-                </div>
-            </div>
+            {/* View Mode toggle removed from mobile sidebar — use header toggle instead.
+                Toggling isGlobalView here triggered O(n²) createBundles during slide animation. */}
           </div>
         </div>
       )}
@@ -470,8 +449,10 @@ export default function App() {
     return () => unsubscribe();
   }, [user?.id]);
 
-  // Avatar & Metaverse state
-  const { avatar, nearbyUsers, currentSector, updatePosition } = useAvatar(user?.id || null);
+  // C3 FIX: Only activate avatar/presence tracking when user navigates to Explore tab.
+  // Previously this fired on every mount, hitting Supabase for presence even on Dashboard.
+  const avatarUserId = (activeTab === 'explore' && user?.id) ? user.id : null;
+  const { avatar, nearbyUsers, currentSector, updatePosition } = useAvatar(avatarUserId);
 
   // Memoized to avoid re-computing on every render (can be large with 387+ assets)
   const totalTokens = useMemo(() => assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0), [assets]);
@@ -536,54 +517,55 @@ export default function App() {
         setIsAdmin(isSuperUser);
         setIsEnterprise(true); // Authenticated users are treated as enterprise-tier
         
-        // 1. Sync local assets to cloud if they aren't there yet
-        const local = await loadAssets();
-        const syncPromises = local.map(async (asset) => {
-          if (asset.status === AssetStatus.MINTED && !asset.sqlRecord?.USER_ID) {
-            try {
-              await contributeAssetToGlobalCorpus(asset, data.user.id, 'GEOGRAPH_CORPUS_1.0', true);
-              // Update local record to show it's synced (optional, but good for UI)
-              if (asset.sqlRecord) asset.sqlRecord.USER_ID = data.user.id;
+        // C2 FIX — PHASE 1: Show local data IMMEDIATELY (IndexedDB is ~5ms)
+        const localImmediate = await loadAssets();
+        setLocalAssets(localImmediate);
+
+        // C2 FIX — PHASE 2: Defer cloud sync to idle so UI is interactive first
+        const deferredSync = async () => {
+          try {
+            // Sync unsynced local assets to cloud
+            const syncPromises = localImmediate
+              .filter(asset => asset.status === AssetStatus.MINTED && !asset.sqlRecord?.USER_ID)
+              .map(async (asset) => {
+                try {
+                  await contributeAssetToGlobalCorpus(asset, data.user.id, 'GEOGRAPH_CORPUS_1.0', true);
+                  if (asset.sqlRecord) asset.sqlRecord.USER_ID = data.user.id;
+                  await saveAsset(asset);
+                } catch (e) {
+                  console.error("Failed to sync local asset to cloud:", e);
+                }
+              });
+            
+            await Promise.all(syncPromises);
+
+            // Fetch remote assets and merge
+            const remoteAssets = await fetchUserAssets(data.user.id);
+            const assetMap = new Map<string, DigitalAsset>();
+            localImmediate.forEach(a => assetMap.set(a.id, a));
+            remoteAssets.forEach(a => assetMap.set(a.id, a));
+            
+            const mergedAssets = Array.from(assetMap.values()).sort((a, b) => 
+              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            );
+
+            setLocalAssets(mergedAssets);
+            
+            // Persist merged state to IndexedDB in background
+            for (const asset of mergedAssets) {
               await saveAsset(asset);
-            } catch (e) {
-              console.error("Failed to sync local asset to cloud:", e);
             }
+          } catch (err) {
+            console.error('Failed to sync with cloud:', err);
+            // Local data is already shown — no action needed
           }
-          return asset;
-        });
-        
-        await Promise.all(syncPromises);
+        };
 
-        // 2. Load user's assets from Supabase and MERGE with local
-        try {
-          const remoteAssets = await fetchUserAssets(data.user.id);
-          const localAssetsAfterSync = await loadAssets();
-          
-          // Create a map of assets by ID
-          const assetMap = new Map<string, DigitalAsset>();
-          
-          // Add local assets first
-          localAssetsAfterSync.forEach(a => assetMap.set(a.id, a));
-          
-          // Merge remote assets (overwriting local if they exist, as remote is "truth" for synced items)
-          // BUT preserve local-only items (like pending uploads or guest work)
-          remoteAssets.forEach(a => assetMap.set(a.id, a));
-          
-          const mergedAssets = Array.from(assetMap.values()).sort((a, b) => 
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-          );
-
-          setLocalAssets(mergedAssets);
-          
-          // Update IndexedDB with the merged state to ensure consistency
-          for (const asset of mergedAssets) {
-            await saveAsset(asset);
-          }
-          
-        } catch (err) {
-          console.error('Failed to load user assets:', err);
-          // Fallback to just local assets if remote fetch fails
-          loadAssets().then(setLocalAssets);
+        // Kick off cloud sync after the browser has finished painting
+        if ('requestIdleCallback' in window) {
+          (window as any).requestIdleCallback(deferredSync, { timeout: 10000 });
+        } else {
+          setTimeout(deferredSync, 2000);
         }
       } else {
         // Unauthenticated: load from IndexedDB only
@@ -633,15 +615,64 @@ export default function App() {
     if (isGlobalView && globalAssets.length === 0) refreshGlobalData();
   }, [isGlobalView]);
 
+  // C1 FIX: createBundles() runs O(n²) dedup (74K+ comparisons for 387 assets).
+  // Debounce to requestIdleCallback and cache by asset-ID fingerprint so it only
+  // re-runs when the actual set of assets changes, not on every reference change.
+  const bundleCacheRef = useRef<{ fingerprint: string; items: (DigitalAsset | ImageBundle)[] } | null>(null);
+  const bundleIdleRef = useRef<any>(null);
+
   useEffect(() => {
-    if (assets.length > 0) {
-        const processedAssets = assets.filter(a => !!a.sqlRecord);
-        const processingAssets = assets.filter(a => !a.sqlRecord);
-        const bundles = createBundles(processedAssets);
-        setDisplayItems([...processingAssets, ...bundles]);
-    } else {
-        setDisplayItems([]);
+    if (assets.length === 0) {
+      setDisplayItems([]);
+      bundleCacheRef.current = null;
+      return;
     }
+
+    const processedAssets = assets.filter(a => !!a.sqlRecord);
+    const processingAssets = assets.filter(a => !a.sqlRecord);
+
+    // Fast fingerprint: sorted asset IDs joined. If unchanged, skip O(n²) dedup entirely.
+    const fingerprint = processedAssets.map(a => a.id).sort().join(',');
+    if (bundleCacheRef.current?.fingerprint === fingerprint) {
+      // Asset set unchanged — reuse cached bundles, just update processing assets
+      setDisplayItems([...processingAssets, ...bundleCacheRef.current.items]);
+      return;
+    }
+
+    // Show processing assets immediately (instant feedback), defer heavy bundling
+    setDisplayItems([...processingAssets, ...processedAssets]);
+
+    // Cancel any pending idle callback
+    if (bundleIdleRef.current !== null) {
+      if ('cancelIdleCallback' in window) {
+        (window as any).cancelIdleCallback(bundleIdleRef.current);
+      } else {
+        clearTimeout(bundleIdleRef.current);
+      }
+    }
+
+    const runBundling = () => {
+      const bundles = createBundles(processedAssets);
+      bundleCacheRef.current = { fingerprint, items: bundles };
+      setDisplayItems([...processingAssets, ...bundles]);
+    };
+
+    // Defer to idle so the sidebar / tab switch animation isn't blocked
+    if ('requestIdleCallback' in window) {
+      bundleIdleRef.current = (window as any).requestIdleCallback(runBundling, { timeout: 5000 });
+    } else {
+      bundleIdleRef.current = setTimeout(runBundling, 300);
+    }
+
+    return () => {
+      if (bundleIdleRef.current !== null) {
+        if ('cancelIdleCallback' in window) {
+          (window as any).cancelIdleCallback(bundleIdleRef.current);
+        } else {
+          clearTimeout(bundleIdleRef.current);
+        }
+      }
+    };
   }, [assets]);
 
   const handleAssetUpdate = async (updatedAsset: DigitalAsset) => {
@@ -1789,15 +1820,27 @@ export default function App() {
                 <MobileNavigation 
                   activeTab={activeTab} 
                   switchTab={switchTab} 
-                  isGlobalView={isGlobalView} 
-                  setIsGlobalView={setIsGlobalView} 
                 />
                 <h2 className="text-lg font-semibold text-white capitalize hidden sm:block">
                   {activeTab === 'database' ? (isGlobalView ? 'CLOUD DATAFRAMES' : 'LOCAL DATAFRAMES')
                     : activeTab === 'explore' ? (exploreSubTab === 'graph' ? 'Knowledge Graph' : exploreSubTab === '3d' ? '3D World' : 'Semantic Canvas')
                     : activeTab}
                 </h2>
-                {/* LOCAL/MASTER toggle is in the sidebar — not duplicated here */}
+                {/* Compact LOCAL/MASTER toggle — lightweight, always accessible */}
+                <div className="flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800 ml-2">
+                    <button 
+                        onClick={() => setIsGlobalView(false)}
+                        className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${!isGlobalView ? 'bg-primary-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        LOCAL
+                    </button>
+                    <button 
+                        onClick={() => setIsGlobalView(true)}
+                        className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${isGlobalView ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
+                    >
+                        MASTER
+                    </button>
+                </div>
             </div>
           <div className="flex items-center gap-2">
              {/* Queue Status Button - ALWAYS VISIBLE */}
