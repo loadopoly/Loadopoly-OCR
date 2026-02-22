@@ -304,8 +304,8 @@ class ProcessingQueueService {
     }
 
     const testId = `test-${Date.now()}`;
-    const testBlob = new Blob(['test'], { type: 'text/plain' });
-    const testPath = `${this.userId}/${testId}.txt`;
+    const testBlob = new Blob(['test'], { type: 'image/jpeg' });
+    const testPath = `${this.userId}/${testId}.jpg`;
 
     // Test 1: Storage upload
     try {
@@ -890,9 +890,19 @@ class ProcessingQueueService {
     // For large files (>5MB), use chunked upload with retries
     const FIVE_MB = 5 * 1024 * 1024;
     
+    // Determine content type, fallback to image/jpeg if unknown to pass RLS
+    let contentType = file.type;
+    if (!contentType || contentType === 'application/octet-stream') {
+      if (file.name.toLowerCase().endsWith('.pdf')) contentType = 'application/pdf';
+      else if (file.name.toLowerCase().endsWith('.png')) contentType = 'image/png';
+      else if (file.name.toLowerCase().endsWith('.webp')) contentType = 'image/webp';
+      else contentType = 'image/jpeg'; // Default fallback
+    }
+
     const uploadOptions: any = {
       cacheControl: '3600',
       upsert: true,
+      contentType,
     };
     
     // Add duplex option for larger files to handle streaming properly
