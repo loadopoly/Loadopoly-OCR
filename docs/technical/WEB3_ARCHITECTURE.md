@@ -57,6 +57,25 @@ This document describes the comprehensive Web3 optimizations implemented for the
 
 ## New Components
 
+## Performance & Scalability
+
+### ⚡ Lazy Web3 Integration (v2.11.1)
+To ensure the app's initial load time is not penalized by a ~400KB Web3 library, `ethers.js` is now lazily loaded using a dynamic import wrapper:
+
+**Getter implementation:**
+```typescript
+// src/services/web3Service.ts
+export const getEthers = async () => {
+  if (!ethersInstance) {
+    const ethersModule = await import('ethers');
+    ethersInstance = ethersModule.ethers;
+  }
+  return ethersInstance;
+};
+```
+
+This reduces the main application bundle parse time significantly, deferring the overhead until the user specifically interacts with minting or wallet functions.
+
 ### 1. Oracle Verification Service
 
 **File:** [src/services/oracleVerificationService.ts](src/services/oracleVerificationService.ts)

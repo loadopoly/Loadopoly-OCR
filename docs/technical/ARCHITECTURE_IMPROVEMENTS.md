@@ -11,13 +11,14 @@ Based on the analysis of the Loadopoly-OCR codebase, this document outlines acti
 - **Comprehensive database optimization** (`sql/DATABASE_OPTIMIZATION.sql`) with BRIN/GIN indexes
 - **Client-side persistence** via IndexedDB for offline support
 - **Deduplication service v2** using n-gram/shingle similarity algorithms
+- **O(1) Deduplication Engine**: Replaced $O(n^2)$ render-time comparisons with Map-based fingerprint caching (implemented in v2.11.1).
+- **Parallel Boot Architecture**: Non-blocking module initialization + simultaneous App bundle fetch.
 
 ### Identified Bottlenecks 🚧
 1. **Sequential Gemini API calls** in `processNextBatchItem()`
-2. **Client-side processing** limits concurrency to single-threaded
+2. **Client-side processing** limits concurrency to single-threaded (mostly resolved by Worker Pool)
 3. **No server-side queue** for background processing
 4. **Full-size image uploads** before compression
-5. **O(n²) deduplication** for large batches
 
 ---
 
