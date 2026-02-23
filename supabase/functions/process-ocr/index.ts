@@ -20,7 +20,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.2.0';
+import { GoogleGenAI } from 'https://esm.sh/@google/genai@1';
 
 // ============================================
 // Utility: Timeout wrapper
@@ -104,7 +104,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseKey);
-    const genAI = new GoogleGenerativeAI(geminiKey);
+    const genAI = new GoogleGenAI({ apiKey: geminiKey });
 
     // Parse request
     const body = await req.json().catch(() => ({}));
@@ -255,8 +255,9 @@ Deno.serve(async (req: Request) => {
 // ============================================
 
 async function processJob(
+  // deno-lint-ignore no-explicit-any
   supabase: any,
-  genAI: GoogleGenerativeAI,
+  genAI: GoogleGenAI,
   job: ProcessingJob,
   workerId: string
 ): Promise<void> {
@@ -368,13 +369,11 @@ async function updateProgress(
 // ============================================
 
 async function callGemini(
-  genAI: GoogleGenerativeAI,
+  genAI: GoogleGenAI,
   imageBase64: string,
   mimeType: string,
   job: ProcessingJob
 ): Promise<ProcessingResult> {
-  const model = genAI.getGenerativeModel({ model: GEMINI_MODEL });
-
   const locationContext = job.latitude && job.longitude
     ? `Image was captured at Latitude: ${job.latitude}, Longitude: ${job.longitude}.`
     : 'No geolocation data available.';
@@ -414,21 +413,28 @@ async function callGemini(
 
   // Wrap Gemini call with timeout to prevent indefinite hangs
   const result = await withTimeout(
-    model.generateContent([
-      { text: prompt },
-      {
-        inlineData: {
-          mimeType: mimeType || 'image/jpeg',
-          data: imageBase64,
+    genAI.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: mimeType || 'image/jpeg',
+                data: imageBase64,
+              },
+            },
+          ],
         },
-      },
-    ]),
+      ],
+    }),
     GEMINI_TIMEOUT_MS,
     'Gemini API call timed out'
   );
 
-  const response = result.response;
-  const text = response.text();
+  const text = result.text ?? '';
 
   // Parse JSON from response
   const jsonMatch = text.match(/\{[\s\S]*\}/);
