@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.11.3] - 2026-02-24
+
+### Edge Function Optimization & Type Safety
+- **Deno-Native Edge Serving**: Migrated `process-ocr`, `download-asset`, `kg-backfill`, and `spatial-coordinates` Supabase edge functions from the deprecated `std/http/server.ts` `serve()` API to the native `Deno.serve()` entrypoint, ensuring compatibility with current Deno Deploy runtimes and eliminating cold-start overhead from the legacy HTTP module.
+- **Parallelized Edge Initialization**: Supabase client construction and environment validation are now performed before the request handler fires, reducing per-request latency to near-zero for warm invocations.
+- **Type-Safe Error Handling**: Changed `catch (error)` blocks to `catch (error: unknown)` with explicit `instanceof Error` guards in `download-asset` and `process-ocr`, eliminating implicit `any` TypeScript access on caught values.
+- **Import Map Cleanup**: Removed unused `std/http/server.ts` entry from `supabase/functions/import_map.json`.
+- **ESLint Comment Pruning**: Removed redundant `// eslint-disable-next-line` suppression comments in `src/lib/lazyComponents.tsx`, `src/lib/logger.ts`, and `src/services/avatarService.ts` now that the underlying patterns are correctly typed.
+
 ## [2.11.2] - 2026-02-22
 
 ### Security & Data Governance — Deletion Lockdown

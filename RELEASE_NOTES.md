@@ -1,4 +1,23 @@
-# 🚀 GeoGraph Node: v2.11.2 Release Notes
+# 🚀 GeoGraph Node: v2.11.3 Release Notes
+
+## ⚡ v2.11.3 — Edge Function Optimization & Type Safety (2026-02-24)
+
+### 🎯 Overview
+This patch modernizes all Supabase edge functions to the native `Deno.serve()` runtime API, improves TypeScript type safety in error-handling paths, cleans up the import map, and removes redundant ESLint suppression comments.
+
+### 🚀 Edge & Performance Changes
+- **Native `Deno.serve()` Migration**: `process-ocr`, `download-asset`, `kg-backfill`, and `spatial-coordinates` now use the first-class `Deno.serve()` entrypoint, removing the dependency on the deprecated `std@0.168.0/http/server.ts` module.
+- **Pre-initialized Clients**: Supabase client and environment checks are hoisted outside of the request handler to speed up warm-path requests.
+
+### 🔒 Type Safety
+- `catch (error: unknown)` with `instanceof Error` guards replaces implicit `any` access in `download-asset` and `process-ocr`.
+- Removes the last implicit runtime property access (`error.message`, `error.code`) on untyped caught values.
+
+### 🧹 Housekeeping
+- Removed `std/http/server.ts` from `supabase/functions/import_map.json`.
+- Pruned three redundant `// eslint-disable-next-line` comments in `src/lib/`.
+
+---
 
 ## 🔒 v2.11.2 — Deletion Lockdown & Governance Enforcement (2026-02-22)
 
