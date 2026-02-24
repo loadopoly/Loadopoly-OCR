@@ -208,7 +208,6 @@ interface WithSuspenseProps {
   componentName?: string;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function withLazySuspense<T extends ComponentType<any>>(
   LazyComponent: React.LazyExoticComponent<T>,
   options: WithSuspenseProps = {}

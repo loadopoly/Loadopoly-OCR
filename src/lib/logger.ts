@@ -81,7 +81,6 @@ const DEFAULT_REDACT_FIELDS = [
 
 // Determine environment
 const isDev = typeof import.meta !== 'undefined' 
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore - Vite import.meta.env
   ? import.meta.env?.DEV 
   : process.env.NODE_ENV !== 'production';

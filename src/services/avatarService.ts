@@ -11,7 +11,6 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 
 // Type assertion helper for metaverse tables
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
 // ============================================

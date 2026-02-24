@@ -238,10 +238,11 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify(summary), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Edge function error:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -338,13 +339,15 @@ async function processJob(
 
     const processingTime = Date.now() - startTime;
     console.log(`[${workerId}] Job ${job.id} completed in ${processingTime}ms`);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`[${workerId}] Job ${job.id} failed:`, error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errCode = (error as Record<string, unknown>)?.code ?? 'PROCESSING_ERROR';
 
     await supabase.rpc('fail_processing_job', {
       p_job_id: job.id,
-      p_error_message: error.message,
-      p_error_code: error.code ?? 'PROCESSING_ERROR',
+      p_error_message: errMsg,
+      p_error_code: errCode,
     });
 
     throw error;
