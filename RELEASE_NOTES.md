@@ -1,4 +1,29 @@
-# 🚀 GeoGraph Node: v2.11.3 Release Notes
+# 🚀 GeoGraph Node: v2.11.4 Release Notes
+
+## ⚡ v2.11.4 — UX Reliability, Download Fallbacks, and QA Drill-Down (2026-02-25)
+
+### 🎯 Overview
+This patch focuses on production reliability and operator visibility: image-download failures are now resilient to missing edge URL handlers, Explore behavior aligns with expected user flow, and QA debug now surfaces actionable failed-job context.
+
+### ✅ UX & Flow Improvements
+- **Explore Defaults**: `3D World` is now the default Explore sub-tab, with keyboard shortcut alignment for consistent navigation.
+- **Node/Edge Access from Structured DB**: The `NODES` column is now clickable and routes directly to the selected asset graph in `Explore → Knowledge Graph`.
+- **QA Debug Failure Drill-Down**: Added a dedicated failed-jobs panel that surfaces queue failure stage/error and provides direct navigation to the affected asset context.
+
+### 📥 Download Reliability
+- **Alert Removal**: Replaced blocking `alert()` dialogs on image download failures with toast feedback.
+- **Automatic Fallback Export**: On image-download failure, JSON export fallback now proceeds with non-blocking UX messaging.
+- **Direct Storage Signed URL Fallback**: When edge-function signed URL generation fails, the app now attempts direct Supabase Storage signed URL resolution.
+
+### 🖼️ Asset Card Robustness
+- **Bundle Thumbnail Fallback**: Bundle card image tiles now gracefully handle broken image URLs with visual fallback rendering.
+
+### 🧪 Validation Snapshot
+- `npm run typecheck` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+---
 
 ## ⚡ v2.11.3 — Edge Function Optimization & Type Safety (2026-02-24)
 

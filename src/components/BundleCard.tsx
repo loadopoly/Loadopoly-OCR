@@ -40,7 +40,17 @@ const BundleCard: React.FC<BundleCardProps> = ({ bundle, onClick, onAssetUpdated
       
       <div className="grid grid-cols-4 gap-2 mb-4 h-24">
         {bundle.imageUrls.slice(0, 4).map((url, i) => (
-          <img key={i} src={url} className="w-full h-full object-cover rounded border border-purple-500/30" alt={`Bundle part ${i}`} />
+          <div key={i} className="w-full h-full rounded border border-purple-500/30 bg-slate-900/60 flex items-center justify-center overflow-hidden">
+            <img
+              src={url}
+              className="w-full h-full object-cover"
+              alt={`Bundle part ${i}`}
+              onError={(event) => {
+                event.currentTarget.style.display = 'none';
+              }}
+            />
+            <Package size={20} className="text-purple-400/40" />
+          </div>
         ))}
       </div>
       
