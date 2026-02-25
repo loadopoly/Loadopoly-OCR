@@ -135,7 +135,7 @@ This is a 3-day sprint once I have an engineer onboarded."
 **If Gemini shuts down**:
 - Failover to OpenAI automatically (already configured)
 - Tesseract.js local OCR works offline
-- Users retain all existing data (local-first architecture)
+- Users retain all existing data — their structured records remain in their Supabase account, untouched
 
 **Risk**: LOW. We're not locked into any single provider."
 
@@ -166,21 +166,24 @@ This is a 3-day sprint once I have an engineer onboarded."
 
 ### Q: "How do you handle user data privacy with GDPR/CCPA?"
 
-**A**: "Our local-first architecture is **inherently GDPR-compliant**:
+**A**: "Our architecture is designed around database-level ownership, which maps cleanly to GDPR rights:
 
 **GDPR Article 17 (Right to Erasure)**:
-- User owns data in their browser
-- Delete account → function to `clearAllAssets()` in IndexedDB
-- Optional cloud data → Supabase row delete cascades automatically
+- Every row in Supabase is tied to the user's account via Row-Level Security (RLS)
+- Delete account → cascades delete all their structured records automatically
+- Local IndexedDB cache cleared on sign-out
 
 **GDPR Article 20 (Data Portability)**:
-- Export to JSON, CSV, GraphML, RDF built-in
-- No vendor lock-in → full compliance
+- Structured records exportable as JSON, CSV, GraphML, RDF at any time
+- No proprietary lock-in — it's PostgreSQL rows the user can fully extract
+- Supabase is open-source; enterprise users can self-host the entire backend
 
 **CCPA (California Consumer Privacy Act)**:
-- Users control what data is synced to cloud
-- Default is local-only (opt-in cloud sync)
-- Data marketplace requires explicit consent for sharing
+- Data marketplace requires explicit per-dataset consent before any sharing
+- Users explicitly choose which structured records to list on the marketplace
+- Default: data stays private in their account, never shared
+
+**The key privacy argument**: We don't own the data — the user's account owns the rows. Our platform just writes to their account and reads from it. RLS enforces this at the Postgres layer, not just the application layer.
 
 **Legal docs ready**:
 - `PRIVACY-POLICY.md` (draft, needs lawyer review)

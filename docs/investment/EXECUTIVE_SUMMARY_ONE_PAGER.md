@@ -14,7 +14,7 @@
 
 ## What We Built
 
-**Advanced OCR Platform** that transforms documents into **structured knowledge graphs** stored locally in the user's browser.
+**Advanced OCR Platform** that transforms documents into **structured knowledge graphs** — stored as user-owned records in Supabase, protected by database-level Row-Level Security. The user owns the data at the database layer, not inside a vendor's proprietary system.
 
 ### Not Just Text Files - Structured Databases
 - **Raw OCR**: Multi-language text extraction (Google Gemini 2.5 Flash)
@@ -23,7 +23,8 @@
 - **GIS Metadata**: GPS coordinates + zone classification
 - **Temporal Classification**: Era, period, age (e.g., "Industrial Age, 1920s")
 - **3D Visualization**: Immersive metaverse navigation (default explore mode)
-- **Data Ownership**: Everything stored in user's IndexedDB (local-first)
+- **Data Ownership**: User-owned structured records in Supabase, enforced by Row-Level Security — not locked in vendor formats
+- **Offline Cache**: Local IndexedDB mirrors cloud records for offline access and performance
 - **Mobile-First PWA**: Full bottom nav, installable, works offline
 - **Download Resilience**: Multi-fallback signed URL chain, cancel mid-flight
 
@@ -55,15 +56,18 @@ AI companies keep returning: First license 100K docs → Six months later 500K d
 |-------------|---------------|----------------|---------------|
 | Smithsonian (11M items) | Flat JSON | No graphs, no GPS | Structured + queryable |
 | Library of Congress | JSON API | OCR errors, manual conversion | Auto entity extraction |
-| Google/AWS | Accurate OCR | Vendor lock-in, no graph | User ownership + graph |
+| Google/AWS | Accurate OCR | Vendor lock-in, no graph, user has no DB ownership | User-owned Supabase rows + knowledge graph |
 | **Us** | All of the above | — | **Structure + Ownership + Monetization** |
 
 ### 4. Scalable Business Model
-- **Freemium**: Users bring own API keys (0% cost)
-- **Paid Tier**: $49-99/month (70% gross margin)
-- **Marketplace**: 15-20% commission on data sales
-- **NFT Minting**: Fees + royalties on fractionalized datasets
-- **Enterprise**: White-label self-hosting ($50K-100K one-time)
+
+The **core value** — structured Supabase ownership — is the foundation. Everything else is built on top:
+
+- **Free**: Bring your own API keys; structured data still recorded in your account
+- **Paid Tier**: $49-99/month — processing credits + expanded cloud storage + sync capacity (70% gross margin)
+- **Marketplace**: 15-20% commission when users license their structured datasets to AI companies
+- **NFT Minting**: Fees + royalties on fractionalized ownership stakes
+- **Enterprise**: White-label self-hosted Supabase deployments ($50K-100K one-time)
 
 ---
 

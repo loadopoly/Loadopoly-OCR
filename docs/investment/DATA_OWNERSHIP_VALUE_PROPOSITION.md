@@ -294,37 +294,43 @@ User uploads document → Vendor processes → Data stays in vendor's cloud
                             Data lost if vendor goes away
 ```
 
-### Our Model (Privacy-First Data Ownership)
+### Our Model (Structured Data Ownership)
 ```
-User uploads document → Process locally FIRST → Store in user's browser (IndexedDB)
-                                              ↓
-                                    Optional: Backup to user's Supabase
-                                    Optional: Export to user's formats
-                                    Optional: Tokenize as user's NFT
-                                              ↓
-                                    USER CONTROLS EVERYTHING
+User uploads document → AI processes it → Structured records written to user's Supabase account
+                                          ↓
+                            RLS enforces: only this user's account can read/write these rows
+                            User can: query them, export them, license them, or mint them as NFTs
+                            Local IndexedDB: offline read-through cache of the same records
+                                          ↓
+                                    USER OWNS THE STRUCTURE
 ```
+
+**The core distinction**: Every other OCR platform keeps the structured output in their system. We write it into the user's own account in a real database. They own the rows — not files, not exports, not tokens — actual structured database records with knowledge graphs, embeddings, and spatial/temporal metadata they control.
 
 ---
 
 ## What Makes Our Data Ownership Unique
 
-### 1. Local-First Architecture
+### 1. Supabase-Backed Structured Ownership
 
-**IndexedDB Storage** (Browser-Native Database)
-- All processed data stored directly in user's browser
-- Works offline - no internet required after first load
-- Zero vendor lock-in - users can export at any time
-- Instant access - no API calls or cloud latency
-- Privacy-preserving - nothing sent to cloud unless user chooses
+**Every user account has a private partition of the database** — Row-Level Security ensures only their credentials can read or modify their records. This is ownership enforced at the Postgres layer, not just the application layer.
+
+- No vendor lock-in — Supabase is open-source; enterprise users can self-host the entire backend
+- Export at any time — it’s standard PostgreSQL, not a proprietary format
+- Portable — structured records exportable to JSON, CSV, GraphML, RDF
+- Durable — survives browser refreshes, device changes, and new logins
+
+**The local IndexedDB is a performance cache** — an offline sync of the same cloud rows for speed and offline access. The source of truth and the ownership vehicle is Supabase.
 
 **Technical Implementation**:
 ```typescript
-// src/lib/indexeddb.ts - User's local database
-class GeoGraphDB extends Dexie {
-  assets!: Table<DigitalAsset, string>;
-  // User owns this data - stored in their browser
-}
+// Supabase RLS policy (simplified) - enforced at Postgres query level
+// CREATE POLICY "Users own their assets"
+//   ON public.assets FOR ALL
+//   USING (auth.uid() = user_id);
+
+// Any query from any client that doesn't match user_id is rejected at DB level
+// No application code can bypass this
 ```
 
 ### 2. Structured Database Schema (Not Just Text Files)
@@ -372,7 +378,7 @@ Every scanned document becomes a structured record with:
 }
 ```
 
-**This is user's property** - portable, exportable, monetizable.
+**This is user's property** — stored as their Supabase row, protected by RLS, portable to any format, and licensable on the marketplace. Subscriptions, marketplace commissions, and NFT fees are all monetization layers built on top of this foundational ownership.
 
 ---
 

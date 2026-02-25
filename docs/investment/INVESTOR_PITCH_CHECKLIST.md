@@ -42,11 +42,11 @@
 
 ### **Opening** (30 seconds)
 - **Goal**: Frame the problem
-- **Script**: "Hey [Name], thanks for your time. Every OCR tool out there locks data in their cloud. I built something that gives users full ownership of their structured data. Let me show you."
+- **Script**: "Hey [Name], thanks for your time. Every OCR tool out there processes your documents and keeps the structured output in their system. I built something different — the structured records, the knowledge graph, the embeddings — they live in the user's own database account, protected by row-level access control. They can license it, export it, or take it anywhere. Let me show you."
 
-### **Demo Part 1: Local Storage** (90 seconds)
-- **Action**: Upload 2-3 documents, show IndexedDB in browser DevTools
-- **Key Point**: "This data lives in MY browser, not your servers."
+### **Demo Part 1: Structured Ownership** (90 seconds)
+- **Action**: Upload 2-3 documents, then show the resulting structured records in the Supabase dashboard (or via app DB panel) and point out RLS enforcement
+- **Key Point**: "These rows are mine. They're in a real database tied to my account — not locked in a vendor's proprietary format."
 - **Commands**: Use `BROWSER_CONSOLE_DEMO_COMMANDS.md` Demo Command 1
 
 ### **Demo Part 2: Structured Data** (90 seconds)
@@ -56,20 +56,20 @@
 
 ### **Demo Part 3: Knowledge Graph** (90 seconds)
 - **Action**: Show force-directed graph, click entity, show cross-document connections
-- **Key Point**: "Users own these relationships. Export to any format."
+- **Key Point**: "The user owns these relationships — they're rows in their Supabase account, queryable and exportable."
 
-### **Demo Part 4: Data Portability** (60 seconds)
-- **Action**: Show export options (JSON, CSV, GraphML), optional cloud sync, NFT minting
-- **Key Point**: "User controls where data lives. Zero vendor lock-in."
+### **Demo Part 4: Portability + Monetization** (60 seconds)
+- **Action**: Show export options (JSON, CSV, GraphML), the marketplace listing flow, optional NFT minting
+- **Key Point**: "Subscriptions, the marketplace, NFTs — these are all built on top of the core ownership model. The structured data is already theirs before they pay a cent."
 
 ### **Value Proposition** (60 seconds)
-- **Script**: "Business model is different:
-  1. **Freemium**: Users bring own API keys (0% cost)
-  2. **Paid tier**: We provide credits (70% margin)
-  3. **Marketplace**: 15-20% commission on data sales
+- **Script**: "The core value is the structured ownership — every user gets a real database of their own structured knowledge, protected by Row-Level Security. Subscriptions, marketplace, NFTs are how we monetize on top of that:
+  1. **Free**: Structured ownership, bring your own API key
+  2. **Paid tier**: Processing credits + sync capacity (70% margin)
+  3. **Marketplace**: We take 15-20% when users license their structured datasets
   4. **NFTs**: Minting fees + royalties
 
-  Market timing: Privacy regs, AI trust crisis, Web3 momentum."
+  Market timing: AI data wall, privacy regulations, Web3 ownership momentum."
 
 ### **The Ask** (30 seconds)
 - **Script**: "$150K for 8-10% to launch beta with 100 users and get to $5K MRR in 6 months. Biggest gap is user validation - tech is proven. What questions do you have?"
@@ -85,13 +85,13 @@
 **A**: "Users pay for processing power and marketplace access, not storage. Export builds trust."
 
 ### 3. "Can this scale to 100K users?"
-**A**: "Yes. Local-first architecture + Supabase auto-scaling. Variable costs scale linearly."
+**A**: "Yes. Supabase handles 100K user accounts with auto-scaling PostgreSQL. Each user's data is isolated via Row-Level Security. Variable costs scale linearly."
 
 ### 4. "What's the TAM?"
 **A**: "$13.7B OCR market by 2027. Our niche: 50K archivist institutions + 1.3M legal firms. 1% capture = $5M ARR."
 
 ### 5. "How do you compete with Google/AWS?"
-**A**: "They provide flat text in their cloud. We provide structured graphs users own. Different business model."
+**A**: "They give you flat text back in their system. We give you structured knowledge graphs in YOUR Supabase account — with entity extraction, embeddings, and spatial/temporal metadata you actually own at the database row level. Different product, different model."
 
 ### 6. "What if Gemini raises prices?"
 **A**: "Multi-provider architecture built in. Can swap to OpenAI, Claude, or local Tesseract in settings."
