@@ -22,8 +22,10 @@
 - **Vector Embeddings**: 768D semantic search capabilities
 - **GIS Metadata**: GPS coordinates + zone classification
 - **Temporal Classification**: Era, period, age (e.g., "Industrial Age, 1920s")
-- **3D Visualization**: Immersive metaverse navigation
+- **3D Visualization**: Immersive metaverse navigation (default explore mode)
 - **Data Ownership**: Everything stored in user's IndexedDB (local-first)
+- **Mobile-First PWA**: Full bottom nav, installable, works offline
+- **Download Resilience**: Multi-fallback signed URL chain, cancel mid-flight
 
 ---
 
@@ -68,12 +70,15 @@ AI companies keep returning: First license 100K docs → Six months later 500K d
 ## Current Status
 
 ### ✅ Technical Strengths
-- **37,543 lines** of TypeScript code (v2.9.10)
+- **50,758 lines** of TypeScript code (v2.11.4)
 - **Production deployed** on Vercel + Supabase
-- **10+ major features** fully implemented
+- **15+ major features** fully implemented
 - **Comprehensive docs**: 60KB+ (DATA_DICTIONARY, ARCHITECTURE, AUDIT_REPORT)
 - **Security audit** completed (RLS policies, input validation)
 - **Modern stack**: React 19, TypeScript 5.6, Vite 5
+- **Mobile PWA**: Installable app, bottom navigation, offline-capable
+- **Download resilience**: Automatic fallbacks, abort/cancel, toast UX
+- **UX telemetry**: Persistent event tracking for QA and iteration
 
 ### ⚠️ Honest Gaps
 - **Zero traction** (no users, no revenue yet)
@@ -158,10 +163,11 @@ AI companies keep returning: First license 100K docs → Six months later 500K d
 - **2026**: Perfect timing to ride this wave
 
 ### Technical Credibility
-- Built entire platform solo (37K LOC)
+- Built entire platform solo (50K+ LOC)
 - Production-ready architecture (proven at scale with Vercel/Supabase)
-- Active development (v2.9.10, bug fixes in last 48 hours)
+- Active development (v2.11.4, bi-weekly releases — latest: Feb 25, 2026)
 - Comprehensive documentation (uncommon for MVP)
+- Mobile PWA, UX telemetry, and download resilience shipped in v2.11.4
 
 ### Personal Commitment
 - [Your background/expertise]

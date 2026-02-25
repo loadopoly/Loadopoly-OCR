@@ -37,8 +37,15 @@ GeoGraph OCR Node is an advanced OCR-to-Graph platform designed for researchers,
 
 ⚡ **Batch Processing**
 - Process entire folders of documents
-- Queue management with progress tracking
+- Queue management with progress tracking, cancel mid-flight
+- Automatic download fallbacks with resilient signed URL chain
 - Support for JPEG, PNG, and PDF formats
+
+📱 **Mobile-First PWA**
+- Installable to home screen on iOS and Android
+- Full bottom navigation bar for one-handed mobile use
+- Offline-capable with service worker caching
+- Safe-area inset support for notch and status bar
 
 🎨 **Accessibility**
 - WCAG 2.1 AA compliant
@@ -139,7 +146,14 @@ Upload to store (1280x720 or larger):
 
 ## Version History
 
-### v1.7.1 (Current)
+### v1.8.0 (Current)
+- Added mobile bottom navigation bar (full PWA experience)
+- Download resilience: automatic signed URL fallback chain, abort/cancel support
+- 3D visualization is now the default Explore mode
+- QA debug panel: UX event telemetry, failed-job drill-down
+- UX telemetry module with persistent localStorage ring buffer
+- Bundle card broken-image fallback with package icon
+- Vite chunk splitting improved (30 manual chunks for faster load)
 - Fixed Gemini 2.5 Flash connectivity and API key detection in browser
 - Standardized environment variables for client-side exposure
 - Improved SDK reliability for structured data extraction
