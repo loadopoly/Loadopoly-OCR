@@ -7,6 +7,8 @@ import { ToastProvider, ConnectionStatus } from './components/Toast';
 import { Onboarding } from './components/Onboarding';
 import { ModuleProvider } from './contexts/ModuleContext';
 import { bootstrapModuleSystem } from './bootstrap';
+import { initPWA } from './lib/pwaUtils';
+import { initPerformanceMonitoring } from './lib/performanceMonitor';
 
 // Build info for debugging cache issues
 declare const __BUILD_TIME__: string;
@@ -44,6 +46,11 @@ if ('serviceWorker' in navigator) {
     });
   });
 }
+
+// Initialize runtime optimization systems that were previously dormant.
+// This aligns mobile install behavior and web performance telemetry with docs.
+initPerformanceMonitoring();
+initPWA();
 
 // PERF FIX: Start App chunk download IN PARALLEL with module bootstrap.
 // Previously bootstrap had to fully complete (2-4s on mobile due to Supabase

@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.11.4] - 2026-02-25
+
+### UX Reliability & Diagnostics
+- **QA Debug Drill-Down**: Added failed-job visibility to the in-app QA panel, including queue failure stage/error details and quick navigation to the relevant asset context.
+- **Structured DB Graph Affordance**: Made the `NODES` column interactive so users can jump directly to `Explore → Knowledge Graph` for node/edge inspection of a selected asset.
+- **Explore Default Alignment**: Set `3D World` as the default Explore sub-tab and updated keyboard shortcut behavior for consistency.
+
+### Download Resilience
+- **Non-Blocking Failure UX**: Replaced blocking image download `alert()` fallbacks with toast-driven feedback and automatic JSON fallback export.
+- **Signed URL Fallback Path**: Added direct Supabase Storage signed-URL fallback when edge-function URL generation fails, improving download success in environments where the edge endpoint is unavailable.
+- **Abort/Cancel Integrity**: Preserved explicit cancellation states and queue updates through the revised download flow.
+
+### Marketplace Card Robustness
+- **Broken Image Handling**: Added Bundle card image fallback rendering to avoid broken thumbnail placeholders when bundle-part URLs are invalid or unavailable.
+
 ## [2.11.3] - 2026-02-24
 
 ### Edge Function Optimization & Type Safety
