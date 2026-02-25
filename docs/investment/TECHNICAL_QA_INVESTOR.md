@@ -72,7 +72,7 @@ This is a 3-day sprint once I have an engineer onboarded."
 **Client-Side Scalability**:
 - Local-first architecture (IndexedDB) means each user has their own database
 - No centralized bottleneck for reads/writes
-- Code splitting and lazy loading already implemented (6 vendor chunks)
+- Code splitting and lazy loading implemented (30 manual code-split chunks, lazy-loaded React components)
 - PWA with offline support reduces server load
 
 **Server-Side Scalability**:
@@ -255,7 +255,7 @@ This is a 3-day sprint once I have an engineer onboarded."
 - Philosophical difference → they won't copy this
 
 **3. Speed & Focus**:
-- We move fast (v2.9.10 with weekly releases)
+- We move fast (v2.11.4 with bi-weekly releases)
 - We serve a niche (archivists, legal, researchers) they ignore
 - By the time they notice, we'll have 10K users and network effects
 
@@ -275,13 +275,13 @@ This is a 3-day sprint once I have an engineer onboarded."
 **A**: "Fair question. Here's why I can execute:
 
 **1. Technical Track Record**:
-- Built this entire platform solo (37K LOC, 10+ major features)
-- v2.9.10 with active bug fixes (last commit 48 hours ago)
+- Built this entire platform solo (50K+ LOC, 15+ major features)
+- v2.11.4 with regular bi-weekly releases (latest: Feb 25, 2026)
 - Production deployment (Vercel + Supabase) working today
 
 **2. Rapid Iteration**:
 - CHANGELOG.md shows 262+ commits with semantic versioning
-- Recent bug fixes: AR Scanner black screen resolved in 3 commits (v2.9.10)
+- Recent release: v2.11.4 — download resilience fallbacks, mobile PWA nav, QA debug tools
 - I ship fast and fix fast
 
 **3. Post-Funding Plan**:
@@ -563,7 +563,7 @@ This is a 3-day sprint once I have an engineer onboarded."
 - **Clear differentiation** (structured data ownership vs. flat text)
 - **Scalable architecture** (local-first + optional cloud)
 - **Strong documentation** (60KB+ of docs, audit report)
-- **Fast iteration** (v2.9.10, weekly releases)
+- **Fast iteration** (v2.11.4, bi-weekly releases)
 - **Clear use of funds** (hiring, beta, validation - not R&D)
 - **Founder commitment** (2 years of solo work, deep technical knowledge)
 - **Market timing** (privacy regulations, AI trust, Web3 adoption)
