@@ -69,7 +69,13 @@ import { createBundles, createUserBundle } from './services/bundleService';
 import { initSync, isSyncEnabled } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
 import { getCurrentUser } from './lib/auth';
-import { fetchGlobalCorpus, contributeAssetToGlobalCorpus, fetchUserAssets, subscribeToAssetUpdates } from './services/supabaseService';
+import {
+  fetchGlobalCorpus,
+  contributeAssetToGlobalCorpus,
+  fetchUserAssets,
+  subscribeToAssetUpdates,
+  mirrorEdgeAssetToMasterIfNeeded,
+} from './services/supabaseService';
 import { processingQueueService, QueueStats, QueueJob } from './services/processingQueueService';
 import { downloadService, DownloadQueueItem } from './services/downloadService';
 import { canInstall as canInstallPWA, promptInstall } from './lib/pwaUtils';
@@ -746,6 +752,11 @@ export default function App() {
           }
           return prev;
         });
+
+        mirrorEdgeAssetToMasterIfNeeded(updatedAsset, user.id).catch(err =>
+          console.warn('Master mirror after edge update failed:', err)
+        );
+
         // Also persist to local IndexedDB
         saveAsset(updatedAsset).catch(e => console.error('Failed to persist updated asset', e));
       },
@@ -758,6 +769,11 @@ export default function App() {
           }
           return [newAsset, ...prev];
         });
+
+        mirrorEdgeAssetToMasterIfNeeded(newAsset, user.id).catch(err =>
+          console.warn('Master mirror after edge insert failed:', err)
+        );
+
         saveAsset(newAsset).catch(e => console.error('Failed to persist new asset', e));
       }
     );
@@ -3621,7 +3637,7 @@ export default function App() {
         )}
 
         {showProcessingPanel && (
-          <div className="absolute top-14 sm:top-16 right-2 sm:right-8 w-[calc(100vw-1rem)] sm:w-96 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-40 flex flex-col max-h-[calc(100vh-120px)] animate-in slide-in-from-top-4 duration-200">
+          <div className="absolute top-14 sm:top-16 left-0 right-0 mx-2 sm:mx-0 sm:left-auto sm:right-8 sm:w-96 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-40 flex flex-col max-h-[calc(100vh-120px)] animate-in slide-in-from-top-4 duration-200 overflow-hidden box-border">
                 <div className="p-4 border-b border-slate-800 flex items-center justify-between">
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
                         <Zap size={14} className="text-amber-500" />
@@ -3643,7 +3659,7 @@ export default function App() {
                         <button onClick={() => setShowProcessingPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
                     </div>
                 </div>
-                <div className="flex-1 overflow-auto p-2 space-y-4 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-4 custom-scrollbar">
                     {/* Debug Logs Panel */}
                     {showDebugPanel && (
                         <div className="px-2 py-2 border-b border-slate-800/50 pb-4">
@@ -3659,17 +3675,26 @@ export default function App() {
                                     Clear
                                 </button>
                             </div>
-                            <div className="bg-slate-950 border border-slate-800 rounded max-h-32 overflow-y-auto text-[8px] font-mono">
+                            <div className="bg-slate-950 border border-slate-800 rounded max-h-48 overflow-y-auto overflow-x-auto text-[8px] font-mono whitespace-nowrap">
                                 {debugLogs.length === 0 ? (
                                     <div className="p-2 text-slate-600 text-center">No logs yet</div>
                                 ) : (
                                     debugLogs.map(log => (
-                                        <div key={log.id} className={`p-1 border-b border-slate-800/30 ${log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-yellow-400' : 'text-slate-300'}`}>
-                                            <span className="text-slate-500">{log.timestamp}</span> {log.message}
+                                        <div key={log.id} className={`p-1.5 border-b border-slate-800/30 ${log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-yellow-400' : 'text-slate-300'}`}>
+                                            <span className="text-slate-500 mr-2">{log.timestamp}</span>
+                                            {log.message}
                                         </div>
                                     ))
                                 )}
                             </div>
+                        </div>
+                    )}
+
+                    {user?.id && (
+                        <div className="mb-3 pb-3 border-b border-slate-800/50">
+                            <QueueMonitor userId={user.id} onRequeueComplete={() => {
+                                loadAssets().then(loaded => setLocalAssets(loaded));
+                            }} uploadProgress={uploadProgress} />
                         </div>
                     )}
 
@@ -3748,15 +3773,6 @@ export default function App() {
                         <div className="flex items-center justify-center gap-2 text-amber-500 text-xs py-1">
                             <RefreshCw size={12} className="animate-spin" />
                             Processing in progress...
-                        </div>
-                    )}
-                    
-                    {/* Server Queue Monitor */}
-                    {user?.id && (
-                        <div className="mb-3 pb-3 border-b border-slate-800">
-                            <QueueMonitor userId={user.id} onRequeueComplete={() => {
-                                loadAssets().then(loaded => setLocalAssets(loaded));
-                            }} uploadProgress={uploadProgress} />
                         </div>
                     )}
                     
