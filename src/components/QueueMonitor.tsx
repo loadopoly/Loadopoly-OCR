@@ -431,7 +431,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       )}
 
       {/* Header with prominent queue count */}
-      <div className="flex items-center justify-between px-1 w-full max-w-full min-w-0">
+      <div className="flex items-center justify-between px-1 w-full max-w-full min-w-0 gap-1">
         <div className="flex items-center gap-1 sm:gap-3 flex-wrap sm:flex-nowrap min-w-0">
           <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5 flex-shrink-0">
             <Server size={10} />
@@ -580,7 +580,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
               <List size={10} />
               Jobs ({filteredJobs.length}{selectedStageFilter || selectedStatusFilter ? ' filtered' : ''})
             </span>
-            <div className="flex items-center gap-1 flex-wrap">
+            <div className="flex items-center gap-1 flex-wrap w-full sm:w-auto">
               {/* Status filter buttons */}
               {(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'] as JobStatus[]).map(status => (
                 <button
