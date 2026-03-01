@@ -168,14 +168,14 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
 const StatCard = ({ label, value, icon: Icon, color, onClick }: any) => (
   <div 
     onClick={onClick}
-    className={`bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between ${onClick ? 'cursor-pointer hover:bg-slate-800/50 hover:border-slate-700 transition-all active:scale-[0.98]' : ''}`}
+    className={`bg-slate-900 border border-slate-800 p-3 sm:p-4 rounded-xl flex items-center justify-between overflow-hidden ${onClick ? 'cursor-pointer hover:bg-slate-800/50 hover:border-slate-700 transition-all active:scale-[0.98]' : ''}`}
   >
-    <div>
-      <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">{label}</p>
-      <p className="text-2xl font-bold text-white">{value}</p>
+    <div className="min-w-0 flex-1">
+      <p className="text-slate-500 text-[10px] sm:text-xs uppercase tracking-wider mb-1 truncate">{label}</p>
+      <p className="text-xl sm:text-2xl font-bold text-white truncate">{value}</p>
     </div>
-    <div className={`p-3 rounded-lg bg-opacity-10 ${color.replace('text-', 'bg-')}`}>
-      <Icon className={color} size={24} />
+    <div className={`p-2 sm:p-3 rounded-lg bg-opacity-10 flex-shrink-0 ml-2 ${color.replace('text-', 'bg-')}`}>
+      <Icon className={color} size={20} />
     </div>
   </div>
 );
@@ -2343,7 +2343,7 @@ export default function App() {
 
   return (
     <FilterProvider initialAssets={assets} initialGraphData={globalGraphData}>
-    <div className="flex h-[100dvh] w-full max-w-[100vw] bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30 relative">
+    <div className="flex h-[100dvh] w-full bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30 relative" style={{ maxWidth: '100vw', overflowX: 'hidden' }}>
       
       {/* Sidebar - Desktop */}
       <div className="hidden lg:flex w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex-col">
@@ -2411,7 +2411,7 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-14 sm:h-16 border-b border-slate-800 flex items-center justify-between px-3 sm:px-4 lg:px-8 bg-slate-950/80 backdrop-blur z-10">
+        <header className="h-14 sm:h-16 border-b border-slate-800 flex items-center justify-between px-3 sm:px-4 lg:px-8 bg-slate-950/80 backdrop-blur z-10" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
                 <MobileNavigation 
                   activeTab={activeTab} 
@@ -2599,7 +2599,7 @@ export default function App() {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
                 <StatCard label="Total Assets" value={assets.length} icon={FileText} color="text-blue-500" onClick={() => setActiveTab('assets')} />
                 <StatCard label="Knowledge Nodes" value={knowledgeNodeCount} icon={Network} color="text-purple-500" onClick={() => { setActiveTab('explore'); setExploreSubTab('graph'); }} />
                 <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" onClick={() => setActiveTab('database')} />
@@ -3876,7 +3876,7 @@ export default function App() {
           </div>
         )}
 
-        <div className="lg:hidden fixed left-0 right-0 z-40 px-2 pointer-events-none" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 28px)' }}>
+        <div className="lg:hidden fixed left-0 right-0 z-40 px-2 pointer-events-none" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 28px)', maxWidth: '100vw', overflowX: 'hidden' }}>
           <div className="max-w-md mx-auto pointer-events-auto bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-xl p-1.5 grid grid-cols-6 gap-1">
             {[
               { key: 'dashboard', label: 'Home', icon: Layers },

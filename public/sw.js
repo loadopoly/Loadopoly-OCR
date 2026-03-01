@@ -14,7 +14,7 @@
  * - Performance optimizations with preload hints
  */
 
-const CACHE_VERSION = '3.1.0';
+const CACHE_VERSION = '3.2.0';
 const CACHE_NAME = `geograph-v${CACHE_VERSION}`;
 const IMAGE_CACHE_NAME = `geograph-images-v${CACHE_VERSION}`;
 const API_CACHE_NAME = `geograph-api-v${CACHE_VERSION}`;
