@@ -11,6 +11,7 @@ This document validates the mobile Processing Queue panel behavior in `src/App.t
 
 ## Changes Under Test
 - `src/App.tsx`
+  - `Open Full Panel` popup is rendered with `createPortal(..., document.body)` to prevent container-relative offset/clipping.
   - Queue panel overlay uses explicit mobile bounds (`left-2 right-2`) with desktop override (`sm:w-96`).
   - Panel uses mobile viewport-aware max height: `max-h-[calc(100dvh-140px)]`.
   - Panel body uses touch-safe vertical scrolling and safe-area padding:
@@ -42,6 +43,11 @@ npm run build
 ## Manual Mobile Test Plan (Android Chrome)
 Use a hard refresh before each run to avoid stale JS/CSS.
 
+### Primary reproduction path (required)
+1. Open `Dashboard` tab.
+2. In `Processing Queue Status`, tap `Open Full Panel`.
+3. Validate panel alignment and scroll behavior from this path first.
+
 ### Pre-conditions
 - Login with a test user.
 - Ensure there are pending/failed jobs to populate queue cards and lists.
@@ -49,7 +55,7 @@ Use a hard refresh before each run to avoid stale JS/CSS.
 
 ### Test Case MQ-01: Panel horizontal fit
 1. Open app on Android.
-2. Tap queue button (`PENDING`) in top bar.
+2. Tap `Open Full Panel` (Dashboard card) and then also test top bar queue button (`PENDING`).
 3. Observe panel edges.
 
 Expected:
