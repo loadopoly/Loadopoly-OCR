@@ -288,6 +288,41 @@ export const contributeAssetToGlobalCorpus = async (
 };
 
 /**
+ * Ensures assets created by server-side queue/edge processing are mirrored into
+ * the Loadopoly master corpus when users run a separate Supabase instance.
+ *
+ * Guardrails:
+ * - Runs only when dual-write mode is active
+ * - Runs only for fully processed assets
+ * - Skips rows already marked with CONTRIBUTED_AT to prevent loops
+ */
+export const mirrorEdgeAssetToMasterIfNeeded = async (
+  asset: DigitalAsset,
+  userId?: string,
+): Promise<void> => {
+  if (!isDualWriteRequired()) return;
+  if (!asset?.sqlRecord) return;
+
+  const record = asset.sqlRecord as Record<string, any>;
+  const isMinted =
+    asset.status === AssetStatus.MINTED ||
+    record.PROCESSING_STATUS === AssetStatus.MINTED;
+  const alreadyContributed = Boolean(record.CONTRIBUTED_AT);
+
+  if (!isMinted || alreadyContributed) return;
+
+  const licenseType: 'GEOGRAPH_CORPUS_1.0' | 'CC0' =
+    record.DATA_LICENSE === 'CC0' ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+
+  await contributeAssetToGlobalCorpus(
+    asset,
+    userId || record.USER_ID || undefined,
+    licenseType,
+    true,
+  );
+};
+
+/**
  * Subscribe to real-time asset updates for a user.
  * This is more efficient than polling processing_queue - we watch the final destination table.
  */
