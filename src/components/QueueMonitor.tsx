@@ -431,9 +431,9 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       )}
 
       {/* Header with prominent queue count */}
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-3">
-          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+      <div className="flex items-center justify-between px-1 w-full max-w-full min-w-0">
+        <div className="flex items-center gap-1 sm:gap-3 flex-wrap sm:flex-nowrap min-w-0">
+          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5 flex-shrink-0">
             <Server size={10} />
             Processing Queue
           </h4>
@@ -445,16 +445,16 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 ml-1">
             <button 
               onClick={() => { setShowJobList(!showJobList); if (!showJobList) fetchJobs(); }}
-              className={`text-[8px] px-2 py-0.5 rounded transition-colors flex items-center gap-1 ${showJobList ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+              className={`text-[8px] px-1.5 sm:px-2 py-0.5 rounded transition-colors flex items-center gap-1 ${showJobList ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
             >
-              <List size={8} />
-              {showJobList ? 'Hide' : 'Show'} Jobs
+              <List size={8} className="hidden sm:block" />
+              {showJobList ? 'Hide' : 'Show'} <span className="hidden sm:inline">Jobs</span>
             </button>
-            <span className="text-[8px] text-slate-600">Updated {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-            <button onClick={() => { fetchStats(); fetchJobs(); }} className="text-slate-500 hover:text-white transition-colors">
+            <span className="text-[8px] text-slate-600 hidden sm:inline">Updated {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <button onClick={() => { fetchStats(); fetchJobs(); }} className="text-slate-500 hover:text-white transition-colors p-1">
                 <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
             </button>
         </div>
@@ -575,12 +575,12 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       {/* Detailed Job List - Interactive */}
       {showJobList && (
         <div className="border border-slate-800 rounded-lg overflow-hidden">
-          <div className="px-2 py-1.5 bg-slate-900 flex items-center justify-between">
-            <span className="text-[9px] text-slate-400 flex items-center gap-1">
+          <div className="px-2 py-1.5 bg-slate-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <span className="text-[9px] text-slate-400 flex items-center gap-1 whitespace-nowrap">
               <List size={10} />
               Jobs ({filteredJobs.length}{selectedStageFilter || selectedStatusFilter ? ' filtered' : ''})
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-wrap">
               {/* Status filter buttons */}
               {(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'] as JobStatus[]).map(status => (
                 <button
@@ -657,7 +657,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                     </div>
                     
                     {/* Progress */}
-                    <div className="flex-shrink-0 w-16">
+                    <div className="flex-shrink-0 w-12 sm:w-16">
                       <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
                         <div 
                           className={`h-full transition-all duration-300 ${
