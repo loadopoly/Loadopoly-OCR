@@ -153,7 +153,7 @@ const SemanticCanvas: React.FC<SemanticCanvasProps> = ({ assets }) => {
       />
 
       {/* Floating Controls */}
-      <div className="absolute top-4 left-4 space-y-3 z-10 w-64">
+      <div className="absolute top-4 left-4 space-y-3 z-10 w-[min(16rem,calc(100vw-2rem))]">
         <div className="bg-slate-900/90 backdrop-blur p-4 rounded-xl border border-slate-700 shadow-xl">
           <div className="flex items-center gap-2 mb-3 text-primary-400">
              <Filter size={16} />
