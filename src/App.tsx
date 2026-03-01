@@ -366,6 +366,9 @@ export default function App() {
   const [isStandaloneMode, setIsStandaloneMode] = useState(false);
   const [isInstallPromptAvailable, setIsInstallPromptAvailable] = useState(false);
   const [isInstallingPWA, setIsInstallingPWA] = useState(false);
+  const [installBannerDismissed, setInstallBannerDismissed] = useState(() => {
+    try { return localStorage.getItem('geograph-install-banner-dismissed') === '1'; } catch { return false; }
+  });
   const [showQaPanel, setShowQaPanel] = useState(false);
   const [safeAreaDebug, setSafeAreaDebug] = useState({ top: 0, right: 0, bottom: 0, left: 0, viewportHeight: 0, innerHeight: 0 });
   const [recentUxEvents, setRecentUxEvents] = useState<Array<Record<string, unknown>>>([]);
@@ -2494,6 +2497,36 @@ export default function App() {
              </button>
           </div>
         </header>
+
+        {/* PWA Install Banner — shown in browser mode on mobile, hidden once installed or dismissed */}
+        {!isStandaloneMode && !installBannerDismissed && (
+          <div className="flex lg:hidden items-center gap-2 px-3 py-2 bg-primary-900/80 border-b border-primary-700/50 text-xs text-primary-100">
+            <Download size={13} className="flex-shrink-0 text-primary-300" />
+            <span className="flex-1 min-w-0">
+              {isInstallPromptAvailable
+                ? 'Install app to hide the browser bar'
+                : 'Add to Home Screen to hide the browser bar'}
+            </span>
+            {isInstallPromptAvailable ? (
+              <button
+                onClick={() => { handleInstallPWA(); setInstallBannerDismissed(true); try { localStorage.setItem('geograph-install-banner-dismissed','1'); } catch {} }}
+                disabled={isInstallingPWA}
+                className="flex-shrink-0 px-2 py-0.5 bg-primary-600 hover:bg-primary-500 rounded font-semibold disabled:opacity-50"
+              >
+                {isInstallingPWA ? 'Installing…' : 'Install'}
+              </button>
+            ) : (
+              <span className="flex-shrink-0 text-primary-400 text-[10px]">⋮ → Add to Home Screen</span>
+            )}
+            <button
+              onClick={() => { setInstallBannerDismissed(true); try { localStorage.setItem('geograph-install-banner-dismissed','1'); } catch {} }}
+              className="flex-shrink-0 p-1 text-primary-400 hover:text-white"
+              aria-label="Dismiss"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
 
         <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 pb-28 sm:pb-20 relative">
           
