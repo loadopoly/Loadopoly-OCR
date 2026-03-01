@@ -29,7 +29,13 @@ if (rootElement) {
 
 // Service Worker update detection
 if ('serviceWorker' in navigator) {
+  // When a waiting SW is already installed, skip waiting and reload
   navigator.serviceWorker.ready.then((registration) => {
+    // If there's already a waiting worker (e.g. user returns to PWA), activate it
+    if (registration.waiting) {
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+
     registration.addEventListener('updatefound', () => {
       const newWorker = registration.installing;
       if (newWorker) {
@@ -44,6 +50,17 @@ if ('serviceWorker' in navigator) {
         });
       }
     });
+  });
+
+  // When the SW activates and calls clients.claim(), force a reload
+  // so the new JS/CSS bundles are loaded (critical for PWA installs).
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!refreshing) {
+      refreshing = true;
+      console.log('[GeoGraph] New SW controller — reloading for fresh bundle');
+      window.location.reload();
+    }
   });
 }
 
