@@ -3636,7 +3636,7 @@ export default function App() {
             />
         )}
 
-        {showProcessingPanel && (
+        {showProcessingPanel && createPortal((
           <div className="fixed top-14 sm:top-16 left-2 right-2 sm:left-auto sm:right-8 sm:w-96 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-[60] flex flex-col max-h-[calc(100dvh-140px)] sm:max-h-[calc(100vh-120px)] animate-in slide-in-from-top-4 duration-200 overflow-hidden box-border">
                 <div className="p-3 sm:p-4 border-b border-slate-800 flex items-center justify-between w-full box-border">
                     <h3 className="text-sm font-bold text-white flex items-center gap-2 min-w-0">
@@ -3814,7 +3814,7 @@ export default function App() {
                     </button>
                 </div>
             </div>
-        )}
+        ), document.body)}
 
         {/* New Scalable Batch Processing Panel */}
         {showNewBatchPanel && (
