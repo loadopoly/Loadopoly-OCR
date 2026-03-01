@@ -2438,11 +2438,14 @@ export default function App() {
                     </button>
                 </div>
             </div>
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div
+            className="flex items-center gap-1.5 sm:gap-2 min-w-0 max-w-[56vw] sm:max-w-none overflow-x-auto sm:overflow-visible touch-pan-x"
+            style={{ scrollbarWidth: 'none' }}
+          >
              {/* Queue Status Button - ALWAYS VISIBLE */}
              <button 
                onClick={() => toggleQueuePanel('header')}
-                 className={`flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border transition-all ${
+                 className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border transition-all ${
                    showProcessingPanel 
                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' 
                      : totalPendingCount > 0 || stuckAssetsCount > 0
@@ -2472,7 +2475,7 @@ export default function App() {
                     isOnline={isOnline}
                     zoomEnabled={zoomEnabled}
                   />
-                    <label className={`hidden sm:flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 ${isGlobalView ? 'bg-indigo-900/40 border-indigo-500/50 hover:bg-indigo-900/60' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'} border text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <label className={`flex-shrink-0 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 ${isGlobalView ? 'bg-indigo-900/40 border-indigo-500/50 hover:bg-indigo-900/60' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'} border text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                       {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Upload size={18} />}
                       <span className="hidden sm:inline">{isGlobalView ? 'Contribute' : 'Upload'}</span>
                       <input type="file" className="hidden" accept="image/*, application/pdf" onChange={(e) => e.target.files?.[0] && ingestFile(e.target.files[0], isGlobalView ? "Global Contribution" : "Direct Upload")} disabled={isProcessing} />
@@ -2480,10 +2483,10 @@ export default function App() {
                 </>
              )}
              {isGlobalView && (
-                 <button 
+                  <button 
                     onClick={refreshGlobalData}
                     disabled={isProcessing}
-                    className="flex items-center gap-2 px-2.5 sm:px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50"
+                    className="flex-shrink-0 flex items-center gap-2 px-2.5 sm:px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50"
                  >
                      <RefreshCw size={18} className={isProcessing ? 'animate-spin' : ''} />
                      <span className="hidden sm:inline">Refresh Cloud</span>
@@ -2491,7 +2494,7 @@ export default function App() {
              )}
              <button 
                 onClick={() => setActiveTab('settings')}
-                className={`p-2 rounded-full border transition-all ${user ? 'bg-primary-900/20 border-primary-500/50 text-primary-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
+               className={`flex-shrink-0 p-2 rounded-full border transition-all ${user ? 'bg-primary-900/20 border-primary-500/50 text-primary-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
              >
                 <User size={20} />
              </button>
@@ -2867,13 +2870,13 @@ export default function App() {
           )}
 
           {activeTab === 'curator' && (
-            <div className="space-y-6 max-w-6xl mx-auto h-full flex flex-col">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="text-2xl font-bold text-white">Curator Mode</h3>
-                  <p className="text-sm text-slate-400">Manually manage bundles and refine AI-extracted annotations.</p>
+            <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto h-full flex flex-col">
+              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+                <div className="min-w-0">
+                  <h3 className="text-lg sm:text-2xl font-bold text-white">Curator Mode</h3>
+                  <p className="text-xs sm:text-sm text-slate-400 truncate">Manage bundles and refine annotations.</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   {/* Cluster Sync Statistics Button - Human-in-the-Loop Overview */}
                   <ClusterSyncButton 
                     onClick={() => setShowClusterSyncStats(true)}
@@ -2901,9 +2904,9 @@ export default function App() {
                   )}
                   <button 
                     onClick={() => setSelectedAssetIds(new Set())}
-                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium"
+                    className="px-3 sm:px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs sm:text-sm font-medium"
                   >
-                    Clear Selection
+                    Clear
                   </button>
                 </div>
               </div>
@@ -2924,7 +2927,7 @@ export default function App() {
                       <tr>
                         <th className="px-4 py-3 border-b border-slate-800 w-10"></th>
                         {['Preview', 'Title', 'Collection', 'Status', 'Annotated', 'Action'].map(h => (
-                          <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">{h}</th>
+                          <th key={h} className={`px-2 sm:px-4 py-2 sm:py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950 ${(h === 'Collection' || h === 'Annotated') ? 'hidden sm:table-cell' : ''}`}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -2947,29 +2950,30 @@ export default function App() {
                               className="rounded border-slate-700 bg-slate-800 text-primary-600 focus:ring-primary-500"
                             />
                           </td>
-                          <td className="px-4 py-3 border-r border-slate-800">
-                            <img src={asset.imageUrl} alt="Preview" className="w-12 h-12 object-cover rounded border border-slate-700" />
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800">
+                            <img src={asset.imageUrl} alt="Preview" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded border border-slate-700" />
                           </td>
-                          <td className="px-4 py-3 text-white border-r border-slate-800 font-bold">{asset.sqlRecord?.DOCUMENT_TITLE || 'Untitled'}</td>
-                          <td className="px-4 py-3 text-blue-400 border-r border-slate-800">{asset.sqlRecord?.SOURCE_COLLECTION || 'Unsorted'}</td>
-                          <td className="px-4 py-3 border-r border-slate-800">
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-white border-r border-slate-800 font-bold truncate max-w-[120px] sm:max-w-none">{asset.sqlRecord?.DOCUMENT_TITLE || 'Untitled'}</td>
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-blue-400 border-r border-slate-800 hidden sm:table-cell">{asset.sqlRecord?.SOURCE_COLLECTION || 'Unsorted'}</td>
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${asset.status === AssetStatus.MINTED ? 'bg-green-500/20 text-green-500' : 'bg-amber-500/20 text-amber-500'}`}>
                               {asset.status}
                             </span>
                           </td>
-                          <td className="px-4 py-3 border-r border-slate-800 text-center">
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800 text-center hidden sm:table-cell">
                             {asset.sqlRecord?.IS_USER_ANNOTATED ? (
                               <CheckCircle size={16} className="text-green-500 mx-auto" />
                             ) : (
                               <span className="text-slate-600">-</span>
                             )}
                           </td>
-                          <td className="px-4 py-3 text-center">
+                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
                             <button 
                               onClick={() => setEditingAsset(asset)}
-                              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-bold border border-slate-700"
+                              className="px-2 sm:px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-bold border border-slate-700"
                             >
-                              EDIT ANNOTATIONS
+                              <span className="hidden sm:inline">EDIT ANNOTATIONS</span>
+                              <span className="sm:hidden">EDIT</span>
                             </button>
                           </td>
                         </tr>
@@ -3057,21 +3061,22 @@ export default function App() {
                         </button>
                       )}
                    </div>
-                   <div className="flex flex-wrap gap-4">
+                   <div className="flex flex-wrap gap-2 sm:gap-4">
                        <FilterBadge count={groupBy !== 'SOURCE' ? 1 : 0} onClick={() => setShowUnifiedFilters(true)} />
                        <button 
                           onClick={handleProcessAllPending}
                           disabled={dbProcessRun.running}
-                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg flex items-center gap-2 transition-all"
+                          className="px-3 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg flex items-center gap-2 transition-all"
                        >
                           <Zap size={14} />
-                          {dbProcessRun.running ? 'PROCESSING…' : 'PROCESS ALL PENDING'}
+                          <span className="hidden sm:inline">{dbProcessRun.running ? 'PROCESSING…' : 'PROCESS ALL PENDING'}</span>
+                          <span className="sm:hidden">{dbProcessRun.running ? '…' : 'Process'}</span>
                        </button>
                        <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
                             <button onClick={() => { setDbViewMode('DRILLDOWN'); setSelectedGroupKey(null); }} className={`px-3 py-1.5 text-xs font-medium rounded flex items-center gap-2 transition-colors ${dbViewMode === 'DRILLDOWN' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}><List size={14} /> Table</button>
                             <button onClick={() => setDbViewMode('GROUPS')} className={`px-3 py-1.5 text-xs font-medium rounded flex items-center gap-2 transition-colors ${dbViewMode === 'GROUPS' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}><FolderOpen size={14} /> Clusters</button>
                        </div>
-                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 min-w-[200px]">
+                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 min-w-0">
                            <Filter size={14} className="text-primary-500" />
                            <div className="flex-1 flex flex-col">
                               <span className="text-[9px] text-slate-500 uppercase font-bold">Grouping Feature</span>
@@ -3112,7 +3117,7 @@ export default function App() {
                         <thead className="bg-slate-950 sticky top-0 z-10">
                           <tr>
                             {['ID', 'TITLE', 'COLLECTION', 'ENTITIES', 'GIS ZONE', 'NODES', 'CATEGORY', 'PROGRESS', 'ACTION'].map(h => (
-                                <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">{h}</th>
+                                <th key={h} className={`px-2 sm:px-4 py-2 sm:py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950 ${['ENTITIES', 'GIS ZONE', 'CATEGORY'].includes(h) ? 'hidden md:table-cell' : ''}`}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -3121,11 +3126,11 @@ export default function App() {
                                const rec = asset.sqlRecord;
                                return (
                                    <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
-                                       <td className="px-4 py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{asset.id.substring(0,8)}</td>
-                                       <td className="px-4 py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate">{rec?.DOCUMENT_TITLE || 'Processing...'}</td>
-                                       <td className="px-4 py-3 text-blue-400 border-r border-slate-800 whitespace-nowrap">{rec?.SOURCE_COLLECTION || 'Pending'}</td>
-                                       <td className="px-4 py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px]">{rec?.ENTITIES_EXTRACTED.slice(0, 3).join(', ') || '...'}</td>
-                                       <td className="px-4 py-3 text-emerald-400 border-r border-slate-800">{rec?.LOCAL_GIS_ZONE || '...'}</td>
+                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{asset.id.substring(0,8)}</td>
+                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[120px] sm:max-w-[200px] truncate">{rec?.DOCUMENT_TITLE || 'Processing...'}</td>
+                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-blue-400 border-r border-slate-800 whitespace-nowrap">{rec?.SOURCE_COLLECTION || 'Pending'}</td>
+                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px] hidden md:table-cell">{rec?.ENTITIES_EXTRACTED.slice(0, 3).join(', ') || '...'}</td>
+                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-emerald-400 border-r border-slate-800 hidden md:table-cell">{rec?.LOCAL_GIS_ZONE || '...'}</td>
                                        <td className="px-4 py-3 text-center border-r border-slate-800">
                                          <button
                                            onClick={() => {
@@ -3141,8 +3146,8 @@ export default function App() {
                                            {rec?.NODE_COUNT || 0}
                                          </button>
                                        </td>
-                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap">{rec?.NLP_NODE_CATEGORIZATION || '...'}</td>
-                                       <td className="px-4 py-3 border-r border-slate-800 min-w-[120px]">
+                                       <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800 whitespace-nowrap hidden md:table-cell">{rec?.NLP_NODE_CATEGORIZATION || '...'}</td>
+                                       <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800 min-w-0 sm:min-w-[120px]">
                                             <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
                                                 <div 
                                                     className={`h-full transition-all duration-500 ${asset.status === AssetStatus.FAILED ? 'bg-red-500' : asset.status === AssetStatus.MINTED ? 'bg-emerald-500' : 'bg-primary-500'}`}
@@ -3150,7 +3155,7 @@ export default function App() {
                                                 />
                                             </div>
                                        </td>
-                                       <td className="px-4 py-3 text-center flex gap-2 justify-center">
+                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-center flex gap-2 justify-center">
                                             {rec && <button onClick={() => handleAssetDownload(asset, 'json')} className="text-primary-500 hover:text-white"><Download size={14} /></button>}
                                        </td>
                                    </tr>
@@ -3239,7 +3244,7 @@ export default function App() {
                                                 )}
                                             </td>
                                             <td className="px-4 py-2 text-slate-300 font-mono">{item.file.name}</td>
-                                            <td className="px-4 py-2 min-w-[150px]">
+                                            <td className="px-2 sm:px-4 py-2 min-w-0 sm:min-w-[150px]">
                                                 <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
                                                     <div 
                                                         className={`h-full transition-all duration-500 ${item.status === 'ERROR' ? 'bg-red-500' : item.status === 'COMPLETED' ? 'bg-emerald-500' : 'bg-primary-500'}`}
@@ -3342,28 +3347,28 @@ export default function App() {
           {activeTab === 'explore' && (
             <div className="h-full flex flex-col gap-0">
               {/* Sub-tab selector */}
-              <div className="flex items-center gap-1 px-1 pb-3 flex-shrink-0">
-                <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800 gap-1">
+              <div className="flex flex-wrap items-center gap-1 px-1 pb-3 flex-shrink-0">
+                <div className="flex flex-wrap bg-slate-900 p-1 rounded-lg border border-slate-800 gap-1">
                   <button
                     onClick={() => setExploreSubTab('graph')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${exploreSubTab === 'graph' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    className={`px-2 sm:px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 sm:gap-1.5 ${exploreSubTab === 'graph' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
                   >
                     <Network size={13} />
-                    Knowledge Graph
+                    <span className="hidden sm:inline">Knowledge</span> Graph
                   </button>
                   <button
                     onClick={() => setExploreSubTab('3d')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${exploreSubTab === '3d' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    className={`px-2 sm:px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 sm:gap-1.5 ${exploreSubTab === '3d' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
                   >
                     <Globe size={13} />
-                    3D World
+                    3D
                   </button>
                   <button
                     onClick={() => setExploreSubTab('semantic')}
-                    className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${exploreSubTab === 'semantic' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    className={`px-2 sm:px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 sm:gap-1.5 ${exploreSubTab === 'semantic' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
                   >
                     <Zap size={13} />
-                    Semantic Canvas
+                    <span className="hidden sm:inline">Semantic</span> Canvas
                   </button>
                 </div>
                 <div className="ml-auto">
@@ -3374,9 +3379,9 @@ export default function App() {
               {/* Knowledge Graph sub-view */}
               {exploreSubTab === 'graph' && (
                 <div className="flex gap-6 h-full flex-col flex-1 min-h-0">
-                   <div className="flex items-center justify-between flex-shrink-0">
-                     <h3 className="text-lg font-bold text-white">Knowledge Graph</h3>
-                     <div className="flex items-center gap-3">
+                   <div className="flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
+                     <h3 className="text-base sm:text-lg font-bold text-white">Knowledge Graph</h3>
+                     <div className="flex items-center gap-2 sm:gap-3">
                        <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
                           <button 
                             onClick={() => setGraphViewMode('SINGLE')} 
@@ -3496,15 +3501,15 @@ export default function App() {
           )}
 
           {activeTab === 'market' && (
-            <div className="h-full flex flex-col gap-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-white">Data Marketplace</h3>
-                  <p className="text-sm text-slate-400">Acquire high-quality training datasets and sharded document bundles.</p>
+            <div className="h-full flex flex-col gap-4 sm:gap-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-bold text-white">Data Marketplace</h3>
+                  <p className="text-xs sm:text-sm text-slate-400 truncate">Acquire training datasets and sharded document bundles.</p>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-xs font-bold">
+                <div className="flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-xs font-bold flex-shrink-0">
                   <ShoppingBag size={14} />
-                  {displayItems.filter(i => 'bundleId' in i).length} BUNDLES AVAILABLE
+                  <span className="truncate">{displayItems.filter(i => 'bundleId' in i).length} BUNDLES</span>
                 </div>
               </div>
 
@@ -3540,15 +3545,15 @@ export default function App() {
           )}
 
           {activeTab === 'review' && isAdmin && (
-            <div className="h-full flex flex-col gap-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="text-lg font-bold text-white">Super-User Review Queue</h3>
-                  <p className="text-sm text-slate-400">Process and validate images that failed automated extraction.</p>
+            <div className="h-full flex flex-col gap-4 sm:gap-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                <div className="min-w-0">
+                  <h3 className="text-base sm:text-lg font-bold text-white">Super-User Review Queue</h3>
+                  <p className="text-xs sm:text-sm text-slate-400 truncate">Process and validate images that failed automated extraction.</p>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-amber-500 text-xs font-bold">
+                <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-amber-500 text-xs font-bold flex-shrink-0">
                   <AlertCircle size={14} />
-                  {globalAssets.filter(a => a.sqlRecord?.PROCESSING_STATUS === AssetStatus.FAILED || !a.sqlRecord?.IS_ENTERPRISE).length} PENDING REVIEW
+                  <span className="truncate">{globalAssets.filter(a => a.sqlRecord?.PROCESSING_STATUS === AssetStatus.FAILED || !a.sqlRecord?.IS_ENTERPRISE).length} PENDING</span>
                 </div>
               </div>
 
@@ -3561,7 +3566,7 @@ export default function App() {
                     <thead className="bg-slate-950 sticky top-0 z-10">
                       <tr>
                         {['Preview', 'ID', 'Timestamp', 'Status', 'Error', 'Action'].map(h => (
-                          <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">{h}</th>
+                          <th key={h} className={`px-2 sm:px-4 py-2 sm:py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950 ${(h === 'Timestamp' || h === 'Error') ? 'hidden sm:table-cell' : ''}`}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -3570,23 +3575,24 @@ export default function App() {
                         .filter(a => a.sqlRecord?.PROCESSING_STATUS === AssetStatus.FAILED || !a.sqlRecord?.IS_ENTERPRISE)
                         .map(asset => (
                           <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
-                            <td className="px-4 py-3 border-r border-slate-800">
-                              <img src={asset.imageUrl} alt="Preview" className="w-12 h-12 object-cover rounded border border-slate-700" />
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800">
+                              <img src={asset.imageUrl} alt="Preview" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded border border-slate-700" />
                             </td>
-                            <td className="px-4 py-3 text-slate-500 border-r border-slate-800">{asset.id.substring(0, 8)}</td>
-                            <td className="px-4 py-3 text-slate-300 border-r border-slate-800">{new Date(asset.timestamp).toLocaleString()}</td>
-                            <td className="px-4 py-3 border-r border-slate-800">
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800">{asset.id.substring(0, 8)}</td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 hidden sm:table-cell">{new Date(asset.timestamp).toLocaleString()}</td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${asset.status === AssetStatus.FAILED ? 'bg-red-500/20 text-red-500' : 'bg-amber-500/20 text-amber-500'}`}>
                                 {asset.status}
                               </span>
                             </td>
-                            <td className="px-4 py-3 text-red-400 border-r border-slate-800 max-w-[200px] truncate">{asset.errorMessage || 'Manual Review Required'}</td>
-                            <td className="px-4 py-3 text-center">
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-red-400 border-r border-slate-800 max-w-[120px] sm:max-w-[200px] truncate hidden sm:table-cell">{asset.errorMessage || 'Manual Review Required'}</td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
                               <button 
                                 onClick={() => setEditingAsset(asset)}
-                                className="px-3 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded text-[10px] font-bold"
+                                className="px-2 sm:px-3 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded text-[10px] font-bold"
                               >
-                                REVIEW & FIX
+                                <span className="hidden sm:inline">REVIEW & FIX</span>
+                                <span className="sm:hidden">FIX</span>
                               </button>
                             </td>
                           </tr>
@@ -3719,7 +3725,7 @@ export default function App() {
                                     Clear
                                 </button>
                             </div>
-                            <div className="bg-slate-950 border border-slate-800 rounded max-h-48 overflow-y-auto overflow-x-auto text-[8px] font-mono whitespace-nowrap">
+                            <div className="bg-slate-950 border border-slate-800 rounded max-h-48 overflow-y-auto overflow-x-auto text-[8px] font-mono whitespace-pre-wrap break-all">
                                 {debugLogs.length === 0 ? (
                                     <div className="p-2 text-slate-600 text-center">No logs yet</div>
                                 ) : (
@@ -4040,7 +4046,7 @@ export default function App() {
 
       {/* Unified Filter Panel - Sliding */}
       {showUnifiedFilters && (
-        <div className="fixed right-0 top-0 bottom-0 w-96 bg-slate-900/95 backdrop-blur-sm border-l border-slate-800 shadow-2xl z-50 overflow-y-auto">
+        <div className="fixed inset-0 sm:inset-auto sm:right-0 sm:top-0 sm:bottom-0 sm:w-96 bg-slate-900/95 backdrop-blur-sm sm:border-l border-slate-800 shadow-2xl z-50 overflow-y-auto">
           <div className="p-4">
             <UnifiedFilterPanel
               activeView={activeTab as any}

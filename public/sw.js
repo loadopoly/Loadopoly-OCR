@@ -1,5 +1,5 @@
 /**
- * GeoGraph Service Worker v3.0.0
+ * GeoGraph Service Worker v3.3.0
  * 
  * IMPORTANT: This service worker is designed to be cache-safe for Vite builds.
  * - JS/CSS bundles are NEVER cached (they have content hashes that change per build)
@@ -14,7 +14,7 @@
  * - Performance optimizations with preload hints
  */
 
-const CACHE_VERSION = '3.2.0';
+const CACHE_VERSION = '3.3.0';
 const CACHE_NAME = `geograph-v${CACHE_VERSION}`;
 const IMAGE_CACHE_NAME = `geograph-images-v${CACHE_VERSION}`;
 const API_CACHE_NAME = `geograph-api-v${CACHE_VERSION}`;
