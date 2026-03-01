@@ -2340,7 +2340,7 @@ export default function App() {
 
   return (
     <FilterProvider initialAssets={assets} initialGraphData={globalGraphData}>
-    <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30">
+    <div className="flex h-[100dvh] w-full max-w-[100vw] bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30 relative">
       
       {/* Sidebar - Desktop */}
       <div className="hidden lg:flex w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex-col">
@@ -3637,18 +3637,18 @@ export default function App() {
         )}
 
         {showProcessingPanel && (
-          <div className="absolute top-14 sm:top-16 left-0 right-0 mx-2 sm:mx-0 sm:left-auto sm:right-8 sm:w-96 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-40 flex flex-col max-h-[calc(100vh-120px)] animate-in slide-in-from-top-4 duration-200 overflow-hidden box-border">
-                <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                        <Zap size={14} className="text-amber-500" />
-                        Processing Queue
+          <div className="fixed top-14 sm:top-16 left-1/2 -translate-x-1/2 sm:left-auto sm:-translate-x-0 sm:right-8 w-[calc(100vw-16px)] sm:w-96 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-[60] flex flex-col max-h-[calc(100vh-120px)] animate-in slide-in-from-top-4 duration-200 overflow-hidden box-border">
+                <div className="p-3 sm:p-4 border-b border-slate-800 flex items-center justify-between w-full box-border">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2 min-w-0">
+                        <Zap size={14} className="text-amber-500 flex-shrink-0" />
+                        <span className="truncate">Processing Queue</span>
                         {(totalPendingCount > 0 || batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').length > 0) && (
-                            <span className="ml-2 px-2 py-0.5 bg-amber-500/20 text-amber-500 text-[10px] font-bold rounded-full">
+                            <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 bg-amber-500/20 text-amber-500 text-[10px] font-bold rounded-full flex-shrink-0">
                                 {totalPendingCount + batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').length}
                             </span>
                         )}
                     </h3>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 ml-2">
                         <button 
                             onClick={() => setShowDebugPanel(!showDebugPanel)}
                             className={`p-2 rounded text-xs font-mono ${showDebugPanel ? 'bg-blue-500/20 text-blue-400' : 'text-slate-500 hover:text-white'}`}
@@ -3659,7 +3659,7 @@ export default function App() {
                         <button onClick={() => setShowProcessingPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
                     </div>
                 </div>
-                <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-4 custom-scrollbar">
+                <div className="flex-1 overflow-y-auto overflow-x-hidden p-2 space-y-4 custom-scrollbar w-full">
                     {/* Debug Logs Panel */}
                     {showDebugPanel && (
                         <div className="px-2 py-2 border-b border-slate-800/50 pb-4">
