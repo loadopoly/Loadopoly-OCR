@@ -2472,7 +2472,7 @@ export default function App() {
                     isOnline={isOnline}
                     zoomEnabled={zoomEnabled}
                   />
-                    <label className={`flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 ${isGlobalView ? 'bg-indigo-900/40 border-indigo-500/50 hover:bg-indigo-900/60' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'} border text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+                    <label className={`hidden sm:flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 ${isGlobalView ? 'bg-indigo-900/40 border-indigo-500/50 hover:bg-indigo-900/60' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'} border text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                       {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Upload size={18} />}
                       <span className="hidden sm:inline">{isGlobalView ? 'Contribute' : 'Upload'}</span>
                       <input type="file" className="hidden" accept="image/*, application/pdf" onChange={(e) => e.target.files?.[0] && ingestFile(e.target.files[0], isGlobalView ? "Global Contribution" : "Direct Upload")} disabled={isProcessing} />
@@ -3670,19 +3670,17 @@ export default function App() {
         )}
 
         {showProcessingPanel && createPortal((
-          <div
-            className="fixed inset-x-0 top-14 sm:top-16 z-[60] flex sm:justify-end pointer-events-none box-border px-2 sm:px-0 sm:pr-8"
-          >
+          <div style={{ position: 'fixed', inset: 0, zIndex: 60, pointerEvents: 'none' }}>
             <div
-              ref={(el) => {
-                // Debug: log actual panel position to console on mount
-                if (el) {
-                  const r = el.getBoundingClientRect();
-                  console.log('[QueuePanel] rect:', JSON.stringify({ left: r.left, right: r.right, width: r.width, vw: window.innerWidth }));
-                }
+              className="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl flex flex-col overflow-hidden"
+              style={{
+                position: 'absolute',
+                top: 56,
+                left: 8,
+                right: 8,
+                maxHeight: 'calc(100dvh - 140px)',
+                pointerEvents: 'auto',
               }}
-              className="pointer-events-auto w-full sm:w-96 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl flex flex-col max-h-[calc(100dvh-140px)] sm:max-h-[calc(100vh-120px)] overflow-hidden box-border"
-              style={{ maxWidth: '100%' }}
             >
                 <div className="p-3 sm:p-4 border-b border-slate-800 flex items-center justify-between w-full box-border">
                     <h3 className="text-sm font-bold text-white flex items-center gap-2 min-w-0">
@@ -3705,19 +3703,6 @@ export default function App() {
                         <button onClick={() => setShowProcessingPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
                     </div>
                 </div>
-                {/* TEMP DEBUG: On-screen position readout — remove after confirming fix */}
-                <div
-                  ref={(el) => {
-                    if (!el) return;
-                    const panel = el.parentElement;
-                    const wrapper = panel?.parentElement;
-                    if (!panel || !wrapper) return;
-                    const pr = panel.getBoundingClientRect();
-                    const wr = wrapper.getBoundingClientRect();
-                    el.textContent = `vw:${window.innerWidth} wr:[L${Math.round(wr.left)},R${Math.round(wr.right)},W${Math.round(wr.width)}] pnl:[L${Math.round(pr.left)},R${Math.round(pr.right)},W${Math.round(pr.width)}]`;
-                  }}
-                  className="px-2 py-1 bg-yellow-600 text-black text-[9px] font-mono leading-tight"
-                />
                 <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y p-2 pb-[calc(env(safe-area-inset-bottom,0px)+88px)] sm:pb-2 space-y-4 custom-scrollbar w-full">
                     {/* Debug Logs Panel */}
                     {showDebugPanel && (
