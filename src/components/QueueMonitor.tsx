@@ -713,7 +713,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                         </div>
                       </div>
                       {job.error && (
-                        <div className="mt-2 p-1.5 bg-rose-900/20 border border-rose-800/50 rounded text-rose-300">
+                        <div className="mt-2 p-1.5 bg-rose-900/20 border border-rose-800/50 rounded text-rose-300 break-words whitespace-pre-wrap">
                           <span className="text-rose-400 font-medium">Error: </span>{job.error}
                         </div>
                       )}
@@ -801,7 +801,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                   </span>
                 </div>
                 {connectionTest.storageUpload.error && (
-                  <div className="text-[7px] text-rose-400 bg-rose-900/20 p-1 rounded">
+                  <div className="text-[7px] text-rose-400 bg-rose-900/20 p-1 rounded break-words whitespace-pre-wrap">
                     {connectionTest.storageUpload.error}
                   </div>
                 )}
@@ -812,7 +812,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                   </span>
                 </div>
                 {connectionTest.queueInsert.error && (
-                  <div className="text-[7px] text-rose-400 bg-rose-900/20 p-1 rounded">
+                  <div className="text-[7px] text-rose-400 bg-rose-900/20 p-1 rounded break-words whitespace-pre-wrap">
                     {connectionTest.queueInsert.error}
                   </div>
                 )}
@@ -823,7 +823,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                   </span>
                 </div>
                 {connectionTest.queueSelect.error && (
-                  <div className="text-[7px] text-rose-400 bg-rose-900/20 p-1 rounded">
+                  <div className="text-[7px] text-rose-400 bg-rose-900/20 p-1 rounded break-words whitespace-pre-wrap">
                     {connectionTest.queueSelect.error}
                   </div>
                 )}
@@ -937,33 +937,39 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
           {/* Connection test results */}
           {connectionTest && (
             <div className="mt-2 p-2 bg-slate-900 rounded text-[8px] space-y-1">
-              <div className="flex items-center gap-1">
-                {connectionTest.storageUpload.success ? (
-                  <CheckCircle size={10} className="text-emerald-400" />
-                ) : (
-                  <AlertCircle size={10} className="text-rose-400" />
-                )}
-                <span className={connectionTest.storageUpload.success ? 'text-emerald-400' : 'text-rose-400'}>
+              <div className="flex items-start gap-1">
+                <div className="mt-0.5">
+                  {connectionTest.storageUpload.success ? (
+                    <CheckCircle size={10} className="text-emerald-400" />
+                  ) : (
+                    <AlertCircle size={10} className="text-rose-400" />
+                  )}
+                </div>
+                <span className={`break-words whitespace-pre-wrap flex-1 ${connectionTest.storageUpload.success ? 'text-emerald-400' : 'text-rose-400'}`}>
                   Storage: {connectionTest.storageUpload.success ? 'OK' : connectionTest.storageUpload.error}
                 </span>
               </div>
-              <div className="flex items-center gap-1">
-                {connectionTest.queueInsert.success ? (
-                  <CheckCircle size={10} className="text-emerald-400" />
-                ) : (
-                  <AlertCircle size={10} className="text-rose-400" />
-                )}
-                <span className={connectionTest.queueInsert.success ? 'text-emerald-400' : 'text-rose-400'}>
+              <div className="flex items-start gap-1">
+                <div className="mt-0.5">
+                  {connectionTest.queueInsert.success ? (
+                    <CheckCircle size={10} className="text-emerald-400" />
+                  ) : (
+                    <AlertCircle size={10} className="text-rose-400" />
+                  )}
+                </div>
+                <span className={`break-words whitespace-pre-wrap flex-1 ${connectionTest.queueInsert.success ? 'text-emerald-400' : 'text-rose-400'}`}>
                   Queue Insert: {connectionTest.queueInsert.success ? 'OK' : connectionTest.queueInsert.error}
                 </span>
               </div>
-              <div className="flex items-center gap-1">
-                {connectionTest.queueSelect.success ? (
-                  <CheckCircle size={10} className="text-emerald-400" />
-                ) : (
-                  <AlertCircle size={10} className="text-rose-400" />
-                )}
-                <span className={connectionTest.queueSelect.success ? 'text-emerald-400' : 'text-rose-400'}>
+              <div className="flex items-start gap-1">
+                <div className="mt-0.5">
+                  {connectionTest.queueSelect.success ? (
+                    <CheckCircle size={10} className="text-emerald-400" />
+                  ) : (
+                    <AlertCircle size={10} className="text-rose-400" />
+                  )}
+                </div>
+                <span className={`break-words whitespace-pre-wrap flex-1 ${connectionTest.queueSelect.success ? 'text-emerald-400' : 'text-rose-400'}`}>
                   Queue Read: {connectionTest.queueSelect.success ? 'OK' : connectionTest.queueSelect.error}
                 </span>
               </div>
