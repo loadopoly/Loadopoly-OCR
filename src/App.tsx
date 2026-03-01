@@ -3637,7 +3637,7 @@ export default function App() {
         )}
 
         {showProcessingPanel && (
-          <div className="fixed top-14 sm:top-16 inset-x-0 px-3 sm:px-0 sm:left-auto sm:right-8 sm:w-96 max-w-[1024px] w-full bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-[60] flex flex-col max-h-[calc(100vh-120px)] animate-in slide-in-from-top-4 duration-200 overflow-hidden box-border">
+          <div className="fixed top-14 sm:top-16 left-2 right-2 sm:left-auto sm:right-8 sm:w-96 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-[60] flex flex-col max-h-[calc(100dvh-140px)] sm:max-h-[calc(100vh-120px)] animate-in slide-in-from-top-4 duration-200 overflow-hidden box-border">
                 <div className="p-3 sm:p-4 border-b border-slate-800 flex items-center justify-between w-full box-border">
                     <h3 className="text-sm font-bold text-white flex items-center gap-2 min-w-0">
                         <Zap size={14} className="text-amber-500 flex-shrink-0" />
@@ -3659,7 +3659,7 @@ export default function App() {
                         <button onClick={() => setShowProcessingPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
                     </div>
                 </div>
-                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden p-2 space-y-4 custom-scrollbar w-full">
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y p-2 pb-[calc(env(safe-area-inset-bottom,0px)+88px)] sm:pb-2 space-y-4 custom-scrollbar w-full">
                     {/* Debug Logs Panel */}
                     {showDebugPanel && (
                         <div className="px-2 py-2 border-b border-slate-800/50 pb-4">
