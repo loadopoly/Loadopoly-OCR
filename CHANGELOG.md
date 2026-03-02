@@ -3,6 +3,47 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.0] - 2026-03-02
+
+### Adventure Mode & AR Walk (WorldRenderer)
+- **Adventure Mode**: New `Compass` toolbar button in the 3D World view activates live GPS tracking via `watchPosition`. Nearby captures (within 1 km, haversine distance) surface as a proximity overlay panel with thumbnail, title, and distance badge.
+- **`onStartAdventure` prop**: `WorldRenderer` now accepts an optional callback so parent components can respond to adventure mode activation.
+- **Empty-state overlay**: 3D World now shows a clear call-to-action when no graph data exists instead of a blank canvas.
+
+### Structured Data Population (Edge Functions)
+- **`TOKEN_COUNT`**: Populated in both `api/process-ocr/index.ts` and `supabase/functions/process-ocr/index.ts` using a ~0.75 words-per-token approximation.
+- **`STRUCTURED_CONTENT`**: Populated with `detected`, `wordCount`, and `paragraphCount` when OCR text is present.
+- **`STRUCTURED_TEMPORAL`**: Populated with detected temporal entities when DATE/TIME nodes are found.
+- **`STRUCTURED_SPATIAL`**: Populated with zone type, GIS coordinates, and device-captured lat/lng when spatial context is available.
+- **`STRUCTURED_PROVENANCE`**: Always populated with capture metadata (timestamp, scan type, source asset ID, processing version).
+- **`STRUCTURED_DISCOVERY`**: Populated with entity/keyword/node/link counts when entities or keywords were extracted.
+
+### Knowledge Graph — Server-Path Enrichment
+- **`STRUCTURED_KNOWLEDGE_GRAPH` node merging**: `buildGlobalGraphData` in `App.tsx` now merges nodes and links from the edge function's `STRUCTURED_KNOWLEDGE_GRAPH` JSONB field alongside the existing client-side `graphData`, providing richer multi-hop entity relationships.
+
+### GPS Capture at Ingest
+- **Geolocation at queue time**: When a file is queued via `ingestFile()`, the current GPS position is captured (3 s timeout) and passed to `processingQueueService.queueFile()` as `location`, enabling the edge function to associate images with physical capture coordinates.
+
+### PWA & Service Worker Reliability
+- **No more lock-screen reload loop**: Removed `self.skipWaiting()` from SW `install` handler. SW now waits for old clients to close before activating, preventing the `clients.claim()` → `controllerchange` → `location.reload()` cycle that restarted the app on phone lock-screen unlock.
+- **SW update banner**: `App.tsx` listens for the `geograph-sw-updated` custom event (dispatched by both `index.tsx` and `pwaUtils.ts`) and renders a non-blocking top banner with an "Update Now" button that calls `SKIP_WAITING` and reloads.
+- **Offline status banner**: A persistent amber banner appears when `navigator.onLine` is false, showing how many queued captures will upload when connectivity returns.
+- **Background Sync integration**: When the app comes back online with pending assets, it registers a `sync-contributions` background sync tag. The SW `sync` event dispatches `geograph-sync-requested` to the page which triggers `handleProcessAllPending`.
+
+### UX & Navigation Fixes
+- **3D World as Explore default**: `useEffect` in `App.tsx` resets `exploreSubTab` to `'3d'` every time the Explore tab is activated, preventing stale sub-tab state from previous visits.
+- **Batch tab auto-navigation removed**: `handleBatchFiles` no longer calls `setActiveTab('batch')` — the caller decides navigation, preventing AR sessions from hijacking the user to the batch tab.
+- **Queue monitor visible by default**: `showDashboardQueue` now reads from `localStorage` with a default of `true` (key `geograph-queue-visible`).
+
+### Bug Fixes
+- **Null-safe `ENTITIES_EXTRACTED`**: Drilldown table now uses `(rec?.ENTITIES_EXTRACTED ?? []).slice(0,3)` to avoid crash when field is null.
+- **Blob URL cleanup**: `loadAssets` in `indexeddb.ts` now detects dead `blob:` URLs (no backing `imageBlob`) and clears them to prevent broken image icons after reload.
+- **Public URL persistence**: After cloud sync, `saveAsset()` is called with the updated HTTPS URL so future reloads serve the permanent cloud link, not a dead blob.
+- **`ErrorBoundary` on database tab**: The entire database view is now wrapped in an `ErrorBoundary` with a "Reset View" recovery button.
+
+### Dependencies
+- Promoted `@react-three/drei`, `@react-three/fiber`, and `three` from `optionalDependencies` to `dependencies` to ensure they are always bundled.
+
 ## [2.11.4] - 2026-02-25
 
 ### UX Reliability & Diagnostics

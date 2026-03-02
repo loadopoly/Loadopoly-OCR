@@ -74,7 +74,7 @@ The **core value** — structured Supabase ownership — is the foundation. Ever
 ## Current Status
 
 ### ✅ Technical Strengths
-- **50,758 lines** of TypeScript code (v2.11.4)
+- **53,447 lines** of TypeScript code (v2.12.0)
 - **Production deployed** on Vercel + Supabase
 - **15+ major features** fully implemented
 - **Comprehensive docs**: 60KB+ (DATA_DICTIONARY, ARCHITECTURE, AUDIT_REPORT)
@@ -169,9 +169,9 @@ The **core value** — structured Supabase ownership — is the foundation. Ever
 ### Technical Credibility
 - Built entire platform solo (50K+ LOC)
 - Production-ready architecture (proven at scale with Vercel/Supabase)
-- Active development (v2.11.4, bi-weekly releases — latest: Feb 25, 2026)
+- Active development (v2.12.0, bi-weekly releases — latest: Mar 2, 2026)
 - Comprehensive documentation (uncommon for MVP)
-- Mobile PWA, UX telemetry, and download resilience shipped in v2.11.4
+- Mobile PWA, AR Walk Adventure Mode, JSONB structured population, and PWA reliability shipped in v2.12.0
 
 ### Personal Commitment
 - [Your background/expertise]

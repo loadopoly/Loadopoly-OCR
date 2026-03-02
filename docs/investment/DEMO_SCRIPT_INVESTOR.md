@@ -340,9 +340,9 @@ Users can switch providers in settings. I also have edge OCR with Tesseract.js f
 
 ### Q6: "Why are you the right person to build this?"
 **A**: "Combination of:
-1. **Technical chops**: Built entire platform solo (50K+ LOC)
+1. **Technical chops**: Built entire platform solo (53K+ LOC)
 2. **Domain knowledge**: [Your background in OCR/archival/Web3]
-3. **Persistence**: v2.11.4 — bi-weekly releases, consistent improvements (see changelog)
+3. **Persistence**: v2.12.0 — bi-weekly releases, consistent improvements (see changelog)
 4. **Vision**: I believe data ownership is the future - this is personal
 
 With your funding, I can scale from solo maker to team. But the core vision and technical foundation are solid."

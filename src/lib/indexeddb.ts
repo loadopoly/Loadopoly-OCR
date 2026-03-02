@@ -63,6 +63,12 @@ export const loadAssets = async (): Promise<DigitalAsset[]> => {
                 };
             }
         }
+        // #14: If imageUrl is a blob: URL but we have no backing blob (e.g. after
+        // a page reload for server-processed assets whose blob was GC'd), the URL
+        // is dead. Clear it so the UI shows a placeholder rather than a broken icon.
+        if (!asset.imageBlob && asset.imageUrl?.startsWith('blob:')) {
+            return { ...asset, imageUrl: '' };
+        }
         return asset;
     }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 };
