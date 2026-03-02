@@ -251,7 +251,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window === 'undefined') return 'dashboard';
     const savedMobileTab = localStorage.getItem('geograph-mobile-last-tab');
-    const mobileEligible = ['dashboard', 'database', 'batch', 'curator', 'settings'];
+    const mobileEligible = ['dashboard', 'database', 'batch', 'curator', 'settings', 'explore', 'assets'];
     if (window.innerWidth < 1024 && savedMobileTab && mobileEligible.includes(savedMobileTab)) {
       return savedMobileTab;
     }
@@ -430,6 +430,25 @@ export default function App() {
       }
     }
   }, [isOnline, localAssets]);
+
+  // App resume: re-hydrate state from IndexedDB when the app comes back from background.
+  // On Android, the PWA process may be killed; on return the entire React tree
+  // remounts fresh which is fine. But if the process survives (tab hidden → visible),
+  // we need to refresh data and reconnect subscriptions.
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        // Refresh local data from IndexedDB (covers process-survived case)
+        loadAssets().then(loaded => setLocalAssets(loaded)).catch(() => {});
+        // Refresh auth session — keeps Supabase token alive
+        getCurrentUser().then(({ data }) => {
+          if (data.user) setUser(data.user);
+        }).catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, []);
 
   const startUploadTracking = useCallback((count = 1) => {
     setUploadProgress(prev => {
@@ -2937,7 +2956,7 @@ export default function App() {
                     <div className="space-y-4">
                         {assets.slice(0, 3).map(asset => (
                             <div key={asset.id} className="flex items-start gap-4 p-3 rounded bg-slate-950/50 border border-slate-800 group relative">
-                                <img src={asset.imageUrl} className="w-16 h-16 object-cover rounded" alt="thumb" />
+                                <img src={asset.imageUrl} className="w-16 h-16 object-cover rounded" alt="thumb" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start">
                                         <h4 className="text-sm font-bold text-slate-200">{asset.gisMetadata?.zoneType || 'Processing...'}</h4>
@@ -3108,16 +3127,16 @@ export default function App() {
 
           {activeTab === 'database' && (
              <ErrorBoundary
-               fallback={
+               fallback={({ resetError }) => (
                  <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-400">
                    <AlertCircle size={32} className="text-rose-500" />
                    <p className="text-sm">The database view encountered an error.</p>
                    <button
-                     onClick={() => { setCurrentPage(1); setDbViewMode('DRILLDOWN'); setSelectedGroupKey(null); }}
+                     onClick={() => { resetError(); setCurrentPage(1); setDbViewMode('DRILLDOWN'); setSelectedGroupKey(null); }}
                      className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-xs rounded-lg"
                    >Reset View</button>
                  </div>
-               }
+               )}
              >
              <div className="h-full flex flex-col gap-4">
                {/* Processing Queue Status Banner for Master View */}
@@ -3454,7 +3473,7 @@ export default function App() {
                                 />
                             </div>
                             <div className="relative h-48 bg-slate-950 overflow-hidden">
-                                <img src={item.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" />
+                                <img src={item.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" onError={(e) => { (e.target as HTMLImageElement).src = ''; (e.target as HTMLImageElement).style.display = 'none'; }} />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
                                     <button 
                                         onClick={() => setEditingAsset(item)}
@@ -3484,18 +3503,18 @@ export default function App() {
               <div className="flex flex-wrap items-center gap-1 px-1 pb-3 flex-shrink-0">
                 <div className="flex flex-wrap bg-slate-900 p-1 rounded-lg border border-slate-800 gap-1">
                   <button
-                    onClick={() => setExploreSubTab('graph')}
-                    className={`px-2 sm:px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 sm:gap-1.5 ${exploreSubTab === 'graph' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    <Network size={13} />
-                    <span className="hidden sm:inline">Knowledge</span> Graph
-                  </button>
-                  <button
                     onClick={() => setExploreSubTab('3d')}
                     className={`px-2 sm:px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 sm:gap-1.5 ${exploreSubTab === '3d' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
                   >
                     <Globe size={13} />
-                    3D
+                    3D World
+                  </button>
+                  <button
+                    onClick={() => setExploreSubTab('graph')}
+                    className={`px-2 sm:px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 sm:gap-1.5 ${exploreSubTab === 'graph' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    <Network size={13} />
+                    Graph
                   </button>
                   <button
                     onClick={() => setExploreSubTab('semantic')}
@@ -3573,6 +3592,7 @@ export default function App() {
                   <div className="h-full">
                     <WorldRenderer
                       graphData={graphViewMode === 'GLOBAL' ? globalGraphData : (assets.find(a => a.id === selectedAssetId)?.graphData || globalGraphData)}
+                      assets={assets}
                       nearbyUsers={nearbyUsers}
                       currentUserId={user?.id}
                       onNodeSelect={(node) => {
@@ -3581,6 +3601,9 @@ export default function App() {
                       }}
                       onPositionChange={(pos) => {
                         if (avatar) updatePosition(pos, [0, 0, 0, 1], avatar.lastSector);
+                      }}
+                      onStartAdventure={() => {
+                        showToast('info', 'Adventure Mode activated! Walk to discover nearby captures.');
                       }}
                     />
                   </div>
@@ -3710,7 +3733,7 @@ export default function App() {
                         .map(asset => (
                           <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
                             <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800">
-                              <img src={asset.imageUrl} alt="Preview" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded border border-slate-700" />
+                              <img src={asset.imageUrl} alt="Preview" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded border border-slate-700" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                             </td>
                             <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800">{asset.id.substring(0, 8)}</td>
                             <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 hidden sm:table-cell">{new Date(asset.timestamp).toLocaleString()}</td>
@@ -3812,13 +3835,14 @@ export default function App() {
         {showProcessingPanel && createPortal((
           <div style={{ position: 'fixed', inset: 0, zIndex: 60, pointerEvents: 'none' }}>
             <div
-              className="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl flex flex-col overflow-hidden"
+              className="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl flex flex-col"
               style={{
                 position: 'absolute',
                 top: 56,
                 left: 8,
                 right: 8,
-                maxHeight: 'calc(100dvh - 140px)',
+                bottom: 80,
+                maxHeight: 'calc(100dvh - 64px)',
                 pointerEvents: 'auto',
               }}
             >
@@ -3843,7 +3867,7 @@ export default function App() {
                         <button onClick={() => setShowProcessingPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
                     </div>
                 </div>
-                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain touch-pan-y p-2 pb-[calc(env(safe-area-inset-bottom,0px)+88px)] sm:pb-2 space-y-4 custom-scrollbar w-full">
+                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain p-2 pb-20 sm:pb-2 space-y-4 custom-scrollbar w-full" style={{ WebkitOverflowScrolling: 'touch' }}>
                     {/* Debug Logs Panel */}
                     {showDebugPanel && (
                         <div className="px-2 py-2 border-b border-slate-800/50 pb-4">
@@ -3922,7 +3946,7 @@ export default function App() {
                             .filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING)
                             .map(asset => (
                             <div key={asset.id} className="p-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center gap-3 group">
-                                <img src={asset.imageUrl} className="w-10 h-10 object-cover rounded border border-slate-700" alt="thumb" />
+                                <img src={asset.imageUrl} className="w-10 h-10 object-cover rounded border border-slate-700" alt="thumb" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="text-[10px] font-mono text-slate-400 truncate">{asset.id.slice(0,8)}</span>
@@ -4199,6 +4223,22 @@ export default function App() {
         <ClusterSyncStatsPanel
           assets={assets}
           onClose={() => setShowClusterSyncStats(false)}
+          onClassificationUpdate={(results) => {
+            // Merge classification results into local asset state
+            results.forEach(r => {
+              setLocalAssets(prev => prev.map(a => {
+                if (a.id !== r.assetId) return a;
+                const updatedRecord = { ...a.sqlRecord! };
+                if (r.structuredTemporal) (updatedRecord as any).STRUCTURED_TEMPORAL = r.structuredTemporal;
+                if (r.structuredSpatial) (updatedRecord as any).STRUCTURED_SPATIAL = r.structuredSpatial;
+                if (r.structuredContent) (updatedRecord as any).STRUCTURED_CONTENT = r.structuredContent;
+                if (r.structuredKnowledgeGraph) (updatedRecord as any).STRUCTURED_KNOWLEDGE_GRAPH = r.structuredKnowledgeGraph;
+                if (r.structuredProvenance) (updatedRecord as any).STRUCTURED_PROVENANCE = r.structuredProvenance;
+                if (r.structuredDiscovery) (updatedRecord as any).STRUCTURED_DISCOVERY = r.structuredDiscovery;
+                return { ...a, sqlRecord: updatedRecord };
+              }));
+            });
+          }}
         />
       )}
     </div>

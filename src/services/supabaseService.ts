@@ -30,10 +30,14 @@ const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> =
     }
   }
 
-  // Parse JSONB fields
-  const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED) 
-    ? row.ENTITIES_EXTRACTED 
-    : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
+  // Parse JSONB fields — guard JSON.parse to prevent a single malformed row
+  // from crashing the entire data pipeline.
+  let entities: string[] = [];
+  try {
+    entities = Array.isArray(row.ENTITIES_EXTRACTED) 
+      ? row.ENTITIES_EXTRACTED 
+      : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
+  } catch { entities = []; }
   
   // Reconstruct Nodes
   const nodes: GraphNode[] = [
@@ -195,9 +199,15 @@ export const contributeAssetToGlobalCorpus = async (
     // 1. Storage Upload: Only if it's a local blob
     //    Always upload to master storage first, then mirror to user storage
     let publicUrl = asset.imageUrl;
-    if (asset.imageUrl.startsWith('blob:')) {
-      const response = await fetch(asset.imageUrl);
-      const blob = await response.blob();
+    if (asset.imageUrl.startsWith('blob:') || (asset as any).imageBlob) {
+      // Prefer the raw imageBlob (survives page navigations) over fetching the blob URL
+      let blob: Blob;
+      if ((asset as any).imageBlob) {
+        blob = (asset as any).imageBlob;
+      } else {
+        const response = await fetch(asset.imageUrl);
+        blob = await response.blob();
+      }
       const fileExt = asset.sqlRecord.FILE_FORMAT.split('/').pop() || 'jpg';
       const fileName = `${asset.id}_${Date.now()}.${fileExt}`;
 

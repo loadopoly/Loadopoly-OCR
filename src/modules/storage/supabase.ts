@@ -46,10 +46,14 @@ const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> =
     }
   }
 
-  // Parse JSONB fields
-  const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED) 
-    ? row.ENTITIES_EXTRACTED 
-    : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
+  // Parse JSONB fields — guard JSON.parse to prevent a single malformed row
+  // from crashing the entire data pipeline.
+  let entities: string[] = [];
+  try {
+    entities = Array.isArray(row.ENTITIES_EXTRACTED) 
+      ? row.ENTITIES_EXTRACTED 
+      : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
+  } catch { entities = []; }
   
   // Reconstruct Nodes
   const nodes: GraphNode[] = [
