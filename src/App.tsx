@@ -91,6 +91,7 @@ const ContributeButton = React.lazy(() => import('./components/ContributeButton'
 const BundleCard = React.lazy(() => import('./components/BundleCard'));
 const SettingsPanel = React.lazy(() => import('./components/SettingsPanel'));
 const PurchaseModal = React.lazy(() => import('./components/PurchaseModal'));
+import { ErrorBoundary } from './components/ErrorBoundary';
 import CameraCapture from './components/CameraCapture';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import StatusBar from './components/StatusBar';
@@ -352,8 +353,12 @@ export default function App() {
   const [showUnifiedFilters, setShowUnifiedFilters] = useState(false);
   const [showClusterSyncStats, setShowClusterSyncStats] = useState(false);
   const isDevBuild = import.meta.env.DEV;
-  // Dashboard queue monitor is hidden by default to avoid Supabase calls on cold start
-  const [showDashboardQueue, setShowDashboardQueue] = useState(false);
+  // Dashboard queue monitor — default visible so users can always see queue status
+  const [showDashboardQueue, setShowDashboardQueue] = useState(() => {
+    try { return localStorage.getItem('geograph-queue-visible') !== '0'; } catch { return true; }
+  });
+  // SW update available — set by geograph-sw-updated custom event, shows a soft banner
+  const [swUpdateAvailable, setSwUpdateAvailable] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
   const [downloadQueueItems, setDownloadQueueItems] = useState<DownloadQueueItem[]>([]);
   const [downloadProgressByAsset, setDownloadProgressByAsset] = useState<Record<string, {
@@ -398,6 +403,33 @@ export default function App() {
   const dbProcessCancelRef = useRef(false);
   // Explore tab sub-view (merges Knowledge Graph + 3D World into one tab)
   const [exploreSubTab, setExploreSubTab] = useState<'graph' | '3d' | 'semantic'>('3d');
+
+  // #8: 3D World is always the landing page when entering Explore tab.
+  // Any prior setExploreSubTab('graph') from stat card clicks is reset on re-entry.
+  useEffect(() => {
+    if (activeTab === 'explore') setExploreSubTab('3d');
+  }, [activeTab]);
+
+  // #11: Listen for SW update event dispatched by index.tsx — show soft update banner.
+  useEffect(() => {
+    const handleSwUpdate = () => setSwUpdateAvailable(true);
+    window.addEventListener('geograph-sw-updated', handleSwUpdate);
+    return () => window.removeEventListener('geograph-sw-updated', handleSwUpdate);
+  }, []);
+
+  // #12/#13: Register background sync when we have pending assets and go back online.
+  useEffect(() => {
+    if (isOnline && 'serviceWorker' in navigator) {
+      const pending = localAssets.filter(
+        a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING
+      ).length;
+      if (pending > 0) {
+        navigator.serviceWorker.ready
+          .then(reg => (reg as any).sync?.register?.('sync-contributions'))
+          .catch(() => { /* Background Sync not supported */ });
+      }
+    }
+  }, [isOnline, localAssets]);
 
   const startUploadTracking = useCallback((count = 1) => {
     setUploadProgress(prev => {
@@ -1229,7 +1261,7 @@ export default function App() {
           if (window.confirm(`Process ${arSessionQueue.length} items from your AR Session?`)) {
               handleBatchFiles(arSessionQueue);
               setArSessionQueue([]);
-              setActiveTab('batch');
+              setActiveTab('batch'); // explicit: user chose to leave AR → go to batch
           } else {
               // If user cancels, stay on AR tab and keep the queue
               return;
@@ -1406,6 +1438,9 @@ export default function App() {
           } else {
             setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
           }
+          // #14: Persist the permanent HTTPS URL to IndexedDB so it survives reloads.
+          // Without this, the blob: URL from ingest time becomes a broken link on next open.
+          saveAsset(updatedAsset).catch(e => console.warn('Failed to persist publicUrl to IndexedDB', e));
         }
       }).catch(err => console.error("Auto-sync to Supabase failed", err));
 
@@ -1582,9 +1617,22 @@ export default function App() {
       try {
         const scanType = (file as any).scanType || selectedScanType || ScanType.DOCUMENT;
         startUploadTracking();
+
+        // #3: Capture GPS coordinates at the moment of ingest so the edge function
+        // can associate the image with the exact location where it was taken.
+        let captureLocation: { lat: number; lng: number } | undefined;
+        if (navigator.geolocation) {
+          try {
+            const pos = await new Promise<GeolocationPosition>((res, rej) =>
+              navigator.geolocation.getCurrentPosition(res, rej, { timeout: 3000, maximumAge: 10000 })
+            );
+            captureLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          } catch { /* location unavailable — continue without it */ }
+        }
         
         await processingQueueService.queueFile(file, {
           scanType,
+          location: captureLocation,
           metadata: {
             DOCUMENT_TITLE: newAsset.sqlRecord?.DOCUMENT_TITLE,
             SOURCE_COLLECTION: source
@@ -1784,9 +1832,12 @@ export default function App() {
       try {
         const syncResult = await contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true);
         if (syncResult.success && syncResult.publicUrl) {
+          const updatedWithUrl = { ...resultAsset, imageUrl: syncResult.publicUrl };
           setLocalAssets(prev => prev.map(a => 
-            a.id === itemId ? { ...a, imageUrl: syncResult.publicUrl || a.imageUrl } : a
+            a.id === itemId ? updatedWithUrl : a
           ));
+          // #14: Persist permanent HTTPS URL to IndexedDB so images survive reloads.
+          saveAsset(updatedWithUrl).catch(e => console.warn('Failed to persist publicUrl', e));
         }
       } catch (e) {
         console.warn('Cloud sync failed, asset saved locally:', e);
@@ -1811,9 +1862,11 @@ export default function App() {
     const { batchProcessor } = await import('./services/batchProcessorService');
     batchProcessor.addFiles(files, selectedScanType || ScanType.DOCUMENT);
     
-    // Show the new batch panel
+    // Show the batch panel UI but do NOT switch tabs here.
+    // The caller (switchTab, BatchImporter, onFinishSession) decides which tab
+    // to navigate to after invoking this function. This prevents AR session
+    // submissions from hijacking the user back to the Quick Processing tab.
     setShowNewBatchPanel(true);
-    setActiveTab('batch');
     
     // Announce for accessibility
     if (files.length > 50) {
@@ -1984,6 +2037,18 @@ export default function App() {
       setDbProcessRun(prev => ({ ...prev, running: false, currentAssetId: null, step: 'idle' }));
     }
   };
+
+  // #13: Background sync — when SW fires sync-contributions, trigger the processing queue
+  useEffect(() => {
+    const handleSyncRequested = () => {
+      if (isOnline) {
+        handleProcessAllPending();
+      }
+    };
+    window.addEventListener('geograph-sync-requested', handleSyncRequested);
+    return () => window.removeEventListener('geograph-sync-requested', handleSyncRequested);
+    // handleProcessAllPending is stable (useCallback) — intentionally omitted from deps
+  }, [isOnline]);
 
   const handleSendMessage = (receiverId: string, content: string, giftId?: string, isBundle?: boolean) => {
     const newMessage: UserMessage = {
@@ -2320,12 +2385,39 @@ export default function App() {
          const catId = `CAT_${cat.replace(/\s+/g, '_')}`;
          if (!entityNodesMap.has(catId)) entityNodesMap.set(catId, { id: catId, label: cat, type: 'CLUSTER', relevance: 0.8 });
          links.push({ source: asset.id, target: catId, relationship: "CATEGORIZED_AS" });
+         // #4: Merge entity nodes from local graphData (client-side processing path)
          if (asset.graphData?.nodes) {
              asset.graphData.nodes.forEach(node => {
                  const entityId = `ENT_${node.label.replace(/\s+/g, '_').toUpperCase()}`;
                  if (!entityNodesMap.has(entityId)) entityNodesMap.set(entityId, { ...node, id: entityId });
                  links.push({ source: asset.id, target: entityId, relationship: "CONTAINS" });
              });
+         }
+         // #4: Merge richer graph data from STRUCTURED_KNOWLEDGE_GRAPH (server-side processing path)
+         // This is the JSON blob written by the edge function with multi-hop entity nodes.
+         const skg = asset.sqlRecord?.STRUCTURED_KNOWLEDGE_GRAPH as any;
+         if (skg?.nodes) {
+             (skg.nodes as any[]).forEach((node: any) => {
+                 const nodeId = `SKG_${(node.id || node.label || '').replace(/\s+/g, '_').toUpperCase()}`;
+                 if (!entityNodesMap.has(nodeId)) {
+                     entityNodesMap.set(nodeId, {
+                         id: nodeId,
+                         label: node.label || node.id || 'Unknown',
+                         type: (node.type as any) || 'CONCEPT',
+                         relevance: node.relevance ?? 0.75,
+                     });
+                 }
+                 links.push({ source: asset.id, target: nodeId, relationship: "STRUCTURED_ENTITY" });
+             });
+             if (skg.links) {
+                 (skg.links as any[]).forEach((link: any) => {
+                     const sourceId = `SKG_${(link.source || '').replace(/\s+/g, '_').toUpperCase()}`;
+                     const targetId = `SKG_${(link.target || '').replace(/\s+/g, '_').toUpperCase()}`;
+                     if (entityNodesMap.has(sourceId) && entityNodesMap.has(targetId)) {
+                         links.push({ source: sourceId, target: targetId, relationship: link.relationship || "RELATED" });
+                     }
+                 });
+             }
          }
       });
       return { nodes: [...docNodes, ...Array.from(entityNodesMap.values())], links };
@@ -2344,6 +2436,35 @@ export default function App() {
   return (
     <FilterProvider initialAssets={assets} initialGraphData={globalGraphData}>
     <div className="flex h-[100dvh] w-full bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30 relative" style={{ maxWidth: '100vw', overflowX: 'hidden' }}>
+      
+      {/* #11: SW update notification — non-blocking, user-controlled */}
+      {swUpdateAvailable && (
+        <div className="fixed top-0 left-0 right-0 z-[100] bg-primary-700 text-white text-xs flex items-center justify-between px-4 py-2" role="alert">
+          <span>A new version of GeoGraph is available.</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                navigator.serviceWorker.ready.then(reg => {
+                  reg.waiting?.postMessage({ type: 'SKIP_WAITING' });
+                });
+                setTimeout(() => window.location.reload(), 500);
+              }}
+              className="px-3 py-1 bg-white text-primary-700 rounded font-bold text-xs hover:bg-primary-100"
+            >Update Now</button>
+            <button onClick={() => setSwUpdateAvailable(false)} className="text-primary-200 hover:text-white" aria-label="Dismiss"><X size={14} /></button>
+          </div>
+        </div>
+      )}
+
+      {/* #12: Offline state banner */}
+      {!isOnline && (
+        <div className="fixed top-0 left-0 right-0 z-[99] bg-amber-800/90 backdrop-blur-sm text-amber-100 text-xs flex items-center gap-2 px-4 py-2" role="status">
+          <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+          Offline — {localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length} queued
+          &nbsp;capture{localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length !== 1 ? 's' : ''}{' '}
+          will upload automatically when connection is restored.
+        </div>
+      )}
       
       {/* Sidebar - Desktop */}
       <div className="hidden lg:flex w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex-col">
@@ -2986,6 +3107,18 @@ export default function App() {
           )}
 
           {activeTab === 'database' && (
+             <ErrorBoundary
+               fallback={
+                 <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-400">
+                   <AlertCircle size={32} className="text-rose-500" />
+                   <p className="text-sm">The database view encountered an error.</p>
+                   <button
+                     onClick={() => { setCurrentPage(1); setDbViewMode('DRILLDOWN'); setSelectedGroupKey(null); }}
+                     className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-xs rounded-lg"
+                   >Reset View</button>
+                 </div>
+               }
+             >
              <div className="h-full flex flex-col gap-4">
                {/* Processing Queue Status Banner for Master View */}
                {user?.id && isGlobalView && (
@@ -3129,7 +3262,7 @@ export default function App() {
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{asset.id.substring(0,8)}</td>
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[120px] sm:max-w-[200px] truncate">{rec?.DOCUMENT_TITLE || 'Processing...'}</td>
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-blue-400 border-r border-slate-800 whitespace-nowrap">{rec?.SOURCE_COLLECTION || 'Pending'}</td>
-                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px] hidden md:table-cell">{rec?.ENTITIES_EXTRACTED.slice(0, 3).join(', ') || '...'}</td>
+                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px] hidden md:table-cell">{(rec?.ENTITIES_EXTRACTED ?? []).slice(0, 3).join(', ') || '...'}</td>
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-emerald-400 border-r border-slate-800 hidden md:table-cell">{rec?.LOCAL_GIS_ZONE || '...'}</td>
                                        <td className="px-4 py-3 text-center border-r border-slate-800">
                                          <button
@@ -3166,6 +3299,7 @@ export default function App() {
                  </div>
                )}
              </div>
+          </ErrorBoundary>
           )}
 
           {activeTab === 'batch' && (

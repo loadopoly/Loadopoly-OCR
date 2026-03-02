@@ -258,7 +258,7 @@ This is a 3-day sprint once I have an engineer onboarded."
 - Philosophical difference → they won't copy this
 
 **3. Speed & Focus**:
-- We move fast (v2.11.4 with bi-weekly releases)
+- We move fast (v2.12.0 with bi-weekly releases)
 - We serve a niche (archivists, legal, researchers) they ignore
 - By the time they notice, we'll have 10K users and network effects
 
@@ -278,13 +278,13 @@ This is a 3-day sprint once I have an engineer onboarded."
 **A**: "Fair question. Here's why I can execute:
 
 **1. Technical Track Record**:
-- Built this entire platform solo (50K+ LOC, 15+ major features)
-- v2.11.4 with regular bi-weekly releases (latest: Feb 25, 2026)
+- Built this entire platform solo (53K+ LOC, 15+ major features)
+- v2.12.0 with regular bi-weekly releases (latest: Mar 2, 2026)
 - Production deployment (Vercel + Supabase) working today
 
 **2. Rapid Iteration**:
 - CHANGELOG.md shows 262+ commits with semantic versioning
-- Recent release: v2.11.4 — download resilience fallbacks, mobile PWA nav, QA debug tools
+- Recent release: v2.12.0 — Adventure Mode AR Walk, structured JSONB population, PWA hardening
 - I ship fast and fix fast
 
 **3. Post-Funding Plan**:
@@ -566,7 +566,7 @@ This is a 3-day sprint once I have an engineer onboarded."
 - **Clear differentiation** (structured data ownership vs. flat text)
 - **Scalable architecture** (local-first + optional cloud)
 - **Strong documentation** (60KB+ of docs, audit report)
-- **Fast iteration** (v2.11.4, bi-weekly releases)
+- **Fast iteration** (v2.12.0, bi-weekly releases)
 - **Clear use of funds** (hiring, beta, validation - not R&D)
 - **Founder commitment** (2 years of solo work, deep technical knowledge)
 - **Market timing** (privacy regulations, AI trust, Web3 adoption)

@@ -489,6 +489,8 @@ async function saveAsset(
     KEYWORDS_TAGS: result.keywords,
     NLP_NODE_CATEGORIZATION: result.graphData.nodes[0]?.type || 'DOCUMENT',
     NODE_COUNT: result.graphData.nodes.length,
+    // #6: TOKEN_COUNT — approximate from word count (1 token ≈ 0.75 words)
+    TOKEN_COUNT: Math.round((result.ocrText.trim().split(/\s+/).filter((w: string) => w.length > 0).length) / 0.75),
     CONFIDENCE_SCORE: result.confidence,
     PROCESSING_STATUS: 'MINTED',
     SCAN_TYPE: job.scan_type,
@@ -501,6 +503,40 @@ async function saveAsset(
       links: result.graphData.links,
       generatedAt: new Date().toISOString(),
     },
+    // #7: STRUCTURED_* JSONB fields — set based on what was successfully extracted.
+    // These gate the "Fully Structured" count in Curator Mode.
+    STRUCTURED_CONTENT: result.ocrText.trim().length > 0 ? {
+      detected: true,
+      wordCount: result.ocrText.trim().split(/\s+/).filter((w: string) => w.length > 0).length,
+      paragraphCount: result.ocrText.split(/\n{2,}/).filter((p: string) => p.length > 0).length,
+    } : null,
+    STRUCTURED_TEMPORAL: result.graphData.nodes.some((n: any) => n.type === 'DATE' || n.type === 'TIME') ? {
+      detected: true,
+      temporalEntities: result.entities.filter((e: string) =>
+        /\b(19|20)\d{2}\b|\bjanuary|february|march|april|may|june|july|august|september|october|november|december\b/i.test(e)
+      ),
+    } : null,
+    STRUCTURED_SPATIAL: (result.gisMetadata?.zoneType && result.gisMetadata.zoneType !== 'UNKNOWN') ? {
+      detected: true,
+      zone: result.gisMetadata.zoneType,
+      coordinates: result.gisMetadata.coordinates || null,
+      deviceLat: job.latitude || null,
+      deviceLng: job.longitude || null,
+    } : null,
+    STRUCTURED_PROVENANCE: {
+      recorded: true,
+      capturedAt: new Date().toISOString(),
+      scanType: job.scan_type,
+      sourceAssetId: job.asset_id,
+      processingVersion: '1.0',
+    },
+    STRUCTURED_DISCOVERY: result.entities.length > 0 || result.keywords.length > 0 ? {
+      recorded: true,
+      entityCount: result.entities.length,
+      keywordCount: result.keywords.length,
+      nodeCount: result.graphData.nodes.length,
+      linkCount: result.graphData.links.length,
+    } : null,
   };
 
   // Check if asset already exists

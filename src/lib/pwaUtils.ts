@@ -387,6 +387,8 @@ export function initPWA(): void {
   navigator.serviceWorker?.addEventListener('message', (event) => {
     if (event.data?.type === 'SYNC_STARTED') {
       logger.info('Background sync started');
+      // Dispatch custom event so App.tsx can trigger the processing queue
+      window.dispatchEvent(new CustomEvent('geograph-sync-requested'));
     }
     if (event.data?.type === 'NOTIFICATION_CLICKED') {
       logger.info('Notification clicked', { module: 'pwa', data: event.data.data });
