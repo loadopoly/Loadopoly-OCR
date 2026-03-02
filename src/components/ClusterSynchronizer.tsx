@@ -49,6 +49,7 @@ import {
 import { useModuleContext } from '../contexts/ModuleContext';
 import { useFilterContext, FilterDimension } from '../contexts/FilterContext';
 import { DigitalAsset, HistoricalDocumentMetadata } from '../types';
+import { saveAsset } from '../lib/indexeddb';
 
 // ============================================
 // Types
@@ -796,7 +797,45 @@ export function ClusterSynchronizer({
           next.set(selectedAsset.id, updated);
           return next;
         });
-        
+
+        // Persist classification to IndexedDB so results survive page reloads.
+        // Map cluster result back to the asset's sqlRecord STRUCTURED_* fields.
+        const clusterFieldMap: Record<string, string> = {
+          TEMPORAL: 'STRUCTURED_TEMPORAL',
+          SPATIAL: 'STRUCTURED_SPATIAL',
+          CONTENT: 'STRUCTURED_CONTENT',
+          KNOWLEDGE_GRAPH: 'STRUCTURED_KNOWLEDGE_GRAPH',
+          PROVENANCE: 'STRUCTURED_PROVENANCE',
+          DISCOVERY: 'STRUCTURED_DISCOVERY',
+        };
+        const dbField = clusterFieldMap[clusterType];
+        if (dbField && selectedAsset.sqlRecord) {
+          const persistedAsset = {
+            ...selectedAsset,
+            sqlRecord: {
+              ...selectedAsset.sqlRecord,
+              [dbField]: structuredValue,
+            },
+          };
+          saveAsset(persistedAsset).catch(e => console.warn('Failed to persist classification to IndexedDB', e));
+          // Notify parent so the in-memory asset list is also updated
+          onClassificationComplete?.([
+            {
+              assetId: selectedAsset.id,
+              structuredTemporal: clusterType === 'TEMPORAL' ? (structuredValue as any) : null,
+              structuredSpatial: clusterType === 'SPATIAL' ? (structuredValue as any) : null,
+              structuredContent: clusterType === 'CONTENT' ? (structuredValue as any) : null,
+              structuredKnowledgeGraph: clusterType === 'KNOWLEDGE_GRAPH' ? (structuredValue as any) : null,
+              structuredProvenance: clusterType === 'PROVENANCE' ? (structuredValue as any) : null,
+              structuredDiscovery: clusterType === 'DISCOVERY' ? (structuredValue as any) : null,
+              llmUsed: activeLLM.name,
+              classificationDate: new Date().toISOString(),
+              classificationVersion: CLASSIFICATION_VERSION,
+              overallConfidence: structuredValue.confidence ?? 0,
+            },
+          ]);
+        }
+
         // Learn mappings from this classification
         const config = CLUSTER_CONFIG[clusterType];
         for (const dim of config.dimensions) {

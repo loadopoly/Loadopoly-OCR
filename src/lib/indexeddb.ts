@@ -51,17 +51,14 @@ export const loadAssets = async (): Promise<DigitalAsset[]> => {
     const assets = await db.assets.toArray();
     // Revive ObjectURLs from Blobs
     return assets.map(asset => {
-        // If we have the raw blob, always prefer regenerating a fresh ObjectURL
-        // unless we have a remote http/https URL which might be the permanent cloud link.
+        // If we have the raw blob, always regenerate a fresh ObjectURL.
+        // The blob is the reliable local source of truth — remote URLs can
+        // fail due to CORS / auth / storage-bucket mismatches.
         if (asset.imageBlob) {
-            const isRemote = asset.imageUrl && asset.imageUrl.startsWith('http') && !asset.imageUrl.startsWith('http://localhost') && !asset.imageUrl.includes('blob:');
-            
-            if (!isRemote) {
-                return {
-                    ...asset,
-                    imageUrl: URL.createObjectURL(asset.imageBlob)
-                };
-            }
+            return {
+                ...asset,
+                imageUrl: URL.createObjectURL(asset.imageBlob)
+            };
         }
         // #14: If imageUrl is a blob: URL but we have no backing blob (e.g. after
         // a page reload for server-processed assets whose blob was GC'd), the URL
