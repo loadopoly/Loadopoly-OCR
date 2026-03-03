@@ -258,7 +258,7 @@ async function handleApiRequest(request) {
     }
     throw error;
   }
-});
+}
 
 // Background Sync for offline data
 self.addEventListener('sync', (event) => {

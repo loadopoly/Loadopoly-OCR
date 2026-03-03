@@ -1061,7 +1061,14 @@ export default function App() {
     setScannerConnected(!!localStorage.getItem('geograph-scanner-url'));
 
     const storedPurchases = localStorage.getItem('geograph-owned-assets');
-    if (storedPurchases) setOwnedAssetIds(new Set(JSON.parse(storedPurchases)));
+    if (storedPurchases) {
+      try {
+        const parsed = JSON.parse(storedPurchases);
+        setOwnedAssetIds(new Set(Array.isArray(parsed) ? parsed : []));
+      } catch {
+        setOwnedAssetIds(new Set());
+      }
+    }
     
     const handleNewFile = (event: CustomEvent<File>) => ingestFile(event.detail, "Auto-Sync");
     window.addEventListener('geograph-new-file', handleNewFile as any);
@@ -2360,15 +2367,18 @@ export default function App() {
     
   }, [isOnline, selectedScanType, user, debugLogger, startUploadTracking, completeUploadTracking]);
 
+  const asText = (value: unknown, fallback = ''): string =>
+    typeof value === 'string' ? value : fallback;
+
   // MEMOIZED: Prevent expensive aggregation on every render (e.g. tab switch)
   const aggregatedGroups = useMemo(() => {
     const groups: Record<string, DigitalAsset[]> = {};
     assets.forEach(asset => {
         let key = 'Unknown';
-        if (groupBy === 'SOURCE') key = asset.sqlRecord?.SOURCE_COLLECTION || 'Unknown';
-        if (groupBy === 'ZONE') key = asset.sqlRecord?.LOCAL_GIS_ZONE || 'Unknown';
-        if (groupBy === 'CATEGORY') key = asset.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized';
-        if (groupBy === 'RIGHTS') key = asset.sqlRecord?.RIGHTS_STATEMENT || 'Unknown';
+        if (groupBy === 'SOURCE') key = asText(asset.sqlRecord?.SOURCE_COLLECTION, 'Unknown') || 'Unknown';
+        if (groupBy === 'ZONE') key = asText(asset.sqlRecord?.LOCAL_GIS_ZONE, 'Unknown') || 'Unknown';
+        if (groupBy === 'CATEGORY') key = asText(asset.sqlRecord?.NLP_NODE_CATEGORIZATION, 'Uncategorized') || 'Uncategorized';
+        if (groupBy === 'RIGHTS') key = asText(asset.sqlRecord?.RIGHTS_STATEMENT, 'Unknown') || 'Unknown';
         if (!groups[key]) groups[key] = [];
         groups[key].push(asset);
     });
@@ -2389,25 +2399,29 @@ export default function App() {
       const filteredAssets = assets.filter(asset => {
           const r = asset.sqlRecord;
           if (!r) return false;
-          if (graphFilters.category !== 'all' && r.NLP_NODE_CATEGORIZATION !== graphFilters.category) return false;
-          const eraKey = r.NLP_DERIVED_TIMESTAMP?.match(/\d{4}/)?.[0]?.slice(0,3) + '0s' || 'Unknown';
+        const category = asText(r.NLP_NODE_CATEGORIZATION, '');
+        if (graphFilters.category !== 'all' && category !== graphFilters.category) return false;
+        const derivedTimestamp = asText(r.NLP_DERIVED_TIMESTAMP, '');
+        const eraKey = derivedTimestamp.match(/\d{4}/)?.[0]?.slice(0,3) + '0s' || 'Unknown';
           if (graphFilters.era !== 'all' && eraKey !== graphFilters.era) return false;
-          const isContested = r.ACCESS_RESTRICTIONS || /controversy|removed|relocated/i.test(r.DOCUMENT_DESCRIPTION);
+        const documentDescription = asText(r.DOCUMENT_DESCRIPTION, '');
+        const isContested = r.ACCESS_RESTRICTIONS || /controversy|removed|relocated/i.test(documentDescription);
           if (graphFilters.contested && !isContested) return false;
           return true;
       });
-      const docNodes = filteredAssets.map(a => ({ id: a.id, label: a.sqlRecord?.DOCUMENT_TITLE || 'Untitled', type: 'DOCUMENT' as const, relevance: 1.0, license: a.sqlRecord?.DATA_LICENSE }));
+        const docNodes = filteredAssets.map(a => ({ id: a.id, label: asText(a.sqlRecord?.DOCUMENT_TITLE, 'Untitled') || 'Untitled', type: 'DOCUMENT' as const, relevance: 1.0, license: a.sqlRecord?.DATA_LICENSE }));
       const entityNodesMap = new Map<string, GraphNode>();
       const links: any[] = [];
       filteredAssets.forEach(asset => {
-         const cat = asset.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized';
+        const cat = asText(asset.sqlRecord?.NLP_NODE_CATEGORIZATION, 'Uncategorized') || 'Uncategorized';
          const catId = `CAT_${cat.replace(/\s+/g, '_')}`;
          if (!entityNodesMap.has(catId)) entityNodesMap.set(catId, { id: catId, label: cat, type: 'CLUSTER', relevance: 0.8 });
          links.push({ source: asset.id, target: catId, relationship: "CATEGORIZED_AS" });
          // #4: Merge entity nodes from local graphData (client-side processing path)
-         if (asset.graphData?.nodes) {
-             asset.graphData.nodes.forEach(node => {
-                 const entityId = `ENT_${node.label.replace(/\s+/g, '_').toUpperCase()}`;
+         if (Array.isArray(asset.graphData?.nodes)) {
+           asset.graphData.nodes.forEach(node => {
+             const safeLabel = asText((node as any)?.label, 'UNKNOWN') || 'UNKNOWN';
+             const entityId = `ENT_${safeLabel.replace(/\s+/g, '_').toUpperCase()}`;
                  if (!entityNodesMap.has(entityId)) entityNodesMap.set(entityId, { ...node, id: entityId });
                  links.push({ source: asset.id, target: entityId, relationship: "CONTAINS" });
              });
@@ -2415,23 +2429,24 @@ export default function App() {
          // #4: Merge richer graph data from STRUCTURED_KNOWLEDGE_GRAPH (server-side processing path)
          // This is the JSON blob written by the edge function with multi-hop entity nodes.
          const skg = asset.sqlRecord?.STRUCTURED_KNOWLEDGE_GRAPH as any;
-         if (skg?.nodes) {
+         if (Array.isArray(skg?.nodes)) {
              (skg.nodes as any[]).forEach((node: any) => {
-                 const nodeId = `SKG_${(node.id || node.label || '').replace(/\s+/g, '_').toUpperCase()}`;
+             const rawNodeKey = asText(node?.id, '') || asText(node?.label, '');
+             const nodeId = `SKG_${rawNodeKey.replace(/\s+/g, '_').toUpperCase()}`;
                  if (!entityNodesMap.has(nodeId)) {
                      entityNodesMap.set(nodeId, {
                          id: nodeId,
-                         label: node.label || node.id || 'Unknown',
+                 label: asText(node?.label, asText(node?.id, 'Unknown')) || 'Unknown',
                          type: (node.type as any) || 'CONCEPT',
                          relevance: node.relevance ?? 0.75,
                      });
                  }
                  links.push({ source: asset.id, target: nodeId, relationship: "STRUCTURED_ENTITY" });
              });
-             if (skg.links) {
+           if (Array.isArray(skg.links)) {
                  (skg.links as any[]).forEach((link: any) => {
-                     const sourceId = `SKG_${(link.source || '').replace(/\s+/g, '_').toUpperCase()}`;
-                     const targetId = `SKG_${(link.target || '').replace(/\s+/g, '_').toUpperCase()}`;
+               const sourceId = `SKG_${asText(link?.source, '').replace(/\s+/g, '_').toUpperCase()}`;
+               const targetId = `SKG_${asText(link?.target, '').replace(/\s+/g, '_').toUpperCase()}`;
                      if (entityNodesMap.has(sourceId) && entityNodesMap.has(targetId)) {
                          links.push({ source: sourceId, target: targetId, relationship: link.relationship || "RELATED" });
                      }
@@ -3281,7 +3296,7 @@ export default function App() {
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{asset.id.substring(0,8)}</td>
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[120px] sm:max-w-[200px] truncate">{rec?.DOCUMENT_TITLE || 'Processing...'}</td>
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-blue-400 border-r border-slate-800 whitespace-nowrap">{rec?.SOURCE_COLLECTION || 'Pending'}</td>
-                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px] hidden md:table-cell">{(rec?.ENTITIES_EXTRACTED ?? []).slice(0, 3).join(', ') || '...'}</td>
+                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px] hidden md:table-cell">{(Array.isArray(rec?.ENTITIES_EXTRACTED) ? rec.ENTITIES_EXTRACTED : []).slice(0, 3).join(', ') || '...'}</td>
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-emerald-400 border-r border-slate-800 hidden md:table-cell">{rec?.LOCAL_GIS_ZONE || '...'}</td>
                                        <td className="px-4 py-3 text-center border-r border-slate-800">
                                          <button
