@@ -2956,7 +2956,7 @@ export default function App() {
                     <div className="space-y-4">
                         {assets.slice(0, 3).map(asset => (
                             <div key={asset.id} className="flex items-start gap-4 p-3 rounded bg-slate-950/50 border border-slate-800 group relative">
-                                <img src={asset.imageUrl} className="w-16 h-16 object-cover rounded" alt="thumb" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                <img src={asset.imageUrl} className="w-16 h-16 object-cover rounded" alt="thumb" onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>'; }} />
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start">
                                         <h4 className="text-sm font-bold text-slate-200">{asset.gisMetadata?.zoneType || 'Processing...'}</h4>
@@ -3473,7 +3473,7 @@ export default function App() {
                                 />
                             </div>
                             <div className="relative h-48 bg-slate-950 overflow-hidden">
-                                <img src={item.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" onError={(e) => { (e.target as HTMLImageElement).src = ''; (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                <img src={item.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" onError={(e) => { (e.target as HTMLImageElement).src = ''; (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>'; }} />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
                                     <button 
                                         onClick={() => setEditingAsset(item)}
@@ -3733,7 +3733,7 @@ export default function App() {
                         .map(asset => (
                           <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
                             <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800">
-                              <img src={asset.imageUrl} alt="Preview" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded border border-slate-700" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                              <img src={asset.imageUrl} alt="Preview" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded border border-slate-700" onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>'; }} />
                             </td>
                             <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800">{asset.id.substring(0, 8)}</td>
                             <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 hidden sm:table-cell">{new Date(asset.timestamp).toLocaleString()}</td>
@@ -3833,17 +3833,14 @@ export default function App() {
         )}
 
         {showProcessingPanel && createPortal((
-          <div style={{ position: 'fixed', inset: 0, zIndex: 60, pointerEvents: 'none' }}>
+          <div className="fixed inset-0 z-[60] pointer-events-none sm:p-4">
             <div
-              className="bg-slate-900 border border-slate-800 rounded-xl shadow-2xl flex flex-col"
+              className="bg-slate-900 border border-slate-800 sm:rounded-xl shadow-2xl flex flex-col pointer-events-auto absolute sm:relative sm:ml-auto w-full sm:w-[450px]"
               style={{
-                position: 'absolute',
                 top: 56,
-                left: 8,
-                right: 8,
-                bottom: 80,
-                maxHeight: 'calc(100dvh - 64px)',
-                pointerEvents: 'auto',
+                right: 0,
+                bottom: 'env(safe-area-inset-bottom, 80px)',
+                maxHeight: 'calc(100dvh - 56px)',
               }}
             >
                 <div className="p-3 sm:p-4 border-b border-slate-800 flex items-center justify-between w-full box-border">
@@ -3946,7 +3943,7 @@ export default function App() {
                             .filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING)
                             .map(asset => (
                             <div key={asset.id} className="p-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center gap-3 group">
-                                <img src={asset.imageUrl} className="w-10 h-10 object-cover rounded border border-slate-700" alt="thumb" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                                <img src={asset.imageUrl} className="w-10 h-10 object-cover rounded border border-slate-700" alt="thumb" onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>'; }} />
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center mb-1">
                                         <span className="text-[10px] font-mono text-slate-400 truncate">{asset.id.slice(0,8)}</span>
@@ -4228,14 +4225,14 @@ export default function App() {
             results.forEach(r => {
               setLocalAssets(prev => prev.map(a => {
                 if (a.id !== r.assetId) return a;
-                const updatedRecord = { ...a.sqlRecord! };
+                const updatedRecord = { ...(a.sqlRecord || {}) } as any;
                 if (r.structuredTemporal) (updatedRecord as any).STRUCTURED_TEMPORAL = r.structuredTemporal;
                 if (r.structuredSpatial) (updatedRecord as any).STRUCTURED_SPATIAL = r.structuredSpatial;
                 if (r.structuredContent) (updatedRecord as any).STRUCTURED_CONTENT = r.structuredContent;
                 if (r.structuredKnowledgeGraph) (updatedRecord as any).STRUCTURED_KNOWLEDGE_GRAPH = r.structuredKnowledgeGraph;
                 if (r.structuredProvenance) (updatedRecord as any).STRUCTURED_PROVENANCE = r.structuredProvenance;
                 if (r.structuredDiscovery) (updatedRecord as any).STRUCTURED_DISCOVERY = r.structuredDiscovery;
-                return { ...a, sqlRecord: updatedRecord };
+                return { ...a, sqlRecord: updatedRecord as any };
               }));
             });
           }}

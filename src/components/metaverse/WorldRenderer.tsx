@@ -1213,6 +1213,7 @@ export default function WorldRenderer({
               onAssetView={onAssetView}
               isExpanded={isPanelExpanded}
               onToggleExpand={() => setIsPanelExpanded(!isPanelExpanded)}
+              onStartAdventure={handleStartAdventure}
             />
           ) : (
             <KnowledgeExplorer
