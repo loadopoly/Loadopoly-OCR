@@ -305,7 +305,7 @@ function DimensionFilter({
     }
     
     // String or array types - show pill buttons
-    const displayValues = isExpanded ? constrainedValues : constrainedValues.slice(0, 6);
+    const displayValues = isExpanded ? constrainedValues : constrainedValues?.slice(0, 6);
     const hasMore = constrainedValues.length > 6;
     
     return (
@@ -315,7 +315,7 @@ function DimensionFilter({
             const isSelected = currentValue?.value === value ||
               (Array.isArray(currentValue?.value) && currentValue.value.includes(value));
             const displayValue = String(value).length > 20 
-              ? String(value).slice(0, 18) + '...' 
+              ? String(value)?.slice(0, 18) + '...' 
               : String(value);
             
             return (

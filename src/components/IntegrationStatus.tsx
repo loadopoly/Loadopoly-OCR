@@ -99,7 +99,7 @@ export function IntegrationStatusItem({ integration, compact }: { integration: I
               />
             </div>
             <span className={`text-xs ${config.color}`}>
-              {integration.state.charAt(0).toUpperCase() + integration.state.slice(1)}
+              {integration.state.charAt(0).toUpperCase() + integration.state?.slice(1)}
             </span>
           </div>
         </div>
@@ -150,7 +150,7 @@ export default function IntegrationStatus({
   if (compact) {
     return (
       <div className="flex items-center gap-1">
-        {integrations.slice(0, 4).map((integration) => (
+        {integrations?.slice(0, 4).map((integration) => (
           <IntegrationStatusItem key={integration.id} integration={integration} compact />
         ))}
         {integrations.length > 4 && (

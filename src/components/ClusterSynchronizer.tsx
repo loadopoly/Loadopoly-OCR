@@ -239,7 +239,7 @@ function buildClassificationPrompt(
   // Include learned mappings for consistency
   const relevantMappings = existingMappings
     .filter(m => m.clusterType === clusterType)
-    .slice(0, 10)
+    ?.slice(0, 10)
     .map(m => `${m.rawValue} → ${m.structuredValue} (${m.mappingType}, conf: ${m.confidence.toFixed(2)})`)
     .join('\n');
 
@@ -771,7 +771,7 @@ export function ClusterSynchronizer({
             overallConfidence: 0,
           };
           
-          const clusterKey = `structured${clusterType.charAt(0) + clusterType.slice(1).toLowerCase().replace(/_/g, '')}` as keyof ClassificationResult;
+          const clusterKey = `structured${clusterType.charAt(0) + clusterType?.slice(1).toLowerCase().replace(/_/g, '')}` as keyof ClassificationResult;
           const updated = {
             ...existing,
             [clusterKey]: structuredValue,
@@ -1092,7 +1092,7 @@ export function ClusterSynchronizer({
               Select Asset ({targetAssets.length})
             </div>
             <div className="space-y-1">
-              {targetAssets.slice(0, 50).map(asset => {
+              {targetAssets?.slice(0, 50).map(asset => {
                 const hasClassification = classificationResults.has(asset.id);
                 const isSelected = selectedAsset?.id === asset.id;
                 
@@ -1110,7 +1110,7 @@ export function ClusterSynchronizer({
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-slate-300 truncate flex-1">
-                        {asset.sqlRecord?.DOCUMENT_TITLE || asset.id.slice(0, 12)}
+                        {asset.sqlRecord?.DOCUMENT_TITLE || asset.id?.slice(0, 12)}
                       </span>
                       {hasClassification && (
                         <CheckCircle size={12} className="text-emerald-400 flex-shrink-0" />
@@ -1173,7 +1173,7 @@ export function ClusterSynchronizer({
               {/* Cluster Cards */}
               <div className="grid gap-3">
                 {(Object.keys(CLUSTER_CONFIG) as ClusterType[]).map(clusterType => {
-                  const clusterKey = `structured${clusterType.charAt(0) + clusterType.slice(1).toLowerCase().replace(/_/g, '')}` as keyof ClassificationResult;
+                  const clusterKey = `structured${clusterType.charAt(0) + clusterType?.slice(1).toLowerCase().replace(/_/g, '')}` as keyof ClassificationResult;
                   const structuredValue = currentResult?.[clusterKey] as StructuredClusterValue | null;
                   
                   return (
@@ -1209,7 +1209,7 @@ export function ClusterSynchronizer({
             </div>
             
             <div className="space-y-2">
-              {learnedMappings.slice(-20).reverse().map((mapping, idx) => (
+              {learnedMappings?.slice(-20).reverse().map((mapping, idx) => (
                 <div
                   key={idx}
                   className="p-2 rounded bg-slate-800/50 text-xs"

@@ -150,7 +150,7 @@ function SuggestionCard({
         
         {/* Match reasons */}
         <div className="flex flex-wrap gap-1 mt-2">
-          {cluster.matchReasons.slice(0, 3).map((reason, i) => (
+          {cluster.matchReasons?.slice(0, 3).map((reason, i) => (
             <span key={i} className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">
               {reason}
             </span>
@@ -165,7 +165,7 @@ function SuggestionCard({
       
       {/* Preview thumbnails */}
       <div className="p-3 flex gap-2 overflow-x-auto">
-        {allAssets.slice(0, 5).map((asset) => (
+        {allAssets?.slice(0, 5).map((asset) => (
           <div 
             key={asset.id}
             className="w-16 h-16 rounded overflow-hidden bg-slate-700 flex-shrink-0"
@@ -204,8 +204,8 @@ function SuggestionCard({
           <div className="text-sm text-slate-300 space-y-1">
             <p><span className="text-slate-500">Title:</span> {cluster.consolidatedMetadata.title}</p>
             <p><span className="text-slate-500">Category:</span> {cluster.consolidatedMetadata.category}</p>
-            <p><span className="text-slate-500">Entities:</span> {cluster.consolidatedMetadata.entities.slice(0, 5).join(', ')}</p>
-            <p><span className="text-slate-500">Keywords:</span> {cluster.consolidatedMetadata.keywords.slice(0, 5).join(', ')}</p>
+            <p><span className="text-slate-500">Entities:</span> {cluster.consolidatedMetadata.entities?.slice(0, 5).join(', ')}</p>
+            <p><span className="text-slate-500">Keywords:</span> {cluster.consolidatedMetadata.keywords?.slice(0, 5).join(', ')}</p>
           </div>
         </div>
       )}
