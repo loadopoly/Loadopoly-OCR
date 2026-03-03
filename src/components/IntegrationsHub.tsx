@@ -462,7 +462,7 @@ export default function IntegrationsHub({ isOpen, onClose }: IntegrationsHubProp
                 <div className="space-y-2 text-xs">
                   <div className="flex justify-between">
                     <span className="text-slate-400">Browser</span>
-                    <span className="text-white">{navigator.userAgent.split(' ').slice(-2).join(' ')}</span>
+                    <span className="text-white">{navigator.userAgent.split(' ')?.slice(-2).join(' ')}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-slate-400">Online</span>

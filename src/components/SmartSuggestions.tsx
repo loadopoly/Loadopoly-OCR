@@ -569,7 +569,7 @@ export default function SmartSuggestions({
 
     // Filter dismissed suggestions
     const visibleSuggestions = suggestions.filter(s => !dismissedSuggestions.includes(s.id));
-    const displayedSuggestions = showAllSuggestions ? visibleSuggestions : visibleSuggestions.slice(0, 3);
+    const displayedSuggestions = showAllSuggestions ? visibleSuggestions : visibleSuggestions?.slice(0, 3);
 
     return (
         <div className="mb-8">

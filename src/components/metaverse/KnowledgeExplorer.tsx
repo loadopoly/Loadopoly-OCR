@@ -197,7 +197,7 @@ function findShortestPaths(
 
   return paths
     .sort((a, b) => b.significance - a.significance)
-    .slice(0, maxPaths);
+    ?.slice(0, maxPaths);
 }
 
 function identifyClusters(node: GraphNode, graphData: GraphData): ClusterInfo[] {
@@ -347,7 +347,7 @@ const PathVisualization: React.FC<{
               border: `1px solid ${getTypeColor(node.type)}40`
             }}
           >
-            {node.label.length > 20 ? node.label.slice(0, 20) + '...' : node.label}
+            {node.label.length > 20 ? node.label?.slice(0, 20) + '...' : node.label}
           </button>
           {idx < path.hops.length - 1 && (
             <div className="flex items-center text-slate-500">
@@ -378,13 +378,13 @@ const ClusterVisualization: React.FC<{
     </div>
     <p className="text-xs text-slate-400 mb-2">{cluster.theme}</p>
     <div className="flex flex-wrap gap-1">
-      {cluster.nodes.slice(0, 6).map(node => (
+      {cluster.nodes?.slice(0, 6).map(node => (
         <button
           key={node.id}
           onClick={() => onNodeClick(node)}
           className="px-2 py-1 rounded text-xs bg-slate-700/50 text-slate-300 hover:bg-slate-600/50 hover:text-white transition-colors"
         >
-          {node.label.length > 15 ? node.label.slice(0, 15) + '...' : node.label}
+          {node.label.length > 15 ? node.label?.slice(0, 15) + '...' : node.label}
         </button>
       ))}
       {cluster.nodes.length > 6 && (
@@ -447,7 +447,7 @@ export const KnowledgeExplorer: React.FC<KnowledgeExplorerProps> = ({
         )
       )
       .map(a => a.id)
-      .slice(0, 5);
+      ?.slice(0, 5);
 
     return {
       node: selectedNode,
@@ -461,7 +461,7 @@ export const KnowledgeExplorer: React.FC<KnowledgeExplorerProps> = ({
   // Handle node selection with history tracking
   const handleNodeClick = useCallback((node: GraphNode) => {
     setExplorationHistory(prev => {
-      const newHistory = [...prev, node].slice(-10); // Keep last 10
+      const newHistory = [...prev, node]?.slice(-10); // Keep last 10
       return newHistory;
     });
     onNodeSelect(node);
@@ -614,7 +614,7 @@ export const KnowledgeExplorer: React.FC<KnowledgeExplorerProps> = ({
             {filteredNodes.length} nodes {searchQuery && `matching "${searchQuery}"`}
           </div>
           <div className="space-y-1">
-            {filteredNodes.slice(0, 50).map(node => (
+            {filteredNodes?.slice(0, 50).map(node => (
               <button
                 key={node.id}
                 onClick={() => handleNodeClick(node)}
@@ -655,13 +655,13 @@ export const KnowledgeExplorer: React.FC<KnowledgeExplorerProps> = ({
               Recent Explorations
             </div>
             <div className="flex gap-1 flex-wrap">
-              {explorationHistory.slice(-5).map((node, idx) => (
+              {explorationHistory?.slice(-5).map((node, idx) => (
                 <button
                   key={`${node.id}-${idx}`}
                   onClick={() => handleNodeClick(node)}
                   className="px-2 py-1 text-xs bg-slate-800 text-slate-300 rounded hover:bg-slate-700 transition-colors"
                 >
-                  {node.label.length > 15 ? node.label.slice(0, 15) + '...' : node.label}
+                  {node.label.length > 15 ? node.label?.slice(0, 15) + '...' : node.label}
                 </button>
               ))}
             </div>
@@ -882,7 +882,7 @@ export const KnowledgeExplorer: React.FC<KnowledgeExplorerProps> = ({
                 onClick={() => {
                   const prev = explorationHistory[explorationHistory.length - 2];
                   if (prev) {
-                    setExplorationHistory(h => h.slice(0, -1));
+                    setExplorationHistory(h => h?.slice(0, -1));
                     onNodeSelect(prev);
                   }
                 }}
