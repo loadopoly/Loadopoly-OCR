@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.1] - 2026-03-03
+
+### Analysis Functions — Type Safety & Crash Guards
+- **`asText()` helper**: Introduced a lightweight `asText(value, fallback)` guard in `App.tsx` that coerces any non-string value to a safe fallback string, preventing runtime crashes when JSONB fields arrive as numbers, booleans, or null instead of strings.
+- **Graph data aggregation hardening**: All `buildGlobalGraphData` paths (category clustering, era bucketing, contested-content detection, node label extraction) now route through `asText()`, eliminating `TypeError: Cannot read properties of null` and `String.prototype.replace` crashes on malformed knowledge graph records.
+- **`STRUCTURED_KNOWLEDGE_GRAPH` node merge safety**: Array guards added (`Array.isArray(skg?.nodes)`, `Array.isArray(asset.graphData?.nodes)`) before iterating server-side and client-side graph node lists, preventing silent failures on empty or non-array payloads.
+- **Document title / entity label fallbacks**: `docNodes` and `entityNodesMap` entries now always receive a defined string label even when `DOCUMENT_TITLE`, `NLP_NODE_CATEGORIZATION`, or node `label` fields are missing.
+
+### localStorage Resilience
+- **`geograph-owned-assets` parse guard**: Wrapped `JSON.parse` in a try/catch; malformed stored data now resets asset ownership to an empty set rather than crashing the app on startup.
+- **Array validation**: Parsed owned-asset IDs are validated with `Array.isArray()` before constructing the `Set`, preventing a `Set(non-iterable)` TypeError.
+
+### Service Worker Fix
+- **`handleApiRequest` syntax fix**: Corrected a stray `});` → `}` closing the `handleApiRequest` function body, resolving a parse error that could prevent SW registration in strict environments.
+
+### Testing Infrastructure
+- **Playwright added**: `playwright` and `@playwright/test` added as dev dependencies (`^1.58.2`) enabling headless browser automation.
+- **Headless test suite**: Added `headless-test.cjs`, `headless-test-v2.cjs`, `headless-test-v3.cjs`, `test-navigation.cjs`, `test-db-interactive.cjs`, `test-mobile-db.cjs`, and `test-structured-db.cjs` for end-to-end browser, navigation, and database interaction testing.
+
 ## [2.12.0] - 2026-03-02
 
 ### Adventure Mode & AR Walk (WorldRenderer)
