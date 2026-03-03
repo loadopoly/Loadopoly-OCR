@@ -46,6 +46,7 @@ import {
 // ============================================
 
 interface StoryNarratorProps {
+  onStartAdventure?: () => void;
   graphData: GraphData;
   assets: DigitalAsset[];
   selectedNode: GraphNode | null;
@@ -310,6 +311,8 @@ export function StoryNarrator({
   onAssetView,
   isExpanded = false,
   onToggleExpand,
+  onStartAdventure,
+
 }: StoryNarratorProps) {
   // State
   const narrativeEngine = useMemo(() => createNarrativeEngine(graphData, assets), [graphData, assets]);
@@ -421,7 +424,7 @@ export function StoryNarrator({
           </p>
 
           <button
-            onClick={handleSuggestStart}
+            onClick={() => { handleSuggestStart(); onStartAdventure?.(); }}
             className="px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-500 hover:to-primary-600 rounded-xl font-semibold flex items-center gap-2 transition-all transform hover:scale-105 shadow-lg shadow-primary-500/25"
           >
             <Sparkles size={18} />
@@ -609,7 +612,7 @@ export function StoryNarrator({
             {/* Alternative actions */}
             <div className="flex gap-2 pt-2">
               <button
-                onClick={handleSuggestStart}
+                onClick={() => { handleSuggestStart(); onStartAdventure?.(); }}
                 className="flex-1 p-2 text-xs text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex items-center justify-center gap-1"
               >
                 <Sparkles size={12} />
@@ -636,7 +639,7 @@ export function StoryNarrator({
               Would you like to explore a new direction?
             </p>
             <button
-              onClick={handleSuggestStart}
+              onClick={() => { handleSuggestStart(); onStartAdventure?.(); }}
               className="px-4 py-2 bg-primary-600 hover:bg-primary-500 rounded-lg font-semibold text-sm transition-colors"
             >
               Find New Adventure

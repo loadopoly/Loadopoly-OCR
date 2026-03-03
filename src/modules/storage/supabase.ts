@@ -501,9 +501,10 @@ export class SupabaseStorage extends BaseStorage {
     try {
       const { error } = await supabase
         .from(this.tableName)
-        .select('count', { count: 'exact', head: true });
+        .select('ASSET_ID')
+        .limit(1);
 
-      return !error;
+      return !error || error.code === 'PGRST116'; // empty result is fine
     } catch {
       return false;
     }
