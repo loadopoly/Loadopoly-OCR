@@ -2370,6 +2370,11 @@ export default function App() {
   const asText = (value: unknown, fallback = ''): string =>
     typeof value === 'string' ? value : fallback;
 
+  const truncateText = (value: unknown, length: number): string => {
+    if (typeof value !== 'string') return '';
+    return value.slice(0, length);
+  };
+
   // MEMOIZED: Prevent expensive aggregation on every render (e.g. tab switch)
   const aggregatedGroups = useMemo(() => {
     const groups: Record<string, DigitalAsset[]> = {};
@@ -2833,7 +2838,7 @@ export default function App() {
                         <div key={asset.id} className="bg-slate-950 border border-slate-800 rounded-lg p-3">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="text-sm text-slate-200 truncate">{asset.sqlRecord?.DOCUMENT_TITLE || `Asset ${asset.id.slice(0, 8)}`}</p>
+                              <p className="text-sm text-slate-200 truncate">{asset.sqlRecord?.DOCUMENT_TITLE || `Asset ${truncateText(asset.id, 8)}`}</p>
                               <p className="text-[10px] text-slate-500">{downloadState?.status ? `Status: ${downloadState.status}` : 'Ready to download'}</p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -3202,7 +3207,7 @@ export default function App() {
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-[11px] text-blue-300">
                               Processing {dbProcessRun.processed}/{dbProcessRun.total}
-                              {dbProcessRun.currentAssetId ? ` • ${dbProcessRun.currentAssetId.slice(0, 8)}` : ''}
+                              {dbProcessRun.currentAssetId ? ` • ${truncateText(dbProcessRun.currentAssetId, 8)}` : ''}
                               {dbProcessRun.batchPending > 0 ? ` • batch ${dbProcessRun.batchPending}` : ''}
                             </p>
                             <span className="text-[10px] text-slate-500 uppercase">{dbProcessRun.step.replace('-', ' ')}</span>
@@ -3293,7 +3298,7 @@ export default function App() {
                                const rec = asset.sqlRecord;
                                return (
                                    <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
-                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{asset.id.substring(0,8)}</td>
+                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{truncateText(asset.id, 8)}</td>
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[120px] sm:max-w-[200px] truncate">{rec?.DOCUMENT_TITLE || 'Processing...'}</td>
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-blue-400 border-r border-slate-800 whitespace-nowrap">{rec?.SOURCE_COLLECTION || 'Pending'}</td>
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px] hidden md:table-cell">{(Array.isArray(rec?.ENTITIES_EXTRACTED) ? rec.ENTITIES_EXTRACTED : []).slice(0, 3).join(', ') || '...'}</td>
@@ -3750,7 +3755,7 @@ export default function App() {
                             <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800">
                               <img src={asset.imageUrl} alt="Preview" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded border border-slate-700" onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>'; }} />
                             </td>
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800">{asset.id.substring(0, 8)}</td>
+                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800">{truncateText(asset.id, 8)}</td>
                             <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 hidden sm:table-cell">{new Date(asset.timestamp).toLocaleString()}</td>
                             <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${asset.status === AssetStatus.FAILED ? 'bg-red-500/20 text-red-500' : 'bg-amber-500/20 text-amber-500'}`}>
@@ -3932,7 +3937,7 @@ export default function App() {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-center mb-1">
-                                    <span className="text-[10px] font-mono text-slate-400 truncate">{item.file.name.slice(0, 20)}</span>
+                                    <span className="text-[10px] font-mono text-slate-400 truncate">{truncateText(item.file?.name, 20)}</span>
                                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${item.status === 'PROCESSING' ? 'bg-amber-500/20 text-amber-500' : 'bg-blue-500/20 text-blue-400'}`}>
                                         {item.status === 'PROCESSING' ? 'PROCESSING' : 'QUEUED'}
                                     </span>
@@ -3961,7 +3966,7 @@ export default function App() {
                                 <img src={asset.imageUrl} className="w-10 h-10 object-cover rounded border border-slate-700" alt="thumb" onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>'; }} />
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className="text-[10px] font-mono text-slate-400 truncate">{asset.id.slice(0,8)}</span>
+                                        <span className="text-[10px] font-mono text-slate-400 truncate">{truncateText(asset.id, 8)}</span>
                                         <div className="flex items-center gap-1">
                                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${asset.status === AssetStatus.PROCESSING ? 'bg-amber-500/20 text-amber-500' : 'bg-slate-800 text-slate-400'}`}>
                                                 {asset.status}
@@ -4158,7 +4163,7 @@ export default function App() {
                           {qaFailedJobs.map((job) => (
                             <div key={job.id} className="text-slate-300 border-b border-slate-800/60 pb-1">
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-red-300">{job.assetId.slice(0, 8)} • {job.stage || 'FAILED_FINAL'}</span>
+                                <span className="text-red-300">{truncateText(job.assetId, 8)} • {job.stage || 'FAILED_FINAL'}</span>
                                 <button
                                   onClick={() => {
                                     setSelectedAssetId(job.assetId);
@@ -4176,7 +4181,7 @@ export default function App() {
                           {qaFailedAssets.slice(0, Math.max(0, 8 - qaFailedJobs.length)).map((asset) => (
                             <div key={asset.id} className="text-slate-300 border-b border-slate-800/60 pb-1">
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-amber-300">{asset.id.slice(0, 8)} • asset failed</span>
+                                <span className="text-amber-300">{truncateText(asset.id, 8)} • asset failed</span>
                                 <button
                                   onClick={() => {
                                     setSelectedAssetId(asset.id);

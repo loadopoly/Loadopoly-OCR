@@ -119,10 +119,30 @@ function ChapterGallery({
 }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
+  const getAssetImageUrl = useCallback((asset?: DigitalAsset): string => {
+    if (!asset) return '';
+    const originalUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
+      ? asset.sqlRecord.ORIGINAL_IMAGE_URL
+      : '';
+    return asset.imageUrl || originalUrl || '';
+  }, []);
+
+  const handleImageError = useCallback((event: React.SyntheticEvent<HTMLImageElement>, asset: DigitalAsset) => {
+    const fallbackUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
+      ? asset.sqlRecord.ORIGINAL_IMAGE_URL
+      : '';
+    const img = event.currentTarget;
+    if (fallbackUrl && img.src !== fallbackUrl) {
+      img.src = fallbackUrl;
+      return;
+    }
+    img.style.display = 'none';
+  }, []);
+
   if (assets.length === 0) return null;
 
   const currentAsset = assets[selectedIndex];
-  const imageUrl = currentAsset?.imageUrl;
+  const imageUrl = getAssetImageUrl(currentAsset);
 
   return (
     <div className="mt-4 rounded-lg overflow-hidden bg-slate-800/50 border border-slate-700">
@@ -133,6 +153,7 @@ function ChapterGallery({
             src={imageUrl} 
             alt={currentAsset?.sqlRecord?.DOCUMENT_TITLE || 'Historical artifact'}
             className="max-w-full max-h-full object-contain"
+            onError={(event) => currentAsset && handleImageError(event, currentAsset)}
           />
         ) : (
           <div className="flex flex-col items-center gap-2 text-slate-500">
@@ -168,7 +189,7 @@ function ChapterGallery({
       {assets.length > 1 && (
         <div className="flex gap-2 p-2 overflow-x-auto bg-slate-900/50">
           {assets.map((asset, index) => {
-            const thumbUrl = asset.imageUrl;
+            const thumbUrl = getAssetImageUrl(asset);
             return (
               <button
                 key={asset.id}
@@ -184,6 +205,7 @@ function ChapterGallery({
                     src={thumbUrl} 
                     alt={`View ${index + 1}`}
                     className="w-full h-full object-cover"
+                    onError={(event) => handleImageError(event, asset)}
                   />
                 ) : (
                   <div className="w-full h-full bg-slate-700 flex items-center justify-center">

@@ -66,6 +66,11 @@ interface ConnectionTestResult {
 }
 
 export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueComplete, compact = false, uploadProgress }) => {
+  const truncateText = useCallback((value: unknown, length: number) => {
+    if (typeof value !== 'string') return '';
+    return value.slice(0, length);
+  }, []);
+
   const [stats, setStats] = useState<QueueStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -649,7 +654,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                     {/* Job info */}
                     <div className="flex-1 min-w-0 text-left">
                       <div className="text-[9px] text-slate-300 font-mono truncate">
-                        {job.assetId.slice(0, 8)}...
+                        {truncateText(job.assetId, 8)}...
                       </div>
                       <div className="text-[8px] text-slate-500">
                         {job.stage || 'Waiting'}
@@ -682,11 +687,11 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                         <div>
                           <span className="text-slate-500">Job ID:</span>
-                          <span className="ml-1 text-slate-300 font-mono">{job.id.slice(0, 12)}...</span>
+                          <span className="ml-1 text-slate-300 font-mono">{truncateText(job.id, 12)}...</span>
                         </div>
                         <div>
                           <span className="text-slate-500">Asset ID:</span>
-                          <span className="ml-1 text-slate-300 font-mono">{job.assetId.slice(0, 12)}...</span>
+                          <span className="ml-1 text-slate-300 font-mono">{truncateText(job.assetId, 12)}...</span>
                         </div>
                         <div>
                           <span className="text-slate-500">Status:</span>
@@ -749,7 +754,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
             <div className="flex justify-between">
               <span className="text-slate-500">User ID:</span>
               <span className={diagnostics.userId ? 'text-emerald-400' : 'text-rose-400'}>
-                {diagnostics.userId ? `${diagnostics.userId.slice(0,8)}...` : 'NOT SET'}
+                {diagnostics.userId ? `${truncateText(diagnostics.userId, 8)}...` : 'NOT SET'}
               </span>
             </div>
             <div className="flex justify-between">
