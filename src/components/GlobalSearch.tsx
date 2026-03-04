@@ -142,7 +142,7 @@ export default function GlobalSearch({
   const results = useMemo((): SearchResult[] => {
     if (!query.trim()) {
       // Show trending/suggested when no query
-      return assets?.slice(0, 5).map(asset => ({
+      return assets.slice(0, 5).map(asset => ({
         id: asset.id,
         type: 'suggestion' as const,
         title: asset.sqlRecord?.DOCUMENT_TITLE || 'Untitled',
@@ -221,7 +221,7 @@ export default function GlobalSearch({
     });
 
     // Sort by relevance
-    return searchResults.sort((a, b) => b.relevance - a.relevance)?.slice(0, 20);
+    return searchResults.sort((a, b) => b.relevance - a.relevance).slice(0, 20);
   }, [query, assets, graphNodes, activeFilter]);
 
   // Navigate results with keyboard
@@ -253,7 +253,7 @@ export default function GlobalSearch({
   const handleSelect = useCallback((result: SearchResult) => {
     // Save to recent searches
     if (query.trim()) {
-      const updated = [query, ...recentSearches.filter(s => s !== query)]?.slice(0, 5);
+      const updated = [query, ...recentSearches.filter(s => s !== query)].slice(0, 5);
       setRecentSearches(updated);
       localStorage.setItem('geograph-recent-searches', JSON.stringify(updated));
     }

@@ -477,7 +477,7 @@ function InteractiveCanvas({
           ctx.textBaseline = 'top';
           
           const label = node.label.length > 20 && !isSelected 
-            ? node.label?.slice(0, 20) + '...' 
+            ? node.label.slice(0, 20) + '...' 
             : node.label;
           
           // Text background
@@ -678,7 +678,7 @@ export default function WorldRenderer({
       })
       .filter(x => x.distanceM < 1000) // Within 1km
       .sort((a, b) => a.distanceM - b.distanceM)
-      ?.slice(0, 5);
+      .slice(0, 5);
   }, [userPosition, geoTaggedAssets]);
 
   const handleStartAdventure = useCallback(() => {
@@ -1127,7 +1127,7 @@ export default function WorldRenderer({
               <span>Explorers Nearby</span>
             </div>
             <div className="space-y-2 max-h-32 overflow-y-auto">
-              {otherUsers?.slice(0, 5).map((user) => (
+              {otherUsers.slice(0, 5).map((user) => (
                 <div key={user.sessionId} className="flex items-center gap-2">
                   <div 
                     className="w-3 h-3 rounded-full"
@@ -1160,7 +1160,7 @@ export default function WorldRenderer({
               <span className="ml-auto text-slate-500">{assets.length}</span>
             </div>
             <div className="grid grid-cols-3 gap-1">
-              {assets?.slice(0, 6).map((asset) => (
+              {assets.slice(0, 6).map((asset) => (
                 <button
                   key={asset.id}
                   onClick={() => onAssetView?.(asset.id)}

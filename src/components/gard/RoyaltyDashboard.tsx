@@ -173,7 +173,7 @@ export default function RoyaltyDashboard({ userId, onClaimRewards }: RoyaltyDash
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {recentTransactions?.slice(0, 10).map(tx => (
+                {recentTransactions.slice(0, 10).map(tx => (
                   <tr key={tx.id} className="hover:bg-slate-800/30 transition-colors">
                     <td className="px-4 py-2">
                       <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${

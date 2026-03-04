@@ -157,7 +157,7 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
     const interval = setInterval(() => {
         if(Math.random() > (isLowEndDevice ? 0.9 : 0.7)) {
             setSimulatedNodes(prev => [
-                ...prev?.slice(isLowEndDevice ? -2 : -4), // Fewer nodes on low-end
+                ...prev.slice(isLowEndDevice ? -2 : -4), // Fewer nodes on low-end
                 {
                     id: Date.now(),
                     x: Math.random() * 80 + 10,

@@ -1,4 +1,3 @@
-## [2.12.2] - 2026-03-03\n### Fixed\n- Resolved UI crashes in Structured DB and Curatorial tables due to undefined slice indexing
 # Changelog
 
 All notable changes to this project will be documented in this file.
