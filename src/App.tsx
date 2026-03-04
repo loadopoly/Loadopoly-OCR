@@ -2426,19 +2426,28 @@ export default function App() {
         // are stale/private and fail at render time.
         return !asset.imageBlob;
       })
-      .map((asset) => asset.id)
-      .slice(0, 80);
+      .map((asset) => asset.id);
 
     if (unresolvedIds.length === 0) return;
 
-    // Mark as attempted immediately to prevent re-fetching on re-renders
-    unresolvedIds.forEach(id => attemptedSignedUrlsRef.current.add(id));
-
+    let cancelled = false;
     (async () => {
-      const result = await downloadService.getPreviewUrls(unresolvedIds);
-      if (!result || Object.keys(result).length === 0) return;
-      setSignedPreviewUrls((prev) => ({ ...prev, ...result }));
+      const BATCH_SIZE = 80;
+      for (let index = 0; index < unresolvedIds.length; index += BATCH_SIZE) {
+        if (cancelled) return;
+        const batchIds = unresolvedIds.slice(index, index + BATCH_SIZE);
+        batchIds.forEach((id) => attemptedSignedUrlsRef.current.add(id));
+        const result = await downloadService.getPreviewUrls(batchIds);
+        if (cancelled) return;
+        if (result && Object.keys(result).length > 0) {
+          setSignedPreviewUrls((prev) => ({ ...prev, ...result }));
+        }
+      }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [assets, user?.id, isUsableImageUrl]);
 
   const getThumbnailSrc = useCallback((asset: DigitalAsset): string => {

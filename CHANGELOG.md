@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.11] - 2026-03-04
+
+### Full-Library Thumbnail Recovery + Per-Card Signed Retry
+- Fixed signed preview prefetch in `App.tsx` to process all blob-missing assets in batches (80 at a time) instead of stopping after the first batch, which left most large libraries unrecovered.
+- Added robust bundle thumbnail retry logic in `BundleCard.tsx`: each slot now cycles candidates and then requests a fresh signed URL by `assetId` when initial sources fail.
+- Bundle cards now fail gracefully to icon placeholders only after local/saved/signed candidates are exhausted.
+
 ## [2.12.10] - 2026-03-04
 
 ### Marketplace Visibility + Legacy Thumbnail Recovery
