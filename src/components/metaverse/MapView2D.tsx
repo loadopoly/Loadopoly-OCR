@@ -380,7 +380,7 @@ export function MapView2D({
         ctx.fillStyle = '#ffffff';
         ctx.textAlign = 'center';
         ctx.fillText(
-          node.label.length > 20 ? node.label?.slice(0, 20) + '...' : node.label,
+          node.label.length > 20 ? node.label.slice(0, 20) + '...' : node.label,
           node.x,
           node.y + node.radius + 14 / zoom
         );
@@ -400,7 +400,7 @@ export function MapView2D({
       ctx.fill();
       ctx.fillStyle = typeFilters.size > 0 && !typeFilters.has(type) ? '#475569' : '#94a3b8';
       ctx.textAlign = 'left';
-      ctx.fillText(type.charAt(0) + type?.slice(1).toLowerCase(), x + 12, legendY + 4);
+      ctx.fillText(type.charAt(0) + type.slice(1).toLowerCase(), x + 12, legendY + 4);
     });
   }, [
     visibleNodes,
@@ -549,7 +549,7 @@ export function MapView2D({
 
       {/* Type filters */}
       <div className="absolute bottom-4 right-4 flex gap-1">
-        {Object.entries(TYPE_COLORS)?.slice(0, 6).map(([type, color]) => (
+        {Object.entries(TYPE_COLORS).slice(0, 6).map(([type, color]) => (
           <button
             key={type}
             onClick={() => toggleTypeFilter(type)}

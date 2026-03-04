@@ -184,8 +184,8 @@ export default function ShardPortfolio({ userId }: ShardPortfolioProps) {
                     <tr key={holding.id} className="hover:bg-slate-800/30 transition-colors">
                       <td className="px-4 py-3">
                         <div>
-                          <p className="text-white font-medium">{holding.assetId?.slice(0, 12)}...</p>
-                          <p className="text-slate-500 text-[10px]">Token: {holding.tokenId?.slice(0, 8)}</p>
+                          <p className="text-white font-medium">{holding.assetId.slice(0, 12)}...</p>
+                          <p className="text-slate-500 text-[10px]">Token: {holding.tokenId.slice(0, 8)}</p>
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">

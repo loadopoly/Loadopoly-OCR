@@ -288,7 +288,7 @@ function JourneyBreadcrumbs({
             }`}
             disabled={index > currentIndex}
           >
-            {crumb.length > 15 ? crumb?.slice(0, 12) + '...' : crumb}
+            {crumb.length > 15 ? crumb.slice(0, 12) + '...' : crumb}
           </button>
           {index < path.breadcrumbs.length - 1 && (
             <ChevronRight size={12} className="text-slate-600 flex-shrink-0" />

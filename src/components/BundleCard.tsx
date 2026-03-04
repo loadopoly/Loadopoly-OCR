@@ -39,7 +39,7 @@ const BundleCard: React.FC<BundleCardProps> = ({ bundle, onClick, onAssetUpdated
       </div>
       
       <div className="grid grid-cols-4 gap-2 mb-4 h-24">
-        {bundle.imageUrls?.slice(0, 4).map((url, i) => (
+        {bundle.imageUrls.slice(0, 4).map((url, i) => (
           <div key={i} className="w-full h-full rounded border border-purple-500/30 bg-slate-900/60 flex items-center justify-center overflow-hidden">
             <img
               src={url}

@@ -129,8 +129,8 @@ async function calculateSHA256(file: File): Promise<string> {
   if (file.size > TEN_MB) {
     // Lightweight hash: Use first 64KB + last 64KB + file metadata
     const CHUNK_SIZE = 64 * 1024;
-    const firstChunk = await file?.slice(0, CHUNK_SIZE).arrayBuffer();
-    const lastChunk = await file?.slice(Math.max(0, file.size - CHUNK_SIZE)).arrayBuffer();
+    const firstChunk = await file.slice(0, CHUNK_SIZE).arrayBuffer();
+    const lastChunk = await file.slice(Math.max(0, file.size - CHUNK_SIZE)).arrayBuffer();
     const metaString = `${file.name}|${file.size}|${file.type}|${file.lastModified}`;
     const metaBuffer = new TextEncoder().encode(metaString);
     
@@ -544,14 +544,14 @@ export default function App() {
     };
 
     const refreshTelemetry = () => {
-      const latest = getRecentUXEvents()?.slice(-8).reverse();
+      const latest = getRecentUXEvents().slice(-8).reverse();
       setRecentUxEvents(latest);
     };
 
     const handleTelemetry = (event: Event) => {
       const detail = (event as CustomEvent<Record<string, unknown>>).detail;
       if (!detail || typeof detail !== 'object') return;
-      setRecentUxEvents(prev => [detail, ...prev]?.slice(0, 8));
+      setRecentUxEvents(prev => [detail, ...prev].slice(0, 8));
     };
 
     measureSafeArea();
@@ -873,7 +873,7 @@ export default function App() {
     merged.forEach(asset => {
       if (!deduped.has(asset.id)) deduped.set(asset.id, asset);
     });
-    return Array.from(deduped.values())?.slice(0, 8);
+    return Array.from(deduped.values()).slice(0, 8);
   }, [localAssets, globalAssets]);
   const staleProcessingEligible = Boolean(
     dbQueueStats &&
@@ -2212,7 +2212,7 @@ export default function App() {
       message,
       level
     };
-    setDebugLogs(prev => [...prev?.slice(-49), logEntry]); // Keep last 50 logs
+    setDebugLogs(prev => [...prev.slice(-49), logEntry]); // Keep last 50 logs
     console.log(`[BatchProcessor] ${message}`);
   }, []);
 
@@ -2392,7 +2392,7 @@ export default function App() {
 
   // MEMOIZED: Pagination only runs when page or assets change
   const paginatedAssets = useMemo(() => 
-    drillDownAssets?.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+    drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
   , [drillDownAssets, currentPage]);
 
   const globalGraphData = useMemo<GraphData>(() => {
@@ -2822,7 +2822,7 @@ export default function App() {
                   </div>
 
                   <div className="space-y-2">
-                    {assets?.slice(0, 3).map(asset => {
+                    {assets.slice(0, 3).map(asset => {
                       const downloadState = downloadProgressByAsset[asset.id];
                       const isDownloading = downloadState?.status === 'downloading';
                       const progressPercent = downloadState?.total
@@ -2833,7 +2833,7 @@ export default function App() {
                         <div key={asset.id} className="bg-slate-950 border border-slate-800 rounded-lg p-3">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div className="min-w-0">
-                              <p className="text-sm text-slate-200 truncate">{asset.sqlRecord?.DOCUMENT_TITLE || `Asset ${asset.id?.slice(0, 8)}`}</p>
+                              <p className="text-sm text-slate-200 truncate">{asset.sqlRecord?.DOCUMENT_TITLE || `Asset ${asset.id.slice(0, 8)}`}</p>
                               <p className="text-[10px] text-slate-500">{downloadState?.status ? `Status: ${downloadState.status}` : 'Ready to download'}</p>
                             </div>
                             <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -2875,7 +2875,7 @@ export default function App() {
                     <div className="mt-4 pt-4 border-t border-slate-800">
                       <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Live Download Queue</p>
                       <div className="space-y-2">
-                        {activeDownloads?.slice(0, 4).map(item => (
+                        {activeDownloads.slice(0, 4).map(item => (
                           <div key={item.assetId} className="flex items-center justify-between gap-3 text-xs bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2">
                             <div className="min-w-0">
                               <p className="text-slate-300 truncate">{item.filename}</p>
@@ -2955,7 +2955,7 @@ export default function App() {
                         {assets.some(a => !a.processingAnalysis || a.status === AssetStatus.PROCESSING) && (
                             <button 
                                 onClick={async () => {
-                                    const pending = assets.filter(a => !a.processingAnalysis || a.status === AssetStatus.PROCESSING)?.slice(0, 5);
+                                    const pending = assets.filter(a => !a.processingAnalysis || a.status === AssetStatus.PROCESSING).slice(0, 5);
                                     for (const asset of pending) {
                                         await resumeAsset(asset);
                                     }
@@ -2969,7 +2969,7 @@ export default function App() {
                         )}
                     </div>
                     <div className="space-y-4">
-                        {assets?.slice(0, 3).map(asset => (
+                        {assets.slice(0, 3).map(asset => (
                             <div key={asset.id} className="flex items-start gap-4 p-3 rounded bg-slate-950/50 border border-slate-800 group relative">
                                 <img src={asset.imageUrl} className="w-16 h-16 object-cover rounded" alt="thumb" onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>'; }} />
                                 <div className="flex-1">
@@ -3202,7 +3202,7 @@ export default function App() {
                           <div className="flex items-center justify-between gap-2">
                             <p className="text-[11px] text-blue-300">
                               Processing {dbProcessRun.processed}/{dbProcessRun.total}
-                              {dbProcessRun.currentAssetId ? ` • ${dbProcessRun.currentAssetId?.slice(0, 8)}` : ''}
+                              {dbProcessRun.currentAssetId ? ` • ${dbProcessRun.currentAssetId.slice(0, 8)}` : ''}
                               {dbProcessRun.batchPending > 0 ? ` • batch ${dbProcessRun.batchPending}` : ''}
                             </p>
                             <span className="text-[10px] text-slate-500 uppercase">{dbProcessRun.step.replace('-', ' ')}</span>
@@ -3296,7 +3296,7 @@ export default function App() {
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{asset.id.substring(0,8)}</td>
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[120px] sm:max-w-[200px] truncate">{rec?.DOCUMENT_TITLE || 'Processing...'}</td>
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-blue-400 border-r border-slate-800 whitespace-nowrap">{rec?.SOURCE_COLLECTION || 'Pending'}</td>
-                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px] hidden md:table-cell">{(Array.isArray(rec?.ENTITIES_EXTRACTED) ? rec.ENTITIES_EXTRACTED : [])?.slice(0, 3).join(', ') || '...'}</td>
+                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px] hidden md:table-cell">{(Array.isArray(rec?.ENTITIES_EXTRACTED) ? rec.ENTITIES_EXTRACTED : []).slice(0, 3).join(', ') || '...'}</td>
                                        <td className="px-2 sm:px-4 py-2 sm:py-3 text-emerald-400 border-r border-slate-800 hidden md:table-cell">{rec?.LOCAL_GIS_ZONE || '...'}</td>
                                        <td className="px-4 py-3 text-center border-r border-slate-800">
                                          <button
@@ -3932,7 +3932,7 @@ export default function App() {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-center mb-1">
-                                    <span className="text-[10px] font-mono text-slate-400 truncate">{item.file?.name?.slice(0, 20)}</span>
+                                    <span className="text-[10px] font-mono text-slate-400 truncate">{item.file.name.slice(0, 20)}</span>
                                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${item.status === 'PROCESSING' ? 'bg-amber-500/20 text-amber-500' : 'bg-blue-500/20 text-blue-400'}`}>
                                         {item.status === 'PROCESSING' ? 'PROCESSING' : 'QUEUED'}
                                     </span>
@@ -3961,7 +3961,7 @@ export default function App() {
                                 <img src={asset.imageUrl} className="w-10 h-10 object-cover rounded border border-slate-700" alt="thumb" onError={(e) => { (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>'; }} />
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className="text-[10px] font-mono text-slate-400 truncate">{asset.id?.slice(0,8)}</span>
+                                        <span className="text-[10px] font-mono text-slate-400 truncate">{asset.id.slice(0,8)}</span>
                                         <div className="flex items-center gap-1">
                                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${asset.status === AssetStatus.PROCESSING ? 'bg-amber-500/20 text-amber-500' : 'bg-slate-800 text-slate-400'}`}>
                                                 {asset.status}
@@ -4158,7 +4158,7 @@ export default function App() {
                           {qaFailedJobs.map((job) => (
                             <div key={job.id} className="text-slate-300 border-b border-slate-800/60 pb-1">
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-red-300">{job.assetId?.slice(0, 8)} • {job.stage || 'FAILED_FINAL'}</span>
+                                <span className="text-red-300">{job.assetId.slice(0, 8)} • {job.stage || 'FAILED_FINAL'}</span>
                                 <button
                                   onClick={() => {
                                     setSelectedAssetId(job.assetId);
@@ -4173,10 +4173,10 @@ export default function App() {
                               <div className="text-slate-500 truncate">{job.error || 'No error payload'}</div>
                             </div>
                           ))}
-                          {qaFailedAssets?.slice(0, Math.max(0, 8 - qaFailedJobs.length)).map((asset) => (
+                          {qaFailedAssets.slice(0, Math.max(0, 8 - qaFailedJobs.length)).map((asset) => (
                             <div key={asset.id} className="text-slate-300 border-b border-slate-800/60 pb-1">
                               <div className="flex items-center justify-between gap-2">
-                                <span className="text-amber-300">{asset.id?.slice(0, 8)} • asset failed</span>
+                                <span className="text-amber-300">{asset.id.slice(0, 8)} • asset failed</span>
                                 <button
                                   onClick={() => {
                                     setSelectedAssetId(asset.id);

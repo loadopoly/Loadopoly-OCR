@@ -215,7 +215,7 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
         updateUI();
       },
       onLog: (msg, level) => {
-        setLogs(prev => [...prev?.slice(-99), { msg, level, time: new Date() }]);
+        setLogs(prev => [...prev.slice(-99), { msg, level, time: new Date() }]);
       },
     };
     
@@ -306,7 +306,7 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
   // Visible items (virtualized for performance)
   const visibleItems = useMemo(() => {
     // Show first 100 items for performance
-    return items?.slice(0, 100);
+    return items.slice(0, 100);
   }, [items]);
 
   const progressPercent = stats.total > 0 
