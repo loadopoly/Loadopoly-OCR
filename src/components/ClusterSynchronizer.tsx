@@ -11,7 +11,7 @@
  * scholarly rigor while enabling creative discovery.
  */
 
-import React, { useState, useCallback, useMemo, useEffect } from 'react';
+import React, { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import {
   Sparkles,
   RefreshCw,
@@ -698,6 +698,12 @@ export function ClusterSynchronizer({
   });
   const [filterMode, setFilterMode] = useState<'all' | 'unclassified' | 'classified'>('all');
   const [showSimilarityMatching, setShowSimilarityMatching] = useState(true);
+  const [syncExecutionMode, setSyncExecutionMode] = useState<'foreground' | 'background'>('background');
+  const syncStatusRef = useRef<SyncProgress['status']>('idle');
+
+  useEffect(() => {
+    syncStatusRef.current = syncProgress.status;
+  }, [syncProgress.status]);
   
   // Computed
   const targetAssets = useMemo(() => {
@@ -716,6 +722,10 @@ export function ClusterSynchronizer({
 
   const llmDisplayName = activeLLM?.displayName || 'No LLM Selected';
   const llmAvailable = !!activeLLM;
+  const truncateText = useCallback((value: unknown, length: number) => {
+    if (typeof value !== 'string') return '';
+    return value.slice(0, length);
+  }, []);
 
   // Toggle cluster expansion
   const toggleCluster = useCallback((cluster: ClusterType) => {
@@ -915,19 +925,14 @@ export function ClusterSynchronizer({
     });
     
     const clusters: ClusterType[] = ['TEMPORAL', 'SPATIAL', 'CONTENT', 'KNOWLEDGE_GRAPH', 'PROVENANCE', 'DISCOVERY'];
+    const waitForResume = async () => {
+      while (syncStatusRef.current === 'paused') {
+        await new Promise(resolve => setTimeout(resolve, 150));
+      }
+    };
     
     for (let i = 0; i < targetAssets.length; i++) {
-      // Check if paused
-      if (syncProgress.status === 'paused') {
-        await new Promise<void>(resolve => {
-          const checkResume = setInterval(() => {
-            if (syncProgress.status !== 'paused') {
-              clearInterval(checkResume);
-              resolve();
-            }
-          }, 100);
-        });
-      }
+      await waitForResume();
       
       const asset = targetAssets[i];
       setSyncProgress(prev => ({ ...prev, currentAssetId: asset.id }));
@@ -937,6 +942,7 @@ export function ClusterSynchronizer({
         setSelectedAsset(asset);
         
         for (const cluster of clusters) {
+          await waitForResume();
           await classifyCluster(cluster);
         }
         
@@ -953,6 +959,10 @@ export function ClusterSynchronizer({
           errors: [...prev.errors, { assetId: asset.id, error: String(error) }],
         }));
       }
+
+      if (syncExecutionMode === 'background') {
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
     }
     
     setSyncProgress(prev => ({ ...prev, status: 'completed', currentAssetId: null }));
@@ -960,7 +970,7 @@ export function ClusterSynchronizer({
     // Notify completion
     const results = Array.from(classificationResults.values());
     onClassificationComplete?.(results);
-  }, [activeLLM, targetAssets, classifyCluster, classificationResults, onClassificationComplete, syncProgress.status]);
+  }, [activeLLM, targetAssets, classifyCluster, classificationResults, onClassificationComplete, syncExecutionMode]);
 
   // Export results
   const exportResults = useCallback(() => {
@@ -1042,6 +1052,17 @@ export function ClusterSynchronizer({
         </div>
         
         <div className="flex items-center gap-2">
+          <select
+            value={syncExecutionMode}
+            onChange={(e) => setSyncExecutionMode(e.target.value as 'foreground' | 'background')}
+            disabled={syncProgress.status === 'running'}
+            className="text-xs px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-300"
+            title="Choose sync execution mode"
+          >
+            <option value="background">Background</option>
+            <option value="foreground">Foreground</option>
+          </select>
+
           <button
             onClick={exportResults}
             disabled={classificationResults.size === 0}
@@ -1110,7 +1131,7 @@ export function ClusterSynchronizer({
                   >
                     <div className="flex items-center justify-between">
                       <span className="text-slate-300 truncate flex-1">
-                        {asset.sqlRecord?.DOCUMENT_TITLE || asset.id.slice(0, 12)}
+                        {asset.sqlRecord?.DOCUMENT_TITLE || truncateText(asset.id, 12)}
                       </span>
                       {hasClassification && (
                         <CheckCircle size={12} className="text-emerald-400 flex-shrink-0" />

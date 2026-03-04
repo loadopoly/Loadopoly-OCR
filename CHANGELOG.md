@@ -3,6 +3,21 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.2] - 2026-03-04
+
+### Structured DB Stability
+- Added targeted string truncation guards in `App.tsx` and `QueueMonitor.tsx` to prevent runtime crashes when IDs or file names are missing (`Cannot read properties of undefined (reading 'slice')`).
+- Hardened Structured DB table and queue-adjacent render paths so malformed/partial records degrade safely instead of breaking the view.
+
+### Knowledge World Thumbnails
+- Added resilient thumbnail URL resolution in `WorldRenderer.tsx` and `StoryNarrator.tsx`.
+- Thumbnails now fall back to `sqlRecord.ORIGINAL_IMAGE_URL` when primary image URLs fail, and gracefully hide broken images if both sources fail.
+
+### Cluster Synchronizer Throughput UX
+- Added sync execution mode selector (`Background` / `Foreground`) to `ClusterSynchronizer.tsx`.
+- Refactored pause/resume logic to use live sync status refs (eliminates stale-state waits in long-running sync sessions).
+- Added cooperative yielding in background mode to keep UI responsive during multi-asset sync.
+
 ## [2.12.1] - 2026-03-03
 
 ### Analysis Functions — Type Safety & Crash Guards

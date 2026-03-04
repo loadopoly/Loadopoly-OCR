@@ -681,6 +681,25 @@ export default function WorldRenderer({
       .slice(0, 5);
   }, [userPosition, geoTaggedAssets]);
 
+  const getAssetImageUrl = useCallback((asset: DigitalAsset): string => {
+    const originalUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
+      ? asset.sqlRecord.ORIGINAL_IMAGE_URL
+      : '';
+    return asset.imageUrl || originalUrl || '';
+  }, []);
+
+  const handleThumbnailError = useCallback((event: React.SyntheticEvent<HTMLImageElement>, asset: DigitalAsset) => {
+    const fallbackUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
+      ? asset.sqlRecord.ORIGINAL_IMAGE_URL
+      : '';
+    const img = event.currentTarget;
+    if (fallbackUrl && img.src !== fallbackUrl) {
+      img.src = fallbackUrl;
+      return;
+    }
+    img.style.display = 'none';
+  }, []);
+
   const handleStartAdventure = useCallback(() => {
     setAdventureMode(true);
     setActivePanel('story');
@@ -1097,8 +1116,8 @@ export default function WorldRenderer({
                     }}
                     className="w-full text-left flex items-center gap-2 p-2 bg-slate-800/60 hover:bg-slate-700/60 rounded-lg transition-colors"
                   >
-                    {asset.imageUrl ? (
-                      <img src={asset.imageUrl} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
+                    {getAssetImageUrl(asset) ? (
+                      <img src={getAssetImageUrl(asset)} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" onError={(event) => handleThumbnailError(event, asset)} />
                     ) : (
                       <div className="w-8 h-8 rounded bg-slate-700 flex-shrink-0 flex items-center justify-center">
                         <MapIcon size={12} className="text-slate-500" />
@@ -1166,11 +1185,12 @@ export default function WorldRenderer({
                   onClick={() => onAssetView?.(asset.id)}
                   className="aspect-square rounded overflow-hidden bg-slate-800 hover:ring-2 hover:ring-primary-500 transition-all"
                 >
-                  {asset.imageUrl ? (
+                  {getAssetImageUrl(asset) ? (
                     <img 
-                      src={asset.imageUrl} 
+                      src={getAssetImageUrl(asset)} 
                       alt=""
                       className="w-full h-full object-cover"
+                      onError={(event) => handleThumbnailError(event, asset)}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-slate-600">
