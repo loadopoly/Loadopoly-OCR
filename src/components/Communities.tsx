@@ -25,6 +25,11 @@ export default function Communities({
   onSelect,
   selectedCommunityId
 }: CommunitiesProps) {
+  const truncateText = (value: unknown, length: number): string => {
+    if (typeof value !== 'string') return '';
+    return value.slice(0, length);
+  };
+
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newCommunity, setNewCommunity] = useState<Partial<Community>>({
     name: '',
@@ -148,10 +153,10 @@ export default function Communities({
                   <div key={request.id} className="p-4 space-y-3">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 bg-primary-500/20 rounded-full flex items-center justify-center text-primary-500 font-bold text-xs">
-                        {request.userId.slice(0,2).toUpperCase()}
+                        {truncateText(request.userId, 2).toUpperCase()}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-xs font-bold text-white truncate">User {request.userId.slice(0,8)}</p>
+                        <p className="text-xs font-bold text-white truncate">User {truncateText(request.userId, 8)}</p>
                         <p className="text-[10px] text-slate-500 truncate">wants to join {communities.find(c => c.id === request.communityId)?.name}</p>
                       </div>
                     </div>

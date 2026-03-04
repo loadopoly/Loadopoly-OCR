@@ -63,6 +63,9 @@ export function IntegrationStatusBadge({ state, size = 'sm' }: { state: Integrat
 
 export function IntegrationStatusItem({ integration, compact }: { integration: Integration; compact?: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const safeState = typeof integration.state === 'string' && integration.state.length > 0
+    ? integration.state
+    : 'unknown';
   const config = stateConfig[integration.state];
   const StatusIcon = config.Icon;
 
@@ -99,7 +102,7 @@ export function IntegrationStatusItem({ integration, compact }: { integration: I
               />
             </div>
             <span className={`text-xs ${config.color}`}>
-              {integration.state.charAt(0).toUpperCase() + integration.state.slice(1)}
+              {safeState.charAt(0).toUpperCase() + safeState.slice(1)}
             </span>
           </div>
         </div>
