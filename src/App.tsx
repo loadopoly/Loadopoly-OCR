@@ -2444,6 +2444,14 @@ export default function App() {
     drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
   , [drillDownAssets, currentPage]);
 
+  const assetsById = useMemo(() => {
+    const map: Record<string, DigitalAsset> = {};
+    assets.forEach((asset) => {
+      map[asset.id] = asset;
+    });
+    return map;
+  }, [assets]);
+
   const globalGraphData = useMemo<GraphData>(() => {
       const filteredAssets = assets.filter(asset => {
           const r = asset.sqlRecord;
@@ -3518,7 +3526,7 @@ export default function App() {
                  
                  <Suspense fallback={<div className="p-4 text-slate-500 text-sm">Loading...</div>}>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
-                     {displayItems.map(item => ('bundleId' in item) ? <BundleCard key={item.bundleId} bundle={item as ImageBundle} onAssetUpdated={handleAssetUpdate} /> : (
+                    {displayItems.map(item => ('bundleId' in item) ? <BundleCard key={item.bundleId} bundle={item as ImageBundle} assetsById={assetsById} onAssetUpdated={handleAssetUpdate} /> : (
                         <div 
                             key={item.id} 
                             className={`bg-slate-900 border rounded-xl overflow-hidden hover:shadow-lg transition-all group relative ${selectedAssetIds.has(item.id) ? 'border-primary-500 ring-2 ring-primary-500/20' : 'border-slate-800'}`}

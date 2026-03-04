@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.5] - 2026-03-04
+
+### Multi-View Thumbnail Reliability
+- Hardened bundle thumbnail URL generation in `bundleService` to prefer persisted image sources.
+- Updated `BundleCard` to resolve thumbnail sources per asset (`imageUrl` + `ORIGINAL_IMAGE_URL` + bundle fallback) and retry alternate sources on load failure.
+- Wired `BundleCard` to receive live asset lookup data from `App` for accurate fallback resolution in mobile/local-master views.
+- This directly targets broken image placeholders across Marketplace/Exploratory and Curator-adjacent bundle views.
+
 ## [2.12.4] - 2026-03-04
 
 ### Structured DB Thumbnail Rendering
