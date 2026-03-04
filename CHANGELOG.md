@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.4] - 2026-03-04
+
+### Structured DB Thumbnail Rendering
+- Added centralized thumbnail source resolution in `App.tsx` for Structured DB and related queues.
+- Thumbnails now resolve via fallback chain: `imageUrl` → `sqlRecord.ORIGINAL_IMAGE_URL` → in-memory `imageBlob` URL.
+- Added resilient thumbnail `onError` handling to retry alternate sources before falling back to placeholder SVG.
+- Added cleanup for generated blob thumbnail object URLs to avoid URL leak buildup.
+
 ## [2.12.3] - 2026-03-04
 
 ### Production Crash Guard Follow-up
