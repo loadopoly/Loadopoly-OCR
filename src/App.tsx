@@ -2420,11 +2420,11 @@ export default function App() {
     const unresolvedIds = assets
       .filter((asset) => {
         if (attemptedSignedUrlsRef.current.has(asset.id)) return false;
-        const primary = asset.imageUrl;
-        const original = asset.sqlRecord?.ORIGINAL_IMAGE_URL;
-        // Only skip if a signed URL was already successfully fetched
-        // Do NOT skip based on existing imageUrl — it may be a broken/expired public URL
-        return !isUsableImageUrl(primary) && !isUsableImageUrl(original);
+        if (!asset.sqlRecord) return false;
+        // Cloud-fetched assets don't include imageBlob; proactively hydrate a signed URL
+        // even if they have an http URL, because many historical ORIGINAL_IMAGE_URL values
+        // are stale/private and fail at render time.
+        return !asset.imageBlob;
       })
       .map((asset) => asset.id)
       .slice(0, 80);
@@ -2533,6 +2533,19 @@ export default function App() {
     });
     return map;
   }, [assets, signedPreviewUrls]);
+
+  const marketItems = useMemo<ImageBundle[]>(() => {
+    return displayItems.flatMap((item) => {
+      if ('bundleId' in item) return [item as ImageBundle];
+      const asset = item as DigitalAsset;
+      if (!asset.sqlRecord) return [];
+      try {
+        return [createUserBundle([asset], asset.sqlRecord?.DOCUMENT_TITLE || 'Single Asset Bundle')];
+      } catch {
+        return [];
+      }
+    });
+  }, [displayItems]);
 
   const globalGraphData = useMemo<GraphData>(() => {
       const filteredAssets = assets.filter(asset => {
@@ -3820,12 +3833,12 @@ export default function App() {
                 </div>
                 <div className="flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-xs font-bold flex-shrink-0">
                   <ShoppingBag size={14} />
-                  <span className="truncate">{displayItems.filter(i => 'bundleId' in i).length} BUNDLES</span>
+                  <span className="truncate">{marketItems.length} BUNDLES</span>
                 </div>
               </div>
 
               <div className="flex-1 overflow-auto pr-2 custom-scrollbar">
-                {displayItems.filter(i => 'bundleId' in i).length === 0 ? (
+                {marketItems.length === 0 ? (
                   <div className="h-64 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 gap-4">
                     <Package size={48} className="opacity-20" />
                     <div className="text-center">
@@ -3836,14 +3849,18 @@ export default function App() {
                 ) : (
                   <Suspense fallback={<div className="p-4 text-slate-500 text-sm">Loading bundles...</div>}>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {displayItems
-                      .filter((item): item is ImageBundle => 'bundleId' in item)
-                      .map((bundle) => (
+                    {marketItems.map((bundle) => (
                         <BundleCard 
                           key={bundle.bundleId} 
                           bundle={bundle} 
                           assetsById={assetsById}
-                          onClick={() => setPurchaseModalData({ title: bundle.title, assets: assets.filter(a => bundle.imageUrls.includes(a.imageUrl)) })}
+                          onClick={() => {
+                            const byIds = (bundle.assetIds || [])
+                              .map((id) => assetsById[id])
+                              .filter((a): a is DigitalAsset => !!a);
+                            const fallback = assets.filter(a => bundle.imageUrls.includes(a.imageUrl));
+                            setPurchaseModalData({ title: bundle.title, assets: byIds.length > 0 ? byIds : fallback });
+                          }}
                           onAssetUpdated={(updatedAsset) => {
                             setLocalAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
                           }}

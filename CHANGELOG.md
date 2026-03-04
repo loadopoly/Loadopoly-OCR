@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.10] - 2026-03-04
+
+### Marketplace Visibility + Legacy Thumbnail Recovery
+- Marketplace now includes single processed assets as generated one-item bundles, so a newly captured photo appears immediately with a thumbnail card even before clustering groups it.
+- Signed preview prefetch in `App.tsx` now proactively targets assets that lack `imageBlob` (common for historical cloud-synced rows), even if they still have an `http` URL string.
+- This addresses the long-tail case where `ORIGINAL_IMAGE_URL` exists but is stale/private and old bundle cards stayed broken.
+- Purchase modal asset resolution now prefers `bundle.assetIds` via `assetsById`, with URL-based fallback retained for compatibility.
+
 ## [2.12.7] - 2026-03-04
 
 ### Critical: Storage Bucket Mismatch Fix
