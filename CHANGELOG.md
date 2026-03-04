@@ -3,6 +3,13 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.12] - 2026-03-04
+
+### Realtime Update Overwrite Fix (Image Blob Preservation)
+- Fixed a central regression where realtime Supabase asset updates replaced local assets wholesale, dropping local `imageBlob` data and re-breaking thumbnails shortly after processing completed.
+- `App.tsx` now merges incoming realtime assets with existing local assets and preserves local `imageBlob` + current `imageUrl` when available.
+- Applies to both realtime `UPDATE` and `INSERT` handlers for `historical_documents_global` subscriptions.
+
 ## [2.12.11] - 2026-03-04
 
 ### Full-Library Thumbnail Recovery + Per-Card Signed Retry

@@ -697,6 +697,15 @@ export default function App() {
     return workerPoolRef.current;
   }, []);
 
+  const mergeIncomingAssetPreserveImage = useCallback((current: DigitalAsset, incoming: DigitalAsset): DigitalAsset => {
+    if (!current.imageBlob) return incoming;
+    return {
+      ...incoming,
+      imageBlob: current.imageBlob,
+      imageUrl: current.imageUrl || incoming.imageUrl,
+    };
+  }, []);
+
   // Initialize Processing Queue Service with simplified callbacks
   // The heavy lifting is done by the direct Realtime subscription below
   useEffect(() => {
@@ -802,9 +811,10 @@ export default function App() {
       // On asset UPDATE (e.g., edge processing completed)
       (updatedAsset) => {
         setLocalAssets(prev => {
-          const exists = prev.some(a => a.id === updatedAsset.id);
-          if (exists) {
-            return prev.map(a => a.id === updatedAsset.id ? updatedAsset : a);
+          const current = prev.find(a => a.id === updatedAsset.id);
+          if (current) {
+            const merged = mergeIncomingAssetPreserveImage(current, updatedAsset);
+            return prev.map(a => a.id === updatedAsset.id ? merged : a);
           }
           return prev;
         });
@@ -820,8 +830,10 @@ export default function App() {
       (newAsset) => {
         setLocalAssets(prev => {
           // Avoid duplicates
-          if (prev.some(a => a.id === newAsset.id)) {
-            return prev.map(a => a.id === newAsset.id ? newAsset : a);
+          const current = prev.find(a => a.id === newAsset.id);
+          if (current) {
+            const merged = mergeIncomingAssetPreserveImage(current, newAsset);
+            return prev.map(a => a.id === newAsset.id ? merged : a);
           }
           return [newAsset, ...prev];
         });
@@ -835,7 +847,7 @@ export default function App() {
     );
 
     return () => unsubscribe();
-  }, [user?.id]);
+  }, [mergeIncomingAssetPreserveImage, user?.id]);
 
   // C3 FIX: Only activate avatar/presence tracking when user navigates to Explore tab.
   // Previously this fired on every mount, hitting Supabase for presence even on Dashboard.
