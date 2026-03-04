@@ -3,6 +3,16 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.3] - 2026-03-04
+
+### Production Crash Guard Follow-up
+- Added additional `undefined.slice` guards across high-risk production UI surfaces:
+  - `Messages` conversation and gift ID rendering
+  - `Communities` admission request user ID rendering
+  - `CuratorMergePanel` match reason/entity/keyword array handling
+  - `IntegrationStatus` state label rendering when integration payloads are partial
+- This follows mobile reports where stale/partial records still triggered runtime `slice` errors after app reset.
+
 ## [2.12.2] - 2026-03-04
 
 ### Structured DB Stability
