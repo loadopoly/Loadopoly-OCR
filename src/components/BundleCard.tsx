@@ -1,7 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ImageBundle, DigitalAsset } from '../types';
 import { Package, ImageOff } from 'lucide-react';
 import ContributeButton from './ContributeButton';
+import { downloadService } from '../services/downloadService';
 
 interface BundleCardProps {
   bundle: ImageBundle;
@@ -10,25 +11,18 @@ interface BundleCardProps {
   assetsById?: Record<string, DigitalAsset>;
 }
 
-/** Pick the best available image URL for a bundle slot */
-function resolvePreviewSrc(
+function resolvePreviewCandidates(
   url: string,
   assetId: string | undefined,
   assetsById: Record<string, DigitalAsset> | undefined,
   primaryImageUrl: string,
-): string {
-  // 1. Live asset from assetsById (may include signed URL or fresh blob)
+): string[] {
   const asset = assetId ? assetsById?.[assetId] : undefined;
-  if (asset?.imageUrl && asset.imageUrl.length > 0) return asset.imageUrl;
-  // 2. ORIGINAL_IMAGE_URL from database
   const original = typeof asset?.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
     ? asset.sqlRecord.ORIGINAL_IMAGE_URL : '';
-  if (original.length > 0) return original;
-  // 3. URL stored in bundle at creation time
-  if (url && url.length > 0) return url;
-  // 4. Bundle primary image
-  if (primaryImageUrl && primaryImageUrl.length > 0) return primaryImageUrl;
-  return '';
+
+  return [asset?.imageUrl || '', original, url, primaryImageUrl]
+    .filter((candidate, index, arr) => !!candidate && arr.indexOf(candidate) === index);
 }
 
 const BundleCard: React.FC<BundleCardProps> = ({ bundle, onClick, onAssetUpdated, assetsById }) => {
@@ -45,10 +39,53 @@ const BundleCard: React.FC<BundleCardProps> = ({ bundle, onClick, onAssetUpdated
   const previewSlots = useMemo(() => {
     return bundle.imageUrls.slice(0, 4).map((url, i) => {
       const assetId = Array.isArray(bundle.assetIds) ? bundle.assetIds[i] : undefined;
-      const src = resolvePreviewSrc(url, assetId, assetsById, bundle.primaryImageUrl);
-      return { key: `${assetId || 'bundle'}-${i}`, src };
+      const candidates = resolvePreviewCandidates(url, assetId, assetsById, bundle.primaryImageUrl);
+      return {
+        key: `${assetId || 'bundle'}-${i}`,
+        assetId,
+        candidates,
+      };
     });
   }, [bundle.imageUrls, bundle.assetIds, bundle.primaryImageUrl, assetsById]);
+
+  const [slotSources, setSlotSources] = useState<Record<string, string>>({});
+  const [failedSlots, setFailedSlots] = useState<Record<string, boolean>>({});
+  const pendingSignedRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const next: Record<string, string> = {};
+    previewSlots.forEach((slot) => {
+      next[slot.key] = slot.candidates[0] || '';
+    });
+    setSlotSources(next);
+    setFailedSlots({});
+  }, [previewSlots]);
+
+  const handleImageError = async (slot: { key: string; assetId?: string; candidates: string[] }) => {
+    const current = slotSources[slot.key] || '';
+    const next = slot.candidates.find((candidate) => candidate && candidate !== current);
+
+    if (next) {
+      setSlotSources((prev) => ({ ...prev, [slot.key]: next }));
+      return;
+    }
+
+    if (slot.assetId && !pendingSignedRef.current.has(slot.assetId)) {
+      pendingSignedRef.current.add(slot.assetId);
+      try {
+        const signed = await downloadService.getPreviewUrl(slot.assetId);
+        if (signed) {
+          setSlotSources((prev) => ({ ...prev, [slot.key]: signed }));
+          return;
+        }
+      } catch {
+      } finally {
+        pendingSignedRef.current.delete(slot.assetId);
+      }
+    }
+
+    setFailedSlots((prev) => ({ ...prev, [slot.key]: true }));
+  };
 
   return (
     <div 
@@ -71,15 +108,12 @@ const BundleCard: React.FC<BundleCardProps> = ({ bundle, onClick, onAssetUpdated
       <div className="grid grid-cols-4 gap-2 mb-4 h-24">
         {previewSlots.map((slot) => (
           <div key={slot.key} className="w-full h-full rounded border border-purple-500/30 bg-slate-900/60 overflow-hidden">
-            {slot.src ? (
+            {slotSources[slot.key] && !failedSlots[slot.key] ? (
               <img
-                src={slot.src}
+                src={slotSources[slot.key]}
                 className="w-full h-full object-cover"
                 alt=""
-                onError={(e) => {
-                  // Hide the broken img and let the container background show
-                  (e.currentTarget as HTMLImageElement).style.display = 'none';
-                }}
+                onError={() => { void handleImageError(slot); }}
               />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
