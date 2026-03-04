@@ -3,6 +3,18 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.7] - 2026-03-04
+
+### Critical: Storage Bucket Mismatch Fix
+- **Root cause fix**: `downloadService` was searching for signed URLs in `processing-uploads` bucket, but images are stored in `corpus-images` bucket. All signed URL fallback attempts were silently failing.
+- `getDirectSignedUrl` now searches both `corpus-images` and `processing-uploads` buckets with enhanced path resolution (root-level contributed assets + user folder structures).
+- Fixed asset grid cards (line 3602) using `item.imageUrl` directly instead of `getThumbnailSrc` — the most visible thumbnail view was completely bypassing the fallback pipeline.
+- Added `assetsById` prop to second `BundleCard` render that was missing signed URL data.
+- Fixed proactive signed URL resolution race condition — removed `signedPreviewUrls` from effect dependencies, using ref-based tracking instead to prevent self-cancelling async fetches.
+- `isUsableImageUrl` no longer treats `blob:` URLs as valid (they don't survive page reloads), preventing the proactive resolver from skipping assets with dead blob references.
+- `getThumbnailSrc` now prioritises fresh blob URLs from stored imageBlobs, falls back through signed → persisted → original URLs, and always returns a placeholder SVG instead of empty string.
+- `BundleCard` candidates now filter out stale `blob:` URLs and prioritise signed URL-enriched `assetsById` data.
+
 ## [2.12.6] - 2026-03-04
 
 ### Mobile Thumbnail Recovery (Signed URL Fallback)

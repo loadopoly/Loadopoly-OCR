@@ -30,11 +30,15 @@ const BundleCard: React.FC<BundleCardProps> = ({ bundle, onClick, onAssetUpdated
         : '';
 
       const candidates = [
-        url,
-        asset?.imageUrl,
+        asset?.imageUrl,   // May have signed URL injected via assetsById
         original,
+        url,               // Bundle's stored URL (may be stale blob:)
         bundle.primaryImageUrl,
-      ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0);
+      ].filter((value): value is string =>
+        typeof value === 'string' &&
+        value.trim().length > 0 &&
+        !value.startsWith('blob:')  // blob: URLs don't survive across sessions
+      );
 
       return {
         key: `${assetId || 'bundle'}-${i}`,
