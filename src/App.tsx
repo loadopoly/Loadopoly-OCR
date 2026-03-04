@@ -2397,17 +2397,22 @@ export default function App() {
 
   const isUsableImageUrl = useCallback((value: unknown): value is string => {
     if (typeof value !== 'string' || !value.trim()) return false;
-    return /^(https?:|blob:|data:)/i.test(value);
+    // blob: URLs from previous sessions are invalid — only trust http(s) and data URIs
+    return /^(https?:|data:)/i.test(value);
   }, []);
+
+  const attemptedSignedUrlsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (!user?.id || assets.length === 0) return;
 
     const unresolvedIds = assets
       .filter((asset) => {
-        if (signedPreviewUrls[asset.id]) return false;
+        if (attemptedSignedUrlsRef.current.has(asset.id)) return false;
         const primary = asset.imageUrl;
         const original = asset.sqlRecord?.ORIGINAL_IMAGE_URL;
+        // Only skip if a signed URL was already successfully fetched
+        // Do NOT skip based on existing imageUrl — it may be a broken/expired public URL
         return !isUsableImageUrl(primary) && !isUsableImageUrl(original);
       })
       .map((asset) => asset.id)
@@ -2415,49 +2420,61 @@ export default function App() {
 
     if (unresolvedIds.length === 0) return;
 
-    let cancelled = false;
+    // Mark as attempted immediately to prevent re-fetching on re-renders
+    unresolvedIds.forEach(id => attemptedSignedUrlsRef.current.add(id));
+
     (async () => {
       const result = await downloadService.getPreviewUrls(unresolvedIds);
-      if (cancelled || !result || Object.keys(result).length === 0) return;
+      if (!result || Object.keys(result).length === 0) return;
       setSignedPreviewUrls((prev) => ({ ...prev, ...result }));
     })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [assets, user?.id, signedPreviewUrls, isUsableImageUrl]);
+  }, [assets, user?.id, isUsableImageUrl]);
 
   const getThumbnailSrc = useCallback((asset: DigitalAsset): string => {
+    // 1. Best: fresh blob URL from stored imageBlob (always valid within current session)
+    const blobUrl = getBlobThumbnailUrl(asset);
+    if (blobUrl) return blobUrl;
+    // 2. Signed URL from storage (generated for this session)
     const signed = signedPreviewUrls[asset.id];
     if (isUsableImageUrl(signed)) return signed;
+    // 3. Persisted http(s) imageUrl
     if (isUsableImageUrl(asset.imageUrl)) return asset.imageUrl;
+    // 4. Database ORIGINAL_IMAGE_URL
     const originalUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
       ? asset.sqlRecord.ORIGINAL_IMAGE_URL
       : '';
     if (isUsableImageUrl(originalUrl)) return originalUrl;
-    return getBlobThumbnailUrl(asset);
+    // 5. Inline placeholder SVG
+    return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
   }, [getBlobThumbnailUrl, isUsableImageUrl, signedPreviewUrls]);
 
   const handleThumbnailError = useCallback(async (event: React.SyntheticEvent<HTMLImageElement>, asset: DigitalAsset) => {
     const img = event.currentTarget;
+    const currentSrc = img.src;
+
+    // Collect all viable candidates, try each in order
+    const blobUrl = getBlobThumbnailUrl(asset);
     const signed = signedPreviewUrls[asset.id] || '';
     const originalUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
       ? asset.sqlRecord.ORIGINAL_IMAGE_URL
       : '';
-    const blobUrl = getBlobThumbnailUrl(asset);
-    const currentSrc = img.src;
-    const nextSrc = [signed, originalUrl, blobUrl].find((candidate) => !!candidate && candidate !== currentSrc);
 
+    const candidates = [blobUrl, signed, asset.imageUrl, originalUrl].filter(
+      (c): c is string => typeof c === 'string' && c.length > 0 && c !== currentSrc && !c.startsWith('data:')
+    );
+
+    const nextSrc = candidates[0];
     if (nextSrc) {
       img.src = nextSrc;
       return;
     }
 
+    // Last resort: request a fresh signed URL from storage
     if (user?.id && !signedPreviewPendingRef.current.has(asset.id)) {
       signedPreviewPendingRef.current.add(asset.id);
       try {
         const refreshed = await downloadService.getPreviewUrl(asset.id);
-        if (refreshed && refreshed !== img.src) {
+        if (refreshed && refreshed !== currentSrc) {
           setSignedPreviewUrls((prev) => ({ ...prev, [asset.id]: refreshed }));
           img.src = refreshed;
           return;
@@ -3599,7 +3616,7 @@ export default function App() {
                                 />
                             </div>
                             <div className="relative h-48 bg-slate-950 overflow-hidden">
-                                <img src={item.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" onError={(e) => { (e.target as HTMLImageElement).src = ''; (e.target as HTMLImageElement).src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>'; }} />
+                                <img src={getThumbnailSrc(item)} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" onError={(e) => handleThumbnailError(e, item)} />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
                                     <button 
                                         onClick={() => setEditingAsset(item)}
@@ -3814,6 +3831,7 @@ export default function App() {
                         <BundleCard 
                           key={bundle.bundleId} 
                           bundle={bundle} 
+                          assetsById={assetsById}
                           onClick={() => setPurchaseModalData({ title: bundle.title, assets: assets.filter(a => bundle.imageUrls.includes(a.imageUrl)) })}
                           onAssetUpdated={(updatedAsset) => {
                             setLocalAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));

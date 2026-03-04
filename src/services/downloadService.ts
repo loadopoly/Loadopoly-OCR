@@ -60,7 +60,8 @@ class DownloadService {
   private abortControllers: Map<string, AbortController> = new Map();
   private queueListeners: Set<DownloadQueueListener> = new Set();
   private edgeFunctionUrl: string = '';
-  private readonly storageBucket: string = 'processing-uploads';
+  private readonly storageBuckets: string[] = ['corpus-images', 'processing-uploads'];
+  private readonly storageBucket: string = 'corpus-images';
 
   constructor() {
     if (isSupabaseConfigured() && supabase) {
@@ -392,34 +393,54 @@ class DownloadService {
   private async getDirectSignedUrl(assetId: string, userId: string): Promise<string | null> {
     if (!supabase) return null;
 
-    const storagePath = await this.resolveStoragePath(assetId, userId);
-    if (!storagePath) return null;
+    // Try each bucket in order (corpus-images first, then processing-uploads)
+    for (const bucket of this.storageBuckets) {
+      const storagePath = await this.resolveStoragePath(assetId, userId, bucket);
+      if (!storagePath) continue;
 
-    const { data, error } = await (supabase as any).storage
-      .from(this.storageBucket)
-      .createSignedUrl(storagePath, 3600);
+      const { data, error } = await (supabase as any).storage
+        .from(bucket)
+        .createSignedUrl(storagePath, 3600);
 
-    if (error || !data?.signedUrl) {
-      logger.warn(`Direct signed URL failed for ${assetId}`, { error });
-      return null;
+      if (!error && data?.signedUrl) {
+        return data.signedUrl;
+      }
+      logger.warn(`Direct signed URL failed for ${assetId} in bucket ${bucket}`, { error });
     }
 
-    return data.signedUrl;
+    return null;
   }
 
-  private async resolveStoragePath(assetId: string, userId: string): Promise<string | null> {
+  private async resolveStoragePath(assetId: string, userId: string, bucket: string): Promise<string | null> {
     if (!supabase) return null;
 
+    // Strategy 1: Check if image is stored at root level (contributed assets)
+    // These use the format: {assetId}_{timestamp}.{ext}
+    const { data: rootData } = await (supabase as any).storage
+      .from(bucket)
+      .list('', { limit: 100, offset: 0, search: assetId });
+
+    if (Array.isArray(rootData)) {
+      const match = rootData.find((f: { name: string }) => f.name.startsWith(assetId));
+      if (match) return match.name;
+    }
+
+    // Strategy 2: Check in user folder
     const folder = `${userId}/${assetId}`;
     const { data, error } = await (supabase as any).storage
-      .from(this.storageBucket)
+      .from(bucket)
       .list(folder, { limit: 10, offset: 0, sortBy: { column: 'name', order: 'asc' } });
 
     if (!error && Array.isArray(data) && data.length > 0) {
       return `${folder}/${data[0].name}`;
     }
 
+    // Strategy 3: Try direct path candidates
     const fallbackCandidates = [
+      `${assetId}.jpg`,
+      `${assetId}.jpeg`,
+      `${assetId}.png`,
+      `${assetId}.webp`,
       `${userId}/${assetId}.jpg`,
       `${userId}/${assetId}.jpeg`,
       `${userId}/${assetId}.png`,
@@ -429,7 +450,7 @@ class DownloadService {
 
     for (const candidate of fallbackCandidates) {
       const { data: signedData, error: signedError } = await (supabase as any).storage
-        .from(this.storageBucket)
+        .from(bucket)
         .createSignedUrl(candidate, 60);
 
       if (!signedError && signedData?.signedUrl) {
