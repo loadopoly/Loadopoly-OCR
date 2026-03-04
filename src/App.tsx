@@ -1118,7 +1118,17 @@ export default function App() {
             const remoteAssets = await fetchUserAssets(data.user.id);
             const assetMap = new Map<string, DigitalAsset>();
             localSnapshot.forEach(a => assetMap.set(a.id, a));
-            remoteAssets.forEach(a => assetMap.set(a.id, a));
+            // Merge remote data INTO local: preserve local imageBlob and imageUrl
+            // when the local version has binary data (remote always lacks imageBlob).
+            remoteAssets.forEach(a => {
+              const local = assetMap.get(a.id);
+              if (local?.imageBlob) {
+                // Keep the local blob and its valid blob URL; merge the rest from remote
+                assetMap.set(a.id, { ...a, imageBlob: local.imageBlob, imageUrl: local.imageUrl });
+              } else {
+                assetMap.set(a.id, a);
+              }
+            });
             
             const mergedAssets = Array.from(assetMap.values()).sort((a, b) => 
               new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()

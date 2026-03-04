@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { ImageBundle, DigitalAsset } from '../types';
-import { Package } from 'lucide-react';
+import { Package, ImageOff } from 'lucide-react';
 import ContributeButton from './ContributeButton';
 
 interface BundleCardProps {
@@ -8,6 +8,27 @@ interface BundleCardProps {
   onClick?: () => void;
   onAssetUpdated?: (asset: DigitalAsset) => void;
   assetsById?: Record<string, DigitalAsset>;
+}
+
+/** Pick the best available image URL for a bundle slot */
+function resolvePreviewSrc(
+  url: string,
+  assetId: string | undefined,
+  assetsById: Record<string, DigitalAsset> | undefined,
+  primaryImageUrl: string,
+): string {
+  // 1. Live asset from assetsById (may include signed URL or fresh blob)
+  const asset = assetId ? assetsById?.[assetId] : undefined;
+  if (asset?.imageUrl && asset.imageUrl.length > 0) return asset.imageUrl;
+  // 2. ORIGINAL_IMAGE_URL from database
+  const original = typeof asset?.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
+    ? asset.sqlRecord.ORIGINAL_IMAGE_URL : '';
+  if (original.length > 0) return original;
+  // 3. URL stored in bundle at creation time
+  if (url && url.length > 0) return url;
+  // 4. Bundle primary image
+  if (primaryImageUrl && primaryImageUrl.length > 0) return primaryImageUrl;
+  return '';
 }
 
 const BundleCard: React.FC<BundleCardProps> = ({ bundle, onClick, onAssetUpdated, assetsById }) => {
@@ -21,29 +42,11 @@ const BundleCard: React.FC<BundleCardProps> = ({ bundle, onClick, onAssetUpdated
       sqlRecord: bundle.combinedRecord
   };
 
-  const previewSources = useMemo(() => {
+  const previewSlots = useMemo(() => {
     return bundle.imageUrls.slice(0, 4).map((url, i) => {
       const assetId = Array.isArray(bundle.assetIds) ? bundle.assetIds[i] : undefined;
-      const asset = assetId ? assetsById?.[assetId] : undefined;
-      const original = typeof asset?.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
-        ? asset.sqlRecord.ORIGINAL_IMAGE_URL
-        : '';
-
-      const candidates = [
-        asset?.imageUrl,   // May have signed URL injected via assetsById, or fresh blob URL
-        url,               // Bundle's stored URL (blob: is valid if bundle was created this session)
-        original,
-        bundle.primaryImageUrl,
-      ].filter((value): value is string =>
-        typeof value === 'string' &&
-        value.trim().length > 0
-      );
-
-      return {
-        key: `${assetId || 'bundle'}-${i}`,
-        src: candidates[0] || '',
-        fallbackList: candidates,
-      };
+      const src = resolvePreviewSrc(url, assetId, assetsById, bundle.primaryImageUrl);
+      return { key: `${assetId || 'bundle'}-${i}`, src };
     });
   }, [bundle.imageUrls, bundle.assetIds, bundle.primaryImageUrl, assetsById]);
 
@@ -66,30 +69,23 @@ const BundleCard: React.FC<BundleCardProps> = ({ bundle, onClick, onAssetUpdated
       </div>
       
       <div className="grid grid-cols-4 gap-2 mb-4 h-24">
-        {previewSources.map((preview, i) => (
-          <div key={preview.key} className="w-full h-full rounded border border-purple-500/30 bg-slate-900/60 flex items-center justify-center overflow-hidden">
-            <img
-              src={preview.src}
-              data-fallbacks={JSON.stringify(preview.fallbackList)}
-              className="w-full h-full object-cover"
-              alt={`Bundle part ${i}`}
-              onError={(event) => {
-                const img = event.currentTarget;
-                const currentSrc = img.src;
-                const raw = img.dataset.fallbacks;
-                const fallbacks = raw ? JSON.parse(raw) as string[] : [];
-                const next = fallbacks.find((candidate) => candidate && candidate !== currentSrc);
-
-                if (next) {
-                  img.src = next;
-                  img.dataset.fallbacks = JSON.stringify(fallbacks.filter((candidate) => candidate !== next));
-                  return;
-                }
-
-                img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
-              }}
-            />
-            <Package size={20} className="text-purple-400/40" />
+        {previewSlots.map((slot) => (
+          <div key={slot.key} className="w-full h-full rounded border border-purple-500/30 bg-slate-900/60 overflow-hidden">
+            {slot.src ? (
+              <img
+                src={slot.src}
+                className="w-full h-full object-cover"
+                alt=""
+                onError={(e) => {
+                  // Hide the broken img and let the container background show
+                  (e.currentTarget as HTMLImageElement).style.display = 'none';
+                }}
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <ImageOff size={20} className="text-purple-400/40" />
+              </div>
+            )}
           </div>
         ))}
       </div>
