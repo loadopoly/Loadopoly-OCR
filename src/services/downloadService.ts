@@ -375,6 +375,20 @@ class DownloadService {
     }
   }
 
+  /**
+   * Resolve a signed preview URL for a single asset (for UI thumbnails/previews).
+   */
+  async getPreviewUrl(assetId: string): Promise<string | null> {
+    return this.getSignedUrl(assetId);
+  }
+
+  /**
+   * Resolve signed preview URLs for multiple assets.
+   */
+  async getPreviewUrls(assetIds: string[]): Promise<Record<string, string>> {
+    return this.getSignedUrls(assetIds);
+  }
+
   private async getDirectSignedUrl(assetId: string, userId: string): Promise<string | null> {
     if (!supabase) return null;
 

@@ -367,6 +367,8 @@ export default function App() {
     status: 'idle' | 'downloading' | 'completed' | 'failed' | 'cancelled';
     error?: string;
   }>>({});
+  const [signedPreviewUrls, setSignedPreviewUrls] = useState<Record<string, string>>({});
+  const signedPreviewPendingRef = useRef<Set<string>>(new Set());
   const [queueDiagnostics, setQueueDiagnostics] = useState<any>(null);
   const [isStandaloneMode, setIsStandaloneMode] = useState(false);
   const [isInstallPromptAvailable, setIsInstallPromptAvailable] = useState(false);
@@ -2393,31 +2395,82 @@ export default function App() {
     return blobUrl;
   }, []);
 
+  const isUsableImageUrl = useCallback((value: unknown): value is string => {
+    if (typeof value !== 'string' || !value.trim()) return false;
+    return /^(https?:|blob:|data:)/i.test(value);
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id || assets.length === 0) return;
+
+    const unresolvedIds = assets
+      .filter((asset) => {
+        if (signedPreviewUrls[asset.id]) return false;
+        const primary = asset.imageUrl;
+        const original = asset.sqlRecord?.ORIGINAL_IMAGE_URL;
+        return !isUsableImageUrl(primary) && !isUsableImageUrl(original);
+      })
+      .map((asset) => asset.id)
+      .slice(0, 80);
+
+    if (unresolvedIds.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      const result = await downloadService.getPreviewUrls(unresolvedIds);
+      if (cancelled || !result || Object.keys(result).length === 0) return;
+      setSignedPreviewUrls((prev) => ({ ...prev, ...result }));
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [assets, user?.id, signedPreviewUrls, isUsableImageUrl]);
+
   const getThumbnailSrc = useCallback((asset: DigitalAsset): string => {
-    if (typeof asset.imageUrl === 'string' && asset.imageUrl.trim()) return asset.imageUrl;
+    const signed = signedPreviewUrls[asset.id];
+    if (isUsableImageUrl(signed)) return signed;
+    if (isUsableImageUrl(asset.imageUrl)) return asset.imageUrl;
     const originalUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
       ? asset.sqlRecord.ORIGINAL_IMAGE_URL
       : '';
-    if (originalUrl && originalUrl.trim()) return originalUrl;
+    if (isUsableImageUrl(originalUrl)) return originalUrl;
     return getBlobThumbnailUrl(asset);
-  }, [getBlobThumbnailUrl]);
+  }, [getBlobThumbnailUrl, isUsableImageUrl, signedPreviewUrls]);
 
-  const handleThumbnailError = useCallback((event: React.SyntheticEvent<HTMLImageElement>, asset: DigitalAsset) => {
+  const handleThumbnailError = useCallback(async (event: React.SyntheticEvent<HTMLImageElement>, asset: DigitalAsset) => {
     const img = event.currentTarget;
+    const signed = signedPreviewUrls[asset.id] || '';
     const originalUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
       ? asset.sqlRecord.ORIGINAL_IMAGE_URL
       : '';
     const blobUrl = getBlobThumbnailUrl(asset);
     const currentSrc = img.src;
-    const nextSrc = [originalUrl, blobUrl].find((candidate) => !!candidate && candidate !== currentSrc);
+    const nextSrc = [signed, originalUrl, blobUrl].find((candidate) => !!candidate && candidate !== currentSrc);
 
     if (nextSrc) {
       img.src = nextSrc;
       return;
     }
 
+    if (user?.id && !signedPreviewPendingRef.current.has(asset.id)) {
+      signedPreviewPendingRef.current.add(asset.id);
+      try {
+        const refreshed = await downloadService.getPreviewUrl(asset.id);
+        if (refreshed && refreshed !== img.src) {
+          setSignedPreviewUrls((prev) => ({ ...prev, [asset.id]: refreshed }));
+          img.src = refreshed;
+          return;
+        }
+      } catch {
+        // no-op; fallback below
+      } finally {
+        signedPreviewPendingRef.current.delete(asset.id);
+      }
+    }
+
     img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
-  }, [getBlobThumbnailUrl]);
+  }, [getBlobThumbnailUrl, signedPreviewUrls, user?.id]);
 
   // MEMOIZED: Prevent expensive aggregation on every render (e.g. tab switch)
   const aggregatedGroups = useMemo(() => {
@@ -2447,10 +2500,11 @@ export default function App() {
   const assetsById = useMemo(() => {
     const map: Record<string, DigitalAsset> = {};
     assets.forEach((asset) => {
-      map[asset.id] = asset;
+      const signed = signedPreviewUrls[asset.id];
+      map[asset.id] = signed ? { ...asset, imageUrl: signed } : asset;
     });
     return map;
-  }, [assets]);
+  }, [assets, signedPreviewUrls]);
 
   const globalGraphData = useMemo<GraphData>(() => {
       const filteredAssets = assets.filter(asset => {

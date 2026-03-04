@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.6] - 2026-03-04
+
+### Mobile Thumbnail Recovery (Signed URL Fallback)
+- Added on-demand signed preview URL resolution for assets in `App.tsx` using `downloadService`.
+- Thumbnail pipeline now recovers from invalid/expired `imageUrl` and missing `ORIGINAL_IMAGE_URL` by requesting fresh signed URLs from storage.
+- Added signed preview URL caching and per-asset retry on image load failure to stabilize Marketplace/Curator/Structured list previews.
+- Exposed `downloadService.getPreviewUrl()` and `getPreviewUrls()` for UI-safe thumbnail retrieval.
+
 ## [2.12.5] - 2026-03-04
 
 ### Multi-View Thumbnail Reliability
