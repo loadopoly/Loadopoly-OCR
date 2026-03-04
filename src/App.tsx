@@ -2397,8 +2397,9 @@ export default function App() {
 
   const isUsableImageUrl = useCallback((value: unknown): value is string => {
     if (typeof value !== 'string' || !value.trim()) return false;
-    // blob: URLs from previous sessions are invalid — only trust http(s) and data URIs
-    return /^(https?:|data:)/i.test(value);
+    // blob: URLs are valid within the current session (loadAssets regenerates them
+    // from stored imageBlobs and clears dead ones on startup)
+    return /^(https?:|blob:|data:)/i.test(value);
   }, []);
 
   const attemptedSignedUrlsRef = useRef<Set<string>>(new Set());
