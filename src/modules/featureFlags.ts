@@ -264,6 +264,7 @@ export class EnvironmentFeatureFlagProvider implements IFeatureFlagProvider {
   async init(_config: Record<string, unknown>): Promise<void> {
     // Load from environment variables
     // Format: VITE_FF_ENABLE_3D_NAVIGATOR=true
+    
     const env: Record<string, string | undefined> = typeof import.meta !== 'undefined'
       ? (import.meta.env as Record<string, string | undefined>)
       : (process as NodeJS.Process | undefined)?.env ?? {};
