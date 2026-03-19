@@ -19,11 +19,8 @@ const getApiKey = (): string => {
   }
 
   // Vite environment variables (prefixed with VITE_)
-  // @ts-ignore - Vite's import.meta.env
   if (typeof import.meta !== 'undefined' && import.meta.env) {
-    // @ts-ignore
     if (import.meta.env.VITE_GEMINI_API_KEY) return import.meta.env.VITE_GEMINI_API_KEY;
-    // @ts-ignore
     if (import.meta.env.API_KEY) return import.meta.env.API_KEY;
   }
   
