@@ -21,16 +21,16 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { Database } from './database.types'
 
 const getEnvVar = (key: string): string => {
-  // Vite environment variables
-  if (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env[key]) {
-    // @ts-ignore
-    return import.meta.env[key]
+  // Vite environment variables — cast through Record for dynamic key access
+  if (typeof import.meta !== 'undefined' && import.meta.env) {
+    const val = (import.meta.env as Record<string, string | undefined>)[key];
+    if (val) return val;
   }
   // Node.js environment variables (for API routes)
   if (typeof process !== 'undefined' && process.env && process.env[key]) {
-    return process.env[key]
+    return process.env[key] as string;
   }
-  return ''
+  return '';
 }
 
 const supabaseUrl = getEnvVar('VITE_SUPABASE_URL')
