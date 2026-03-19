@@ -3,6 +3,15 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.13] - 2026-03-19
+
+### Fix: `ImportMeta.env` TypeScript Errors
+
+- **`src/vite-env.d.ts`**: Declared full `ImportMetaEnv` interface with all app-specific environment variables (`VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_LOADOPOLY_SUPABASE_URL`, `VITE_LOADOPOLY_SUPABASE_ANON_KEY`, `VITE_GEMINI_API_KEY`, `VITE_OPENAI_API_KEY`, `API_KEY`, `VITE_DCC1_ADDRESS`) and a `VITE_FF_*` template-literal index for feature flags. Added explicit `ImportMeta.env` declaration.
+- Removed all `// @ts-ignore` suppressions that worked around the missing types in `src/lib/logger.ts`, `src/modules/llm/gemini.ts`, `src/modules/llm/openai.ts`, and `src/services/geminiService.ts`.
+- **`src/lib/supabaseClient.ts`**: Replaced unsafe dynamic `import.meta.env[key]` indexing with a typed `as Record<string, string | undefined>` cast — no suppressions required.
+- **`src/modules/featureFlags.ts`**: Same cast pattern applied to the dynamic feature-flag env lookup (`VITE_FF_*`).
+
 ## [2.12.12] - 2026-03-04
 
 ### Realtime Update Overwrite Fix (Image Blob Preservation)
