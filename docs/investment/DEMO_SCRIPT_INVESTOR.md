@@ -8,7 +8,7 @@
 
 ---
 
-## Opening Hook (30 seconds) - **UPDATED WITH MARKET CONTEXT**
+## Opening Hook (30 seconds)
 
 **YOU**: "Hey [Name], thanks for taking the time. Let me show you something interesting.
 
@@ -18,9 +18,9 @@ They have digitized images, but not structured knowledge.
 
 That's the **$1.2 billion** gap we're solving. AI companies are hitting a 'data wall'—they've exhausted post-2010 web scrapes. Meanwhile, 80-90% of historical documents aren't even digitized yet. And the ones that ARE digitized lack the structure AI needs for training.
 
-Let me show you the difference between what Smithsonian gives researchers versus what we give them."
+Every OCR tool today processes your document and hands you back text — in their format, on their platform. We do something different: the structured output — entities, knowledge graph, embeddings, spatial and temporal metadata — is written into YOUR account as database rows YOU own. The structure is the product. The ownership is the moat.
 
-*[Have comparison slide ready: Smithsonian's flat JSON vs. our structured knowledge graph]*
+Let me show you the difference between what Smithsonian gives researchers versus what we give them."
 
 ---
 
@@ -67,13 +67,15 @@ Now watch what we do differently..."
 
 ### Show Structured Output
 ```javascript
-// Open browser DevTools (F12) Console tab
-const db = new Dexie('GeoGraphSync');
+// The data is stored as a Supabase row owned by the user's account
+// Row-Level Security ensures only this user can read/write these records
+// Open browser DevTools (F12) Console tab to query the local cache of the same data
+const db = new Dexie('GeoGraphSync'); // local read-through cache
 await db.open();
 const assets = await db.assets.toArray();
 const doc = assets[0];
 
-console.log('=== What Smithsonian is Missing ===');
+console.log('=== What the user OWNS in their Supabase account ===');
 console.log('1. Entities:', doc.entities);
 // Shows: [{name: "Cass Gilbert", type: "PERSON"}, {name: "Woolworth Building", type: "LOCATION"}]
 
@@ -94,7 +96,7 @@ console.log('5. Text Embeddings (768D for AI training):', doc.textEmbedding?.sli
 
 Instead of 40 hours manually processing JSON, they query: 'Show 1920s architecture by Cass Gilbert within 5km of Manhattan' → **5 minutes, 23 results** with knowledge graph showing all his related buildings.
 
-**That's an 88% time savings.** And this is LOCAL in their browser - they own it."
+**That's an 88% time savings.** And crucially — these records live in their Supabase account. Their rows, their schema, protected by Row-Level Security. Not locked in our system. Exportable, licensable, or portable to any Postgres-compatible tool."
 
 ---
 
@@ -338,9 +340,9 @@ Users can switch providers in settings. I also have edge OCR with Tesseract.js f
 
 ### Q6: "Why are you the right person to build this?"
 **A**: "Combination of:
-1. **Technical chops**: Built entire platform solo (37K LOC)
+1. **Technical chops**: Built entire platform solo (53K+ LOC)
 2. **Domain knowledge**: [Your background in OCR/archival/Web3]
-3. **Persistence**: v2.9.10 - I iterate fast and fix bugs (see changelog)
+3. **Persistence**: v2.12.0 — bi-weekly releases, consistent improvements (see changelog)
 4. **Vision**: I believe data ownership is the future - this is personal
 
 With your funding, I can scale from solo maker to team. But the core vision and technical foundation are solid."

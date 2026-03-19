@@ -17,6 +17,11 @@ export default function Messages({ user, messages, assets, bundles, onSendMessag
   const [showGiftModal, setShowGiftModal] = useState(false);
   const [giftType, setGiftType] = useState<'ASSET' | 'BUNDLE'>('ASSET');
 
+  const truncateText = (value: unknown, length: number): string => {
+    if (typeof value !== 'string') return '';
+    return value.slice(0, length);
+  };
+
   // Group messages by conversation
   const conversations = messages.reduce((acc, msg) => {
     const otherId = msg.senderId === user?.id ? msg.receiverId : msg.senderId;
@@ -70,11 +75,11 @@ export default function Messages({ user, messages, assets, bundles, onSendMessag
                 className={`w-full p-4 flex items-center gap-3 hover:bg-slate-800/50 transition-colors border-b border-slate-800/50 ${selectedUserId === otherId ? 'bg-primary-600/10 border-r-2 border-r-primary-500' : ''}`}
               >
                 <div className="w-10 h-10 bg-slate-800 rounded-full flex items-center justify-center text-slate-400 font-bold text-sm">
-                  {otherId.slice(0,2).toUpperCase()}
+                  {truncateText(otherId, 2).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0 text-left">
                   <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs font-bold text-white truncate">User {otherId.slice(0,8)}</span>
+                    <span className="text-xs font-bold text-white truncate">User {truncateText(otherId, 8)}</span>
                     <span className="text-[9px] text-slate-500">{new Date(lastMsg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                   </div>
                   <p className="text-[11px] text-slate-400 truncate">{lastMsg.content}</p>
@@ -101,10 +106,10 @@ export default function Messages({ user, messages, assets, bundles, onSendMessag
             <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/30">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 bg-slate-800 rounded-full flex items-center justify-center text-slate-400 font-bold text-xs">
-                  {selectedUserId.slice(0,2).toUpperCase()}
+                  {truncateText(selectedUserId, 2).toUpperCase()}
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-white">User {selectedUserId.slice(0,8)}</h4>
+                  <h4 className="text-xs font-bold text-white">User {truncateText(selectedUserId, 8)}</h4>
                   <span className="text-[10px] text-emerald-500 flex items-center gap-1">
                     <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div> Online
                   </span>
@@ -230,7 +235,7 @@ export default function Messages({ user, messages, assets, bundles, onSendMessag
                   >
                     <img src={asset.imageUrl} className="w-full h-24 object-cover rounded-lg mb-2 border border-slate-700" alt="asset" />
                     <p className="text-[10px] font-bold text-white truncate">{asset.sqlRecord?.DOCUMENT_TITLE || 'Untitled'}</p>
-                    <p className="text-[9px] text-slate-500">{asset.id.slice(0,8)}</p>
+                    <p className="text-[9px] text-slate-500">{truncateText(asset.id, 8)}</p>
                   </button>
                 ))
               ) : (

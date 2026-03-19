@@ -149,10 +149,11 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({ success: false, error: 'Missing assetId or assetIds' }),
       { status: 400, headers: { 'Content-Type': 'application/json' } }
     );
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Download asset error:', error);
+    const message = error instanceof Error ? error.message : 'Internal server error';
     return new Response(
-      JSON.stringify({ success: false, error: error.message || 'Internal server error' }),
+      JSON.stringify({ success: false, error: message }),
       { status: 500, headers: { 'Content-Type': 'application/json' } }
     );
   }

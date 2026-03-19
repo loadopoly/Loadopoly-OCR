@@ -46,10 +46,14 @@ const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> =
     }
   }
 
-  // Parse JSONB fields
-  const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED) 
-    ? row.ENTITIES_EXTRACTED 
-    : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
+  // Parse JSONB fields — guard JSON.parse to prevent a single malformed row
+  // from crashing the entire data pipeline.
+  let entities: string[] = [];
+  try {
+    entities = Array.isArray(row.ENTITIES_EXTRACTED) 
+      ? row.ENTITIES_EXTRACTED 
+      : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
+  } catch { entities = []; }
   
   // Reconstruct Nodes
   const nodes: GraphNode[] = [
@@ -497,9 +501,10 @@ export class SupabaseStorage extends BaseStorage {
     try {
       const { error } = await supabase
         .from(this.tableName)
-        .select('count', { count: 'exact', head: true });
+        .select('ASSET_ID')
+        .limit(1);
 
-      return !error;
+      return !error || error.code === 'PGRST116'; // empty result is fine
     } catch {
       return false;
     }

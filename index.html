@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light">
     <meta name="theme-color" content="#020617">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
     
     <!-- PWA Meta Tags -->
     <link rel="manifest" href="/manifest.json" crossorigin="use-credentials">
@@ -24,10 +26,14 @@
       }
     </script>
     <style>
+      html, body {
+        overflow-x: hidden;
+        max-width: 100vw;
+      }
       body {
         background-color: #020617;
         color: #f8fafc;
-        overscroll-behavior-y: none;
+        overscroll-behavior: none;
       }
       ::-webkit-scrollbar {
         width: 8px;

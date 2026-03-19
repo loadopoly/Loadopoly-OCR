@@ -16,6 +16,7 @@ The application implements a mandatory dual-write strategy to ensure data integr
 - **Fail-over Retries**: Transparent 3-attempt retry loop with exponential backoff for master writes.
 - **User Write**: Secondary write to user-provided Supabase instances; failures here are non-fatal.
 - **Storage Mirroring**: OCR images are uploaded to master storage first, then mirrored to user storage.
+- **Queue/Edge Mirror (v3.1.1+)**: Assets completed by `process-ocr` are mirrored to master via app-level post-completion sync when dual-write mode is active.
 
 **Key Features:**
 - Stores document metadata, OCR transcriptions, and processing results
@@ -233,6 +234,11 @@ All tables have RLS enabled with appropriate policies:
 - `user_asset_access` - Users can only view their own access grants
 - `web3_transactions` - Users can only access their own transactions
 - `dataset_shares` - Users can view datasets shared with them
+
+### Master Corpus Access Control (v3.1.1+)
+- `master_user_access` defines pre-approved users allowed to engage with the shared/master corpus.
+- `historical_documents_global` read access is restricted to document owners, service role, or users granted via `master_user_access`.
+- `graph_nodes`, `graph_edges`, and `asset_graph_nodes` read access follows the same owner-or-master access model.
 
 ## Environment Variables
 

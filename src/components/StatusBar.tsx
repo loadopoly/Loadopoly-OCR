@@ -27,8 +27,8 @@ export default function StatusBar({
     onQueueClick 
 }: StatusBarProps) {
     return (
-        <div className="fixed bottom-0 left-0 right-0 bg-slate-950/80 backdrop-blur-md border-t border-slate-800 px-4 py-1.5 flex items-center justify-between z-50 text-[10px] font-medium text-slate-500">
-            <div className="flex items-center gap-4">
+        <div className="fixed bottom-0 left-0 right-0 bg-slate-950/80 backdrop-blur-md border-t border-slate-800 px-2 sm:px-4 py-1.5 flex items-center justify-between z-50 text-[10px] font-medium text-slate-500" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6px)', maxWidth: '100vw', overflowX: 'hidden' }}>
+            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
                 <div className="flex items-center gap-1.5">
                     {isOnline ? (
                         <span className="flex items-center gap-1 text-emerald-500">
@@ -67,14 +67,14 @@ export default function StatusBar({
                 
                 <div className="h-3 w-px bg-slate-800 hidden sm:block" />
                 
-                <div className="flex items-center gap-1.5">
+                <div className="hidden sm:flex items-center gap-1.5">
                     <Database size={12} />
                     <span>{localCount} <span className="hidden sm:inline">Local Assets</span></span>
                 </div>
 
-                <div className="h-3 w-px bg-slate-800 hidden sm:block" />
+                <div className="h-3 w-px bg-slate-800 hidden md:block" />
 
-                <div className="flex items-center bg-slate-900 rounded-full p-0.5 border border-slate-800">
+                <div className="hidden md:flex items-center bg-slate-900 rounded-full p-0.5 border border-slate-800">
                     <button 
                         onClick={() => setIsGlobalView(false)}
                         className={`px-2 py-0.5 rounded-full transition-all flex items-center gap-1 ${!isGlobalView ? 'bg-primary-600 text-white shadow-sm' : 'text-slate-500 hover:text-slate-300'}`}
@@ -91,11 +91,11 @@ export default function StatusBar({
                     </button>
                 </div>
 
-                <div className="h-3 w-px bg-slate-800 hidden sm:block" />
-                <span className="text-slate-600 hidden md:inline">v1.8.1</span>
+                <div className="h-3 w-px bg-slate-800 hidden lg:block" />
+                <span className="text-slate-600 hidden lg:inline">v1.8.1</span>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 shrink-0">
                 <button 
                     onClick={() => onTabChange('settings')}
                     className={`flex items-center gap-1.5 transition-colors hover:text-white ${syncOn ? 'text-emerald-500' : 'text-slate-500'}`}
@@ -104,11 +104,11 @@ export default function StatusBar({
                     <span className="hidden sm:inline">{syncOn ? 'Auto-Sync Active' : 'Sync Disabled'}</span>
                 </button>
 
-                <div className="h-3 w-px bg-slate-800" />
+                <div className="h-3 w-px bg-slate-800 hidden sm:block" />
 
                 <button 
                     onClick={() => onTabChange('settings')}
-                    className={`flex items-center gap-1.5 transition-colors hover:text-white ${user ? 'text-primary-400' : 'text-slate-500'}`}
+                    className={`hidden sm:flex items-center gap-1.5 transition-colors hover:text-white ${user ? 'text-primary-400' : 'text-slate-500'}`}
                 >
                     {user ? (
                         <>

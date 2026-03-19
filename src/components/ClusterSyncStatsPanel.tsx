@@ -33,7 +33,7 @@ import {
   Activity,
 } from 'lucide-react';
 import { DigitalAsset } from '../types';
-import { ClusterSynchronizer, ClusterType } from './ClusterSynchronizer';
+import { ClusterSynchronizer, ClusterType, ClassificationResult } from './ClusterSynchronizer';
 
 // ============================================
 // Types
@@ -42,6 +42,7 @@ import { ClusterSynchronizer, ClusterType } from './ClusterSynchronizer';
 interface ClusterSyncStatsPanelProps {
   assets: DigitalAsset[];
   onClose: () => void;
+  onClassificationUpdate?: (results: ClassificationResult[]) => void;
 }
 
 interface ClusterStats {
@@ -180,7 +181,7 @@ function QualityIndicator({ score, label }: { score: number; label: string }) {
 // Main Component
 // ============================================
 
-export function ClusterSyncStatsPanel({ assets, onClose }: ClusterSyncStatsPanelProps) {
+export function ClusterSyncStatsPanel({ assets, onClose, onClassificationUpdate }: ClusterSyncStatsPanelProps) {
   const [showFullSynchronizer, setShowFullSynchronizer] = useState(false);
   const [selectedTab, setSelectedTab] = useState<'overview' | 'clusters' | 'quality'>('overview');
 
@@ -385,7 +386,7 @@ export function ClusterSyncStatsPanel({ assets, onClose }: ClusterSyncStatsPanel
           
           {/* Synchronizer */}
           <div className="flex-1 overflow-hidden">
-            <ClusterSynchronizer assets={assets} />
+            <ClusterSynchronizer assets={assets} onClassificationComplete={onClassificationUpdate} />
           </div>
         </div>
       </div>

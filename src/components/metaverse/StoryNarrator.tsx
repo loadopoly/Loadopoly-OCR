@@ -46,6 +46,7 @@ import {
 // ============================================
 
 interface StoryNarratorProps {
+  onStartAdventure?: () => void;
   graphData: GraphData;
   assets: DigitalAsset[];
   selectedNode: GraphNode | null;
@@ -118,10 +119,30 @@ function ChapterGallery({
 }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
 
+  const getAssetImageUrl = useCallback((asset?: DigitalAsset): string => {
+    if (!asset) return '';
+    const originalUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
+      ? asset.sqlRecord.ORIGINAL_IMAGE_URL
+      : '';
+    return asset.imageUrl || originalUrl || '';
+  }, []);
+
+  const handleImageError = useCallback((event: React.SyntheticEvent<HTMLImageElement>, asset: DigitalAsset) => {
+    const fallbackUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
+      ? asset.sqlRecord.ORIGINAL_IMAGE_URL
+      : '';
+    const img = event.currentTarget;
+    if (fallbackUrl && img.src !== fallbackUrl) {
+      img.src = fallbackUrl;
+      return;
+    }
+    img.style.display = 'none';
+  }, []);
+
   if (assets.length === 0) return null;
 
   const currentAsset = assets[selectedIndex];
-  const imageUrl = currentAsset?.imageUrl;
+  const imageUrl = getAssetImageUrl(currentAsset);
 
   return (
     <div className="mt-4 rounded-lg overflow-hidden bg-slate-800/50 border border-slate-700">
@@ -132,6 +153,7 @@ function ChapterGallery({
             src={imageUrl} 
             alt={currentAsset?.sqlRecord?.DOCUMENT_TITLE || 'Historical artifact'}
             className="max-w-full max-h-full object-contain"
+            onError={(event) => currentAsset && handleImageError(event, currentAsset)}
           />
         ) : (
           <div className="flex flex-col items-center gap-2 text-slate-500">
@@ -167,7 +189,7 @@ function ChapterGallery({
       {assets.length > 1 && (
         <div className="flex gap-2 p-2 overflow-x-auto bg-slate-900/50">
           {assets.map((asset, index) => {
-            const thumbUrl = asset.imageUrl;
+            const thumbUrl = getAssetImageUrl(asset);
             return (
               <button
                 key={asset.id}
@@ -183,6 +205,7 @@ function ChapterGallery({
                     src={thumbUrl} 
                     alt={`View ${index + 1}`}
                     className="w-full h-full object-cover"
+                    onError={(event) => handleImageError(event, asset)}
                   />
                 ) : (
                   <div className="w-full h-full bg-slate-700 flex items-center justify-center">
@@ -310,6 +333,8 @@ export function StoryNarrator({
   onAssetView,
   isExpanded = false,
   onToggleExpand,
+  onStartAdventure,
+
 }: StoryNarratorProps) {
   // State
   const narrativeEngine = useMemo(() => createNarrativeEngine(graphData, assets), [graphData, assets]);
@@ -421,7 +446,7 @@ export function StoryNarrator({
           </p>
 
           <button
-            onClick={handleSuggestStart}
+            onClick={() => { handleSuggestStart(); onStartAdventure?.(); }}
             className="px-6 py-3 bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-500 hover:to-primary-600 rounded-xl font-semibold flex items-center gap-2 transition-all transform hover:scale-105 shadow-lg shadow-primary-500/25"
           >
             <Sparkles size={18} />
@@ -609,7 +634,7 @@ export function StoryNarrator({
             {/* Alternative actions */}
             <div className="flex gap-2 pt-2">
               <button
-                onClick={handleSuggestStart}
+                onClick={() => { handleSuggestStart(); onStartAdventure?.(); }}
                 className="flex-1 p-2 text-xs text-slate-500 hover:text-white hover:bg-slate-800 rounded-lg transition-colors flex items-center justify-center gap-1"
               >
                 <Sparkles size={12} />
@@ -636,7 +661,7 @@ export function StoryNarrator({
               Would you like to explore a new direction?
             </p>
             <button
-              onClick={handleSuggestStart}
+              onClick={() => { handleSuggestStart(); onStartAdventure?.(); }}
               className="px-4 py-2 bg-primary-600 hover:bg-primary-500 rounded-lg font-semibold text-sm transition-colors"
             >
               Find New Adventure

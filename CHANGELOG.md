@@ -3,6 +3,173 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.12.12] - 2026-03-04
+
+### Realtime Update Overwrite Fix (Image Blob Preservation)
+- Fixed a central regression where realtime Supabase asset updates replaced local assets wholesale, dropping local `imageBlob` data and re-breaking thumbnails shortly after processing completed.
+- `App.tsx` now merges incoming realtime assets with existing local assets and preserves local `imageBlob` + current `imageUrl` when available.
+- Applies to both realtime `UPDATE` and `INSERT` handlers for `historical_documents_global` subscriptions.
+
+## [2.12.11] - 2026-03-04
+
+### Full-Library Thumbnail Recovery + Per-Card Signed Retry
+- Fixed signed preview prefetch in `App.tsx` to process all blob-missing assets in batches (80 at a time) instead of stopping after the first batch, which left most large libraries unrecovered.
+- Added robust bundle thumbnail retry logic in `BundleCard.tsx`: each slot now cycles candidates and then requests a fresh signed URL by `assetId` when initial sources fail.
+- Bundle cards now fail gracefully to icon placeholders only after local/saved/signed candidates are exhausted.
+
+## [2.12.10] - 2026-03-04
+
+### Marketplace Visibility + Legacy Thumbnail Recovery
+- Marketplace now includes single processed assets as generated one-item bundles, so a newly captured photo appears immediately with a thumbnail card even before clustering groups it.
+- Signed preview prefetch in `App.tsx` now proactively targets assets that lack `imageBlob` (common for historical cloud-synced rows), even if they still have an `http` URL string.
+- This addresses the long-tail case where `ORIGINAL_IMAGE_URL` exists but is stale/private and old bundle cards stayed broken.
+- Purchase modal asset resolution now prefers `bundle.assetIds` via `assetsById`, with URL-based fallback retained for compatibility.
+
+## [2.12.7] - 2026-03-04
+
+### Critical: Storage Bucket Mismatch Fix
+- **Root cause fix**: `downloadService` was searching for signed URLs in `processing-uploads` bucket, but images are stored in `corpus-images` bucket. All signed URL fallback attempts were silently failing.
+- `getDirectSignedUrl` now searches both `corpus-images` and `processing-uploads` buckets with enhanced path resolution (root-level contributed assets + user folder structures).
+- Fixed asset grid cards (line 3602) using `item.imageUrl` directly instead of `getThumbnailSrc` — the most visible thumbnail view was completely bypassing the fallback pipeline.
+- Added `assetsById` prop to second `BundleCard` render that was missing signed URL data.
+- Fixed proactive signed URL resolution race condition — removed `signedPreviewUrls` from effect dependencies, using ref-based tracking instead to prevent self-cancelling async fetches.
+- `isUsableImageUrl` no longer treats `blob:` URLs as valid (they don't survive page reloads), preventing the proactive resolver from skipping assets with dead blob references.
+- `getThumbnailSrc` now prioritises fresh blob URLs from stored imageBlobs, falls back through signed → persisted → original URLs, and always returns a placeholder SVG instead of empty string.
+- `BundleCard` candidates now filter out stale `blob:` URLs and prioritise signed URL-enriched `assetsById` data.
+
+## [2.12.6] - 2026-03-04
+
+### Mobile Thumbnail Recovery (Signed URL Fallback)
+- Added on-demand signed preview URL resolution for assets in `App.tsx` using `downloadService`.
+- Thumbnail pipeline now recovers from invalid/expired `imageUrl` and missing `ORIGINAL_IMAGE_URL` by requesting fresh signed URLs from storage.
+- Added signed preview URL caching and per-asset retry on image load failure to stabilize Marketplace/Curator/Structured list previews.
+- Exposed `downloadService.getPreviewUrl()` and `getPreviewUrls()` for UI-safe thumbnail retrieval.
+
+## [2.12.5] - 2026-03-04
+
+### Multi-View Thumbnail Reliability
+- Hardened bundle thumbnail URL generation in `bundleService` to prefer persisted image sources.
+- Updated `BundleCard` to resolve thumbnail sources per asset (`imageUrl` + `ORIGINAL_IMAGE_URL` + bundle fallback) and retry alternate sources on load failure.
+- Wired `BundleCard` to receive live asset lookup data from `App` for accurate fallback resolution in mobile/local-master views.
+- This directly targets broken image placeholders across Marketplace/Exploratory and Curator-adjacent bundle views.
+
+## [2.12.4] - 2026-03-04
+
+### Structured DB Thumbnail Rendering
+- Added centralized thumbnail source resolution in `App.tsx` for Structured DB and related queues.
+- Thumbnails now resolve via fallback chain: `imageUrl` → `sqlRecord.ORIGINAL_IMAGE_URL` → in-memory `imageBlob` URL.
+- Added resilient thumbnail `onError` handling to retry alternate sources before falling back to placeholder SVG.
+- Added cleanup for generated blob thumbnail object URLs to avoid URL leak buildup.
+
+## [2.12.3] - 2026-03-04
+
+### Production Crash Guard Follow-up
+- Added additional `undefined.slice` guards across high-risk production UI surfaces:
+  - `Messages` conversation and gift ID rendering
+  - `Communities` admission request user ID rendering
+  - `CuratorMergePanel` match reason/entity/keyword array handling
+  - `IntegrationStatus` state label rendering when integration payloads are partial
+- This follows mobile reports where stale/partial records still triggered runtime `slice` errors after app reset.
+
+## [2.12.2] - 2026-03-04
+
+### Structured DB Stability
+- Added targeted string truncation guards in `App.tsx` and `QueueMonitor.tsx` to prevent runtime crashes when IDs or file names are missing (`Cannot read properties of undefined (reading 'slice')`).
+- Hardened Structured DB table and queue-adjacent render paths so malformed/partial records degrade safely instead of breaking the view.
+
+### Knowledge World Thumbnails
+- Added resilient thumbnail URL resolution in `WorldRenderer.tsx` and `StoryNarrator.tsx`.
+- Thumbnails now fall back to `sqlRecord.ORIGINAL_IMAGE_URL` when primary image URLs fail, and gracefully hide broken images if both sources fail.
+
+### Cluster Synchronizer Throughput UX
+- Added sync execution mode selector (`Background` / `Foreground`) to `ClusterSynchronizer.tsx`.
+- Refactored pause/resume logic to use live sync status refs (eliminates stale-state waits in long-running sync sessions).
+- Added cooperative yielding in background mode to keep UI responsive during multi-asset sync.
+
+## [2.12.1] - 2026-03-03
+
+### Analysis Functions — Type Safety & Crash Guards
+- **`asText()` helper**: Introduced a lightweight `asText(value, fallback)` guard in `App.tsx` that coerces any non-string value to a safe fallback string, preventing runtime crashes when JSONB fields arrive as numbers, booleans, or null instead of strings.
+- **Graph data aggregation hardening**: All `buildGlobalGraphData` paths (category clustering, era bucketing, contested-content detection, node label extraction) now route through `asText()`, eliminating `TypeError: Cannot read properties of null` and `String.prototype.replace` crashes on malformed knowledge graph records.
+- **`STRUCTURED_KNOWLEDGE_GRAPH` node merge safety**: Array guards added (`Array.isArray(skg?.nodes)`, `Array.isArray(asset.graphData?.nodes)`) before iterating server-side and client-side graph node lists, preventing silent failures on empty or non-array payloads.
+- **Document title / entity label fallbacks**: `docNodes` and `entityNodesMap` entries now always receive a defined string label even when `DOCUMENT_TITLE`, `NLP_NODE_CATEGORIZATION`, or node `label` fields are missing.
+
+### localStorage Resilience
+- **`geograph-owned-assets` parse guard**: Wrapped `JSON.parse` in a try/catch; malformed stored data now resets asset ownership to an empty set rather than crashing the app on startup.
+- **Array validation**: Parsed owned-asset IDs are validated with `Array.isArray()` before constructing the `Set`, preventing a `Set(non-iterable)` TypeError.
+
+### Service Worker Fix
+- **`handleApiRequest` syntax fix**: Corrected a stray `});` → `}` closing the `handleApiRequest` function body, resolving a parse error that could prevent SW registration in strict environments.
+
+### Testing Infrastructure
+- **Playwright added**: `playwright` and `@playwright/test` added as dev dependencies (`^1.58.2`) enabling headless browser automation.
+- **Headless test suite**: Added `headless-test.cjs`, `headless-test-v2.cjs`, `headless-test-v3.cjs`, `test-navigation.cjs`, `test-db-interactive.cjs`, `test-mobile-db.cjs`, and `test-structured-db.cjs` for end-to-end browser, navigation, and database interaction testing.
+
+## [2.12.0] - 2026-03-02
+
+### Adventure Mode & AR Walk (WorldRenderer)
+- **Adventure Mode**: New `Compass` toolbar button in the 3D World view activates live GPS tracking via `watchPosition`. Nearby captures (within 1 km, haversine distance) surface as a proximity overlay panel with thumbnail, title, and distance badge.
+- **`onStartAdventure` prop**: `WorldRenderer` now accepts an optional callback so parent components can respond to adventure mode activation.
+- **Empty-state overlay**: 3D World now shows a clear call-to-action when no graph data exists instead of a blank canvas.
+
+### Structured Data Population (Edge Functions)
+- **`TOKEN_COUNT`**: Populated in both `api/process-ocr/index.ts` and `supabase/functions/process-ocr/index.ts` using a ~0.75 words-per-token approximation.
+- **`STRUCTURED_CONTENT`**: Populated with `detected`, `wordCount`, and `paragraphCount` when OCR text is present.
+- **`STRUCTURED_TEMPORAL`**: Populated with detected temporal entities when DATE/TIME nodes are found.
+- **`STRUCTURED_SPATIAL`**: Populated with zone type, GIS coordinates, and device-captured lat/lng when spatial context is available.
+- **`STRUCTURED_PROVENANCE`**: Always populated with capture metadata (timestamp, scan type, source asset ID, processing version).
+- **`STRUCTURED_DISCOVERY`**: Populated with entity/keyword/node/link counts when entities or keywords were extracted.
+
+### Knowledge Graph — Server-Path Enrichment
+- **`STRUCTURED_KNOWLEDGE_GRAPH` node merging**: `buildGlobalGraphData` in `App.tsx` now merges nodes and links from the edge function's `STRUCTURED_KNOWLEDGE_GRAPH` JSONB field alongside the existing client-side `graphData`, providing richer multi-hop entity relationships.
+
+### GPS Capture at Ingest
+- **Geolocation at queue time**: When a file is queued via `ingestFile()`, the current GPS position is captured (3 s timeout) and passed to `processingQueueService.queueFile()` as `location`, enabling the edge function to associate images with physical capture coordinates.
+
+### PWA & Service Worker Reliability
+- **No more lock-screen reload loop**: Removed `self.skipWaiting()` from SW `install` handler. SW now waits for old clients to close before activating, preventing the `clients.claim()` → `controllerchange` → `location.reload()` cycle that restarted the app on phone lock-screen unlock.
+- **SW update banner**: `App.tsx` listens for the `geograph-sw-updated` custom event (dispatched by both `index.tsx` and `pwaUtils.ts`) and renders a non-blocking top banner with an "Update Now" button that calls `SKIP_WAITING` and reloads.
+- **Offline status banner**: A persistent amber banner appears when `navigator.onLine` is false, showing how many queued captures will upload when connectivity returns.
+- **Background Sync integration**: When the app comes back online with pending assets, it registers a `sync-contributions` background sync tag. The SW `sync` event dispatches `geograph-sync-requested` to the page which triggers `handleProcessAllPending`.
+
+### UX & Navigation Fixes
+- **3D World as Explore default**: `useEffect` in `App.tsx` resets `exploreSubTab` to `'3d'` every time the Explore tab is activated, preventing stale sub-tab state from previous visits.
+- **Batch tab auto-navigation removed**: `handleBatchFiles` no longer calls `setActiveTab('batch')` — the caller decides navigation, preventing AR sessions from hijacking the user to the batch tab.
+- **Queue monitor visible by default**: `showDashboardQueue` now reads from `localStorage` with a default of `true` (key `geograph-queue-visible`).
+
+### Bug Fixes
+- **Null-safe `ENTITIES_EXTRACTED`**: Drilldown table now uses `(rec?.ENTITIES_EXTRACTED ?? []).slice(0,3)` to avoid crash when field is null.
+- **Blob URL cleanup**: `loadAssets` in `indexeddb.ts` now detects dead `blob:` URLs (no backing `imageBlob`) and clears them to prevent broken image icons after reload.
+- **Public URL persistence**: After cloud sync, `saveAsset()` is called with the updated HTTPS URL so future reloads serve the permanent cloud link, not a dead blob.
+- **`ErrorBoundary` on database tab**: The entire database view is now wrapped in an `ErrorBoundary` with a "Reset View" recovery button.
+
+### Dependencies
+- Promoted `@react-three/drei`, `@react-three/fiber`, and `three` from `optionalDependencies` to `dependencies` to ensure they are always bundled.
+
+## [2.11.4] - 2026-02-25
+
+### UX Reliability & Diagnostics
+- **QA Debug Drill-Down**: Added failed-job visibility to the in-app QA panel, including queue failure stage/error details and quick navigation to the relevant asset context.
+- **Structured DB Graph Affordance**: Made the `NODES` column interactive so users can jump directly to `Explore → Knowledge Graph` for node/edge inspection of a selected asset.
+- **Explore Default Alignment**: Set `3D World` as the default Explore sub-tab and updated keyboard shortcut behavior for consistency.
+
+### Download Resilience
+- **Non-Blocking Failure UX**: Replaced blocking image download `alert()` fallbacks with toast-driven feedback and automatic JSON fallback export.
+- **Signed URL Fallback Path**: Added direct Supabase Storage signed-URL fallback when edge-function URL generation fails, improving download success in environments where the edge endpoint is unavailable.
+- **Abort/Cancel Integrity**: Preserved explicit cancellation states and queue updates through the revised download flow.
+
+### Marketplace Card Robustness
+- **Broken Image Handling**: Added Bundle card image fallback rendering to avoid broken thumbnail placeholders when bundle-part URLs are invalid or unavailable.
+
+## [2.11.3] - 2026-02-24
+
+### Edge Function Optimization & Type Safety
+- **Deno-Native Edge Serving**: Migrated `process-ocr`, `download-asset`, `kg-backfill`, and `spatial-coordinates` Supabase edge functions from the deprecated `std/http/server.ts` `serve()` API to the native `Deno.serve()` entrypoint, ensuring compatibility with current Deno Deploy runtimes and eliminating cold-start overhead from the legacy HTTP module.
+- **Parallelized Edge Initialization**: Supabase client construction and environment validation are now performed before the request handler fires, reducing per-request latency to near-zero for warm invocations.
+- **Type-Safe Error Handling**: Changed `catch (error)` blocks to `catch (error: unknown)` with explicit `instanceof Error` guards in `download-asset` and `process-ocr`, eliminating implicit `any` TypeScript access on caught values.
+- **Import Map Cleanup**: Removed unused `std/http/server.ts` entry from `supabase/functions/import_map.json`.
+- **ESLint Comment Pruning**: Removed redundant `// eslint-disable-next-line` suppression comments in `src/lib/lazyComponents.tsx`, `src/lib/logger.ts`, and `src/services/avatarService.ts` now that the underlying patterns are correctly typed.
+
 ## [2.11.2] - 2026-02-22
 
 ### Security & Data Governance — Deletion Lockdown

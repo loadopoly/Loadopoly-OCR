@@ -126,6 +126,16 @@ CREATE TABLE IF NOT EXISTS digital_asset_bundles (
     "UPDATED_AT" TIMESTAMPTZ DEFAULT NOW()
 );
 
+  -- 2.3 Master User Access Control
+  -- Users listed here can access the shared/master corpus and graph datasets.
+  CREATE TABLE IF NOT EXISTS master_user_access (
+    "USER_ID" UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    "CAN_ACCESS_CORPUS" BOOLEAN NOT NULL DEFAULT true,
+    "CAN_MANAGE_ACCESS" BOOLEAN NOT NULL DEFAULT false,
+    "CREATED_AT" TIMESTAMPTZ DEFAULT NOW(),
+    "UPDATED_AT" TIMESTAMPTZ DEFAULT NOW()
+  );
+
 -- ============================================
 -- 3. CLASSIFICATION SYSTEM
 -- ============================================
@@ -1158,6 +1168,81 @@ ALTER TABLE spatial_anchors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE graph_nodes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE graph_edges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE asset_graph_nodes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE master_user_access ENABLE ROW LEVEL SECURITY;
+
+-- historical_documents_global may be created externally in some deployments.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'historical_documents_global'
+  ) THEN
+    EXECUTE 'ALTER TABLE historical_documents_global ENABLE ROW LEVEL SECURITY';
+  END IF;
+END $$;
+
+-- Master access control table policies
+DROP POLICY IF EXISTS "master_access_self_or_service_read" ON master_user_access;
+DROP POLICY IF EXISTS "master_access_service_manage" ON master_user_access;
+CREATE POLICY "master_access_self_or_service_read" ON master_user_access FOR SELECT
+USING ((select auth.uid()) = "USER_ID" OR (select auth.role()) = 'service_role');
+CREATE POLICY "master_access_service_manage" ON master_user_access FOR ALL TO service_role
+USING (true) WITH CHECK (true);
+
+-- historical_documents_global policies (owner or master-granted access)
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public' AND table_name = 'historical_documents_global'
+  ) THEN
+    EXECUTE 'DROP POLICY IF EXISTS "docs_read_owner_or_master" ON historical_documents_global';
+    EXECUTE 'DROP POLICY IF EXISTS "docs_insert_owner_or_service" ON historical_documents_global';
+    EXECUTE 'DROP POLICY IF EXISTS "docs_update_owner_or_service" ON historical_documents_global';
+    EXECUTE 'DROP POLICY IF EXISTS "Users view own documents" ON historical_documents_global';
+    EXECUTE 'DROP POLICY IF EXISTS "Authenticated insert own" ON historical_documents_global';
+    EXECUTE 'DROP POLICY IF EXISTS "Users update own documents" ON historical_documents_global';
+
+    EXECUTE '
+      CREATE POLICY "docs_read_owner_or_master"
+      ON historical_documents_global FOR SELECT
+      USING (
+        (select auth.role()) = ''service_role''
+        OR "USER_ID" = (select auth.uid())
+        OR EXISTS (
+          SELECT 1
+          FROM public.master_user_access mua
+          WHERE mua."USER_ID" = (select auth.uid())
+            AND mua."CAN_ACCESS_CORPUS" = true
+        )
+      )
+    ';
+
+    EXECUTE '
+      CREATE POLICY "docs_insert_owner_or_service"
+      ON historical_documents_global FOR INSERT
+      WITH CHECK (
+        (select auth.role()) = ''service_role''
+        OR "USER_ID" = (select auth.uid())
+      )
+    ';
+
+    EXECUTE '
+      CREATE POLICY "docs_update_owner_or_service"
+      ON historical_documents_global FOR UPDATE
+      USING (
+        (select auth.role()) = ''service_role''
+        OR "USER_ID" = (select auth.uid())
+      )
+      WITH CHECK (
+        (select auth.role()) = ''service_role''
+        OR "USER_ID" = (select auth.uid())
+      )
+    ';
+  END IF;
+END $$;
 
 -- Processing Queue Policies
 DROP POLICY IF EXISTS "Users view own queue items" ON processing_queue;
@@ -1304,25 +1389,65 @@ DROP POLICY IF EXISTS "graph_nodes_read_all" ON graph_nodes;
 DROP POLICY IF EXISTS "graph_nodes_insert_own" ON graph_nodes;
 DROP POLICY IF EXISTS "graph_nodes_update_own" ON graph_nodes;
 DROP POLICY IF EXISTS "graph_nodes_service" ON graph_nodes;
-CREATE POLICY "graph_nodes_read_all" ON graph_nodes FOR SELECT TO authenticated USING (true);
-CREATE POLICY "graph_nodes_insert_own" ON graph_nodes FOR INSERT TO authenticated
-WITH CHECK (auth.uid() = "USER_ID" OR "USER_ID" IS NULL);
-CREATE POLICY "graph_nodes_update_own" ON graph_nodes FOR UPDATE TO authenticated
-USING (auth.uid() = "USER_ID" OR "USER_ID" IS NULL);
+DROP POLICY IF EXISTS "graph_nodes_read_owner_or_master" ON graph_nodes;
+CREATE POLICY "graph_nodes_read_owner_or_master" ON graph_nodes FOR SELECT TO authenticated
+USING (
+  "USER_ID" = auth.uid()
+  OR EXISTS (
+    SELECT 1
+    FROM public.master_user_access mua
+    WHERE mua."USER_ID" = auth.uid()
+      AND mua."CAN_ACCESS_CORPUS" = true
+  )
+);
 CREATE POLICY "graph_nodes_service" ON graph_nodes FOR ALL TO service_role
 USING (true) WITH CHECK (true);
 
 -- Graph Edges Policies
 DROP POLICY IF EXISTS "graph_edges_read_all" ON graph_edges;
 DROP POLICY IF EXISTS "graph_edges_service" ON graph_edges;
-CREATE POLICY "graph_edges_read_all" ON graph_edges FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "graph_edges_read_owner_or_master" ON graph_edges;
+CREATE POLICY "graph_edges_read_owner_or_master" ON graph_edges FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.graph_nodes gn
+    WHERE (gn."ID" = graph_edges."FROM_NODE_ID" OR gn."ID" = graph_edges."TO_NODE_ID")
+      AND (
+        gn."USER_ID" = auth.uid()
+        OR EXISTS (
+          SELECT 1
+          FROM public.master_user_access mua
+          WHERE mua."USER_ID" = auth.uid()
+            AND mua."CAN_ACCESS_CORPUS" = true
+        )
+      )
+  )
+);
 CREATE POLICY "graph_edges_service" ON graph_edges FOR ALL TO service_role
 USING (true) WITH CHECK (true);
 
 -- Asset Graph Nodes (junction) Policies
 DROP POLICY IF EXISTS "asset_graph_nodes_read" ON asset_graph_nodes;
 DROP POLICY IF EXISTS "asset_graph_nodes_service" ON asset_graph_nodes;
-CREATE POLICY "asset_graph_nodes_read" ON asset_graph_nodes FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "asset_graph_nodes_read_owner_or_master" ON asset_graph_nodes;
+CREATE POLICY "asset_graph_nodes_read_owner_or_master" ON asset_graph_nodes FOR SELECT TO authenticated
+USING (
+  EXISTS (
+    SELECT 1
+    FROM public.historical_documents_global h
+    WHERE h."ASSET_ID"::text = asset_graph_nodes."ASSET_ID"::text
+      AND (
+        h."USER_ID" = auth.uid()
+        OR EXISTS (
+          SELECT 1
+          FROM public.master_user_access mua
+          WHERE mua."USER_ID" = auth.uid()
+            AND mua."CAN_ACCESS_CORPUS" = true
+        )
+      )
+  )
+);
 CREATE POLICY "asset_graph_nodes_service" ON asset_graph_nodes FOR ALL TO service_role
 USING (true) WITH CHECK (true);
 

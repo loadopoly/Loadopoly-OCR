@@ -1,5 +1,5 @@
 /**
- * GeoGraph Service Worker v3.0.0
+ * GeoGraph Service Worker v3.3.1
  * 
  * IMPORTANT: This service worker is designed to be cache-safe for Vite builds.
  * - JS/CSS bundles are NEVER cached (they have content hashes that change per build)
@@ -14,7 +14,7 @@
  * - Performance optimizations with preload hints
  */
 
-const CACHE_VERSION = '3.1.0';
+const CACHE_VERSION = '3.4.0';
 const CACHE_NAME = `geograph-v${CACHE_VERSION}`;
 const IMAGE_CACHE_NAME = `geograph-images-v${CACHE_VERSION}`;
 const API_CACHE_NAME = `geograph-api-v${CACHE_VERSION}`;
@@ -63,8 +63,10 @@ self.addEventListener('install', (event) => {
       caches.open(API_CACHE_NAME), // Pre-create API cache
     ]).then(() => log('All caches initialized'))
   );
-  // Force immediate activation - don't wait for old SW to release
-  self.skipWaiting();
+  // Do NOT call self.skipWaiting() here.
+  // The new SW waits until all tabs using the old SW are closed, or until the
+  // user explicitly requests an update. This prevents the phone lock-screen
+  // reload loop where clients.claim() fires controllerchange → location.reload().
 });
 
 self.addEventListener('activate', (event) => {
@@ -256,7 +258,7 @@ async function handleApiRequest(request) {
     }
     throw error;
   }
-});
+}
 
 // Background Sync for offline data
 self.addEventListener('sync', (event) => {

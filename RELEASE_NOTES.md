@@ -1,4 +1,115 @@
-# 🚀 GeoGraph Node: v2.11.2 Release Notes
+# 🚀 GeoGraph Node: v2.12.0 Release Notes
+
+## 🌐 v2.12.0 — Adventure Mode, Structured Data Population & PWA Hardening (2026-03-02)
+
+### 🎯 Overview
+v2.12.0 delivers three major capability expansions: an immersive **Adventure Mode** AR Walk that surfaces geo-tagged captures from your physical surroundings in the 3D World; comprehensive **structured JSONB field population** in both edge function paths (TOKEN_COUNT, STRUCTURED_CONTENT/TEMPORAL/SPATIAL/PROVENANCE/DISCOVERY); and a **PWA reliability overhaul** that eliminates the lock-screen reload loop and replaces forced-reload SW updates with user-controlled banners.
+
+---
+
+### 🧭 Adventure Mode — AR Walk (3D World)
+- Click the **Compass** button in the 3D World toolbar to enter Adventure Mode
+- Live GPS tracking via `watchPosition` with 5 s maximum cache age
+- Proximity overlay lists up to 5 captures within 1 km, ordered by distance (haversine)
+- Each capture card shows thumbnail, document title, and distance in metres
+- Clicking a proximity card selects the matching node in the knowledge graph
+- Geolocation watch is cleaned up on component unmount
+- **Empty state**: 3D World now shows a helpful message when no graph nodes exist
+
+---
+
+### 🗃️ Structured Data Population
+Both `api/process-ocr` and `supabase/functions/process-ocr` now populate:
+
+| Field | Description |
+|-------|-------------|
+| `TOKEN_COUNT` | Approximate token count (~0.75 words/token) |
+| `STRUCTURED_CONTENT` | Word/paragraph counts when OCR text present |
+| `STRUCTURED_TEMPORAL` | Detected temporal entities (year, month patterns) |
+| `STRUCTURED_SPATIAL` | Zone type + device lat/lng when GIS context available |
+| `STRUCTURED_PROVENANCE` | Always-present capture provenance metadata |
+| `STRUCTURED_DISCOVERY` | Entity + keyword + graph node/link counts |
+
+---
+
+### 🌍 GPS Capture at Ingest
+- GPS coordinates are captured at the moment a file is queued (3 s timeout, non-blocking)
+- Coordinates are forwarded to the edge function via the processing queue `location` field
+- Enables `STRUCTURED_SPATIAL` population and Adventure Mode proximity matching
+
+---
+
+### 🔧 PWA & Service Worker Fixes
+- **Removed `skipWaiting()` from SW install** — eliminates the lock-screen reload loop (`clients.claim()` → `controllerchange` → `location.reload()` cycle)
+- **Non-blocking update banner** — dispatches `geograph-sw-updated` custom event → React renders a dismissible top bar with "Update Now" button
+- **Offline status banner** — amber indicator with queued-capture count when `navigator.onLine === false`
+- **Background sync** — `sync-contributions` tag registered when pending assets + connectivity restored; SW dispatches `geograph-sync-requested` → triggers `handleProcessAllPending`
+- **SW cache version bumped** to `3.4.0`
+
+---
+
+### 🐛 Bug Fixes
+- **Null-safe entities slice** — `ENTITIES_EXTRACTED ?? []` prevents crash when field is null in the drilldown table
+- **Dead blob URL cleanup** — `loadAssets` clears stale `blob:` URLs with no backing `imageBlob` to prevent broken icon placeholders
+- **Public URL persistence** — HTTPS URLs from cloud sync are saved to IndexedDB immediately, surviving future reloads
+- **ErrorBoundary on database tab** — isolated crash recovery with "Reset View" button
+- **Batch tab navigation fix** — `handleBatchFiles` no longer forces navigation; callers decide
+
+### 🕸️ Knowledge Graph Enrichment
+- `buildGlobalGraphData` merges `STRUCTURED_KNOWLEDGE_GRAPH` server-path nodes alongside client-side `graphData` nodes for richer multi-hop entity graphs
+
+---
+
+### 🧪 Validation Snapshot
+- `npm run typecheck` ✅
+- `npm run lint` ✅
+- `npm run build` ✅ (3288 modules)
+
+---
+
+## ⚡ v2.11.4 — UX Reliability, Download Fallbacks, and QA Drill-Down (2026-02-25)
+
+### 🎯 Overview
+This patch focuses on production reliability and operator visibility: image-download failures are now resilient to missing edge URL handlers, Explore behavior aligns with expected user flow, and QA debug now surfaces actionable failed-job context.
+
+### ✅ UX & Flow Improvements
+- **Explore Defaults**: `3D World` is now the default Explore sub-tab, with keyboard shortcut alignment for consistent navigation.
+- **Node/Edge Access from Structured DB**: The `NODES` column is now clickable and routes directly to the selected asset graph in `Explore → Knowledge Graph`.
+- **QA Debug Failure Drill-Down**: Added a dedicated failed-jobs panel that surfaces queue failure stage/error and provides direct navigation to the affected asset context.
+
+### 📥 Download Reliability
+- **Alert Removal**: Replaced blocking `alert()` dialogs on image download failures with toast feedback.
+- **Automatic Fallback Export**: On image-download failure, JSON export fallback now proceeds with non-blocking UX messaging.
+- **Direct Storage Signed URL Fallback**: When edge-function signed URL generation fails, the app now attempts direct Supabase Storage signed URL resolution.
+
+### 🖼️ Asset Card Robustness
+- **Bundle Thumbnail Fallback**: Bundle card image tiles now gracefully handle broken image URLs with visual fallback rendering.
+
+### 🧪 Validation Snapshot
+- `npm run typecheck` ✅
+- `npm run lint` ✅
+- `npm run build` ✅
+
+---
+
+## ⚡ v2.11.3 — Edge Function Optimization & Type Safety (2026-02-24)
+
+### 🎯 Overview
+This patch modernizes all Supabase edge functions to the native `Deno.serve()` runtime API, improves TypeScript type safety in error-handling paths, cleans up the import map, and removes redundant ESLint suppression comments.
+
+### 🚀 Edge & Performance Changes
+- **Native `Deno.serve()` Migration**: `process-ocr`, `download-asset`, `kg-backfill`, and `spatial-coordinates` now use the first-class `Deno.serve()` entrypoint, removing the dependency on the deprecated `std@0.168.0/http/server.ts` module.
+- **Pre-initialized Clients**: Supabase client and environment checks are hoisted outside of the request handler to speed up warm-path requests.
+
+### 🔒 Type Safety
+- `catch (error: unknown)` with `instanceof Error` guards replaces implicit `any` access in `download-asset` and `process-ocr`.
+- Removes the last implicit runtime property access (`error.message`, `error.code`) on untyped caught values.
+
+### 🧹 Housekeeping
+- Removed `std/http/server.ts` from `supabase/functions/import_map.json`.
+- Pruned three redundant `// eslint-disable-next-line` comments in `src/lib/`.
+
+---
 
 ## 🔒 v2.11.2 — Deletion Lockdown & Governance Enforcement (2026-02-22)
 
