@@ -57,9 +57,7 @@ export class OpenAIProvider extends BaseLLMProvider {
   }
 
   private getApiKeyFromEnv(): string {
-    // @ts-ignore - Vite's import.meta.env
     if (typeof import.meta !== 'undefined' && import.meta.env) {
-      // @ts-ignore
       if (import.meta.env.VITE_OPENAI_API_KEY) return import.meta.env.VITE_OPENAI_API_KEY;
     }
     
