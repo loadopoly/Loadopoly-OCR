@@ -30,10 +30,14 @@ const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> =
     }
   }
 
-  // Parse JSONB fields
-  const entities: string[] = Array.isArray(row.ENTITIES_EXTRACTED) 
-    ? row.ENTITIES_EXTRACTED 
-    : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
+  // Parse JSONB fields — guard JSON.parse to prevent a single malformed row
+  // from crashing the entire data pipeline.
+  let entities: string[] = [];
+  try {
+    entities = Array.isArray(row.ENTITIES_EXTRACTED) 
+      ? row.ENTITIES_EXTRACTED 
+      : (typeof row.ENTITIES_EXTRACTED === 'string' ? JSON.parse(row.ENTITIES_EXTRACTED) : []);
+  } catch { entities = []; }
   
   // Reconstruct Nodes
   const nodes: GraphNode[] = [
@@ -195,9 +199,15 @@ export const contributeAssetToGlobalCorpus = async (
     // 1. Storage Upload: Only if it's a local blob
     //    Always upload to master storage first, then mirror to user storage
     let publicUrl = asset.imageUrl;
-    if (asset.imageUrl.startsWith('blob:')) {
-      const response = await fetch(asset.imageUrl);
-      const blob = await response.blob();
+    if (asset.imageUrl.startsWith('blob:') || (asset as any).imageBlob) {
+      // Prefer the raw imageBlob (survives page navigations) over fetching the blob URL
+      let blob: Blob;
+      if ((asset as any).imageBlob) {
+        blob = (asset as any).imageBlob;
+      } else {
+        const response = await fetch(asset.imageUrl);
+        blob = await response.blob();
+      }
       const fileExt = asset.sqlRecord.FILE_FORMAT.split('/').pop() || 'jpg';
       const fileName = `${asset.id}_${Date.now()}.${fileExt}`;
 
@@ -285,6 +295,41 @@ export const contributeAssetToGlobalCorpus = async (
     logger.error('Supabase sync failed', { module: 'supabaseService', error: err });
     throw err;
   }
+};
+
+/**
+ * Ensures assets created by server-side queue/edge processing are mirrored into
+ * the Loadopoly master corpus when users run a separate Supabase instance.
+ *
+ * Guardrails:
+ * - Runs only when dual-write mode is active
+ * - Runs only for fully processed assets
+ * - Skips rows already marked with CONTRIBUTED_AT to prevent loops
+ */
+export const mirrorEdgeAssetToMasterIfNeeded = async (
+  asset: DigitalAsset,
+  userId?: string,
+): Promise<void> => {
+  if (!isDualWriteRequired()) return;
+  if (!asset?.sqlRecord) return;
+
+  const record = asset.sqlRecord as Record<string, any>;
+  const isMinted =
+    asset.status === AssetStatus.MINTED ||
+    record.PROCESSING_STATUS === AssetStatus.MINTED;
+  const alreadyContributed = Boolean(record.CONTRIBUTED_AT);
+
+  if (!isMinted || alreadyContributed) return;
+
+  const licenseType: 'GEOGRAPH_CORPUS_1.0' | 'CC0' =
+    record.DATA_LICENSE === 'CC0' ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+
+  await contributeAssetToGlobalCorpus(
+    asset,
+    userId || record.USER_ID || undefined,
+    licenseType,
+    true,
+  );
 };
 
 /**

@@ -44,10 +44,12 @@ export interface BatchDownloadOptions {
 export interface DownloadQueueItem {
   assetId: string;
   filename: string;
-  status: 'pending' | 'downloading' | 'completed' | 'failed';
+  status: 'pending' | 'downloading' | 'completed' | 'failed' | 'cancelled';
   progress: number;
   error?: string;
 }
+
+type DownloadQueueListener = (items: DownloadQueueItem[]) => void;
 
 // ============================================
 // Download Service Class
@@ -55,13 +57,31 @@ export interface DownloadQueueItem {
 
 class DownloadService {
   private downloadQueue: Map<string, DownloadQueueItem> = new Map();
+  private abortControllers: Map<string, AbortController> = new Map();
+  private queueListeners: Set<DownloadQueueListener> = new Set();
   private edgeFunctionUrl: string = '';
+  private readonly storageBuckets: string[] = ['corpus-images', 'processing-uploads'];
+  private readonly storageBucket: string = 'corpus-images';
 
   constructor() {
     if (isSupabaseConfigured() && supabase) {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
       this.edgeFunctionUrl = `${supabaseUrl}/functions/v1/download-asset`;
     }
+  }
+
+  private notifyQueueListeners(): void {
+    const snapshot = Array.from(this.downloadQueue.values());
+    this.queueListeners.forEach(listener => listener(snapshot));
+  }
+
+  subscribeToQueue(listener: DownloadQueueListener): () => void {
+    this.queueListeners.add(listener);
+    listener(this.getQueueStatus());
+
+    return () => {
+      this.queueListeners.delete(listener);
+    };
   }
 
   /**
@@ -86,6 +106,10 @@ class DownloadService {
         progress: 0,
       };
       this.downloadQueue.set(asset.id, queueItem);
+      this.notifyQueueListeners();
+
+      const abortController = new AbortController();
+      this.abortControllers.set(asset.id, abortController);
 
       // Get signed URL
       const signedUrl = await this.getSignedUrl(asset.id);
@@ -98,8 +122,11 @@ class DownloadService {
         signedUrl,
         (loaded, total) => {
           queueItem.progress = total > 0 ? (loaded / total) * 100 : 0;
+          this.downloadQueue.set(asset.id, queueItem);
+          this.notifyQueueListeners();
           options?.onProgress?.(loaded, total);
-        }
+        },
+        abortController.signal
       );
 
       // Trigger browser download
@@ -109,6 +136,8 @@ class DownloadService {
       queueItem.status = 'completed';
       queueItem.progress = 100;
       this.downloadQueue.set(asset.id, queueItem);
+      this.abortControllers.delete(asset.id);
+      this.notifyQueueListeners();
 
       options?.onComplete?.();
       logger.info(`Successfully downloaded asset ${asset.id}`);
@@ -118,10 +147,14 @@ class DownloadService {
       
       const queueItem = this.downloadQueue.get(asset.id);
       if (queueItem) {
-        queueItem.status = 'failed';
-        queueItem.error = error instanceof Error ? error.message : 'Unknown error';
+        const isCancelled = error instanceof Error && error.name === 'AbortError';
+        queueItem.status = isCancelled ? 'cancelled' : 'failed';
+        queueItem.error = isCancelled ? 'Cancelled by user' : (error instanceof Error ? error.message : 'Unknown error');
         this.downloadQueue.set(asset.id, queueItem);
+        this.notifyQueueListeners();
       }
+
+      this.abortControllers.delete(asset.id);
 
       options?.onError?.(error instanceof Error ? error : new Error('Download failed'));
       return false;
@@ -259,25 +292,33 @@ class DownloadService {
         throw new Error('Not authenticated');
       }
 
-      const response = await fetch(this.edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ assetId }),
-      });
+      if (this.edgeFunctionUrl) {
+        try {
+          const response = await fetch(this.edgeFunctionUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ assetId }),
+          });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const result = await response.json();
+          if (!result.success || !result.signedUrl) {
+            throw new Error(result.error || 'Failed to generate signed URL');
+          }
+
+          return result.signedUrl;
+        } catch (edgeError) {
+          logger.warn(`Edge signed URL failed for ${assetId}, trying direct storage fallback`, { edgeError });
+        }
       }
 
-      const result = await response.json();
-      if (!result.success || !result.signedUrl) {
-        throw new Error(result.error || 'Failed to generate signed URL');
-      }
-
-      return result.signedUrl;
+      return await this.getDirectSignedUrl(assetId, session.user.id);
     } catch (error) {
       logger.error(`Failed to get signed URL for ${assetId}`, error);
       return null;
@@ -296,25 +337,39 @@ class DownloadService {
         throw new Error('Not authenticated');
       }
 
-      const response = await fetch(this.edgeFunctionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({ assetIds }),
-      });
+      if (this.edgeFunctionUrl) {
+        try {
+          const response = await fetch(this.edgeFunctionUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session.access_token}`,
+            },
+            body: JSON.stringify({ assetIds }),
+          });
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const result = await response.json();
+          if (!result.success || !result.signedUrls) {
+            throw new Error(result.error || 'Failed to generate signed URLs');
+          }
+
+          return result.signedUrls;
+        } catch (edgeError) {
+          logger.warn('Edge signed URL batch failed, trying direct storage fallback', { edgeError });
+        }
       }
 
-      const result = await response.json();
-      if (!result.success || !result.signedUrls) {
-        throw new Error(result.error || 'Failed to generate signed URLs');
-      }
+      const signedUrls: Record<string, string> = {};
+      await Promise.all(assetIds.map(async (assetId) => {
+        const signedUrl = await this.getDirectSignedUrl(assetId, session.user.id);
+        if (signedUrl) signedUrls[assetId] = signedUrl;
+      }));
 
-      return result.signedUrls;
+      return signedUrls;
     } catch (error) {
       logger.error('Failed to get signed URLs', error);
       return {};
@@ -322,13 +377,99 @@ class DownloadService {
   }
 
   /**
+   * Resolve a signed preview URL for a single asset (for UI thumbnails/previews).
+   */
+  async getPreviewUrl(assetId: string): Promise<string | null> {
+    return this.getSignedUrl(assetId);
+  }
+
+  /**
+   * Resolve signed preview URLs for multiple assets.
+   */
+  async getPreviewUrls(assetIds: string[]): Promise<Record<string, string>> {
+    return this.getSignedUrls(assetIds);
+  }
+
+  private async getDirectSignedUrl(assetId: string, userId: string): Promise<string | null> {
+    if (!supabase) return null;
+
+    // Try each bucket in order (corpus-images first, then processing-uploads)
+    for (const bucket of this.storageBuckets) {
+      const storagePath = await this.resolveStoragePath(assetId, userId, bucket);
+      if (!storagePath) continue;
+
+      const { data, error } = await (supabase as any).storage
+        .from(bucket)
+        .createSignedUrl(storagePath, 3600);
+
+      if (!error && data?.signedUrl) {
+        return data.signedUrl;
+      }
+      logger.warn(`Direct signed URL failed for ${assetId} in bucket ${bucket}`, { error });
+    }
+
+    return null;
+  }
+
+  private async resolveStoragePath(assetId: string, userId: string, bucket: string): Promise<string | null> {
+    if (!supabase) return null;
+
+    // Strategy 1: Check if image is stored at root level (contributed assets)
+    // These use the format: {assetId}_{timestamp}.{ext}
+    const { data: rootData } = await (supabase as any).storage
+      .from(bucket)
+      .list('', { limit: 100, offset: 0, search: assetId });
+
+    if (Array.isArray(rootData)) {
+      const match = rootData.find((f: { name: string }) => f.name.startsWith(assetId));
+      if (match) return match.name;
+    }
+
+    // Strategy 2: Check in user folder
+    const folder = `${userId}/${assetId}`;
+    const { data, error } = await (supabase as any).storage
+      .from(bucket)
+      .list(folder, { limit: 10, offset: 0, sortBy: { column: 'name', order: 'asc' } });
+
+    if (!error && Array.isArray(data) && data.length > 0) {
+      return `${folder}/${data[0].name}`;
+    }
+
+    // Strategy 3: Try direct path candidates
+    const fallbackCandidates = [
+      `${assetId}.jpg`,
+      `${assetId}.jpeg`,
+      `${assetId}.png`,
+      `${assetId}.webp`,
+      `${userId}/${assetId}.jpg`,
+      `${userId}/${assetId}.jpeg`,
+      `${userId}/${assetId}.png`,
+      `${userId}/${assetId}.webp`,
+      `${userId}/${assetId}`,
+    ];
+
+    for (const candidate of fallbackCandidates) {
+      const { data: signedData, error: signedError } = await (supabase as any).storage
+        .from(bucket)
+        .createSignedUrl(candidate, 60);
+
+      if (!signedError && signedData?.signedUrl) {
+        return candidate;
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Download a file with progress tracking
    */
   private async downloadWithProgress(
     url: string,
-    onProgress?: (loaded: number, total: number) => void
+    onProgress?: (loaded: number, total: number) => void,
+    signal?: AbortSignal
   ): Promise<Blob> {
-    const response = await fetch(url);
+    const response = await fetch(url, { signal });
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText}`);
     }
@@ -395,22 +536,54 @@ class DownloadService {
     return Array.from(this.downloadQueue.values());
   }
 
+  cancelDownload(assetId: string): boolean {
+    const controller = this.abortControllers.get(assetId);
+    const queueItem = this.downloadQueue.get(assetId);
+
+    if (!controller || !queueItem || queueItem.status !== 'downloading') {
+      return false;
+    }
+
+    controller.abort();
+    this.abortControllers.delete(assetId);
+
+    queueItem.status = 'cancelled';
+    queueItem.error = 'Cancelled by user';
+    this.downloadQueue.set(assetId, queueItem);
+    this.notifyQueueListeners();
+    return true;
+  }
+
   /**
    * Clear completed downloads from queue
    */
   clearCompleted(): void {
     for (const [assetId, item] of this.downloadQueue.entries()) {
-      if (item.status === 'completed') {
+      if (item.status === 'completed' || item.status === 'cancelled') {
         this.downloadQueue.delete(assetId);
       }
     }
+    this.notifyQueueListeners();
   }
 
   /**
    * Cancel all pending downloads
    */
   cancelAll(): void {
-    this.downloadQueue.clear();
+    this.abortControllers.forEach(controller => controller.abort());
+    this.abortControllers.clear();
+
+    for (const [assetId, item] of this.downloadQueue.entries()) {
+      if (item.status === 'downloading' || item.status === 'pending') {
+        this.downloadQueue.set(assetId, {
+          ...item,
+          status: 'cancelled',
+          error: 'Cancelled by user',
+        });
+      }
+    }
+
+    this.notifyQueueListeners();
   }
 }
 

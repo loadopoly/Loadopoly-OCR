@@ -72,7 +72,7 @@ This is a 3-day sprint once I have an engineer onboarded."
 **Client-Side Scalability**:
 - Local-first architecture (IndexedDB) means each user has their own database
 - No centralized bottleneck for reads/writes
-- Code splitting and lazy loading already implemented (6 vendor chunks)
+- Code splitting and lazy loading implemented (30 manual code-split chunks, lazy-loaded React components)
 - PWA with offline support reduces server load
 
 **Server-Side Scalability**:
@@ -135,7 +135,7 @@ This is a 3-day sprint once I have an engineer onboarded."
 **If Gemini shuts down**:
 - Failover to OpenAI automatically (already configured)
 - Tesseract.js local OCR works offline
-- Users retain all existing data (local-first architecture)
+- Users retain all existing data — their structured records remain in their Supabase account, untouched
 
 **Risk**: LOW. We're not locked into any single provider."
 
@@ -166,21 +166,24 @@ This is a 3-day sprint once I have an engineer onboarded."
 
 ### Q: "How do you handle user data privacy with GDPR/CCPA?"
 
-**A**: "Our local-first architecture is **inherently GDPR-compliant**:
+**A**: "Our architecture is designed around database-level ownership, which maps cleanly to GDPR rights:
 
 **GDPR Article 17 (Right to Erasure)**:
-- User owns data in their browser
-- Delete account → function to `clearAllAssets()` in IndexedDB
-- Optional cloud data → Supabase row delete cascades automatically
+- Every row in Supabase is tied to the user's account via Row-Level Security (RLS)
+- Delete account → cascades delete all their structured records automatically
+- Local IndexedDB cache cleared on sign-out
 
 **GDPR Article 20 (Data Portability)**:
-- Export to JSON, CSV, GraphML, RDF built-in
-- No vendor lock-in → full compliance
+- Structured records exportable as JSON, CSV, GraphML, RDF at any time
+- No proprietary lock-in — it's PostgreSQL rows the user can fully extract
+- Supabase is open-source; enterprise users can self-host the entire backend
 
 **CCPA (California Consumer Privacy Act)**:
-- Users control what data is synced to cloud
-- Default is local-only (opt-in cloud sync)
-- Data marketplace requires explicit consent for sharing
+- Data marketplace requires explicit per-dataset consent before any sharing
+- Users explicitly choose which structured records to list on the marketplace
+- Default: data stays private in their account, never shared
+
+**The key privacy argument**: We don't own the data — the user's account owns the rows. Our platform just writes to their account and reads from it. RLS enforces this at the Postgres layer, not just the application layer.
 
 **Legal docs ready**:
 - `PRIVACY-POLICY.md` (draft, needs lawyer review)
@@ -255,7 +258,7 @@ This is a 3-day sprint once I have an engineer onboarded."
 - Philosophical difference → they won't copy this
 
 **3. Speed & Focus**:
-- We move fast (v2.9.10 with weekly releases)
+- We move fast (v2.12.0 with bi-weekly releases)
 - We serve a niche (archivists, legal, researchers) they ignore
 - By the time they notice, we'll have 10K users and network effects
 
@@ -275,13 +278,13 @@ This is a 3-day sprint once I have an engineer onboarded."
 **A**: "Fair question. Here's why I can execute:
 
 **1. Technical Track Record**:
-- Built this entire platform solo (37K LOC, 10+ major features)
-- v2.9.10 with active bug fixes (last commit 48 hours ago)
+- Built this entire platform solo (53K+ LOC, 15+ major features)
+- v2.12.0 with regular bi-weekly releases (latest: Mar 2, 2026)
 - Production deployment (Vercel + Supabase) working today
 
 **2. Rapid Iteration**:
 - CHANGELOG.md shows 262+ commits with semantic versioning
-- Recent bug fixes: AR Scanner black screen resolved in 3 commits (v2.9.10)
+- Recent release: v2.12.0 — Adventure Mode AR Walk, structured JSONB population, PWA hardening
 - I ship fast and fix fast
 
 **3. Post-Funding Plan**:
@@ -563,7 +566,7 @@ This is a 3-day sprint once I have an engineer onboarded."
 - **Clear differentiation** (structured data ownership vs. flat text)
 - **Scalable architecture** (local-first + optional cloud)
 - **Strong documentation** (60KB+ of docs, audit report)
-- **Fast iteration** (v2.9.10, weekly releases)
+- **Fast iteration** (v2.12.0, bi-weekly releases)
 - **Clear use of funds** (hiring, beta, validation - not R&D)
 - **Founder commitment** (2 years of solo work, deep technical knowledge)
 - **Market timing** (privacy regulations, AI trust, Web3 adoption)

@@ -55,6 +55,9 @@ interface WorldRendererProps {
   onNodeSelect?: (node: GraphNode) => void;
   onPositionChange?: (position: [number, number, number]) => void;
   onAssetView?: (assetId: string) => void;
+  // #9: Called when user activates adventure mode from within the 3D World.
+  // Parent can use this to enable full-screen adventure UI if desired.
+  onStartAdventure?: () => void;
 }
 
 // ============================================
@@ -623,6 +626,7 @@ export default function WorldRenderer({
   onNodeSelect,
   onPositionChange,
   onAssetView,
+  onStartAdventure,
 }: WorldRendererProps) {
   const [selectedNode, setSelectedNode] = useState<WorldNode | null>(null);
   const [hoveredNode, setHoveredNode] = useState<WorldNode | null>(null);
@@ -641,7 +645,93 @@ export default function WorldRenderer({
   // Panel state - Story Narrator vs Knowledge Explorer
   const [activePanel, setActivePanel] = useState<'story' | 'explorer' | null>('story');
   const [isPanelExpanded, setIsPanelExpanded] = useState(false);
-  
+
+  // #9: Adventure Mode — AR Walk with live geolocation tracking
+  const [adventureMode, setAdventureMode] = useState(false);
+  const [userPosition, setUserPosition] = useState<{ lat: number; lng: number } | null>(null);
+  const watchIdRef = useRef<number | null>(null);
+
+  // Assets that have known GIS coordinates (for AR Walk proximity highlighting)
+  const geoTaggedAssets = useMemo(() => {
+    return assets.filter(a => {
+      const skg = (a.sqlRecord as any)?.STRUCTURED_SPATIAL;
+      return skg?.deviceLat && skg?.deviceLng;
+    });
+  }, [assets]);
+
+  // Compute proximity to user position (haversine distance in metres)
+  const nearbyCaptures = useMemo(() => {
+    if (!userPosition || geoTaggedAssets.length === 0) return [];
+    const R = 6371000; // Earth radius metres
+    return geoTaggedAssets
+      .map(a => {
+        const skg = (a.sqlRecord as any)?.STRUCTURED_SPATIAL;
+        const dLat = (skg.deviceLat - userPosition.lat) * (Math.PI / 180);
+        const dLng = (skg.deviceLng - userPosition.lng) * (Math.PI / 180);
+        const hav =
+          Math.sin(dLat / 2) ** 2 +
+          Math.cos(userPosition.lat * (Math.PI / 180)) *
+            Math.cos(skg.deviceLat * (Math.PI / 180)) *
+            Math.sin(dLng / 2) ** 2;
+        const dist = 2 * R * Math.asin(Math.sqrt(hav));
+        return { asset: a, distanceM: dist };
+      })
+      .filter(x => x.distanceM < 1000) // Within 1km
+      .sort((a, b) => a.distanceM - b.distanceM)
+      .slice(0, 5);
+  }, [userPosition, geoTaggedAssets]);
+
+  const getAssetImageUrl = useCallback((asset: DigitalAsset): string => {
+    const originalUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
+      ? asset.sqlRecord.ORIGINAL_IMAGE_URL
+      : '';
+    return asset.imageUrl || originalUrl || '';
+  }, []);
+
+  const handleThumbnailError = useCallback((event: React.SyntheticEvent<HTMLImageElement>, asset: DigitalAsset) => {
+    const fallbackUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
+      ? asset.sqlRecord.ORIGINAL_IMAGE_URL
+      : '';
+    const img = event.currentTarget;
+    if (fallbackUrl && img.src !== fallbackUrl) {
+      img.src = fallbackUrl;
+      return;
+    }
+    img.style.display = 'none';
+  }, []);
+
+  const handleStartAdventure = useCallback(() => {
+    setAdventureMode(true);
+    setActivePanel('story');
+    onStartAdventure?.();
+    // Start watching geolocation
+    if (navigator.geolocation && watchIdRef.current === null) {
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        pos => setUserPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => { /* ignore errors */ },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 }
+      );
+    }
+  }, [onStartAdventure]);
+
+  const handleStopAdventure = useCallback(() => {
+    setAdventureMode(false);
+    setUserPosition(null);
+    if (watchIdRef.current !== null) {
+      navigator.geolocation.clearWatch(watchIdRef.current);
+      watchIdRef.current = null;
+    }
+  }, []);
+
+  // Cleanup geolocation watch on unmount
+  useEffect(() => {
+    return () => {
+      if (watchIdRef.current !== null) {
+        navigator.geolocation.clearWatch(watchIdRef.current);
+      }
+    };
+  }, []);
+
   // Force simulation state
   const [worldData, setWorldData] = useState<{ nodes: WorldNode[]; links: WorldLink[] }>({ nodes: [], links: [] });
   const simulationRef = useRef<number>();
@@ -795,6 +885,16 @@ export default function WorldRenderer({
       className="relative w-full h-full bg-slate-950 rounded-xl overflow-hidden flex"
       onWheel={handleWheel}
     >
+      {/* #4: Empty state when graph has no data yet */}
+      {graphData.nodes.length === 0 && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-slate-950/80 text-slate-400 pointer-events-none">
+          <Network size={48} className="mb-4 text-slate-700" />
+          <p className="text-lg font-semibold text-slate-500">No Knowledge Graph Yet</p>
+          <p className="text-sm text-slate-600 mt-2 text-center max-w-xs">
+            Capture and process images to build your knowledge world. Nodes will appear here as entities are extracted.
+          </p>
+        </div>
+      )}
       {/* Main Canvas Area */}
       <div className={`relative flex-1 transition-all duration-300 ${activePanel ? (isPanelExpanded ? 'mr-[480px]' : 'mr-96') : ''}`}>
         <InteractiveCanvas
@@ -980,7 +1080,63 @@ export default function WorldRenderer({
           >
             <MapIcon size={18} />
           </button>
+          {/* #9: Adventure Mode — AR Walk with live geolocation */}
+          <button
+            onClick={adventureMode ? handleStopAdventure : handleStartAdventure}
+            className={`p-2 rounded-lg border transition-all ${
+              adventureMode
+                ? 'bg-emerald-600/30 border-emerald-500/60 text-emerald-300 animate-pulse'
+                : 'bg-slate-800/80 border-slate-700 text-slate-400 hover:text-emerald-300 hover:border-emerald-600/50'
+            }`}
+            title={adventureMode ? 'Stop Adventure Mode' : 'Start Adventure — AR Walk'}
+          >
+            <Compass size={18} />
+          </button>
         </div>
+
+        {/* #9: Adventure Mode proximity overlay */}
+        {adventureMode && (
+          <div className="absolute bottom-24 left-4 bg-slate-900/95 backdrop-blur-sm rounded-xl p-4 border border-emerald-600/40 max-w-xs shadow-lg shadow-emerald-900/20">
+            <div className="flex items-center gap-2 text-emerald-400 mb-3">
+              <Compass size={16} className="animate-spin" style={{ animationDuration: '3s' }} />
+              <span className="text-sm font-bold">Adventure Mode Active</span>
+              {userPosition && (
+                <span className="text-[10px] text-emerald-600 ml-auto">GPS ✓</span>
+              )}
+            </div>
+            {nearbyCaptures.length > 0 ? (
+              <div className="space-y-2">
+                <p className="text-[11px] text-slate-400 mb-2">{nearbyCaptures.length} capture{nearbyCaptures.length !== 1 ? 's' : ''} near you</p>
+                {nearbyCaptures.map(({ asset, distanceM }) => (
+                  <button
+                    key={asset.id}
+                    onClick={() => {
+                      const node = graphData.nodes.find(n => n.id === asset.id);
+                      if (node) handleNodeClick(worldData.nodes.find(n => n.id === node.id) || null as any);
+                    }}
+                    className="w-full text-left flex items-center gap-2 p-2 bg-slate-800/60 hover:bg-slate-700/60 rounded-lg transition-colors"
+                  >
+                    {getAssetImageUrl(asset) ? (
+                      <img src={getAssetImageUrl(asset)} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" onError={(event) => handleThumbnailError(event, asset)} />
+                    ) : (
+                      <div className="w-8 h-8 rounded bg-slate-700 flex-shrink-0 flex items-center justify-center">
+                        <MapIcon size={12} className="text-slate-500" />
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="text-xs text-white truncate">{asset.sqlRecord?.DOCUMENT_TITLE || 'Capture'}</p>
+                      <p className="text-[10px] text-emerald-400">{Math.round(distanceM)}m away</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : userPosition ? (
+              <p className="text-xs text-slate-400">No captures within 1km. Keep exploring!</p>
+            ) : (
+              <p className="text-xs text-slate-400">Acquiring GPS signal…</p>
+            )}
+          </div>
+        )}
 
         {/* Online Users List */}
         {otherUsers.length > 0 && (
@@ -1029,11 +1185,12 @@ export default function WorldRenderer({
                   onClick={() => onAssetView?.(asset.id)}
                   className="aspect-square rounded overflow-hidden bg-slate-800 hover:ring-2 hover:ring-primary-500 transition-all"
                 >
-                  {asset.imageUrl ? (
+                  {getAssetImageUrl(asset) ? (
                     <img 
-                      src={asset.imageUrl} 
+                      src={getAssetImageUrl(asset)} 
                       alt=""
                       className="w-full h-full object-cover"
+                      onError={(event) => handleThumbnailError(event, asset)}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center text-slate-600">
@@ -1076,6 +1233,7 @@ export default function WorldRenderer({
               onAssetView={onAssetView}
               isExpanded={isPanelExpanded}
               onToggleExpand={() => setIsPanelExpanded(!isPanelExpanded)}
+              onStartAdventure={handleStartAdventure}
             />
           ) : (
             <KnowledgeExplorer

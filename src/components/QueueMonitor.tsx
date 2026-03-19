@@ -66,6 +66,11 @@ interface ConnectionTestResult {
 }
 
 export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueComplete, compact = false, uploadProgress }) => {
+  const truncateText = useCallback((value: unknown, length: number) => {
+    if (typeof value !== 'string') return '';
+    return value.slice(0, length);
+  }, []);
+
   const [stats, setStats] = useState<QueueStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
@@ -431,9 +436,9 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       )}
 
       {/* Header with prominent queue count */}
-      <div className="flex items-center justify-between px-1">
-        <div className="flex items-center gap-3">
-          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5">
+      <div className="flex items-center justify-between px-1 w-full max-w-full min-w-0 gap-1">
+        <div className="flex items-center gap-1 sm:gap-3 flex-wrap sm:flex-nowrap min-w-0">
+          <h4 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest flex items-center gap-1.5 flex-shrink-0">
             <Server size={10} />
             Processing Queue
           </h4>
@@ -445,16 +450,16 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 ml-1">
             <button 
               onClick={() => { setShowJobList(!showJobList); if (!showJobList) fetchJobs(); }}
-              className={`text-[8px] px-2 py-0.5 rounded transition-colors flex items-center gap-1 ${showJobList ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
+              className={`text-[8px] px-1.5 sm:px-2 py-0.5 rounded transition-colors flex items-center gap-1 ${showJobList ? 'bg-blue-600 text-white' : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}`}
             >
-              <List size={8} />
-              {showJobList ? 'Hide' : 'Show'} Jobs
+              <List size={8} className="hidden sm:block" />
+              {showJobList ? 'Hide' : 'Show'} <span className="hidden sm:inline">Jobs</span>
             </button>
-            <span className="text-[8px] text-slate-600">Updated {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-            <button onClick={() => { fetchStats(); fetchJobs(); }} className="text-slate-500 hover:text-white transition-colors">
+            <span className="text-[8px] text-slate-600 hidden sm:inline">Updated {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            <button onClick={() => { fetchStats(); fetchJobs(); }} className="text-slate-500 hover:text-white transition-colors p-1">
                 <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
             </button>
         </div>
@@ -575,12 +580,12 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       {/* Detailed Job List - Interactive */}
       {showJobList && (
         <div className="border border-slate-800 rounded-lg overflow-hidden">
-          <div className="px-2 py-1.5 bg-slate-900 flex items-center justify-between">
-            <span className="text-[9px] text-slate-400 flex items-center gap-1">
+          <div className="px-2 py-1.5 bg-slate-900 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+            <span className="text-[9px] text-slate-400 flex items-center gap-1 whitespace-nowrap">
               <List size={10} />
               Jobs ({filteredJobs.length}{selectedStageFilter || selectedStatusFilter ? ' filtered' : ''})
             </span>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 flex-wrap w-full sm:w-auto">
               {/* Status filter buttons */}
               {(['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'] as JobStatus[]).map(status => (
                 <button
@@ -649,7 +654,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                     {/* Job info */}
                     <div className="flex-1 min-w-0 text-left">
                       <div className="text-[9px] text-slate-300 font-mono truncate">
-                        {job.assetId.slice(0, 8)}...
+                        {truncateText(job.assetId, 8)}...
                       </div>
                       <div className="text-[8px] text-slate-500">
                         {job.stage || 'Waiting'}
@@ -657,7 +662,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                     </div>
                     
                     {/* Progress */}
-                    <div className="flex-shrink-0 w-16">
+                    <div className="flex-shrink-0 w-12 sm:w-16">
                       <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
                         <div 
                           className={`h-full transition-all duration-300 ${
@@ -682,11 +687,11 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                       <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                         <div>
                           <span className="text-slate-500">Job ID:</span>
-                          <span className="ml-1 text-slate-300 font-mono">{job.id.slice(0, 12)}...</span>
+                          <span className="ml-1 text-slate-300 font-mono">{truncateText(job.id, 12)}...</span>
                         </div>
                         <div>
                           <span className="text-slate-500">Asset ID:</span>
-                          <span className="ml-1 text-slate-300 font-mono">{job.assetId.slice(0, 12)}...</span>
+                          <span className="ml-1 text-slate-300 font-mono">{truncateText(job.assetId, 12)}...</span>
                         </div>
                         <div>
                           <span className="text-slate-500">Status:</span>
@@ -713,7 +718,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                         </div>
                       </div>
                       {job.error && (
-                        <div className="mt-2 p-1.5 bg-rose-900/20 border border-rose-800/50 rounded text-rose-300">
+                        <div className="mt-2 p-1.5 bg-rose-900/20 border border-rose-800/50 rounded text-rose-300 break-words whitespace-pre-wrap">
                           <span className="text-rose-400 font-medium">Error: </span>{job.error}
                         </div>
                       )}
@@ -749,7 +754,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
             <div className="flex justify-between">
               <span className="text-slate-500">User ID:</span>
               <span className={diagnostics.userId ? 'text-emerald-400' : 'text-rose-400'}>
-                {diagnostics.userId ? `${diagnostics.userId.slice(0,8)}...` : 'NOT SET'}
+                {diagnostics.userId ? `${truncateText(diagnostics.userId, 8)}...` : 'NOT SET'}
               </span>
             </div>
             <div className="flex justify-between">
@@ -801,7 +806,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                   </span>
                 </div>
                 {connectionTest.storageUpload.error && (
-                  <div className="text-[7px] text-rose-400 bg-rose-900/20 p-1 rounded">
+                  <div className="text-[7px] text-rose-400 bg-rose-900/20 p-1 rounded break-words whitespace-pre-wrap">
                     {connectionTest.storageUpload.error}
                   </div>
                 )}
@@ -812,7 +817,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                   </span>
                 </div>
                 {connectionTest.queueInsert.error && (
-                  <div className="text-[7px] text-rose-400 bg-rose-900/20 p-1 rounded">
+                  <div className="text-[7px] text-rose-400 bg-rose-900/20 p-1 rounded break-words whitespace-pre-wrap">
                     {connectionTest.queueInsert.error}
                   </div>
                 )}
@@ -823,7 +828,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                   </span>
                 </div>
                 {connectionTest.queueSelect.error && (
-                  <div className="text-[7px] text-rose-400 bg-rose-900/20 p-1 rounded">
+                  <div className="text-[7px] text-rose-400 bg-rose-900/20 p-1 rounded break-words whitespace-pre-wrap">
                     {connectionTest.queueSelect.error}
                   </div>
                 )}
@@ -937,33 +942,39 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
           {/* Connection test results */}
           {connectionTest && (
             <div className="mt-2 p-2 bg-slate-900 rounded text-[8px] space-y-1">
-              <div className="flex items-center gap-1">
-                {connectionTest.storageUpload.success ? (
-                  <CheckCircle size={10} className="text-emerald-400" />
-                ) : (
-                  <AlertCircle size={10} className="text-rose-400" />
-                )}
-                <span className={connectionTest.storageUpload.success ? 'text-emerald-400' : 'text-rose-400'}>
+              <div className="flex items-start gap-1">
+                <div className="mt-0.5">
+                  {connectionTest.storageUpload.success ? (
+                    <CheckCircle size={10} className="text-emerald-400" />
+                  ) : (
+                    <AlertCircle size={10} className="text-rose-400" />
+                  )}
+                </div>
+                <span className={`break-words whitespace-pre-wrap flex-1 ${connectionTest.storageUpload.success ? 'text-emerald-400' : 'text-rose-400'}`}>
                   Storage: {connectionTest.storageUpload.success ? 'OK' : connectionTest.storageUpload.error}
                 </span>
               </div>
-              <div className="flex items-center gap-1">
-                {connectionTest.queueInsert.success ? (
-                  <CheckCircle size={10} className="text-emerald-400" />
-                ) : (
-                  <AlertCircle size={10} className="text-rose-400" />
-                )}
-                <span className={connectionTest.queueInsert.success ? 'text-emerald-400' : 'text-rose-400'}>
+              <div className="flex items-start gap-1">
+                <div className="mt-0.5">
+                  {connectionTest.queueInsert.success ? (
+                    <CheckCircle size={10} className="text-emerald-400" />
+                  ) : (
+                    <AlertCircle size={10} className="text-rose-400" />
+                  )}
+                </div>
+                <span className={`break-words whitespace-pre-wrap flex-1 ${connectionTest.queueInsert.success ? 'text-emerald-400' : 'text-rose-400'}`}>
                   Queue Insert: {connectionTest.queueInsert.success ? 'OK' : connectionTest.queueInsert.error}
                 </span>
               </div>
-              <div className="flex items-center gap-1">
-                {connectionTest.queueSelect.success ? (
-                  <CheckCircle size={10} className="text-emerald-400" />
-                ) : (
-                  <AlertCircle size={10} className="text-rose-400" />
-                )}
-                <span className={connectionTest.queueSelect.success ? 'text-emerald-400' : 'text-rose-400'}>
+              <div className="flex items-start gap-1">
+                <div className="mt-0.5">
+                  {connectionTest.queueSelect.success ? (
+                    <CheckCircle size={10} className="text-emerald-400" />
+                  ) : (
+                    <AlertCircle size={10} className="text-rose-400" />
+                  )}
+                </div>
+                <span className={`break-words whitespace-pre-wrap flex-1 ${connectionTest.queueSelect.success ? 'text-emerald-400' : 'text-rose-400'}`}>
                   Queue Read: {connectionTest.queueSelect.success ? 'OK' : connectionTest.queueSelect.error}
                 </span>
               </div>

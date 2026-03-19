@@ -238,10 +238,11 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify(summary), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Edge function error:', error);
+    const message = error instanceof Error ? error.message : 'Unknown error';
     return new Response(
-      JSON.stringify({ error: error.message }),
+      JSON.stringify({ error: message }),
       { 
         status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -338,13 +339,15 @@ async function processJob(
 
     const processingTime = Date.now() - startTime;
     console.log(`[${workerId}] Job ${job.id} completed in ${processingTime}ms`);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(`[${workerId}] Job ${job.id} failed:`, error);
+    const errMsg = error instanceof Error ? error.message : String(error);
+    const errCode = (error as Record<string, unknown>)?.code ?? 'PROCESSING_ERROR';
 
     await supabase.rpc('fail_processing_job', {
       p_job_id: job.id,
-      p_error_message: error.message,
-      p_error_code: error.code ?? 'PROCESSING_ERROR',
+      p_error_message: errMsg,
+      p_error_code: errCode,
     });
 
     throw error;
@@ -486,6 +489,8 @@ async function saveAsset(
     KEYWORDS_TAGS: result.keywords,
     NLP_NODE_CATEGORIZATION: result.graphData.nodes[0]?.type || 'DOCUMENT',
     NODE_COUNT: result.graphData.nodes.length,
+    // #6: TOKEN_COUNT — approximate from word count (1 token ≈ 0.75 words)
+    TOKEN_COUNT: Math.round((result.ocrText.trim().split(/\s+/).filter((w: string) => w.length > 0).length) / 0.75),
     CONFIDENCE_SCORE: result.confidence,
     PROCESSING_STATUS: 'MINTED',
     SCAN_TYPE: job.scan_type,
@@ -498,6 +503,40 @@ async function saveAsset(
       links: result.graphData.links,
       generatedAt: new Date().toISOString(),
     },
+    // #7: STRUCTURED_* JSONB fields — set based on what was successfully extracted.
+    // These gate the "Fully Structured" count in Curator Mode.
+    STRUCTURED_CONTENT: result.ocrText.trim().length > 0 ? {
+      detected: true,
+      wordCount: result.ocrText.trim().split(/\s+/).filter((w: string) => w.length > 0).length,
+      paragraphCount: result.ocrText.split(/\n{2,}/).filter((p: string) => p.length > 0).length,
+    } : null,
+    STRUCTURED_TEMPORAL: result.graphData.nodes.some((n: any) => n.type === 'DATE' || n.type === 'TIME') ? {
+      detected: true,
+      temporalEntities: result.entities.filter((e: string) =>
+        /\b(19|20)\d{2}\b|\bjanuary|february|march|april|may|june|july|august|september|october|november|december\b/i.test(e)
+      ),
+    } : null,
+    STRUCTURED_SPATIAL: (result.gisMetadata?.zoneType && result.gisMetadata.zoneType !== 'UNKNOWN') ? {
+      detected: true,
+      zone: result.gisMetadata.zoneType,
+      coordinates: result.gisMetadata.coordinates || null,
+      deviceLat: job.latitude || null,
+      deviceLng: job.longitude || null,
+    } : null,
+    STRUCTURED_PROVENANCE: {
+      recorded: true,
+      capturedAt: new Date().toISOString(),
+      scanType: job.scan_type,
+      sourceAssetId: job.asset_id,
+      processingVersion: '1.0',
+    },
+    STRUCTURED_DISCOVERY: result.entities.length > 0 || result.keywords.length > 0 ? {
+      recorded: true,
+      entityCount: result.entities.length,
+      keywordCount: result.keywords.length,
+      nodeCount: result.graphData.nodes.length,
+      linkCount: result.graphData.links.length,
+    } : null,
   };
 
   // Check if asset already exists

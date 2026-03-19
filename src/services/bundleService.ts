@@ -152,6 +152,13 @@ const generateBundleKey = (asset: DigitalAsset, allAssets: DigitalAsset[]): stri
 const createBundleFromGroup = (group: DigitalAsset[], preComputedMetadata?: ConsolidatedMetadata): ImageBundle => {
   if (!group || group.length === 0) throw new Error("Empty group passed to bundle creator");
 
+  const resolveAssetImageUrl = (asset: DigitalAsset): string => {
+    const original = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
+      ? asset.sqlRecord.ORIGINAL_IMAGE_URL
+      : '';
+    return asset.imageUrl || original || '';
+  };
+
   const sorted = group.sort((a, b) => 
     (extractYear(a.sqlRecord?.NLP_DERIVED_TIMESTAMP) || 0) - 
     (extractYear(b.sqlRecord?.NLP_DERIVED_TIMESTAMP) || 0)
@@ -204,8 +211,8 @@ const createBundleFromGroup = (group: DigitalAsset[], preComputedMetadata?: Cons
   return {
     bundleId: `BUNDLE_${sorted[0].id}`,
     title,
-    primaryImageUrl: sorted[0].imageUrl,
-    imageUrls: group.map(a => a.imageUrl),
+    primaryImageUrl: resolveAssetImageUrl(sorted[0]),
+    imageUrls: group.map(resolveAssetImageUrl),
     assetIds: group.map(a => a.id),
     timeRange,
     combinedTokens: group.reduce((sum, a) => sum + (a.tokenization?.tokenCount || 0), 0),

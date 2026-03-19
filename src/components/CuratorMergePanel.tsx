@@ -128,6 +128,9 @@ function SuggestionCard({
   onToggleExpand 
 }: SuggestionCardProps) {
   const allAssets = [cluster.primaryAsset, ...cluster.duplicates];
+  const matchReasons = Array.isArray(cluster.matchReasons) ? cluster.matchReasons : [];
+  const entities = Array.isArray(cluster.consolidatedMetadata.entities) ? cluster.consolidatedMetadata.entities : [];
+  const keywords = Array.isArray(cluster.consolidatedMetadata.keywords) ? cluster.consolidatedMetadata.keywords : [];
   
   return (
     <div className="border border-slate-700 rounded-lg overflow-hidden bg-slate-800/30">
@@ -150,14 +153,14 @@ function SuggestionCard({
         
         {/* Match reasons */}
         <div className="flex flex-wrap gap-1 mt-2">
-          {cluster.matchReasons.slice(0, 3).map((reason, i) => (
+          {matchReasons.slice(0, 3).map((reason, i) => (
             <span key={i} className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-300">
               {reason}
             </span>
           ))}
-          {cluster.matchReasons.length > 3 && (
+          {matchReasons.length > 3 && (
             <span className="px-2 py-0.5 bg-slate-700 rounded text-xs text-slate-400">
-              +{cluster.matchReasons.length - 3} more
+              +{matchReasons.length - 3} more
             </span>
           )}
         </div>
@@ -204,8 +207,8 @@ function SuggestionCard({
           <div className="text-sm text-slate-300 space-y-1">
             <p><span className="text-slate-500">Title:</span> {cluster.consolidatedMetadata.title}</p>
             <p><span className="text-slate-500">Category:</span> {cluster.consolidatedMetadata.category}</p>
-            <p><span className="text-slate-500">Entities:</span> {cluster.consolidatedMetadata.entities.slice(0, 5).join(', ')}</p>
-            <p><span className="text-slate-500">Keywords:</span> {cluster.consolidatedMetadata.keywords.slice(0, 5).join(', ')}</p>
+            <p><span className="text-slate-500">Entities:</span> {entities.slice(0, 5).join(', ')}</p>
+            <p><span className="text-slate-500">Keywords:</span> {keywords.slice(0, 5).join(', ')}</p>
           </div>
         </div>
       )}

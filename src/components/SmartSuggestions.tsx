@@ -249,7 +249,7 @@ function FilterInsightsPanel({ onNavigate }: { onNavigate: (tab: string) => void
                             <span className="text-xs font-medium text-slate-400">Cross-View Dependencies</span>
                         </div>
                         
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                             {(['graph', 'world', 'database', 'curator'] as const).map(view => {
                                 const isSynced = state.syncedViews.has(view);
                                 const viewLabels = {

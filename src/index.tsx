@@ -7,6 +7,8 @@ import { ToastProvider, ConnectionStatus } from './components/Toast';
 import { Onboarding } from './components/Onboarding';
 import { ModuleProvider } from './contexts/ModuleContext';
 import { bootstrapModuleSystem } from './bootstrap';
+import { initPWA } from './lib/pwaUtils';
+import { initPerformanceMonitoring } from './lib/performanceMonitor';
 
 // Build info for debugging cache issues
 declare const __BUILD_TIME__: string;
@@ -26,24 +28,51 @@ if (rootElement) {
 }
 
 // Service Worker update detection
+// IMPORTANT: We deliberately do NOT auto-reload on SW activation.
+// The previous pattern (controllerchange -> location.reload()) caused the
+// app to fully restart whenever the phone lock screen was lifted, because
+// clients.claim() fires controllerchange on every new page claim.
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.ready.then((registration) => {
+    // If a new worker is found (background update downloaded), let the user
+    // know non-intrusively — do NOT force-reload.
     registration.addEventListener('updatefound', () => {
       const newWorker = registration.installing;
       if (newWorker) {
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            // New version available - prompt user to refresh
-            console.log('[GeoGraph] New version available');
-            if (window.confirm('A new version of GeoGraph is available. Reload to update?')) {
-              window.location.reload();
-            }
+            console.log('[GeoGraph] New version available — dispatching update event');
+            // Dispatch a custom event; the React app listens and shows a toast banner.
+            window.dispatchEvent(new CustomEvent('geograph-sw-updated'));
           }
         });
       }
     });
   });
+
+  // Listen for SW_UPDATED message from the service worker activate event.
+  // This is sent when a new SW takes control. Show a soft banner, not a forced reload.
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    if (event.data?.type === 'SW_UPDATED') {
+      console.log('[GeoGraph] SW_UPDATED received — version', event.data.version);
+      window.dispatchEvent(new CustomEvent('geograph-sw-updated', {
+        detail: { version: event.data.version },
+      }));
+    }
+  });
+
+  // controllerchange fires when clients.claim() is called on SW activation.
+  // DO NOT reload here — this causes the lock-screen reload loop.
+  // Simply log the event for debugging.
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    console.log('[GeoGraph] SW controller changed — app continues without reload');
+  });
 }
+
+// Initialize runtime optimization systems that were previously dormant.
+// This aligns mobile install behavior and web performance telemetry with docs.
+initPerformanceMonitoring();
+initPWA();
 
 // PERF FIX: Start App chunk download IN PARALLEL with module bootstrap.
 // Previously bootstrap had to fully complete (2-4s on mobile due to Supabase

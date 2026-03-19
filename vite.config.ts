@@ -76,6 +76,18 @@ export default defineConfig({
           if (id.includes('ethers')) {
             return 'vendor-web3';
           }
+          // Optional web3-heavy service modules - isolate from core app shell
+          if (
+            id.includes('/services/web3Service') ||
+            id.includes('/services/oracleVerificationService') ||
+            id.includes('/services/zkProofService') ||
+            id.includes('/services/zoneShardingService') ||
+            id.includes('/services/batchProcessingService') ||
+            id.includes('/services/pluginSecurityService') ||
+            id.includes('/services/analyticsService')
+          ) {
+            return 'chunk-web3-services';
+          }
           // Google AI
           if (id.includes('@google/genai')) {
             return 'vendor-ai';
@@ -84,9 +96,17 @@ export default defineConfig({
           if (id.includes('/components/metaverse/')) {
             return 'chunk-metaverse';
           }
-          // Cluster and batch components share dependencies
-          if (id.includes('/components/ClusterSync') || id.includes('/components/BatchProcessing') || id.includes('/components/QueueMonitor')) {
-            return 'chunk-processing-ui';
+          // Queue monitor is frequently used; keep isolated for faster warm load
+          if (id.includes('/components/QueueMonitor')) {
+            return 'chunk-queue-monitor';
+          }
+          // Cluster sync is optional/curator-only and can be deferred heavily
+          if (id.includes('/components/ClusterSync') || id.includes('/components/ClusterSynchronizer')) {
+            return 'chunk-cluster-sync';
+          }
+          // Batch processing panel is optional and should remain isolated
+          if (id.includes('/components/BatchProcessing')) {
+            return 'chunk-batch-processing';
           }
         },
       },
