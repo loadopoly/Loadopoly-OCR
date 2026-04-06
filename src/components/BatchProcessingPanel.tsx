@@ -28,6 +28,8 @@ interface BatchProcessingPanelProps {
   onClose?: () => void;
   maxConcurrent?: number;
   defaultScanType?: ScanType;
+  serverRetry?: (jobId: string) => Promise<boolean>;
+  downloadFromStorage?: (assetId: string) => Promise<File | null>;
 }
 
 // ============================================
@@ -188,6 +190,8 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
   onClose,
   maxConcurrent = 3,
   defaultScanType = ScanType.DOCUMENT,
+  serverRetry,
+  downloadFromStorage,
 }) => {
   const [items, setItems] = useState<BatchItemState[]>([]);
   const [stats, setStats] = useState<BatchStats>(batchProcessor.getStats());
@@ -204,6 +208,8 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
     
     const callbacks: Partial<BatchProcessorCallbacks> = {
       processItem: onProcessItem,
+      serverRetry,
+      downloadFromStorage,
       onItemQueued: () => updateUI(),
       onItemStarted: () => updateUI(),
       onItemProgress: () => updateUI(),
@@ -231,7 +237,7 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
     return () => {
       batchProcessor.setCallbacks({});
     };
-  }, [onProcessItem, maxConcurrent]);
+  }, [onProcessItem, maxConcurrent, serverRetry, downloadFromStorage]);
   
   // Prevent accidental data loss when closing page during processing
   useEffect(() => {

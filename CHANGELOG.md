@@ -3,6 +3,43 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.13.0] - 2026-04-06
+
+### Batch Retry Resilience & File Persistence
+
+**Core Problem:** "File not found" errors when retrying failed batch items — files stored only in memory were lost on page refresh, tab switch, or network interruption, causing 50-75% failure rates on mobile.
+
+#### IndexedDB File Persistence (indexeddb.ts)
+- Added `batchFiles` table (v3 schema migration) to persist file blobs across page refreshes
+- Added `arQueue` table for AR session capture persistence
+- New helpers: `saveBatchFile`, `loadBatchFile`, `deleteBatchFile`, `deleteBatchFiles`, `clearAllBatchFiles`
+- New helpers: `saveArQueueItem`, `loadArQueue`, `clearArQueue`, `getArQueueCount`
+
+#### Batch Processor File Recovery (batchProcessorService.ts)
+- `addFiles()` now persists file blobs to IndexedDB alongside the in-memory Map
+- `processItem()` attempts 3-tier file recovery on cache miss before failing
+- `retryFailed()` uses server-side retry for items with `serverJobId` (no re-upload needed)
+- New `recoverFiles()` method: batchFiles IndexedDB → assets table imageBlob → Supabase Storage download
+- New `retryViaServer()` method: server-side retry path for cross-location support
+- `loadPersistedState()` now restores QUEUED items (previously dropped) since files persist in IndexedDB
+- `clearCompleted()`/`clearAll()` clean up IndexedDB entries to prevent storage bloat
+- New `setServerJobId()` public method for tracking server job IDs on batch items
+- Added `serverJobId` to `BatchItemState`, `serverRetry`/`downloadFromStorage` to callbacks
+
+#### Server-Side Recovery (processingQueueService.ts)
+- New `downloadFromStorage()` public method: downloads files from Supabase Storage by asset ID for cross-location retry
+- Fixed `requeueLocalAssets()` to prefer `imageBlob` from IndexedDB over fetching dead `blob:` URLs
+
+#### AR Session Queue Persistence (App.tsx)
+- AR captures now persist to IndexedDB via `saveArQueueItem()` — survive page crashes
+- Restored from IndexedDB on app mount via `loadArQueue()`
+- Cleared on consumption via `clearArQueue()`
+
+#### Wiring & Integration
+- `handleNewBatchProcess` tracks `serverJobId` back to batch items via `setServerJobId()`
+- `BatchProcessingPanel` wired with `serverRetry` and `downloadFromStorage` callbacks
+- Zero bundle size increase — new code uses existing Dexie dependency
+
 ## [2.12.13] - 2026-03-19
 
 ### Fix: `ImportMeta.env` TypeScript Errors

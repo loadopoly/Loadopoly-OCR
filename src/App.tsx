@@ -67,7 +67,7 @@ import {
 import { processImageWithGemini } from './services/geminiService';
 import { createBundles, createUserBundle } from './services/bundleService';
 import { initSync, isSyncEnabled } from './lib/syncEngine';
-import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
+import { loadAssets, saveAsset, deleteAsset, saveArQueueItem, loadArQueue, clearArQueue } from './lib/indexeddb';
 import { getCurrentUser } from './lib/auth';
 import {
   fetchGlobalCorpus,
@@ -298,6 +298,15 @@ export default function App() {
   const [isPublicBroadcast, setIsPublicBroadcast] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [arSessionQueue, setArSessionQueue] = useState<File[]>([]);
+
+  // Restore persisted AR session queue on mount
+  useEffect(() => {
+    loadArQueue().then(files => {
+      if (files.length > 0) {
+        setArSessionQueue(prev => prev.length > 0 ? prev : files);
+      }
+    }).catch(() => {});
+  }, []);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showProcessingPanel, setShowProcessingPanel] = useState(false);
   const [showNewBatchPanel, setShowNewBatchPanel] = useState(false);
@@ -1311,6 +1320,7 @@ export default function App() {
           if (window.confirm(`Process ${arSessionQueue.length} items from your AR Session?`)) {
               handleBatchFiles(arSessionQueue);
               setArSessionQueue([]);
+              clearArQueue().catch(() => {});
               setActiveTab('batch'); // explicit: user chose to leave AR → go to batch
           } else {
               // If user cancels, stay on AR tab and keep the queue
@@ -1781,6 +1791,10 @@ export default function App() {
               SOURCE_COLLECTION: 'AR Scanner / Batch Import'
             }
           }, itemId);
+          
+          // Track serverJobId on batch item for server-side retry
+          const { batchProcessor } = await import('./services/batchProcessorService');
+          batchProcessor.setServerJobId(itemId, job.id);
           
           // Update local asset to show it's been queued
           const queuedAsset: DigitalAsset = {
@@ -3810,11 +3824,15 @@ export default function App() {
           {activeTab === 'ar' && (
             <div className="h-full rounded-xl overflow-hidden border border-slate-800 bg-black relative">
               <ARScene 
-                onCapture={(file) => setArSessionQueue(prev => [...prev, file])} 
+                onCapture={(file) => {
+                  setArSessionQueue(prev => [...prev, file]);
+                  saveArQueueItem(file).catch(() => {});
+                }} 
                 onFinishSession={() => {
                   if (arSessionQueue.length > 0) {
                     handleBatchFiles(arSessionQueue);
                     setArSessionQueue([]);
+                    clearArQueue().catch(() => {});
                   }
                   // Do not switch tab, stay in AR view
                 }}
@@ -4225,6 +4243,8 @@ export default function App() {
                 onClose={() => setShowNewBatchPanel(false)}
                 maxConcurrent={3}
                 defaultScanType={selectedScanType || ScanType.DOCUMENT}
+                serverRetry={(jobId) => processingQueueService.retryJob(jobId)}
+                downloadFromStorage={(assetId) => processingQueueService.downloadFromStorage(assetId)}
               />
             </div>
           </div>

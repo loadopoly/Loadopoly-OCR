@@ -880,6 +880,42 @@ class ProcessingQueueService {
     this.subscriptions.clear();
   }
 
+  /**
+   * Download a file from Supabase Storage by asset ID.
+   * Used for client-side fallback when retrying from a different location.
+   */
+  async downloadFromStorage(assetId: string): Promise<File | null> {
+    if (!isSupabaseConfigured() || !supabase || !this.userId) return null;
+
+    try {
+      // List files in the asset's storage folder
+      const prefix = `${this.userId}/${assetId}/`;
+      const { data: files, error: listError } = await (supabase as any).storage
+        .from(STORAGE_BUCKET)
+        .list(`${this.userId}/${assetId}`);
+
+      if (listError || !files?.length) {
+        logger.debug(`No files found in storage for asset ${assetId}`);
+        return null;
+      }
+
+      const fileName = files[0].name;
+      const { data, error } = await (supabase as any).storage
+        .from(STORAGE_BUCKET)
+        .download(`${prefix}${fileName}`);
+
+      if (error || !data) {
+        logger.warn(`Failed to download from storage for ${assetId}: ${error?.message}`);
+        return null;
+      }
+
+      return new File([data], fileName, { type: data.type || 'image/jpeg' });
+    } catch (e: any) {
+      logger.warn(`Storage download error for ${assetId}: ${e.message}`);
+      return null;
+    }
+  }
+
   // ============================================
   // Private Methods
   // ============================================
@@ -1107,9 +1143,18 @@ class ProcessingQueueService {
       
       try {
         let imageBlob = asset.imageBlob;
+
+        // If no blob passed, try the full asset object from IndexedDB (has imageBlob persisted)
+        if (!imageBlob) {
+          const fullAsset = assetMap.get(asset.id);
+          if (fullAsset?.imageBlob) {
+            imageBlob = fullAsset.imageBlob;
+            logger.debug(`Recovered imageBlob from IndexedDB for ${asset.id}: ${imageBlob.size} bytes`);
+          }
+        }
         
-        // If no blob, try to fetch from URL (including blob: URLs that may still be valid)
-        if (!imageBlob && asset.imageUrl) {
+        // Last resort: try to fetch from URL (blob: URLs may still be valid in same session)
+        if (!imageBlob && asset.imageUrl && !asset.imageUrl.startsWith('blob:')) {
           try {
             logger.debug(`Fetching image for asset ${asset.id} from ${asset.imageUrl.substring(0, 50)}...`);
             const response = await fetch(asset.imageUrl);
