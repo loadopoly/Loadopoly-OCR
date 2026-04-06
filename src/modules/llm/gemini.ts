@@ -16,7 +16,10 @@ import {
   UsageInfo,
 } from '../types';
 import { GraphData, GraphNode, GraphLink, GISMetadata, ScanType } from '../../types';
-import { processImageWithGemini, fileToGenerativePart } from '../../services/geminiService';
+// PERF FIX: geminiService is lazy-imported to avoid pulling @google/genai (253KB)
+// into the module system's static dependency chain. This prevents vendor-ai from
+// being loaded on app startup — it only loads when Gemini processing is triggered.
+// import { processImageWithGemini, fileToGenerativePart } from '../../services/geminiService';
 import { logger } from '../../lib/logger';
 
 // ============================================
@@ -89,7 +92,8 @@ export class GeminiProvider extends BaseLLMProvider {
       // Map scan type
       const scanType = this.mapScanType(options?.scanType);
       
-      // Use existing service
+      // Use existing service (lazy-loaded to avoid pulling vendor-ai into startup)
+      const { processImageWithGemini } = await import('../../services/geminiService');
       const result = await processImageWithGemini(file, null, scanType, false);
 
       // Build graph from extracted entities

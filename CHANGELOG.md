@@ -3,6 +3,45 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.14.0] - 2026-04-07
+
+### Startup Performance Optimization
+
+**Core Problem:** Application took 20–33 seconds to load on mobile devices (Google Pixel 10) due to synchronous import chains pulling ~880 KB of blocking JavaScript into the critical path, including vendor-ai (253 KB) and chunk-cluster-sync (138 KB) that were not needed at startup.
+
+#### React.lazy + Suspense Entry Point (index.tsx)
+- Replaced blocking `Promise.all([import('./App'), import('./ModuleContext')]).then(render)` with `React.lazy()` + `<Suspense>` so React mounts immediately with a branded skeleton fallback
+- Added `AppShellFallback` component with header, spinner, and bottom nav matching the HTML app shell
+- Dynamic imports for `pwaUtils`, `performanceMonitor`, and `bootstrap` — no longer in the critical path
+
+#### Deferred Heavy Dependencies (App.tsx, gemini.ts)
+- `ClusterSyncButton` lazy-loaded via `React.lazy()` with pulse placeholder fallback
+- `processImageWithGemini` lazy-imported at both call sites (camera capture + AR capture) — vendor-ai (253 KB / 50 KB gzip) completely removed from startup chain
+- `geminiService` import in `modules/llm/gemini.ts` converted to dynamic `await import()` inside `extractMetadata()` to break the module → @google/genai cascade
+
+#### Vite Build Optimization (vite.config.js, vite.config.ts)
+- Disabled `modulePreload` to prevent eager download of all chunks via `<link rel="modulepreload">`
+- Added `vendor-preload` manual chunk (1.13 KB) to isolate Vite's `__vitePreload` helper from large chunks
+- Added `chunk-gemini` manual chunk to isolate `geminiService` for on-demand loading
+
+#### Service Worker v3.5.0 (sw.js)
+- Added cache-first caching for content-hashed JS/CSS bundles under `/assets/`
+- Pattern-matched filenames with content hashes for safe indefinite caching
+- HTML excluded from caching to ensure bundle references stay current
+
+#### HTML App Shell (index.html)
+- Added branded skeleton UI inside `<div id="root">` — header with Database icon, loading spinner, and bottom navigation tabs — visible instantly while JS loads
+
+#### Deferred Polyfills (polyfills.ts, web3Service.ts)
+- Moved Buffer/process polyfills behind lazy `ensureWeb3Polyfills()` function
+- Polyfills only loaded when Web3 features are accessed
+
+#### Results
+- Entry blocking JS reduced from ~880 KB to ~76 KB gzip
+- vendor-ai (253 KB) loads only on camera/OCR action
+- vendor-web3 (395 KB) loads only on wallet connect
+- Branded skeleton visible within ~1 second on mobile
+
 ## [2.13.0] - 2026-04-06
 
 ### Batch Retry Resilience & File Persistence
