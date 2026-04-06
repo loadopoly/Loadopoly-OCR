@@ -1,9 +1,13 @@
 // PERF FIX: Lazy-import ethers (~400KB) — only loaded when user actually
 // triggers a Web3 action. Previously this was parsed at page load even
 // though Web3 is an opt-in localStorage flag.
+import { ensureWeb3Polyfills } from '../polyfills';
+
 let _ethers: typeof import('ethers') | null = null;
 const getEthers = async () => {
   if (!_ethers) {
+    // Ensure Buffer/process globals exist before ethers evaluates
+    await ensureWeb3Polyfills();
     _ethers = await import('ethers');
   }
   return _ethers;

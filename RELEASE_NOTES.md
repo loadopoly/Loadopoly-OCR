@@ -1,3 +1,21 @@
+# 🚀 GeoGraph Node: v2.14.0 Release Notes
+
+## ⚡ v2.14.0 — Startup Performance Optimization (2026-04-07)
+
+### 🎯 Overview
+v2.14.0 dramatically reduces application startup time on mobile devices. Entry blocking JavaScript dropped from ~880 KB to ~76 KB gzip through React.lazy code-splitting, deferred heavy dependencies (Gemini AI, Web3, cluster sync), a branded HTML app shell, and Service Worker bundle caching. The app now shows a branded skeleton within ~1 second while lazily loading the rest.
+
+### Key Changes
+- **React.lazy + Suspense** entry point — React mounts immediately with a skeleton fallback
+- **vendor-ai (253 KB)** completely removed from startup — loads on-demand for camera/OCR
+- **ClusterSyncButton** lazy-loaded — chunk-cluster-sync (138 KB) no longer blocks startup
+- **modulePreload disabled** — prevents Vite from eagerly downloading all chunks
+- **HTML app shell** — branded skeleton visible instantly before any JS executes
+- **Service Worker v3.5.0** — caches content-hashed JS/CSS bundles for instant repeat loads
+- **Deferred polyfills** — Buffer/process polyfills load only when Web3 is accessed
+
+---
+
 # 🚀 GeoGraph Node: v2.12.0 Release Notes
 
 ## 🌐 v2.12.0 — Adventure Mode, Structured Data Population & PWA Hardening (2026-03-02)

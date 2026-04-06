@@ -39,6 +39,13 @@ export default defineConfig({
     sourcemap: false,
     // Target modern browsers for smaller bundles
     target: 'es2020',
+    // PERF FIX: Disable modulePreload entirely.
+    // With polyfill: true (default), Vite injects a __vitePreload helper that
+    // Rollup places in chunk-web3-services, forcing the entry chunk to
+    // statically import it — cascading into ~600KB of vendor deps.
+    // Also removes <link rel="modulepreload"> tags from HTML that cause the
+    // browser to eagerly download ~956KB of JS before the entry can execute.
+    modulePreload: false,
     // Use content hashes for cache busting
     rollupOptions: {
       output: {
@@ -48,6 +55,15 @@ export default defineConfig({
         assetFileNames: 'assets/[name]-[hash].[ext]',
         // Aggressive manual chunks for optimal code splitting
         manualChunks(id) {
+          // PERF FIX: Vite's __vitePreload helper is always generated
+          // (even with modulePreload: false) for CSS dep handling.
+          // Without this rule, Rollup places it in chunk-web3-services
+          // which forces the entry to statically import that chunk,
+          // cascading into ~600KB of vendor deps via transitive imports.
+          // Isolate it in a tiny ~1KB chunk to break the cascade.
+          if (id.includes('vite/preload-helper')) {
+            return 'vendor-preload';
+          }
           // React core - smallest possible
           if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
             return 'vendor-react';
@@ -91,6 +107,12 @@ export default defineConfig({
           // Google AI
           if (id.includes('@google/genai')) {
             return 'vendor-ai';
+          }
+          // Gemini service — must be isolated from chunk-cluster-sync
+          // to prevent pulling vendor-ai (253KB) into the App startup chain.
+          // geminiService is only needed on user-triggered camera/OCR actions.
+          if (id.includes('/services/geminiService')) {
+            return 'chunk-gemini';
           }
           // Split heavy components into their own chunks
           if (id.includes('/components/metaverse/')) {

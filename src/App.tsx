@@ -64,7 +64,10 @@ import {
   Community,
   CommunityAdmissionRequest
 } from './types';
-import { processImageWithGemini } from './services/geminiService';
+// PERF FIX: geminiService statically imports @google/genai (253KB vendor-ai).
+// processImageWithGemini is only called on user-triggered actions (camera capture),
+// so we lazy-import it inside the functions that use it.
+// import { processImageWithGemini } from './services/geminiService';
 import { createBundles, createUserBundle } from './services/bundleService';
 import { initSync, isSyncEnabled } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset, saveArQueueItem, loadArQueue, clearArQueue } from './lib/indexeddb';
@@ -102,7 +105,15 @@ import { WorldRendererLazy as WorldRenderer } from './lib/lazyComponents';
 import { useAvatar } from './hooks/useAvatar';
 import { FilterProvider, useFilterContext } from './contexts/FilterContext';
 import UnifiedFilterPanel, { InlineFilterBar, FilterBadge } from './components/UnifiedFilterPanel';
-import { ClusterSyncButton } from './components/ClusterSyncStatsPanel';
+// PERF FIX: ClusterSyncButton is lazy-loaded because importing it from
+// ClusterSyncStatsPanel.tsx pulls in chunk-cluster-sync (138KB) which
+// cascades to vendor-supabase (169KB) + vendor-ai (253KB). The button is
+// only shown in Curator Mode tab, so it's safe to defer.
+const ClusterSyncButton = React.lazy(() =>
+  import('./components/ClusterSyncStatsPanel').then(m => ({
+    default: m.ClusterSyncButton,
+  }))
+);
 
 // --- Custom Hooks ---
 function useOnlineStatus() {
@@ -493,13 +504,18 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    const updateDiagnostics = () => {
+    // PERF FIX: Defer queue diagnostics polling — not needed for first paint.
+    // Start after 10s so the initial render and data loading aren't competing.
+    const startTimeout = setTimeout(() => {
       setQueueDiagnostics(processingQueueService.getDiagnostics());
+    }, 10000);
+    const interval = setInterval(() => {
+      setQueueDiagnostics(processingQueueService.getDiagnostics());
+    }, 15000); // Also reduced frequency from 5s to 15s
+    return () => {
+      clearTimeout(startTimeout);
+      clearInterval(interval);
     };
-
-    updateDiagnostics();
-    const interval = setInterval(updateDiagnostics, 5000);
-    return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -1247,6 +1263,8 @@ export default function App() {
 
     // Show processing assets immediately (instant feedback), defer heavy bundling
     setDisplayItems([...processingAssets, ...processedAssets]);
+    // PERF FIX: Mark app ready immediately so UI is interactive while bundling runs
+    if (!isAppReady) setIsAppReady(true);
 
     // Cancel any pending idle callback
     if (bundleIdleRef.current !== null) {
@@ -1265,8 +1283,16 @@ export default function App() {
     };
 
     if (!isAppReady) {
-      // First render: run synchronously so we can drop the loading screen immediately
-      runBundling();
+      // PERF FIX: Always defer bundling — even on first render. Show raw assets
+      // immediately (setDisplayItems above) and run O(n²) dedup in idle callback.
+      // This avoids blocking the main thread for 200-800ms during initial paint.
+      if ('requestIdleCallback' in window) {
+        bundleIdleRef.current = (window as any).requestIdleCallback(() => {
+          runBundling();
+        }, { timeout: 8000 });
+      } else {
+        bundleIdleRef.current = setTimeout(runBundling, 500);
+      }
     } else {
       // Defer to idle so the sidebar / tab switch animation isn't blocked
       if ('requestIdleCallback' in window) {
@@ -1417,6 +1443,7 @@ export default function App() {
       }
 
       const scanType = (asset.sqlRecord?.SCAN_TYPE as ScanType) || ScanType.DOCUMENT;
+      const { processImageWithGemini } = await import('./services/geminiService');
       const analysis = await processImageWithGemini(file, location, scanType, debugMode);
       
       const updatedSqlRecord: HistoricalDocumentMetadata = {
@@ -1829,6 +1856,7 @@ export default function App() {
       onProgress(25, 'AI analysis...');
       
       // Process with Gemini (client-side fallback or when server not available)
+      const { processImageWithGemini } = await import('./services/geminiService');
       const analysis = await processImageWithGemini(file, location, scanType, debugMode);
       
       onProgress(70, 'Building metadata...');
@@ -3220,6 +3248,7 @@ export default function App() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {/* Cluster Sync Statistics Button - Human-in-the-Loop Overview */}
+                  <Suspense fallback={<div className="h-9 w-32 bg-slate-800 rounded-lg animate-pulse" />}>
                   <ClusterSyncButton 
                     onClick={() => setShowClusterSyncStats(true)}
                     stats={{
@@ -3234,6 +3263,7 @@ export default function App() {
                       total: assets.length
                     }}
                   />
+                  </Suspense>
                   <FilterBadge count={0} onClick={() => setShowUnifiedFilters(true)} />
                   {selectedAssetIds.size > 0 && (
                     <button 

@@ -1,23 +1,26 @@
 /**
- * GeoGraph Service Worker v3.3.1
+ * GeoGraph Service Worker v3.5.0
  * 
  * IMPORTANT: This service worker is designed to be cache-safe for Vite builds.
- * - JS/CSS bundles are NEVER cached (they have content hashes that change per build)
- * - Only static assets (HTML, manifest, icons) are cached
+ * - JS/CSS bundles under /assets/ ARE cached (they have content hashes per build,
+ *   so each filename is unique and safe for indefinite cache-first caching)
+ * - HTML is NEVER cached (it references versioned JS bundles)
  * - Version bump forces cache invalidation across all clients
  * 
  * Features:
  * - Network-first for navigation (always fresh HTML)
+ * - Cache-first for content-hashed JS/CSS bundles (instant repeat loads)
  * - Cache-first for static assets (icons, fonts)
  * - Background sync for offline data
  * - Push notifications support
  * - Performance optimizations with preload hints
  */
 
-const CACHE_VERSION = '3.4.0';
+const CACHE_VERSION = '3.5.0';
 const CACHE_NAME = `geograph-v${CACHE_VERSION}`;
 const IMAGE_CACHE_NAME = `geograph-images-v${CACHE_VERSION}`;
 const API_CACHE_NAME = `geograph-api-v${CACHE_VERSION}`;
+const BUNDLE_CACHE_NAME = `geograph-bundles-v${CACHE_VERSION}`;
 
 // Only cache truly static assets that don't change per build
 // IMPORTANT: Do NOT cache index.html - it references versioned JS bundles
@@ -36,14 +39,13 @@ const CACHEABLE_API_PATTERNS = [
 // Image types to cache
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.ico'];
 
+// Content-hashed Vite bundles under /assets/ are SAFE to cache indefinitely.
+// Each build produces unique filenames (e.g., index-a1b2c3d4.js), so stale
+// bundles are never served — the HTML simply stops referencing old filenames.
+const CONTENT_HASHED_ASSET = /^\/assets\/[^/]+-[a-f0-9]{8}\.(js|css|mjs)$/;
+
 // Patterns for files that should NEVER be cached
-// These are Vite-generated bundles with content hashes
 const NEVER_CACHE_PATTERNS = [
-  /\/assets\//,           // All Vite-generated assets
-  /\.[a-f0-9]{8}\./,      // Files with content hashes (e.g., index.a1b2c3d4.js)
-  /\.js(\?.*)?$/,         // All JavaScript files
-  /\.css(\?.*)?$/,        // All CSS files
-  /\.mjs(\?.*)?$/,        // ES modules
   /hot-update/,           // Vite HMR files
 ];
 
@@ -61,6 +63,7 @@ self.addEventListener('install', (event) => {
       caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS_TO_CACHE)),
       caches.open(IMAGE_CACHE_NAME), // Pre-create image cache
       caches.open(API_CACHE_NAME), // Pre-create API cache
+      caches.open(BUNDLE_CACHE_NAME), // Pre-create bundle cache for JS/CSS
     ]).then(() => log('All caches initialized'))
   );
   // Do NOT call self.skipWaiting() here.
@@ -80,7 +83,8 @@ self.addEventListener('activate', (event) => {
             // Keep current version caches
             if (cacheName === CACHE_NAME || 
                 cacheName === IMAGE_CACHE_NAME || 
-                cacheName === API_CACHE_NAME) {
+                cacheName === API_CACHE_NAME ||
+                cacheName === BUNDLE_CACHE_NAME) {
               return;
             }
             log('Deleting old cache:', cacheName);
@@ -88,7 +92,7 @@ self.addEventListener('activate', (event) => {
           })
         );
       }),
-      // Clean any accidentally cached JS/CSS/HTML from current cache
+      // Clean any accidentally cached HTML from the static asset cache
       caches.open(CACHE_NAME).then((cache) => {
         return cache.keys().then((requests) => {
           return Promise.all(
@@ -97,10 +101,6 @@ self.addEventListener('activate', (event) => {
               // Remove any HTML files from cache
               if (url.pathname === '/' || url.pathname.endsWith('.html')) {
                 log('Removing cached HTML:', url.pathname);
-                return cache.delete(request);
-              }
-              if (NEVER_CACHE_PATTERNS.some(p => p.test(url.pathname) || p.test(url.href))) {
-                log('Removing stale asset:', url.pathname);
                 return cache.delete(request);
               }
             })
@@ -139,11 +139,32 @@ self.addEventListener('fetch', (event) => {
   
   const url = new URL(request.url);
   
-  // CRITICAL: Never intercept JS/CSS/asset requests - let browser fetch directly
-  // This prevents stale bundle issues that cause blank pages
+  // Skip Vite HMR and other never-cache patterns
   if (NEVER_CACHE_PATTERNS.some(pattern => pattern.test(url.pathname) || pattern.test(url.href))) {
     log('Skipping cache for:', url.pathname);
-    return; // Don't call respondWith - browser handles normally
+    return;
+  }
+
+  // Content-hashed JS/CSS bundles: cache-first (safe — filenames are unique per build)
+  // This is the single biggest mobile perf win: repeat visits load from cache instantly.
+  if (CONTENT_HASHED_ASSET.test(url.pathname)) {
+    event.respondWith(
+      caches.open(BUNDLE_CACHE_NAME).then((cache) => {
+        return cache.match(request).then((cachedResponse) => {
+          if (cachedResponse) {
+            log('Bundle cache hit:', url.pathname);
+            return cachedResponse;
+          }
+          return fetch(request).then((networkResponse) => {
+            if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+              cache.put(request, networkResponse.clone());
+            }
+            return networkResponse;
+          });
+        });
+      })
+    );
+    return;
   }
 
   // Handle image requests with stale-while-revalidate
