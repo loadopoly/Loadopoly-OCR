@@ -11,10 +11,30 @@ export interface SyncFile {
   lastModified: number;
 }
 
+export interface BatchFileEntry {
+  id: string;        // Matches BatchItemState.id
+  blob: Blob;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  createdAt: number;
+}
+
+export interface ArQueueEntry {
+  id: string;
+  blob: Blob;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  createdAt: number;
+}
+
 class GeoGraphDB extends Dexie {
   handles!: Table<SyncHandle, number>;
   files!: Table<SyncFile, string>;
   assets!: Table<DigitalAsset, string>;
+  batchFiles!: Table<BatchFileEntry, string>;
+  arQueue!: Table<ArQueueEntry, string>;
 
   constructor() {
     super('GeoGraphSync');
@@ -29,6 +49,15 @@ class GeoGraphDB extends Dexie {
       handles: 'id',
       files: 'name,lastModified',
       assets: 'id, timestamp, status' // Index useful fields
+    });
+
+    // Add batchFiles + arQueue tables in version 3
+    (this as any).version(3).stores({
+      handles: 'id',
+      files: 'name,lastModified',
+      assets: 'id, timestamp, status',
+      batchFiles: 'id, createdAt',
+      arQueue: 'id, createdAt',
     });
   }
 }
@@ -126,4 +155,67 @@ export const resetStuckAssets = async (assetIds?: string[]): Promise<number> => 
     }
     
     return stuckAssets.length;
+};
+
+// ============================================
+// Batch File Persistence (survives page refresh)
+// ============================================
+
+export const saveBatchFile = async (id: string, file: File): Promise<void> => {
+    await db.batchFiles.put({
+        id,
+        blob: file,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        createdAt: Date.now(),
+    });
+};
+
+export const loadBatchFile = async (id: string): Promise<File | null> => {
+    const entry = await db.batchFiles.get(id);
+    if (!entry) return null;
+    return new File([entry.blob], entry.fileName, { type: entry.fileType });
+};
+
+export const deleteBatchFile = async (id: string): Promise<void> => {
+    await db.batchFiles.delete(id);
+};
+
+export const deleteBatchFiles = async (ids: string[]): Promise<void> => {
+    await db.batchFiles.bulkDelete(ids);
+};
+
+export const clearAllBatchFiles = async (): Promise<void> => {
+    await db.batchFiles.clear();
+};
+
+// ============================================
+// AR Session Queue Persistence
+// ============================================
+
+export const saveArQueueItem = async (file: File): Promise<string> => {
+    const id = crypto.randomUUID?.() || `ar-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    await db.arQueue.put({
+        id,
+        blob: file,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        createdAt: Date.now(),
+    });
+    return id;
+};
+
+export const loadArQueue = async (): Promise<File[]> => {
+    const entries = await db.arQueue.orderBy('createdAt').toArray();
+    return entries.map(e => new File([e.blob], e.fileName, { type: e.fileType }));
+};
+
+export const clearArQueue = async (): Promise<void> => {
+    await db.arQueue.clear();
+};
+
+export const getArQueueCount = async (): Promise<number> => {
+    return await db.arQueue.count();
 };

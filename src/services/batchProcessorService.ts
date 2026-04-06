@@ -9,12 +9,23 @@
  * - Automatic retry with exponential backoff
  * - Pause/Resume/Cancel capabilities
  * - Progress persistence across page reloads
+ * - File blob persistence to IndexedDB (survives refresh)
+ * - Server-side retry for items already uploaded to Supabase
+ * - Offline-first client processing fallback
  * - Memory-efficient chunked processing
  * - Real-time event callbacks for UI updates
  */
 
 import { v4 as uuidv4 } from 'uuid';
 import { ScanType } from '../types';
+import {
+  saveBatchFile,
+  loadBatchFile,
+  deleteBatchFile,
+  deleteBatchFiles,
+  clearAllBatchFiles,
+  db,
+} from '../lib/indexeddb';
 
 // ============================================
 // Types
@@ -32,6 +43,7 @@ export interface BatchItemState {
   stage: string;
   errorMsg?: string;
   assetId?: string;
+  serverJobId?: string; // Tracks server-side processing job ID
   scanType: ScanType;
   retryCount: number;
   createdAt: number;
@@ -71,6 +83,10 @@ export interface BatchProcessorCallbacks {
   onLog?: (message: string, level: 'info' | 'warn' | 'error') => void;
   // The actual processing function
   processItem: (file: File, itemId: string, scanType: ScanType, onProgress: (progress: number, stage: string) => void) => Promise<string | null>;
+  // Server-side retry: retry a job already uploaded to Supabase (returns true if successfully re-queued)
+  serverRetry?: (jobId: string) => Promise<boolean>;
+  // Download file from Supabase Storage for client-side fallback (returns File or null)
+  downloadFromStorage?: (assetId: string) => Promise<File | null>;
 }
 
 export type BatchProcessorState = 'IDLE' | 'RUNNING' | 'PAUSED' | 'STOPPING';
@@ -156,6 +172,11 @@ class BatchProcessorService {
       this.files.set(id, file);
       newItems.push(item);
       this.callbacks.onItemQueued?.(item);
+
+      // Persist blob to IndexedDB so it survives page refresh
+      saveBatchFile(id, file).catch(e =>
+        this.log(`Failed to persist file ${file.name}: ${e.message}`, 'warn')
+      );
     }
     
     this.log(`Added ${files.length} files to queue. Total: ${this.items.size}`, 'info');
@@ -280,20 +301,39 @@ class BatchProcessorService {
   }
 
   /**
-   * Retry failed items
+   * Retry failed items — recovers files from IndexedDB / assets table / Supabase Storage,
+   * and uses server-side retry for items already uploaded to Supabase.
    */
   retryFailed(): number {
     let retryCount = 0;
+    const itemsToRecover: BatchItemState[] = [];
     
     for (const [id, item] of this.items) {
       if (item.status === 'ERROR') {
+        // If the item has a serverJobId and a server retry callback, try server-side first
+        if (item.serverJobId && this.callbacks.serverRetry) {
+          this.retryViaServer(item);
+          retryCount++;
+          continue;
+        }
+
         item.status = 'QUEUED';
         item.progress = 0;
         item.stage = 'Queued (Retry)';
         item.errorMsg = undefined;
         this.items.set(id, item);
         retryCount++;
+
+        // If file is NOT in memory, schedule async recovery
+        if (!this.files.has(id)) {
+          itemsToRecover.push(item);
+        }
       }
+    }
+
+    // Async recovery: try IndexedDB batchFiles → assets table → Supabase Storage download
+    if (itemsToRecover.length > 0) {
+      this.recoverFiles(itemsToRecover);
     }
     
     if (retryCount > 0) {
@@ -309,20 +349,124 @@ class BatchProcessorService {
   }
 
   /**
+   * Attempt server-side retry for an item already uploaded to Supabase.
+   * Falls back to client-side re-queue if server retry fails.
+   */
+  private async retryViaServer(item: BatchItemState): Promise<void> {
+    try {
+      this.log(`Server-side retry for ${item.fileName} (job: ${item.serverJobId})`, 'info');
+      const success = await this.callbacks.serverRetry!(item.serverJobId!);
+      if (success) {
+        item.status = 'PROCESSING';
+        item.progress = 5;
+        item.stage = 'Re-queued on server';
+        item.errorMsg = undefined;
+        this.items.set(item.id, item);
+        this.callbacks.onItemStarted?.(item);
+        this.persistState();
+        return;
+      }
+    } catch (e: any) {
+      this.log(`Server retry failed for ${item.fileName}: ${e.message}`, 'warn');
+    }
+
+    // Server retry failed — fall back to client-side re-processing
+    item.status = 'QUEUED';
+    item.progress = 0;
+    item.stage = 'Queued (Retry - server unavailable)';
+    item.errorMsg = undefined;
+    item.serverJobId = undefined; // Clear stale job ID
+    this.items.set(item.id, item);
+
+    if (!this.files.has(item.id)) {
+      this.recoverFiles([item]);
+    }
+
+    this.persistState();
+  }
+
+  /**
+   * Recover file blobs for items missing from in-memory cache.
+   * Tries: batchFiles IndexedDB → assets table imageBlob → Supabase Storage download.
+   */
+  private async recoverFiles(items: BatchItemState[]): Promise<void> {
+    for (const item of items) {
+      if (this.files.has(item.id)) continue; // Already recovered
+
+      let recovered = false;
+
+      // 1. Try batchFiles table (primary persistence)
+      try {
+        const file = await loadBatchFile(item.id);
+        if (file) {
+          this.files.set(item.id, file);
+          this.log(`Recovered file from batchFiles: ${item.fileName}`, 'info');
+          recovered = true;
+          continue;
+        }
+      } catch (e) { /* fall through */ }
+
+      // 2. Try assets table imageBlob (saved during initial processing by handleNewBatchProcess)
+      if (!recovered) {
+        try {
+          const asset = await db.assets.get(item.id);
+          if (asset?.imageBlob) {
+            const file = new File([asset.imageBlob], item.fileName, { type: item.fileType || asset.imageBlob.type });
+            this.files.set(item.id, file);
+            this.log(`Recovered file from assets table: ${item.fileName}`, 'info');
+            recovered = true;
+            continue;
+          }
+        } catch (e) { /* fall through */ }
+      }
+
+      // 3. Try downloading from Supabase Storage (cross-location support)
+      if (!recovered && this.callbacks.downloadFromStorage) {
+        try {
+          const file = await this.callbacks.downloadFromStorage(item.id);
+          if (file) {
+            this.files.set(item.id, file);
+            // Also persist to batchFiles for future retries
+            saveBatchFile(item.id, file).catch(() => {});
+            this.log(`Recovered file from Supabase Storage: ${item.fileName}`, 'info');
+            recovered = true;
+            continue;
+          }
+        } catch (e: any) {
+          this.log(`Supabase download failed for ${item.fileName}: ${e.message}`, 'warn');
+        }
+      }
+
+      if (!recovered) {
+        // All recovery paths exhausted
+        item.status = 'ERROR';
+        item.errorMsg = 'File irrecoverable — please re-add this file';
+        this.items.set(item.id, item);
+        this.callbacks.onItemFailed?.(item);
+        this.log(`File irrecoverable: ${item.fileName} (${item.id})`, 'error');
+      }
+    }
+  }
+
+  /**
    * Clear completed items from the queue
    */
   clearCompleted(): number {
     let clearCount = 0;
+    const idsToDelete: string[] = [];
     
     for (const [id, item] of this.items) {
       if (item.status === 'COMPLETED' || item.status === 'CANCELLED') {
         this.items.delete(id);
         this.files.delete(id);
+        idsToDelete.push(id);
         clearCount++;
       }
     }
     
     if (clearCount > 0) {
+      // Clean up IndexedDB batch file entries
+      deleteBatchFiles(idsToDelete).catch(() => {});
       this.log(`Cleared ${clearCount} completed items`, 'info');
       this.persistState();
     }
@@ -340,6 +484,8 @@ class BatchProcessorService {
     this.processingSet.clear();
     this.completionTimes = [];
     this.state = 'IDLE';
+    // Wipe all batch file blobs from IndexedDB
+    clearAllBatchFiles().catch(() => {});
     this.persistState();
     this.callbacks.onStateChange?.(this.state);
     this.log('Cleared all items', 'info');
@@ -404,6 +550,19 @@ class BatchProcessorService {
    */
   getState(): BatchProcessorState {
     return this.state;
+  }
+
+  /**
+   * Set the server job ID for a batch item (used when server-side processing is initiated).
+   * Enables server-side retry on failure instead of re-uploading the file.
+   */
+  setServerJobId(itemId: string, jobId: string): void {
+    const item = this.items.get(itemId);
+    if (item) {
+      item.serverJobId = jobId;
+      this.items.set(itemId, item);
+      this.persistState();
+    }
   }
 
   // ============================================
@@ -472,11 +631,18 @@ class BatchProcessorService {
   }
 
   private async processItem(item: BatchItemState): Promise<void> {
-    const file = this.files.get(item.id);
+    let file = this.files.get(item.id);
+
+    // File not in memory — attempt recovery from IndexedDB / assets / Supabase
+    if (!file) {
+      await this.recoverFiles([item]);
+      file = this.files.get(item.id);
+    }
+
     if (!file) {
       this.log(`File not found for item ${item.id}`, 'error');
       item.status = 'ERROR';
-      item.errorMsg = 'File data lost (page was refreshed?)';
+      item.errorMsg = 'File irrecoverable — please re-add this file';
       this.items.set(item.id, item);
       this.callbacks.onItemFailed?.(item);
       return;
@@ -535,6 +701,9 @@ class BatchProcessorService {
       item.completedAt = Date.now();
       this.items.set(item.id, item);
       this.processingSet.delete(item.id);
+      this.files.delete(item.id); // Free memory
+      // Clean up IndexedDB batch file entry — no longer needed
+      deleteBatchFile(item.id).catch(() => {});
       this.callbacks.onItemCompleted?.(item);
       this.log(`Completed: ${item.fileName} (${(processingTime / 1000).toFixed(1)}s)`, 'info');
       
@@ -593,17 +762,18 @@ class BatchProcessorService {
       if (stored) {
         const state = JSON.parse(stored);
         
-        // Restore items (but mark PROCESSING as stuck since files are lost)
+        // Restore items — files are now persisted in IndexedDB so QUEUED items survive refresh
         if (state.items) {
           for (const [id, item] of state.items) {
             if (item.status === 'PROCESSING') {
-              item.status = 'ERROR';
-              item.errorMsg = 'Processing interrupted (refresh files to retry)';
+              // Was mid-processing when page died — mark as queued for retry
+              item.status = 'QUEUED';
+              item.progress = 0;
+              item.stage = 'Queued (Recovered)';
+              item.errorMsg = undefined;
             }
-            // Don't restore QUEUED items since files are lost
-            if (item.status === 'COMPLETED' || item.status === 'ERROR') {
-              this.items.set(id, item);
-            }
+            // Restore all states — QUEUED items can now recover files from IndexedDB
+            this.items.set(id, item);
           }
         }
         
