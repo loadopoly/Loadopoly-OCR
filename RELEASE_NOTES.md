@@ -1,3 +1,21 @@
+# 🚀 GeoGraph Node: v2.15.1 Release Notes
+
+## ⚡ v2.15.1 — Filter Engine Startup Performance (2026-04-07)
+
+### 🎯 Overview
+v2.15.1 reduces InlineFilterBar (selection bar) load time from ~20 seconds to <2 seconds on fresh app start. The FilterProvider now computes dimensions in two tiers: cheap field lookups render synchronously, while expensive cross-asset comparisons (serendipity scoring, connection density) are deferred to `requestIdleCallback`.
+
+### Key Changes
+- **Tiered dimension computation** — 21 cheap dimensions sync, 3 expensive dimensions deferred
+- **O(n²) → O(n×m) serendipity scoring** — precomputed entity-frequency and category maps
+- **Batch extraction** — shared lookup tables computed once for all Tier 2 dimensions
+- **Shallow equality guard** — skips full recomputation when asset set unchanged
+- **Static hoisting** — `DIMENSION_LABELS` and `buildDimensionMeta` moved to module scope
+- **Precomputed dependency maps** — `DIMENSION_DEPS_ON`/`DIMENSION_AFFECTS` eliminate repeated `.filter()` calls
+- **Deduplicated cleanup** — `cancelTier2()` helper replaces 3× duplicated cancel logic
+
+---
+
 # 🚀 GeoGraph Node: v2.14.0 Release Notes
 
 ## ⚡ v2.14.0 — Startup Performance Optimization (2026-04-07)

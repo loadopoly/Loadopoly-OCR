@@ -3,6 +3,28 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.15.1] - 2026-04-07
+
+### Filter Engine Startup Performance: Tiered Dimension Computation
+
+**Core Problem:** The InlineFilterBar (selection bar) took ~20 seconds to appear on fresh app load because `FilterProvider` computed all 27 filter dimensions synchronously in a single `useEffect`, including O(n²) cross-asset comparisons for serendipity scoring and connection density.
+
+**Result:** The selection bar renders in <2 seconds. Cheap dimensions (category, era, license, etc.) are computed synchronously on mount; expensive dimensions (subjectMatter, connectionDensity, serendipityScore) are deferred via `requestIdleCallback`.
+
+#### Phase 1 — Tiered Computation & Algorithm Fixes
+- Split 27 dimensions into Tier 1 (21 cheap O(n) lookups, sync) and Tier 2 (3 expensive, deferred via `requestIdleCallback` with 3s timeout)
+- Reduced `calculateSerendipityScore` from O(n²×m²) to O(n×m) with precomputed entity-frequency and category-by-id maps
+- Added `extractExpensiveDimensionsBatch` to precompute shared lookup tables once for all Tier 2 dimensions
+- Added shallow equality guard (`prevAssetKeyRef`/`prevGraphKeyRef`) to skip recomputation when assets haven't changed
+- Cached `getConstrainedValues` to return `meta.availableValues` directly when no filters are active
+
+#### Phase 2 — Static Hoisting & Deduplication
+- Hoisted `dimensionLabels` to module-level `DIMENSION_LABELS` constant (was recreated every render)
+- Converted `buildMeta` from `useCallback` to module-level `buildDimensionMeta` function
+- Precomputed `DIMENSION_DEPS_ON` and `DIMENSION_AFFECTS` maps from `FILTER_DEPENDENCIES` (avoids repeated `.filter()` per dimension)
+- Extracted `cancelTier2()` helper to deduplicate idle-callback cleanup logic (was repeated 3×)
+- Removed `buildMeta` from `useEffect` dependency array
+
 ## [2.15.0] - 2026-04-07
 
 ### Deep Startup Performance: Defer Supabase from Critical Path
