@@ -6,12 +6,15 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { 
-  avatarService, 
+import type { 
   AvatarState, 
   PresenceState, 
   WorldSector 
 } from '../services/avatarService';
+
+// PERF FIX: avatarService statically imports supabaseClient → @supabase/supabase-js (169KB).
+// Dynamic import breaks this chain so vendor-supabase is not pulled into the App chunk.
+const getAvatarService = () => import('../services/avatarService').then(m => m.avatarService);
 
 interface UseAvatarReturn {
   avatar: AvatarState | null;
@@ -56,13 +59,17 @@ export function useAvatar(userId: string | null): UseAvatarReturn {
     }
 
     setIsLoading(true);
+    let cancelled = false;
     
-    avatarService.initializeAvatar(userId).then(async (avatarData) => {
+    getAvatarService().then(async (avatarService) => {
+      const avatarData = await avatarService.initializeAvatar(userId);
+      if (cancelled) return;
       setAvatar(avatarData);
       
       if (avatarData) {
         // Get initial sector info
         const sector = await avatarService.getSector(avatarData.lastSector);
+        if (cancelled) return;
         setCurrentSector(sector);
         
         // Start presence tracking
@@ -71,6 +78,7 @@ export function useAvatar(userId: string | null): UseAvatarReturn {
           avatarData.lastSector,
           avatarData.lastPosition
         );
+        if (cancelled) return;
         setIsOnline(true);
         
         lastPositionRef.current = avatarData.lastPosition;
@@ -81,7 +89,8 @@ export function useAvatar(userId: string | null): UseAvatarReturn {
 
     // Cleanup on unmount or user change
     return () => {
-      avatarService.endPresence();
+      cancelled = true;
+      getAvatarService().then(s => s.endPresence());
       setIsOnline(false);
       
       if (unsubscribeRef.current) {
@@ -101,13 +110,15 @@ export function useAvatar(userId: string | null): UseAvatarReturn {
     }
 
     // Subscribe to current sector
-    unsubscribeRef.current = avatarService.subscribeSectorPresence(
-      currentSector.sectorCode,
-      (presence) => {
-        // Filter out self
-        setNearbyUsers(presence.filter(p => p.userId !== userId));
-      }
-    );
+    getAvatarService().then(avatarService => {
+      unsubscribeRef.current = avatarService.subscribeSectorPresence(
+        currentSector.sectorCode,
+        (presence) => {
+          // Filter out self
+          setNearbyUsers(presence.filter(p => p.userId !== userId));
+        }
+      );
+    });
 
     return () => {
       if (unsubscribeRef.current) {
@@ -133,6 +144,7 @@ export function useAvatar(userId: string | null): UseAvatarReturn {
 
       positionUpdateTimeoutRef.current = setTimeout(async () => {
         const targetSector = sector || avatar.lastSector;
+        const avatarService = await getAvatarService();
         
         // Update presence immediately (fast)
         await avatarService.updatePresencePosition(position, targetSector);
@@ -160,6 +172,7 @@ export function useAvatar(userId: string | null): UseAvatarReturn {
       if (!userId || !avatar) return;
 
       // Get new sector info
+      const avatarService = await getAvatarService();
       const sector = await avatarService.getSector(sectorCode);
       if (!sector) {
         console.warn(`Sector ${sectorCode} not found`);
@@ -193,6 +206,7 @@ export function useAvatar(userId: string | null): UseAvatarReturn {
     }) => {
       if (!userId) return false;
 
+      const avatarService = await getAvatarService();
       const success = await avatarService.updateAvatarSettings(userId, settings);
       
       if (success) {
@@ -209,6 +223,7 @@ export function useAvatar(userId: string | null): UseAvatarReturn {
     async (points: number) => {
       if (!userId) return 0;
       
+      const avatarService = await getAvatarService();
       const newTotal = await avatarService.awardExplorationPoints(userId, points);
       
       setAvatar(prev => prev ? { ...prev, explorationPoints: newTotal } : null);
@@ -243,7 +258,7 @@ export function useWorldSectors() {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    avatarService.getAllSectors().then((data) => {
+    getAvatarService().then(avatarService => avatarService.getAllSectors()).then((data) => {
       setSectors(data);
       setIsLoading(false);
     });
@@ -251,6 +266,7 @@ export function useWorldSectors() {
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
+    const avatarService = await getAvatarService();
     const data = await avatarService.getAllSectors();
     setSectors(data);
     setIsLoading(false);
