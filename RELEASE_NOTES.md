@@ -1,4 +1,19 @@
-# 🚀 GeoGraph Node: v2.15.5 Release Notes
+# 🚀 GeoGraph Node: v2.15.6 Release Notes
+
+## ⚡ v2.15.6 — Web Worker Graph Construction (2026-04-07)
+
+### 🎯 Overview
+The **real** bottleneck was `globalGraphData` useMemo in App.tsx — a synchronous O(n×m) knowledge graph construction running ~30,000-42,000 string operations on the main thread (5-10s per invocation on mobile, triggered 2-3× during init). This was the cause of the 26s sidebar freeze: clicking the sidebar queued behind the blocking graph computation, then cascading re-renders compounded the delay.
+
+#### Key Changes
+- Moved `globalGraphData` from synchronous `useMemo` to a **dedicated Web Worker** (`src/workers/graphDataWorker.ts`, 1.9KB)
+- Worker receives only the 7 sqlRecord fields it needs (vs full record), reducing structured clone from ~2MB to ~200KB
+- Generation counter rejects stale worker responses
+- `globalGraphData` is now a `useState` initialized to empty graph, filled asynchronously by worker
+- Memoized 4 inline `localAssets.filter()` / `assets.filter()` calls that ran on every render
+- Combined with v2.15.5 dimension worker: ALL heavy computation now runs off-thread
+
+---
 
 ## ⚡ v2.15.5 — Web Worker Dimension Extraction (2026-04-07)
 

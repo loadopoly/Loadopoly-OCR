@@ -3,6 +3,22 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.15.6] - 2026-04-07
+
+### Web Worker Graph Construction: Eliminate 26s Sidebar Freeze
+
+**Core Problem:** v2.15.5 moved dimension extraction to a worker, but the PRIMARY bottleneck was `globalGraphData` useMemo in App.tsx. This synchronous computation built the knowledge graph (~30,000-42,000 string operations + Map lookups) every time `assets` changed (2-3× during init). On mobile, each invocation blocked the main thread for 5-10s. Clicking the sidebar queued behind this blocking render, then triggered cascading re-renders that compounded the delay.
+
+**Result:** Graph construction now runs in a dedicated Web Worker. The main thread does ZERO graph computation. Combined with the dimension worker from v2.15.5, all heavy computation is off-thread.
+
+#### Changes
+- `src/workers/graphDataWorker.ts` — 1.9KB worker that builds globalGraphData off-thread
+- App.tsx: `globalGraphData` changed from `useMemo` to `useState` + worker `useEffect`
+- Only 7 sqlRecord fields sent to worker (vs full record) — reduces structured clone cost ~10×
+- Generation counter prevents stale graph results when assets change rapidly
+- Memoized 4 inline filter calls: `pendingLocalCount`, `pendingGlobalCount`, `stuckAssetsCount`, `failedAssetCount`
+- Two workers now active: dimensionWorker (13KB) + graphDataWorker (1.9KB)
+
 ## [2.15.5] - 2026-04-07
 
 ### Web Worker Dimension Extraction: Zero Main-Thread Blocking
