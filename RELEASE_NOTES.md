@@ -1,3 +1,17 @@
+# 🚀 GeoGraph Node: v2.15.4 Release Notes
+
+## ⚡ v2.15.4 — Eliminate Re-render Storm (2026-04-07)
+
+### 🎯 Overview
+v2.15.4 fixes a 10-second freeze when clicking the sidebar during dimension loading. The time-sliced Tier 1 computation now accumulates results in a plain variable and commits them in a single `setState()` call, reducing React re-renders from 18 to 1.
+
+### Key Changes
+- **Batched setState** — Tier 1 results accumulate in closure-local Map, commit once at end
+- **3 total re-renders** — Down from 21 (Tier 0 + Tier 1 batch + Tier 2)
+- **No interaction freeze** — Sidebar, tabs, and all UI interactions respond during dimension loading
+
+---
+
 # 🚀 GeoGraph Node: v2.15.3 Release Notes
 
 ## ⚡ v2.15.3 — Time-Sliced Dimensions & Lazy IntegrationsHub (2026-04-07)

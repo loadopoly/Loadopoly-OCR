@@ -1176,12 +1176,14 @@ export function FilterProvider({ children, initialAssets = [], initialGraphData 
     // --- TIER 1: Remaining dimensions, time-sliced to avoid blocking main thread ---
     // Each dimension is computed in its own macrotask (setTimeout(0)) so the browser
     // can process events, paint, and run other callbacks between dimensions.
-    // Without time-slicing, 18 dimensions × 387 assets with regex-heavy derives
-    // blocks the main thread for ~13-15s even though it starts in requestIdleCallback.
+    // Results are accumulated in a plain Map (no React state) and committed in ONE
+    // setState call at the end — avoids 18 separate re-renders which was causing a
+    // 10s freeze when the user clicked to open the sidebar.
     sliceAbortRef.current = false;
 
     const computeTier1Sliced = () => {
       let dimIndex = 0;
+      const accumulated = new Map<FilterDimension, DimensionMetadata>();
 
       const processNextDimension = () => {
         if (sliceAbortRef.current) return; // cancelled
@@ -1194,20 +1196,25 @@ export function FilterProvider({ children, initialAssets = [], initialGraphData 
             const availableValues = dim === 'nodeType'
               ? extractNodeTypes(boundGraphData)
               : extractDimensionValues(boundAssets, dim);
-
-            setState(prev => {
-              const merged = new Map(prev.dimensions);
-              merged.set(dim, buildDimensionMeta(dim, availableValues));
-              return { ...prev, dimensions: merged };
-            });
+            accumulated.set(dim, buildDimensionMeta(dim, availableValues));
           }
 
           // Yield to main thread before next dimension
           setTimeout(processNextDimension, 0);
         } else {
-          // All Tier 1 dimensions done — chain Tier 2
+          // All Tier 1 dimensions computed — commit in ONE setState (single re-render)
+          if (!sliceAbortRef.current) {
+            setState(prev => {
+              const merged = new Map(prev.dimensions);
+              for (const [dim, meta] of accumulated) {
+                merged.set(dim, meta);
+              }
+              return { ...prev, dimensions: merged };
+            });
+          }
           tier1HandleRef.current = null;
 
+          // --- TIER 2: Expensive cross-asset dimensions, chained after Tier 1 ---
           const computeTier2 = () => {
             if (sliceAbortRef.current) return;
             const expensiveResults = extractExpensiveDimensionsBatch(boundAssets);
