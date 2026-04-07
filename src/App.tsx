@@ -898,12 +898,12 @@ export default function App() {
   // Memoized to avoid re-computing on every render (can be large with 387+ assets)
   const totalTokens = useMemo(() => assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0), [assets]);
   const knowledgeNodeCount = useMemo(() => assets.reduce((a, c) => a + (c.graphData?.nodes?.length || 0), 0), [assets]);
-  const pendingLocalCount = localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
-  const pendingGlobalCount = globalAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
+  const pendingLocalCount = useMemo(() => localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length, [localAssets]);
+  const pendingGlobalCount = useMemo(() => globalAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length, [globalAssets]);
   const totalPendingCount = pendingLocalCount + pendingGlobalCount;
   
   // Count stuck assets (PROCESSING but likely from prior session)
-  const stuckAssetsCount = localAssets.filter(a => a.status === AssetStatus.PROCESSING).length;
+  const stuckAssetsCount = useMemo(() => localAssets.filter(a => a.status === AssetStatus.PROCESSING).length, [localAssets]);
   const activeDownloads = useMemo(
     () => downloadQueueItems.filter(item => item.status === 'downloading' || item.status === 'pending'),
     [downloadQueueItems]
@@ -921,7 +921,8 @@ export default function App() {
     a.sqlRecord?.STRUCTURED_DISCOVERY
   ).length, [assets]);
   const syncQueuedCount = (dbQueueStats?.pending || 0) + (dbQueueStats?.processing || 0);
-  const syncFailureCount = (dbQueueStats?.failed || 0) + assets.filter(a => a.status === AssetStatus.FAILED).length;
+  const failedAssetCount = useMemo(() => assets.filter(a => a.status === AssetStatus.FAILED).length, [assets]);
+  const syncFailureCount = (dbQueueStats?.failed || 0) + failedAssetCount;
   const qaFailedAssets = useMemo(() => {
     const merged = [...localAssets, ...globalAssets].filter(a => a.status === AssetStatus.FAILED);
     const deduped = new Map<string, DigitalAsset>();
@@ -2632,66 +2633,68 @@ export default function App() {
     });
   }, [displayItems]);
 
-  const globalGraphData = useMemo<GraphData>(() => {
-      const filteredAssets = assets.filter(asset => {
-          const r = asset.sqlRecord;
-          if (!r) return false;
-        const category = asText(r.NLP_NODE_CATEGORIZATION, '');
-        if (graphFilters.category !== 'all' && category !== graphFilters.category) return false;
-        const derivedTimestamp = asText(r.NLP_DERIVED_TIMESTAMP, '');
-        const eraKey = derivedTimestamp.match(/\d{4}/)?.[0]?.slice(0,3) + '0s' || 'Unknown';
-          if (graphFilters.era !== 'all' && eraKey !== graphFilters.era) return false;
-        const documentDescription = asText(r.DOCUMENT_DESCRIPTION, '');
-        const isContested = r.ACCESS_RESTRICTIONS || /controversy|removed|relocated/i.test(documentDescription);
-          if (graphFilters.contested && !isContested) return false;
-          return true;
-      });
-        const docNodes = filteredAssets.map(a => ({ id: a.id, label: asText(a.sqlRecord?.DOCUMENT_TITLE, 'Untitled') || 'Untitled', type: 'DOCUMENT' as const, relevance: 1.0, license: a.sqlRecord?.DATA_LICENSE }));
-      const entityNodesMap = new Map<string, GraphNode>();
-      const links: any[] = [];
-      filteredAssets.forEach(asset => {
-        const cat = asText(asset.sqlRecord?.NLP_NODE_CATEGORIZATION, 'Uncategorized') || 'Uncategorized';
-         const catId = `CAT_${cat.replace(/\s+/g, '_')}`;
-         if (!entityNodesMap.has(catId)) entityNodesMap.set(catId, { id: catId, label: cat, type: 'CLUSTER', relevance: 0.8 });
-         links.push({ source: asset.id, target: catId, relationship: "CATEGORIZED_AS" });
-         // #4: Merge entity nodes from local graphData (client-side processing path)
-         if (Array.isArray(asset.graphData?.nodes)) {
-           asset.graphData.nodes.forEach(node => {
-             const safeLabel = asText((node as any)?.label, 'UNKNOWN') || 'UNKNOWN';
-             const entityId = `ENT_${safeLabel.replace(/\s+/g, '_').toUpperCase()}`;
-                 if (!entityNodesMap.has(entityId)) entityNodesMap.set(entityId, { ...node, id: entityId });
-                 links.push({ source: asset.id, target: entityId, relationship: "CONTAINS" });
-             });
-         }
-         // #4: Merge richer graph data from STRUCTURED_KNOWLEDGE_GRAPH (server-side processing path)
-         // This is the JSON blob written by the edge function with multi-hop entity nodes.
-         const skg = asset.sqlRecord?.STRUCTURED_KNOWLEDGE_GRAPH as any;
-         if (Array.isArray(skg?.nodes)) {
-             (skg.nodes as any[]).forEach((node: any) => {
-             const rawNodeKey = asText(node?.id, '') || asText(node?.label, '');
-             const nodeId = `SKG_${rawNodeKey.replace(/\s+/g, '_').toUpperCase()}`;
-                 if (!entityNodesMap.has(nodeId)) {
-                     entityNodesMap.set(nodeId, {
-                         id: nodeId,
-                 label: asText(node?.label, asText(node?.id, 'Unknown')) || 'Unknown',
-                         type: (node.type as any) || 'CONCEPT',
-                         relevance: node.relevance ?? 0.75,
-                     });
-                 }
-                 links.push({ source: asset.id, target: nodeId, relationship: "STRUCTURED_ENTITY" });
-             });
-           if (Array.isArray(skg.links)) {
-                 (skg.links as any[]).forEach((link: any) => {
-               const sourceId = `SKG_${asText(link?.source, '').replace(/\s+/g, '_').toUpperCase()}`;
-               const targetId = `SKG_${asText(link?.target, '').replace(/\s+/g, '_').toUpperCase()}`;
-                     if (entityNodesMap.has(sourceId) && entityNodesMap.has(targetId)) {
-                         links.push({ source: sourceId, target: targetId, relationship: link.relationship || "RELATED" });
-                     }
-                 });
-             }
-         }
-      });
-      return { nodes: [...docNodes, ...Array.from(entityNodesMap.values())], links };
+  // PERF v2.15.6: globalGraphData computed in a Web Worker.
+  // The previous useMemo ran ~30,000-42,000 string operations synchronously
+  // on the main thread (5-10s on mobile per invocation, triggered 2-3× during
+  // init as `assets` changes).  Moving to a worker keeps the UI responsive.
+  const [globalGraphData, setGlobalGraphData] = useState<GraphData>({ nodes: [], links: [] });
+  const graphWorkerRef = useRef<Worker | null>(null);
+  const graphGenRef = useRef(0);
+  const prevGraphInputKeyRef = useRef('');
+
+  // Create / destroy graph worker with component lifecycle
+  useEffect(() => {
+    try {
+      graphWorkerRef.current = new Worker(
+        new URL('./workers/graphDataWorker.ts', import.meta.url),
+        { type: 'module' }
+      );
+    } catch {
+      graphWorkerRef.current = null;
+    }
+    return () => {
+      graphWorkerRef.current?.terminate();
+      graphWorkerRef.current = null;
+    };
+  }, []);
+
+  // Post asset data to worker whenever assets or graphFilters change
+  useEffect(() => {
+    const worker = graphWorkerRef.current;
+    if (!worker || assets.length === 0) return;
+
+    // Shallow key to skip redundant posts with identical data
+    const inputKey = `${assets.length}:${assets[0]?.id}:${assets[assets.length - 1]?.id}:${graphFilters.category}:${graphFilters.era}:${graphFilters.contested}`;
+    if (inputKey === prevGraphInputKeyRef.current) return;
+    prevGraphInputKeyRef.current = inputKey;
+
+    const gen = ++graphGenRef.current;
+
+    // Strip to ONLY the fields the graph worker needs — reduces structured
+    // clone cost from ~2MB (full sqlRecord) to ~200KB (7 fields).
+    const minAssets = assets.map(a => {
+      const r = a.sqlRecord;
+      return {
+        id: a.id,
+        sqlRecord: r ? {
+          NLP_NODE_CATEGORIZATION: r.NLP_NODE_CATEGORIZATION,
+          NLP_DERIVED_TIMESTAMP: r.NLP_DERIVED_TIMESTAMP,
+          DOCUMENT_DESCRIPTION: r.DOCUMENT_DESCRIPTION,
+          ACCESS_RESTRICTIONS: r.ACCESS_RESTRICTIONS,
+          DOCUMENT_TITLE: r.DOCUMENT_TITLE,
+          DATA_LICENSE: r.DATA_LICENSE,
+          STRUCTURED_KNOWLEDGE_GRAPH: r.STRUCTURED_KNOWLEDGE_GRAPH,
+        } : null,
+        graphData: a.graphData,
+      };
+    });
+
+    worker.onmessage = (e: MessageEvent<{ gen: number; graphData: GraphData }>) => {
+      if (e.data.gen !== gen) return; // stale result
+      setGlobalGraphData(e.data.graphData);
+    };
+
+    worker.postMessage({ gen, assets: minAssets, graphFilters });
   }, [assets, graphFilters]);
 
   if (!isAppReady) {
