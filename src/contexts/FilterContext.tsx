@@ -1114,12 +1114,15 @@ export function FilterProvider({ children, initialAssets = [], initialGraphData 
   // Shallow equality guard: skip recomputation when asset IDs haven't changed
   const prevAssetKeyRef = useRef<string>('');
   const prevGraphKeyRef = useRef<number>(0);
-  // Track pending Tier 1 and Tier 2 computations for cleanup
+  // Track pending deferred computations for cleanup
   const tier1HandleRef = useRef<number | ReturnType<typeof setTimeout> | null>(null);
   const tier2HandleRef = useRef<number | ReturnType<typeof setTimeout> | null>(null);
+  // Track time-sliced dimension steps so they can be cancelled
+  const sliceAbortRef = useRef<boolean>(false);
 
   // PERF FIX: cancelDeferred extracted to avoid duplicating cancel logic
   const cancelDeferred = () => {
+    sliceAbortRef.current = true;
     for (const ref of [tier1HandleRef, tier2HandleRef]) {
       if (ref.current !== null) {
         if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
@@ -1170,50 +1173,74 @@ export function FilterProvider({ children, initialAssets = [], initialGraphData 
     // Commit Tier 0 immediately — dashboard is interactive, InlineFilterBar renders now
     setState(prev => ({ ...prev, dimensions }));
 
-    // --- TIER 1: Remaining cheap dimensions, deferred to idle callback ---
-    const computeTier1 = () => {
-      setState(prev => {
-        const merged = new Map(prev.dimensions);
-        for (const dim of TIER1_DIMENSIONS) {
-          if (!DIMENSION_LABELS[dim]) continue;
-          const availableValues = dim === 'nodeType'
-            ? extractNodeTypes(boundGraphData)
-            : extractDimensionValues(boundAssets, dim);
-          merged.set(dim, buildDimensionMeta(dim, availableValues));
-        }
-        return { ...prev, dimensions: merged };
-      });
-      tier1HandleRef.current = null;
+    // --- TIER 1: Remaining dimensions, time-sliced to avoid blocking main thread ---
+    // Each dimension is computed in its own macrotask (setTimeout(0)) so the browser
+    // can process events, paint, and run other callbacks between dimensions.
+    // Without time-slicing, 18 dimensions × 387 assets with regex-heavy derives
+    // blocks the main thread for ~13-15s even though it starts in requestIdleCallback.
+    sliceAbortRef.current = false;
 
-      // --- TIER 2: Expensive cross-asset dimensions, chained after Tier 1 ---
-      const computeTier2 = () => {
-        const expensiveResults = extractExpensiveDimensionsBatch(boundAssets);
+    const computeTier1Sliced = () => {
+      let dimIndex = 0;
 
-        setState(prev => {
-          const merged = new Map(prev.dimensions);
-          for (const dim of TIER2_DIMENSIONS) {
-            const values = expensiveResults.get(dim) || [];
-            const existing = merged.get(dim);
-            if (existing) {
-              merged.set(dim, { ...existing, availableValues: values, filteredValues: values });
-            }
+      const processNextDimension = () => {
+        if (sliceAbortRef.current) return; // cancelled
+
+        if (dimIndex < TIER1_DIMENSIONS.length) {
+          const dim = TIER1_DIMENSIONS[dimIndex];
+          dimIndex++;
+
+          if (DIMENSION_LABELS[dim]) {
+            const availableValues = dim === 'nodeType'
+              ? extractNodeTypes(boundGraphData)
+              : extractDimensionValues(boundAssets, dim);
+
+            setState(prev => {
+              const merged = new Map(prev.dimensions);
+              merged.set(dim, buildDimensionMeta(dim, availableValues));
+              return { ...prev, dimensions: merged };
+            });
           }
-          return { ...prev, dimensions: merged };
-        });
-        tier2HandleRef.current = null;
+
+          // Yield to main thread before next dimension
+          setTimeout(processNextDimension, 0);
+        } else {
+          // All Tier 1 dimensions done — chain Tier 2
+          tier1HandleRef.current = null;
+
+          const computeTier2 = () => {
+            if (sliceAbortRef.current) return;
+            const expensiveResults = extractExpensiveDimensionsBatch(boundAssets);
+
+            setState(prev => {
+              const merged = new Map(prev.dimensions);
+              for (const dim of TIER2_DIMENSIONS) {
+                const values = expensiveResults.get(dim) || [];
+                const existing = merged.get(dim);
+                if (existing) {
+                  merged.set(dim, { ...existing, availableValues: values, filteredValues: values });
+                }
+              }
+              return { ...prev, dimensions: merged };
+            });
+            tier2HandleRef.current = null;
+          };
+
+          if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+            tier2HandleRef.current = (window as any).requestIdleCallback(computeTier2, { timeout: 5000 });
+          } else {
+            tier2HandleRef.current = setTimeout(computeTier2, 0);
+          }
+        }
       };
 
-      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-        tier2HandleRef.current = (window as any).requestIdleCallback(computeTier2, { timeout: 5000 });
-      } else {
-        tier2HandleRef.current = setTimeout(computeTier2, 0);
-      }
+      processNextDimension();
     };
 
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      tier1HandleRef.current = (window as any).requestIdleCallback(computeTier1, { timeout: 2000 });
+      tier1HandleRef.current = (window as any).requestIdleCallback(computeTier1Sliced, { timeout: 2000 });
     } else {
-      tier1HandleRef.current = setTimeout(computeTier1, 0);
+      tier1HandleRef.current = setTimeout(computeTier1Sliced, 0);
     }
 
     return () => { cancelDeferred(); };

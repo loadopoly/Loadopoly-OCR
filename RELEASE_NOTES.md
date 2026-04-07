@@ -1,3 +1,18 @@
+# 🚀 GeoGraph Node: v2.15.3 Release Notes
+
+## ⚡ v2.15.3 — Time-Sliced Dimensions & Lazy IntegrationsHub (2026-04-07)
+
+### 🎯 Overview
+v2.15.3 eliminates the remaining ~13-15 second main-thread freeze after the dashboard renders. Deferred dimension computation is now **time-sliced**: each dimension computes in its own macrotask, yielding to the browser between steps so the UI stays responsive throughout. The IntegrationsHub lazy chunk is no longer eagerly downloaded on every page load.
+
+### Key Changes
+- **Time-sliced Tier 1** — 18 dimensions processed one-at-a-time with `setTimeout(0)` yields between each
+- **Abort on re-entry** — `sliceAbortRef` cancels in-progress dimension chains when assets change
+- **Conditional IntegrationsHub** — `<IntegrationsHub>` only rendered when `showIntegrationsHub` is true; eliminates eager chunk download and "Loading integrations..." spinner
+- **Zero main-thread blocking** — no single task exceeds ~50ms (one dimension extraction)
+
+---
+
 # 🚀 GeoGraph Node: v2.15.2 Release Notes
 
 ## ⚡ v2.15.2 — Dashboard Interactivity Fix (2026-04-07)

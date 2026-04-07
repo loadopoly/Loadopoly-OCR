@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.15.3] - 2026-04-07
+
+### Time-Sliced Dimension Computation & Lazy IntegrationsHub
+
+**Core Problem:** v2.15.2 deferred Tier 1 dimensions via `requestIdleCallback`, but the callback still computed all 18 dimensions synchronously in one long task (~13-15s main-thread block). Additionally, `<IntegrationsHub>` was unconditionally rendered in the JSX tree even when closed, triggering an eager chunk download and showing a "Loading integrations..." spinner on the dashboard.
+
+**Result:** Dashboard is fully interactive within ~1s of first paint. Each deferred dimension computes in its own macrotask (`setTimeout(0)`), yielding to the browser between dimensions so events, paints, and other callbacks are processed. IntegrationsHub chunk only loads when the user opens the panel.
+
+#### Time-Sliced Tier 1
+- Each of 18 Tier 1 dimensions now computes in a separate `setTimeout(0)` macrotask
+- Browser can process touch/click events, repaint, and run other callbacks between each dimension
+- Added `sliceAbortRef` to cancel in-progress time-sliced chains on asset changes
+- Tier 2 chains after last Tier 1 slice completes (unchanged)
+
+#### Conditional IntegrationsHub Rendering
+- Wrapped `<IntegrationsHub>` in `{showIntegrationsHub && ...}` guard
+- Eliminates eager lazy-chunk download and "Loading integrations..." spinner on dashboard
+- Chunk now downloads on-demand only when user clicks "Integrations"
+
 ## [2.15.2] - 2026-04-07
 
 ### Dashboard Interactivity: 3-Tier Deferred Dimension Computation

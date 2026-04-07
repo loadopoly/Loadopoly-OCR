@@ -4074,10 +4074,12 @@ export default function App() {
           <PrivacyPolicyModal onClose={() => setShowPrivacyPolicy(false)} />
         )}
 
-        <IntegrationsHub 
-          isOpen={showIntegrationsHub} 
-          onClose={() => setShowIntegrationsHub(false)} 
-        />
+        {showIntegrationsHub && (
+          <IntegrationsHub 
+            isOpen={showIntegrationsHub} 
+            onClose={() => setShowIntegrationsHub(false)} 
+          />
+        )}
 
         <KeyboardShortcutsHelp 
           isOpen={isShortcutsOpen} 
