@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.15.2] - 2026-04-07
+
+### Dashboard Interactivity: 3-Tier Deferred Dimension Computation
+
+**Core Problem:** After v2.15.1 split dimensions into 2 tiers, the dashboard still appeared unusable for ~29 seconds because Tier 1 synchronously computed 21 dimensions including regex-heavy `deriveMediaType` (14 regex tests × 387 assets), `derivePlaceType` (7×387), `deriveGeographicScale` (3×387), and `deriveNarrativeRole` (5×387) — totalling ~10,449 regex operations blocking the main thread.
+
+**Result:** Dashboard becomes interactive in <1 second. Only 3 instant field lookups (category, era, license) run synchronously. All other dimensions defer via `requestIdleCallback`.
+
+#### 3-Tier Split
+- **Tier 0 (sync)**: `category`, `era`, `license` — direct field reads, zero regex, InlineFilterBar renders instantly
+- **Tier 1 (deferred)**: 18 remaining dimensions including regex-heavy `mediaType`, `placeType`, `geographicScale`, `narrativeRole` — deferred via `requestIdleCallback` with 2s timeout
+- **Tier 2 (chained after Tier 1)**: `subjectMatter`, `connectionDensity`, `serendipityScore` — O(n²) cross-asset comparisons, 5s timeout
+
+#### Cleanup Consolidation
+- Replaced separate `tier2HandleRef` with dual `tier1HandleRef` + `tier2HandleRef` tracked by unified `cancelDeferred()` helper
+- Tier 2 now chains after Tier 1 completion (instead of running in parallel) to avoid main-thread contention
+
 ## [2.15.1] - 2026-04-07
 
 ### Filter Engine Startup Performance: Tiered Dimension Computation

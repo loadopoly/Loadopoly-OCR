@@ -851,16 +851,25 @@ function buildDimensionMeta(dim: FilterDimension, availableValues: any[]): Dimen
   };
 }
 
-// Dimensions that are cheap O(n) field lookups — safe to compute synchronously on mount.
+// Tier 0: Instant dimensions — only those needed by InlineFilterBar on first paint.
+// These are direct field lookups with zero or trivial regex cost.
+const TIER0_DIMENSIONS: FilterDimension[] = [
+  'category',   // record.NLP_NODE_CATEGORIZATION — direct field
+  'era',        // record.NLP_DERIVED_TIMESTAMP — one tiny regex
+  'license',    // record.DATA_LICENSE — direct field
+];
+
+// Tier 1: Cheap-ish dimensions — field lookups and light computation.
+// Deferred via requestIdleCallback so the dashboard becomes interactive immediately.
 const TIER1_DIMENSIONS: FilterDimension[] = [
-  'era', 'historicalPeriod', 'documentAge',
-  'zone', 'geographicScale', 'placeType',
-  'category', 'scanType', 'mediaType',
-  'nodeType', 'narrativeRole',
-  'license', 'confidence', 'verificationLevel', 'contested',
-  'source', 'status', 'entities', 'relevance',
-  'researchPotential',
-  'classificationStatus',
+  'zone', 'scanType', 'status', 'source',      // direct field reads
+  'confidence', 'contested', 'entities',         // numeric / boolean / array
+  'historicalPeriod', 'documentAge',             // tiny lookup / comparison
+  'verificationLevel', 'classificationStatus',   // boolean / null checks
+  'researchPotential', 'relevance',              // numeric aggregation
+  'geographicScale', 'placeType',               // regex on zone/description
+  'mediaType', 'narrativeRole',                  // regex-heavy derive functions
+  'nodeType',                                    // graph extraction
 ];
 
 // Dimensions that involve cross-asset or graph comparisons — deferred to idle callback.
@@ -1105,29 +1114,31 @@ export function FilterProvider({ children, initialAssets = [], initialGraphData 
   // Shallow equality guard: skip recomputation when asset IDs haven't changed
   const prevAssetKeyRef = useRef<string>('');
   const prevGraphKeyRef = useRef<number>(0);
-  // Track pending Tier 2 computation for cleanup
+  // Track pending Tier 1 and Tier 2 computations for cleanup
+  const tier1HandleRef = useRef<number | ReturnType<typeof setTimeout> | null>(null);
   const tier2HandleRef = useRef<number | ReturnType<typeof setTimeout> | null>(null);
 
-  // PERF FIX: cancelTier2 extracted to avoid duplicating cancel logic 3×
-  const cancelTier2 = () => {
-    if (tier2HandleRef.current !== null) {
-      if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
-        (window as any).cancelIdleCallback(tier2HandleRef.current);
-      } else {
-        clearTimeout(tier2HandleRef.current as ReturnType<typeof setTimeout>);
+  // PERF FIX: cancelDeferred extracted to avoid duplicating cancel logic
+  const cancelDeferred = () => {
+    for (const ref of [tier1HandleRef, tier2HandleRef]) {
+      if (ref.current !== null) {
+        if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
+          (window as any).cancelIdleCallback(ref.current);
+        } else {
+          clearTimeout(ref.current as ReturnType<typeof setTimeout>);
+        }
+        ref.current = null;
       }
-      tier2HandleRef.current = null;
     }
   };
 
-  // PERF FIX: Split dimension computation into two tiers.
-  // Tier 1 (cheap O(n) field lookups) runs synchronously so InlineFilterBar
-  // renders immediately. Tier 2 (cross-asset comparisons, O(n²) serendipity)
-  // is deferred to requestIdleCallback / setTimeout so the main thread stays
-  // responsive. With ~400 assets this reduces perceived load from ~20s to <2s.
+  // PERF FIX: Split dimension computation into three tiers.
+  // Tier 0 (category, era, license) runs synchronously — InlineFilterBar renders instantly.
+  // Tier 1 (remaining field lookups + regex-heavy derives) defers via requestIdleCallback
+  //   so the dashboard is interactive immediately instead of blocked for ~20s.
+  // Tier 2 (cross-asset O(n²) comparisons) defers with a longer timeout.
   useEffect(() => {
     // Shallow equality guard: build a lightweight key from asset count + first/last IDs.
-    // If key hasn't changed, skip expensive recomputation.
     const assetKey = boundAssets.length === 0
       ? ''
       : `${boundAssets.length}:${boundAssets[0]?.id}:${boundAssets[boundAssets.length - 1]?.id}`;
@@ -1139,54 +1150,73 @@ export function FilterProvider({ children, initialAssets = [], initialGraphData 
     prevAssetKeyRef.current = assetKey;
     prevGraphKeyRef.current = graphKey;
 
-    // Cancel any pending Tier 2 computation from a previous asset change
-    cancelTier2();
+    // Cancel any pending deferred computations from a previous asset change
+    cancelDeferred();
 
-    // --- TIER 1: Cheap dimensions, computed synchronously ---
-    const tier1Dimensions = new Map<FilterDimension, DimensionMetadata>();
-    
-    for (const dim of TIER1_DIMENSIONS) {
+    // --- TIER 0: InlineFilterBar dimensions only, computed synchronously ---
+    const dimensions = new Map<FilterDimension, DimensionMetadata>();
+
+    for (const dim of TIER0_DIMENSIONS) {
       if (!DIMENSION_LABELS[dim]) continue;
-      const availableValues = dim === 'nodeType'
-        ? extractNodeTypes(boundGraphData)
-        : extractDimensionValues(boundAssets, dim);
-      tier1Dimensions.set(dim, buildDimensionMeta(dim, availableValues));
+      dimensions.set(dim, buildDimensionMeta(dim, extractDimensionValues(boundAssets, dim)));
     }
 
-    // Placeholder entries for Tier 2 dimensions (empty values, filled later)
-    for (const dim of TIER2_DIMENSIONS) {
+    // Placeholder entries for deferred dimensions (empty values, filled later)
+    for (const dim of [...TIER1_DIMENSIONS, ...TIER2_DIMENSIONS]) {
       if (!DIMENSION_LABELS[dim]) continue;
-      tier1Dimensions.set(dim, buildDimensionMeta(dim, []));
+      dimensions.set(dim, buildDimensionMeta(dim, []));
     }
 
-    // Commit Tier 1 immediately — InlineFilterBar (category, era, license) can render now
-    setState(prev => ({ ...prev, dimensions: tier1Dimensions }));
+    // Commit Tier 0 immediately — dashboard is interactive, InlineFilterBar renders now
+    setState(prev => ({ ...prev, dimensions }));
 
-    // --- TIER 2: Expensive dimensions, deferred to idle callback ---
-    const computeTier2 = () => {
-      const expensiveResults = extractExpensiveDimensionsBatch(boundAssets);
-      
+    // --- TIER 1: Remaining cheap dimensions, deferred to idle callback ---
+    const computeTier1 = () => {
       setState(prev => {
         const merged = new Map(prev.dimensions);
-        for (const dim of TIER2_DIMENSIONS) {
-          const values = expensiveResults.get(dim) || [];
-          const existing = merged.get(dim);
-          if (existing) {
-            merged.set(dim, { ...existing, availableValues: values, filteredValues: values });
-          }
+        for (const dim of TIER1_DIMENSIONS) {
+          if (!DIMENSION_LABELS[dim]) continue;
+          const availableValues = dim === 'nodeType'
+            ? extractNodeTypes(boundGraphData)
+            : extractDimensionValues(boundAssets, dim);
+          merged.set(dim, buildDimensionMeta(dim, availableValues));
         }
         return { ...prev, dimensions: merged };
       });
-      tier2HandleRef.current = null;
+      tier1HandleRef.current = null;
+
+      // --- TIER 2: Expensive cross-asset dimensions, chained after Tier 1 ---
+      const computeTier2 = () => {
+        const expensiveResults = extractExpensiveDimensionsBatch(boundAssets);
+
+        setState(prev => {
+          const merged = new Map(prev.dimensions);
+          for (const dim of TIER2_DIMENSIONS) {
+            const values = expensiveResults.get(dim) || [];
+            const existing = merged.get(dim);
+            if (existing) {
+              merged.set(dim, { ...existing, availableValues: values, filteredValues: values });
+            }
+          }
+          return { ...prev, dimensions: merged };
+        });
+        tier2HandleRef.current = null;
+      };
+
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        tier2HandleRef.current = (window as any).requestIdleCallback(computeTier2, { timeout: 5000 });
+      } else {
+        tier2HandleRef.current = setTimeout(computeTier2, 0);
+      }
     };
 
     if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      tier2HandleRef.current = (window as any).requestIdleCallback(computeTier2, { timeout: 3000 });
+      tier1HandleRef.current = (window as any).requestIdleCallback(computeTier1, { timeout: 2000 });
     } else {
-      tier2HandleRef.current = setTimeout(computeTier2, 0);
+      tier1HandleRef.current = setTimeout(computeTier1, 0);
     }
 
-    return () => { cancelTier2(); };
+    return () => { cancelDeferred(); };
   }, [boundAssets, boundGraphData]);
 
   // Filtered assets computation
