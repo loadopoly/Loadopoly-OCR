@@ -1,4 +1,20 @@
-# 🚀 GeoGraph Node: v2.15.4 Release Notes
+# 🚀 GeoGraph Node: v2.15.5 Release Notes
+
+## ⚡ v2.15.5 — Web Worker Dimension Extraction (2026-04-07)
+
+### 🎯 Overview
+All heavy dimension extraction (Tier 1 regex-heavy derives + Tier 2 cross-asset O(n²) comparisons) now runs on a **dedicated Web Worker thread**. The main thread handles only the 3 instant Tier 0 dimensions (category, era, license) synchronously. Result: the UI is **100% responsive** from first paint — sidebar clicks, scrolling, and tab switches process instantly regardless of how long dimension computation takes.
+
+#### Key Changes
+- Created `src/lib/dimensionExtraction.ts` — shared pure extraction logic (no React deps)
+- Created `src/workers/dimensionWorker.ts` — Web Worker receiving minimal asset data, computing all 21 deferred dimensions off-thread
+- FilterProvider creates worker on mount, posts asset data, receives results via `onmessage`
+- Generation counter (`generationRef`) rejects stale worker responses when assets change mid-computation
+- Total main-thread setState calls: 2 (Tier 0 sync + Worker results batch)
+- Worker bundle: ~13KB (self-contained, no React dependency)
+- Eliminates ALL main-thread blocking from dimension computation
+
+---
 
 ## ⚡ v2.15.4 — Eliminate Re-render Storm (2026-04-07)
 

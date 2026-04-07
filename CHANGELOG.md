@@ -3,6 +3,23 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.15.5] - 2026-04-07
+
+### Web Worker Dimension Extraction: Zero Main-Thread Blocking
+
+**Core Problem:** v2.15.4 batched setState into one call, but each individual dimension extraction (regex-heavy `deriveMediaType`, `deriveNarrativeRole`, etc.) still ran on the main thread — each taking 1-2s on mobile. With 18 Tier 1 + 3 Tier 2 dimensions computed sequentially via `setTimeout(0)`, the main thread was blocked ~1.5s per dimension with only ~4ms gaps. Click events (sidebar open) were technically processed between tasks, but the browser couldn't paint the result for 26s. Clicking the sidebar mid-computation could double total time to 58s.
+
+**Result:** All Tier 1+2 extraction runs in a dedicated Web Worker on a separate thread. Main thread does ZERO extraction work after Tier 0. Clicks, scrolls, paints, and sidebar opens are instant.
+
+#### Changes
+- `src/lib/dimensionExtraction.ts` — All pure extraction functions + constants extracted to a shared module
+- `src/workers/dimensionWorker.ts` — Web Worker that imports extraction module, computes 21 dimensions
+- FilterProvider: Worker created on mount, posts minimal (`{id, sqlRecord, graphData}`) asset data
+- Worker sends single `postMessage` with all dimension values → one `setState` on main thread
+- Generation counter prevents stale results when assets change before worker finishes
+- Removed: `tier1HandleRef`, `tier2HandleRef`, `sliceAbortRef`, `cancelDeferred`, time-sliced loop
+- Added: `workerRef`, `generationRef`, worker lifecycle `useEffect`
+
 ## [2.15.4] - 2026-04-07
 
 ### Eliminate Re-render Storm: Single setState for Tier 1 Dimensions

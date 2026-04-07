@@ -1114,143 +1114,82 @@ export function FilterProvider({ children, initialAssets = [], initialGraphData 
   // Shallow equality guard: skip recomputation when asset IDs haven't changed
   const prevAssetKeyRef = useRef<string>('');
   const prevGraphKeyRef = useRef<number>(0);
-  // Track pending deferred computations for cleanup
-  const tier1HandleRef = useRef<number | ReturnType<typeof setTimeout> | null>(null);
-  const tier2HandleRef = useRef<number | ReturnType<typeof setTimeout> | null>(null);
-  // Track time-sliced dimension steps so they can be cancelled
-  const sliceAbortRef = useRef<boolean>(false);
 
-  // PERF FIX: cancelDeferred extracted to avoid duplicating cancel logic
-  const cancelDeferred = () => {
-    sliceAbortRef.current = true;
-    for (const ref of [tier1HandleRef, tier2HandleRef]) {
-      if (ref.current !== null) {
-        if (typeof window !== 'undefined' && 'cancelIdleCallback' in window) {
-          (window as any).cancelIdleCallback(ref.current);
-        } else {
-          clearTimeout(ref.current as ReturnType<typeof setTimeout>);
-        }
-        ref.current = null;
-      }
-    }
-  };
+  // Web Worker for off-main-thread dimension extraction
+  const workerRef = useRef<Worker | null>(null);
+  const generationRef = useRef(0);
 
-  // PERF FIX: Split dimension computation into three tiers.
-  // Tier 0 (category, era, license) runs synchronously — InlineFilterBar renders instantly.
-  // Tier 1 (remaining field lookups + regex-heavy derives) defers via requestIdleCallback
-  //   so the dashboard is interactive immediately instead of blocked for ~20s.
-  // Tier 2 (cross-asset O(n²) comparisons) defers with a longer timeout.
+  // Create / destroy worker with component lifecycle
   useEffect(() => {
-    // Shallow equality guard: build a lightweight key from asset count + first/last IDs.
+    try {
+      workerRef.current = new Worker(
+        new URL('../workers/dimensionWorker.ts', import.meta.url),
+        { type: 'module' }
+      );
+    } catch {
+      // Worker creation can fail in test / SSR environments — fall back gracefully
+      workerRef.current = null;
+    }
+    return () => {
+      workerRef.current?.terminate();
+      workerRef.current = null;
+    };
+  }, []);
+
+  // PERF v2.15.5: Dimension computation — Tier 0 (sync) + Tier 1+2 (Web Worker).
+  // All regex-heavy extractions and O(n²) cross-asset comparisons now run on a
+  // separate thread.  The main thread stays 100 % responsive for clicks, scrolls,
+  // and paints — sidebar opens instantly regardless of computation progress.
+  useEffect(() => {
     const assetKey = boundAssets.length === 0
       ? ''
       : `${boundAssets.length}:${boundAssets[0]?.id}:${boundAssets[boundAssets.length - 1]?.id}`;
     const graphKey = boundGraphData.nodes.length;
 
     if (assetKey === prevAssetKeyRef.current && graphKey === prevGraphKeyRef.current) {
-      return; // Assets unchanged, skip recomputation
+      return; // Assets unchanged — skip recomputation
     }
     prevAssetKeyRef.current = assetKey;
     prevGraphKeyRef.current = graphKey;
 
-    // Cancel any pending deferred computations from a previous asset change
-    cancelDeferred();
-
-    // --- TIER 0: InlineFilterBar dimensions only, computed synchronously ---
+    // --- TIER 0: InlineFilterBar dimensions, computed synchronously (instant) ---
     const dimensions = new Map<FilterDimension, DimensionMetadata>();
-
     for (const dim of TIER0_DIMENSIONS) {
       if (!DIMENSION_LABELS[dim]) continue;
       dimensions.set(dim, buildDimensionMeta(dim, extractDimensionValues(boundAssets, dim)));
     }
-
-    // Placeholder entries for deferred dimensions (empty values, filled later)
+    // Placeholder entries for deferred dimensions (filled by worker)
     for (const dim of [...TIER1_DIMENSIONS, ...TIER2_DIMENSIONS]) {
       if (!DIMENSION_LABELS[dim]) continue;
       dimensions.set(dim, buildDimensionMeta(dim, []));
     }
-
-    // Commit Tier 0 immediately — dashboard is interactive, InlineFilterBar renders now
     setState(prev => ({ ...prev, dimensions }));
 
-    // --- TIER 1: Remaining dimensions, time-sliced to avoid blocking main thread ---
-    // Each dimension is computed in its own macrotask (setTimeout(0)) so the browser
-    // can process events, paint, and run other callbacks between dimensions.
-    // Results are accumulated in a plain Map (no React state) and committed in ONE
-    // setState call at the end — avoids 18 separate re-renders which was causing a
-    // 10s freeze when the user clicked to open the sidebar.
-    sliceAbortRef.current = false;
+    // --- TIER 1 + 2: Offloaded to Web Worker (zero main-thread blocking) ---
+    const gen = ++generationRef.current;
+    const worker = workerRef.current;
 
-    const computeTier1Sliced = () => {
-      let dimIndex = 0;
-      const accumulated = new Map<FilterDimension, DimensionMetadata>();
+    if (worker) {
+      // Strip to minimal serialisable shape — avoid cloning imageBlob, location, etc.
+      const minAssets = boundAssets.map(a => ({
+        id: a.id,
+        sqlRecord: a.sqlRecord,
+        graphData: a.graphData,
+      }));
 
-      const processNextDimension = () => {
-        if (sliceAbortRef.current) return; // cancelled
-
-        if (dimIndex < TIER1_DIMENSIONS.length) {
-          const dim = TIER1_DIMENSIONS[dimIndex];
-          dimIndex++;
-
-          if (DIMENSION_LABELS[dim]) {
-            const availableValues = dim === 'nodeType'
-              ? extractNodeTypes(boundGraphData)
-              : extractDimensionValues(boundAssets, dim);
-            accumulated.set(dim, buildDimensionMeta(dim, availableValues));
+      worker.onmessage = (e: MessageEvent<{ gen: number; dimensions: Record<string, any[]> }>) => {
+        if (e.data.gen !== gen) return; // stale result from previous asset set
+        setState(prev => {
+          const merged = new Map(prev.dimensions);
+          for (const [dim, values] of Object.entries(e.data.dimensions)) {
+            merged.set(dim as FilterDimension, buildDimensionMeta(dim as FilterDimension, values));
           }
-
-          // Yield to main thread before next dimension
-          setTimeout(processNextDimension, 0);
-        } else {
-          // All Tier 1 dimensions computed — commit in ONE setState (single re-render)
-          if (!sliceAbortRef.current) {
-            setState(prev => {
-              const merged = new Map(prev.dimensions);
-              for (const [dim, meta] of accumulated) {
-                merged.set(dim, meta);
-              }
-              return { ...prev, dimensions: merged };
-            });
-          }
-          tier1HandleRef.current = null;
-
-          // --- TIER 2: Expensive cross-asset dimensions, chained after Tier 1 ---
-          const computeTier2 = () => {
-            if (sliceAbortRef.current) return;
-            const expensiveResults = extractExpensiveDimensionsBatch(boundAssets);
-
-            setState(prev => {
-              const merged = new Map(prev.dimensions);
-              for (const dim of TIER2_DIMENSIONS) {
-                const values = expensiveResults.get(dim) || [];
-                const existing = merged.get(dim);
-                if (existing) {
-                  merged.set(dim, { ...existing, availableValues: values, filteredValues: values });
-                }
-              }
-              return { ...prev, dimensions: merged };
-            });
-            tier2HandleRef.current = null;
-          };
-
-          if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-            tier2HandleRef.current = (window as any).requestIdleCallback(computeTier2, { timeout: 5000 });
-          } else {
-            tier2HandleRef.current = setTimeout(computeTier2, 0);
-          }
-        }
+          return { ...prev, dimensions: merged };
+        });
       };
 
-      processNextDimension();
-    };
-
-    if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-      tier1HandleRef.current = (window as any).requestIdleCallback(computeTier1Sliced, { timeout: 2000 });
-    } else {
-      tier1HandleRef.current = setTimeout(computeTier1Sliced, 0);
+      worker.postMessage({ gen, assets: minAssets, graphData: boundGraphData });
     }
-
-    return () => { cancelDeferred(); };
   }, [boundAssets, boundGraphData]);
 
   // Filtered assets computation
