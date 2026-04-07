@@ -1,3 +1,18 @@
+# 🚀 GeoGraph Node: v2.15.2 Release Notes
+
+## ⚡ v2.15.2 — Dashboard Interactivity Fix (2026-04-07)
+
+### 🎯 Overview
+v2.15.2 eliminates the ~29-second unresponsive period after the dashboard renders. The FilterProvider now uses a 3-tier dimension computation strategy: only 3 trivial field lookups (category, era, license) run synchronously; all other dimensions — including regex-heavy media/place/narrative derivations (~10,449 regex ops) — are fully deferred via `requestIdleCallback`.
+
+### Key Changes
+- **3-tier dimension split** — Tier 0 (3 sync), Tier 1 (18 deferred), Tier 2 (3 expensive, chained)
+- **Zero regex on critical path** — `deriveMediaType`, `derivePlaceType`, `deriveGeographicScale`, `deriveNarrativeRole` all moved to deferred Tier 1
+- **Chained Tier 2** — expensive cross-asset comparisons run after Tier 1 completes (avoids contention)
+- **Unified cleanup** — `cancelDeferred()` handles both tier1 and tier2 idle callbacks
+
+---
+
 # 🚀 GeoGraph Node: v2.15.1 Release Notes
 
 ## ⚡ v2.15.1 — Filter Engine Startup Performance (2026-04-07)
