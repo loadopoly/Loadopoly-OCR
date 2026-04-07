@@ -3,6 +3,20 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.15.4] - 2026-04-07
+
+### Eliminate Re-render Storm: Single setState for Tier 1 Dimensions
+
+**Core Problem:** v2.15.3 time-sliced Tier 1 dimensions via `setTimeout(0)` which kept the UI scrollable, but each of the 18 dimensions called `setState()` individually — triggering 18 separate React re-renders of the entire FilterProvider subtree. When the user clicked to open the sidebar at ~20s, React was overwhelmed by the re-render queue, causing a 10s freeze before the sidebar appeared.
+
+**Result:** Tier 1 dimensions are still time-sliced for responsiveness, but results accumulate in a plain Map (outside React state) and commit in a single `setState()` call after all 18 dimensions finish. This reduces re-renders from 18 to 1 for Tier 1, eliminating the interaction freeze.
+
+#### Changes
+- Accumulate Tier 1 dimension results in a closure-local `Map` instead of calling `setState` per dimension
+- Single `setState` merges all 18 accumulated dimensions at once after the last slice completes
+- Abort guard (`sliceAbortRef`) checked before final commit to prevent stale writes
+- Total setState calls for full dimension pipeline: 3 (Tier 0 + Tier 1 batch + Tier 2) — was 21
+
 ## [2.15.3] - 2026-04-07
 
 ### Time-Sliced Dimension Computation & Lazy IntegrationsHub
