@@ -5,7 +5,9 @@ import React, { Suspense, lazy } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider, ConnectionStatus } from './components/Toast';
-import { Onboarding } from './components/Onboarding';
+// PERF FIX: Onboarding only shown for first-time users. Skip import entirely for returning users.
+const shouldOnboard = !localStorage.getItem('geograph-onboarding-completed');
+const LazyOnboarding = shouldOnboard ? lazy(() => import('./components/Onboarding').then(m => ({ default: m.Onboarding }))) : () => null;
 // PERF FIX: ModuleProvider, bootstrap, App, pwaUtils, performanceMonitor are
 // ALL dynamic imports. The entry chunk only needs: React (193KB) + lucide-react
 // icons (50KB) + vendor-preload (1KB) + this file (13KB) = ~257KB total.
@@ -95,16 +97,22 @@ const root = ReactDOM.createRoot(rootElement);
 // Now: React mounts instantly with Suspense, the HTML app shell stays visible while
 // heavy chunks download in parallel. On a Pixel 10, this reduces perceived load
 // from ~33s to ~2-4s (entry + React + Suspense fallback).
+// PERF FIX: Start downloading App + ModuleContext IMMEDIATELY at module evaluation time.
+// Previously these downloads only started when React.lazy triggered during Suspense mount,
+// wasting 50-200ms between entry parse completion and lazy fetch start.
+const _appP = import('./App');
+const _moduleP = import('./contexts/ModuleContext');
+
 const LazyAppShell = lazy(() =>
   Promise.all([
-    import('./App'),
-    import('./contexts/ModuleContext'),
+    _appP,
+    _moduleP,
   ]).then(([appModule, { ModuleProvider }]) => ({
     default: () => (
       <ModuleProvider>
         <ToastProvider>
           <ConnectionStatus />
-          <Onboarding onComplete={() => {}} />
+          <Suspense fallback={null}><LazyOnboarding onComplete={() => {}} /></Suspense>
           <appModule.default />
         </ToastProvider>
       </ModuleProvider>

@@ -1,5 +1,5 @@
 /**
- * GeoGraph Service Worker v3.5.0
+ * GeoGraph Service Worker v3.6.0
  * 
  * IMPORTANT: This service worker is designed to be cache-safe for Vite builds.
  * - JS/CSS bundles under /assets/ ARE cached (they have content hashes per build,
@@ -76,6 +76,13 @@ self.addEventListener('activate', (event) => {
   log('Activating service worker');
   event.waitUntil(
     Promise.all([
+      // PERF: Enable Navigation Preload — lets the browser start fetching the
+      // navigation request in parallel with SW startup (saves 50-100ms on mobile).
+      (async () => {
+        if (self.registration.navigationPreload) {
+          await self.registration.navigationPreload.enable();
+        }
+      })(),
       // Delete ALL old caches
       caches.keys().then((cacheNames) => {
         return Promise.all(
@@ -183,12 +190,17 @@ self.addEventListener('fetch', (event) => {
   // CRITICAL: Never serve cached HTML as it references versioned JS bundles
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          // Return fresh HTML but don't cache it
-          return response;
-        })
-        .catch(() => {
+      (async () => {
+        // Use Navigation Preload response if available (started during SW boot)
+        try {
+          const preloadResponse = await event.preloadResponse;
+          if (preloadResponse) return preloadResponse;
+        } catch (e) {
+          // Navigation Preload not supported or failed — fall through
+        }
+        try {
+          return await fetch(request);
+        } catch (e) {
           // Offline fallback - show a simple offline message instead of stale HTML
           return new Response(
             `<!DOCTYPE html>
@@ -204,7 +216,8 @@ self.addEventListener('fetch', (event) => {
             </html>`,
             { headers: { 'Content-Type': 'text/html' } }
           );
-        })
+        }
+      })()
     );
     return;
   }

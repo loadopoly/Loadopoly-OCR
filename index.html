@@ -18,6 +18,9 @@
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
     <link rel="icon" type="image/png" sizes="512x512" href="/icon-512.png">
     <link rel="icon" type="image/svg+xml" href="/icon.svg">
+    <!-- PERF: Preconnect to Gemini API origin during HTML parse, before JS loads -->
+    <link rel="preconnect" href="https://generativelanguage.googleapis.com" crossorigin>
+    <link rel="dns-prefetch" href="https://generativelanguage.googleapis.com">
 
     <title>GeoGraph OCR Node</title>
     <script>

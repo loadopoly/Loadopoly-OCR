@@ -3,6 +3,57 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.15.0] - 2026-04-07
+
+### Deep Startup Performance: Defer Supabase from Critical Path
+
+**Core Problem:** After v2.14.0 reduced entry-blocking JS from ~880KB to ~76KB gzip, the Suspense waterfall (spinner → full UI) still loaded ~130KB gzip including vendor-supabase (44KB gzip) and vendor-storage (32KB gzip) because App.tsx statically imported supabaseService, processingQueueService, downloadService, and auth — all of which pull in the Supabase SDK.
+
+**Result:** vendor-supabase (44KB gzip) and its transitive dependency chain are now fully deferred from the static startup path. The Suspense waterfall dropped from ~130KB to ~100KB gzip.
+
+#### Deferred Supabase Imports (App.tsx)
+- Converted `processingQueueService` and `downloadService` from static imports to module-level deferred dynamic imports (`_pqsP`, `_dlsP` promises started at module eval)
+- Converted all `supabaseService` function calls (contributeAssetToGlobalCorpus, fetchUserAssets, fetchGlobalCorpus, fetchAssetLineage, subscribeToAssetUpdates) to inline `await import('./services/supabaseService').then(...)` at ~12 call sites
+- Converted `getCurrentUser` to inline dynamic import at 2 call sites
+- All early effects wrapped to await deferred service promises before use
+
+#### Deferred Avatar Service (useAvatar.ts)
+- Replaced static `import { avatarService }` with `getAvatarService()` dynamic loader
+- All effects and callbacks updated to `await getAvatarService()` or `.then()`
+- Updated `useWorldSectors` hook similarly
+
+#### Resource Hints (index.html)
+- Added `<link rel="preconnect">` and `<link rel="dns-prefetch">` for `generativelanguage.googleapis.com`
+
+#### Lazy Onboarding + Eager App Prefetch (index.tsx)
+- Onboarding component conditionally lazy-loaded based on `localStorage` flag
+- App and ModuleContext imports started eagerly at module evaluation time
+
+#### Service Worker v3.6.0 (sw.js)
+- Added Navigation Preload (enable in activate, use `event.preloadResponse` in fetch handler)
+
+#### Build Optimization (vite.config.js)
+- Added `chunk-app-shared` manual chunk for FilterContext and logger — extracts them from chunk-cluster-sync to break App → chunk-cluster-sync → vendor-supabase static chain
+- chunk-cluster-sync reduced from 118KB to 94KB
+
+#### Critical Path Budget
+| Phase | Chunk | Gzip |
+|-------|-------|------|
+| Entry | index.js | 3.4KB |
+| Entry | vendor-preload.js | 0.7KB |
+| Entry | vendor-react.js | 60.2KB |
+| Entry | vendor-icons.js | 10.5KB |
+| Entry | index.css | 13.4KB |
+| **Entry Total** | | **88.2KB** |
+| Suspense | App.js | 49.9KB |
+| Suspense | chunk-app-shared.js | 7.9KB |
+| Suspense | chunk-batch-processing.js | 8.4KB |
+| Suspense | vendor-storage.js (Dexie) | 31.9KB |
+| Suspense | pwaUtils.js | 2.2KB |
+| **Suspense Total** | | **100.3KB** |
+| **DEFERRED** | vendor-supabase.js | **44.0KB** |
+| **DEFERRED** | chunk-cluster-sync.js | **25.9KB** |
+
 ## [2.14.0] - 2026-04-07
 
 ### Startup Performance Optimization

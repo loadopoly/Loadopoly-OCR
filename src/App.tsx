@@ -71,16 +71,19 @@ import {
 import { createBundles, createUserBundle } from './services/bundleService';
 import { initSync, isSyncEnabled } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset, saveArQueueItem, loadArQueue, clearArQueue } from './lib/indexeddb';
-import { getCurrentUser } from './lib/auth';
-import {
-  fetchGlobalCorpus,
-  contributeAssetToGlobalCorpus,
-  fetchUserAssets,
-  subscribeToAssetUpdates,
-  mirrorEdgeAssetToMasterIfNeeded,
-} from './services/supabaseService';
-import { processingQueueService, QueueStats, QueueJob } from './services/processingQueueService';
-import { downloadService, DownloadQueueItem } from './services/downloadService';
+// PERF FIX: Supabase-dependent services deferred from static imports.
+// vendor-supabase (44KB gzip) + vendor-storage (32KB gzip) no longer block App chunk parse.
+// processingQueueService/downloadService keep same variable names; all call sites work unchanged.
+// supabaseService functions + auth use inline dynamic import() at each call site.
+import type { QueueStats, QueueJob } from './services/processingQueueService';
+import type { DownloadQueueItem } from './services/downloadService';
+
+type PQSType = Awaited<typeof import('./services/processingQueueService')>['processingQueueService'];
+type DLSType = Awaited<typeof import('./services/downloadService')>['downloadService'];
+let processingQueueService: PQSType;
+let downloadService: DLSType;
+const _pqsP = import('./services/processingQueueService').then(m => { processingQueueService = m.processingQueueService; });
+const _dlsP = import('./services/downloadService').then(m => { downloadService = m.downloadService; });
 import { canInstall as canInstallPWA, promptInstall } from './lib/pwaUtils';
 import { getRecentUXEvents, trackUXEvent } from './lib/uxTelemetry';
 // PERF FIX: compressImage dynamically imported inside ingestFile() to avoid
@@ -463,7 +466,7 @@ export default function App() {
         // Refresh local data from IndexedDB (covers process-survived case)
         loadAssets().then(loaded => setLocalAssets(loaded)).catch(() => {});
         // Refresh auth session — keeps Supabase token alive
-        getCurrentUser().then(({ data }) => {
+        import('./lib/auth').then(m => m.getCurrentUser()).then(({ data }) => {
           if (data.user) setUser(data.user);
         }).catch(() => {});
       }
@@ -499,17 +502,22 @@ export default function App() {
   }, [uploadProgress]);
 
   useEffect(() => {
-    const unsubscribe = downloadService.subscribeToQueue(setDownloadQueueItems);
-    return unsubscribe;
+    let unsubscribe: (() => void) | undefined;
+    _dlsP.then(() => {
+      unsubscribe = downloadService.subscribeToQueue(setDownloadQueueItems);
+    });
+    return () => unsubscribe?.();
   }, []);
 
   useEffect(() => {
     // PERF FIX: Defer queue diagnostics polling — not needed for first paint.
     // Start after 10s so the initial render and data loading aren't competing.
-    const startTimeout = setTimeout(() => {
+    const startTimeout = setTimeout(async () => {
+      await _pqsP;
       setQueueDiagnostics(processingQueueService.getDiagnostics());
     }, 10000);
-    const interval = setInterval(() => {
+    const interval = setInterval(async () => {
+      await _pqsP;
       setQueueDiagnostics(processingQueueService.getDiagnostics());
     }, 15000); // Also reduced frequency from 5s to 15s
     return () => {
@@ -735,46 +743,48 @@ export default function App() {
   // The heavy lifting is done by the direct Realtime subscription below
   useEffect(() => {
     if (user?.id) {
-      processingQueueService.init(user.id);
+      _pqsP.then(() => {
+        processingQueueService.init(user.id);
       
-      // Lightweight callbacks for progress updates only
-      processingQueueService.setCallbacks({
-        onJobStarted: (job) => {
-          setLocalAssets(prev => prev.map(a => 
-            a.id === job.assetId ? { ...a, status: AssetStatus.PROCESSING, progress: 10 } : a
-          ));
-          // Also update batch queue if item exists there
-          setBatchQueue(prev => prev.map(item => 
-            item.assetId === job.assetId ? { ...item, status: 'PROCESSING', progress: 10, stage: 'Started' } : item
-          ));
-        },
-        onJobProgress: (job) => {
-          setLocalAssets(prev => prev.map(a => 
-            a.id === job.assetId ? { ...a, progress: Math.min(90, job.progress) } : a
-          ));
-          setBatchQueue(prev => prev.map(item => 
-            item.assetId === job.assetId ? { ...item, progress: job.progress, stage: job.stage } : item
-          ));
-        },
-        // onJobCompleted is now handled by the direct Realtime subscription below
-        // This avoids double-fetching and redundant sync
-        onJobCompleted: (job) => {
-          // Mark as completed in UI immediately - Realtime will provide full data
-          setLocalAssets(prev => prev.map(a => 
-            a.id === job.assetId ? { ...a, progress: 100 } : a
-          ));
-          setBatchQueue(prev => prev.map(item => 
-            item.assetId === job.assetId ? { ...item, status: 'COMPLETED', progress: 100, stage: 'Done' } : item
-          ));
-        },
-        onJobFailed: (job) => {
-          setLocalAssets(prev => prev.map(a => 
-            a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, progress: 0, errorMessage: job.error } : a
-          ));
-          setBatchQueue(prev => prev.map(item => 
-            item.assetId === job.assetId ? { ...item, status: 'FAILED', progress: 0, errorMsg: job.error || 'Processing failed' } : item
-          ));
-        }
+        // Lightweight callbacks for progress updates only
+        processingQueueService.setCallbacks({
+          onJobStarted: (job) => {
+            setLocalAssets(prev => prev.map(a => 
+              a.id === job.assetId ? { ...a, status: AssetStatus.PROCESSING, progress: 10 } : a
+            ));
+            // Also update batch queue if item exists there
+            setBatchQueue(prev => prev.map(item => 
+              item.assetId === job.assetId ? { ...item, status: 'PROCESSING', progress: 10, stage: 'Started' } : item
+            ));
+          },
+          onJobProgress: (job) => {
+            setLocalAssets(prev => prev.map(a => 
+              a.id === job.assetId ? { ...a, progress: Math.min(90, job.progress) } : a
+            ));
+            setBatchQueue(prev => prev.map(item => 
+              item.assetId === job.assetId ? { ...item, progress: job.progress, stage: job.stage } : item
+            ));
+          },
+          // onJobCompleted is now handled by the direct Realtime subscription below
+          // This avoids double-fetching and redundant sync
+          onJobCompleted: (job) => {
+            // Mark as completed in UI immediately - Realtime will provide full data
+            setLocalAssets(prev => prev.map(a => 
+              a.id === job.assetId ? { ...a, progress: 100 } : a
+            ));
+            setBatchQueue(prev => prev.map(item => 
+              item.assetId === job.assetId ? { ...item, status: 'COMPLETED', progress: 100, stage: 'Done' } : item
+            ));
+          },
+          onJobFailed: (job) => {
+            setLocalAssets(prev => prev.map(a => 
+              a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, progress: 0, errorMessage: job.error } : a
+            ));
+            setBatchQueue(prev => prev.map(item => 
+              item.assetId === job.assetId ? { ...item, status: 'FAILED', progress: 0, errorMsg: job.error || 'Processing failed' } : item
+            ));
+          }
+        });
       });
     }
   }, [user?.id]);
@@ -784,45 +794,48 @@ export default function App() {
   useEffect(() => {
     if (!user?.id) return;
 
-    const subscription = processingQueueService.subscribeToJobUpdates(
-      user.id,
-      (job) => {
-        console.log('📡 Queue Realtime update:', job.id, job.status, job.stage);
-        
-        // Update batch queue UI based on job status
-        setBatchQueue(prev => prev.map(item => {
-          if (item.assetId !== job.assetId) return item;
+    let subscription: { unsubscribe: () => void } | undefined;
+    _pqsP.then(() => {
+      subscription = processingQueueService.subscribeToJobUpdates(
+        user.id,
+        (job) => {
+          console.log('📡 Queue Realtime update:', job.id, job.status, job.stage);
+          
+          // Update batch queue UI based on job status
+          setBatchQueue(prev => prev.map(item => {
+            if (item.assetId !== job.assetId) return item;
 
-          switch (job.status) {
-            case 'COMPLETED':
-              return { ...item, status: 'COMPLETED', progress: 100, stage: 'Done' };
-            case 'FAILED':
-              return { ...item, status: 'FAILED', progress: 0, errorMsg: job.error || 'Failed' };
-            case 'PROCESSING':
-              return { ...item, status: 'PROCESSING', progress: job.progress, stage: job.stage || 'Processing...' };
-            default:
-              return item;
+            switch (job.status) {
+              case 'COMPLETED':
+                return { ...item, status: 'COMPLETED', progress: 100, stage: 'Done' };
+              case 'FAILED':
+                return { ...item, status: 'FAILED', progress: 0, errorMsg: job.error || 'Failed' };
+              case 'PROCESSING':
+                return { ...item, status: 'PROCESSING', progress: job.progress, stage: job.stage || 'Processing...' };
+              default:
+                return item;
+            }
+          }));
+
+          // Update local assets based on job status
+          if (job.status === 'COMPLETED') {
+            setLocalAssets(prev => prev.map(a => 
+              a.id === job.assetId ? { ...a, status: AssetStatus.MINTED, progress: 100 } : a
+            ));
+          } else if (job.status === 'FAILED') {
+            setLocalAssets(prev => prev.map(a => 
+              a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, progress: 0, errorMessage: job.error } : a
+            ));
+          } else if (job.status === 'PROCESSING') {
+            setLocalAssets(prev => prev.map(a => 
+              a.id === job.assetId ? { ...a, status: AssetStatus.PROCESSING, progress: job.progress } : a
+            ));
           }
-        }));
-
-        // Update local assets based on job status
-        if (job.status === 'COMPLETED') {
-          setLocalAssets(prev => prev.map(a => 
-            a.id === job.assetId ? { ...a, status: AssetStatus.MINTED, progress: 100 } : a
-          ));
-        } else if (job.status === 'FAILED') {
-          setLocalAssets(prev => prev.map(a => 
-            a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, progress: 0, errorMessage: job.error } : a
-          ));
-        } else if (job.status === 'PROCESSING') {
-          setLocalAssets(prev => prev.map(a => 
-            a.id === job.assetId ? { ...a, status: AssetStatus.PROCESSING, progress: job.progress } : a
-          ));
         }
-      }
-    );
+      );
+    });
 
-    return () => subscription.unsubscribe();
+    return () => subscription?.unsubscribe();
   }, [user?.id]);
 
   // Direct Realtime subscription to historical_documents_global
@@ -831,47 +844,50 @@ export default function App() {
   useEffect(() => {
     if (!user?.id) return;
 
-    const unsubscribe = subscribeToAssetUpdates(
-      user.id,
-      // On asset UPDATE (e.g., edge processing completed)
-      (updatedAsset) => {
-        setLocalAssets(prev => {
-          const current = prev.find(a => a.id === updatedAsset.id);
-          if (current) {
-            const merged = mergeIncomingAssetPreserveImage(current, updatedAsset);
-            return prev.map(a => a.id === updatedAsset.id ? merged : a);
-          }
-          return prev;
-        });
+    let unsubscribe: (() => void) | undefined;
+    import('./services/supabaseService').then(({ subscribeToAssetUpdates, mirrorEdgeAssetToMasterIfNeeded }) => {
+      unsubscribe = subscribeToAssetUpdates(
+        user.id,
+        // On asset UPDATE (e.g., edge processing completed)
+        (updatedAsset) => {
+          setLocalAssets(prev => {
+            const current = prev.find(a => a.id === updatedAsset.id);
+            if (current) {
+              const merged = mergeIncomingAssetPreserveImage(current, updatedAsset);
+              return prev.map(a => a.id === updatedAsset.id ? merged : a);
+            }
+            return prev;
+          });
 
-        mirrorEdgeAssetToMasterIfNeeded(updatedAsset, user.id).catch(err =>
-          console.warn('Master mirror after edge update failed:', err)
-        );
+          mirrorEdgeAssetToMasterIfNeeded(updatedAsset, user.id).catch(err =>
+            console.warn('Master mirror after edge update failed:', err)
+          );
 
-        // Also persist to local IndexedDB
-        saveAsset(updatedAsset).catch(e => console.error('Failed to persist updated asset', e));
-      },
-      // On asset INSERT (e.g., new asset from edge function)
-      (newAsset) => {
-        setLocalAssets(prev => {
-          // Avoid duplicates
-          const current = prev.find(a => a.id === newAsset.id);
-          if (current) {
-            const merged = mergeIncomingAssetPreserveImage(current, newAsset);
-            return prev.map(a => a.id === newAsset.id ? merged : a);
-          }
-          return [newAsset, ...prev];
-        });
+          // Also persist to local IndexedDB
+          saveAsset(updatedAsset).catch(e => console.error('Failed to persist updated asset', e));
+        },
+        // On asset INSERT (e.g., new asset from edge function)
+        (newAsset) => {
+          setLocalAssets(prev => {
+            // Avoid duplicates
+            const current = prev.find(a => a.id === newAsset.id);
+            if (current) {
+              const merged = mergeIncomingAssetPreserveImage(current, newAsset);
+              return prev.map(a => a.id === newAsset.id ? merged : a);
+            }
+            return [newAsset, ...prev];
+          });
 
-        mirrorEdgeAssetToMasterIfNeeded(newAsset, user.id).catch(err =>
-          console.warn('Master mirror after edge insert failed:', err)
-        );
+          mirrorEdgeAssetToMasterIfNeeded(newAsset, user.id).catch(err =>
+            console.warn('Master mirror after edge insert failed:', err)
+          );
 
-        saveAsset(newAsset).catch(e => console.error('Failed to persist new asset', e));
-      }
-    );
+          saveAsset(newAsset).catch(e => console.error('Failed to persist new asset', e));
+        }
+      );
+    });
 
-    return () => unsubscribe();
+    return () => unsubscribe?.();
   }, [mergeIncomingAssetPreserveImage, user?.id]);
 
   // C3 FIX: Only activate avatar/presence tracking when user navigates to Explore tab.
@@ -1121,7 +1137,7 @@ export default function App() {
       setIsLocalDataLoaded(true);
     });
 
-    getCurrentUser().then(async ({ data }) => { 
+    import('./lib/auth').then(m => m.getCurrentUser()).then(async ({ data }) => { 
       if(data.user) { 
         setUser(data.user); 
         
@@ -1136,6 +1152,7 @@ export default function App() {
         // PHASE 2: Defer cloud sync to idle so UI is interactive first
         const deferredSync = async () => {
           try {
+            const { contributeAssetToGlobalCorpus, fetchUserAssets } = await import('./services/supabaseService');
             // Sync unsynced local assets to cloud
             const syncPromises = localSnapshot
               .filter(asset => asset.status === AssetStatus.MINTED && !asset.sqlRecord?.USER_ID)
@@ -1219,6 +1236,7 @@ export default function App() {
     setIsProcessing(true);
     try {
       // If not admin, only fetch enterprise-ready assets
+      const { fetchGlobalCorpus } = await import('./services/supabaseService');
       const data = await fetchGlobalCorpus(!isAdmin);
       setGlobalAssets(data);
       announce(`Synced ${data.length} cloud assets.`);
@@ -1323,8 +1341,9 @@ export default function App() {
     if (user?.id || isGlobalView) {
       // Authenticated users or global view: update in Supabase
       const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-      contributeAssetToGlobalCorpus(updatedAsset, user?.id, license as any, true)
-        .catch(err => console.error("Failed to update asset in Supabase", err));
+      import('./services/supabaseService').then(m =>
+        m.contributeAssetToGlobalCorpus(updatedAsset, user?.id, license as any, true)
+      ).catch(err => console.error("Failed to update asset in Supabase", err));
     } else {
       // Unauthenticated users: save to IndexedDB only
       await saveAsset(updatedAsset);
@@ -1516,7 +1535,7 @@ export default function App() {
 
       // Auto-store to Supabase (Automatic Cloud Sync)
       const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-      contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true).then(syncResult => {
+      import('./services/supabaseService').then(m => m.contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true)).then(syncResult => {
         if (syncResult.success && syncResult.publicUrl) {
           // Update state with the permanent cloud URL
           const updatedAsset = { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl };
@@ -1922,6 +1941,7 @@ export default function App() {
       // Auto-sync to cloud
       const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
       try {
+        const { contributeAssetToGlobalCorpus } = await import('./services/supabaseService');
         const syncResult = await contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true);
         if (syncResult.success && syncResult.publicUrl) {
           const updatedWithUrl = { ...resultAsset, imageUrl: syncResult.publicUrl };
@@ -2259,9 +2279,11 @@ export default function App() {
 
     // Sync to Supabase
     const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-    for (const asset of updatedAssets) {
-      contributeAssetToGlobalCorpus(asset, user?.id, license as any, true).catch(e => console.error("Failed to sync manual bundle", e));
-    }
+    import('./services/supabaseService').then(m => {
+      for (const asset of updatedAssets) {
+        m.contributeAssetToGlobalCorpus(asset, user?.id, license as any, true).catch(e => console.error("Failed to sync manual bundle", e));
+      }
+    });
 
     setSelectedAssetIds(new Set());
     announce(`Created manual bundle: ${bundleTitle}`);
