@@ -324,6 +324,7 @@ export default function App() {
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showProcessingPanel, setShowProcessingPanel] = useState(false);
   const [showNewBatchPanel, setShowNewBatchPanel] = useState(false);
+  const [arLeaveConfirm, setArLeaveConfirm] = useState<{ targetTab: string } | null>(null);
   const [isLocalDataLoaded, setIsLocalDataLoaded] = useState(false);
   const [isAppReady, setIsAppReady] = useState(false);
   
@@ -1363,18 +1364,32 @@ export default function App() {
   const switchTab = async (newTab: string) => {
       trackUXEvent('tab_navigation', { from: activeTab, to: newTab, mobile: window.innerWidth < 1024 });
       if (activeTab === 'ar' && newTab !== 'ar' && arSessionQueue.length > 0) {
-          if (window.confirm(`Process ${arSessionQueue.length} items from your AR Session?`)) {
-              handleBatchFiles(arSessionQueue);
-              setArSessionQueue([]);
-              clearArQueue().catch(() => {});
-              setActiveTab('batch'); // explicit: user chose to leave AR → go to batch
-          } else {
-              // If user cancels, stay on AR tab and keep the queue
-              return;
-          }
+          // Show accessible confirmation dialog instead of window.confirm
+          setArLeaveConfirm({ targetTab: newTab });
       } else {
           setActiveTab(newTab);
       }
+  };
+
+  const handleArLeaveProcess = () => {
+      const target = arLeaveConfirm?.targetTab || 'batch';
+      handleBatchFiles(arSessionQueue);
+      setArSessionQueue([]);
+      clearArQueue().catch(() => {});
+      setArLeaveConfirm(null);
+      setActiveTab(target);
+  };
+
+  const handleArLeaveDiscard = () => {
+      const target = arLeaveConfirm?.targetTab || 'dashboard';
+      setArSessionQueue([]);
+      clearArQueue().catch(() => {});
+      setArLeaveConfirm(null);
+      setActiveTab(target);
+  };
+
+  const handleArLeaveCancel = () => {
+      setArLeaveConfirm(null);
   };
 
   const createInitialAsset = async (file: File): Promise<DigitalAsset> => {
@@ -4315,14 +4330,56 @@ export default function App() {
           </div>
         ), document.body)}
 
+        {/* AR Session Leave Confirmation */}
+        {arLeaveConfirm && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="ar-leave-title">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleArLeaveCancel} />
+            <div className="relative bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl">
+              <h3 id="ar-leave-title" className="text-lg font-semibold text-white mb-2">AR Session in Progress</h3>
+              <p className="text-sm text-slate-400 mb-6">
+                You have {arSessionQueue.length} capture{arSessionQueue.length !== 1 ? 's' : ''} from this session. What would you like to do?
+              </p>
+              <div className="flex flex-col gap-2">
+                <button
+                  onClick={handleArLeaveProcess}
+                  className="w-full px-4 py-2.5 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors"
+                  autoFocus
+                >
+                  Process {arSessionQueue.length} Capture{arSessionQueue.length !== 1 ? 's' : ''} & Continue
+                </button>
+                <button
+                  onClick={handleArLeaveDiscard}
+                  className="w-full px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-sm font-medium rounded-lg border border-red-500/30 transition-colors"
+                >
+                  Discard & Leave
+                </button>
+                <button
+                  onClick={handleArLeaveCancel}
+                  className="w-full px-4 py-2.5 text-slate-400 hover:text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  Stay in AR Scanner
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* New Scalable Batch Processing Panel */}
         {showNewBatchPanel && (
           <div className="fixed inset-4 md:inset-8 lg:inset-16 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowNewBatchPanel(false)} />
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => {
+              setShowNewBatchPanel(false);
+              // If AR is active, navigate to dashboard so user sees results
+              // instead of returning to live camera with no feedback
+              if (activeTab === 'ar') setActiveTab('dashboard');
+            }} />
             <div className="relative w-full max-w-4xl h-full max-h-[90vh]">
               <BatchProcessingPanel
                 onProcessItem={handleNewBatchProcess}
-                onClose={() => setShowNewBatchPanel(false)}
+                onClose={() => {
+                  setShowNewBatchPanel(false);
+                  if (activeTab === 'ar') setActiveTab('dashboard');
+                }}
                 maxConcurrent={3}
                 defaultScanType={selectedScanType || ScanType.DOCUMENT}
                 serverRetry={(jobId) => processingQueueService.retryJob(jobId)}
