@@ -86,6 +86,8 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
   const [triggerResult, setTriggerResult] = useState<{ processed: number; succeeded: number; failed: number } | null>(null);
   const [localNeedsUploadCount, setLocalNeedsUploadCount] = useState(0);
   const [localOnServerCount, setLocalOnServerCount] = useState(0);
+  const [isReconciling, setIsReconciling] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState<{ recovered: number; failed: number; orphaned: number } | null>(null);
   
   // New state for detailed job list
   const [jobs, setJobs] = useState<QueueJob[]>([]);
@@ -144,11 +146,11 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       const localAssets = await loadAssets();
       const unprocessed = localAssets.filter(a => 
         a.status === AssetStatus.PENDING ||
-        a.status === AssetStatus.PROCESSING ||
-        (a.status === AssetStatus.FAILED && !a.sqlRecord?.CONFIDENCE_SCORE)
+        a.status === AssetStatus.PROCESSING
       );
       
-      // Split: assets with serverJobId are already on server queue
+      // Split: assets with serverJobId are tracked on server
+      // Assets without serverJobId need to be uploaded
       const needsUpload = unprocessed.filter(a => !a.serverJobId);
       const onServerQueue = unprocessed.filter(a => !!a.serverJobId);
       
@@ -871,7 +873,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
               <span className="text-rose-400">📤 {localNeedsUploadCount} need upload</span>
             )}
             {localOnServerCount > 0 && (
-              <span className="text-cyan-400">☁️ {localOnServerCount} on server queue</span>
+              <span className="text-cyan-400">☁️ {localOnServerCount} tracked locally (server: {stats?.pending || 0} pending, {stats?.processing || 0} active)</span>
             )}
           </div>
           
@@ -1043,6 +1045,53 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
             </button>
           </div>
           
+          {/* Reconcile with server - recover completed results */}
+          {localOnServerCount > 0 && (stats?.pending || 0) === 0 && (stats?.processing || 0) === 0 && (
+            <button
+              onClick={async () => {
+                setIsReconciling(true);
+                setReconcileResult(null);
+                try {
+                  const result = await processingQueueService.reconcileWithServer();
+                  setReconcileResult(result);
+                  if (result.recovered > 0 || result.failed > 0 || result.orphaned > 0) {
+                    alert(`Reconciliation complete:\n✓ ${result.recovered} recovered from server\n✗ ${result.failed} failed on server\n⚠ ${result.orphaned} orphaned (reset to pending)`);
+                    await fetchStats();
+                    onRequeueComplete?.();
+                  } else {
+                    alert('No changes — all local items already match server state.');
+                  }
+                } catch (err) {
+                  console.error('Reconciliation failed:', err);
+                  alert('Reconciliation failed. Check console for details.');
+                } finally {
+                  setIsReconciling(false);
+                }
+              }}
+              disabled={isReconciling}
+              className="w-full py-2 px-2 bg-cyan-700 hover:bg-cyan-600 disabled:bg-slate-800 disabled:text-slate-600 text-white text-[10px] font-medium rounded flex items-center justify-center gap-1.5 transition-colors"
+            >
+              {isReconciling ? (
+                <>
+                  <RefreshCw size={12} className="animate-spin" />
+                  Reconciling with server...
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={12} />
+                  Reconcile {localOnServerCount} Items with Server
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Reconcile result */}
+          {reconcileResult && (
+            <div className="px-2 py-1.5 bg-cyan-900/20 border border-cyan-700/30 rounded text-[9px] text-cyan-400">
+              Reconciled: {reconcileResult.recovered} recovered, {reconcileResult.failed} failed, {reconcileResult.orphaned} orphaned
+            </div>
+          )}
+
           {/* Reset local stuck items */}
           <div className="flex gap-2">
             <button

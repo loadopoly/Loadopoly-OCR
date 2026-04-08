@@ -201,15 +201,23 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
   const [scanType, setScanType] = useState<ScanType>(defaultScanType);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  
+  // Stable refs for callback props to avoid useEffect re-fires
+  const onProcessItemRef = useRef(onProcessItem);
+  const serverRetryRef = useRef(serverRetry);
+  const downloadFromStorageRef = useRef(downloadFromStorage);
+  useEffect(() => { onProcessItemRef.current = onProcessItem; }, [onProcessItem]);
+  useEffect(() => { serverRetryRef.current = serverRetry; }, [serverRetry]);
+  useEffect(() => { downloadFromStorageRef.current = downloadFromStorage; }, [downloadFromStorage]);
 
   // Configure batch processor
   useEffect(() => {
     batchProcessor.configure({ maxConcurrent });
     
     const callbacks: Partial<BatchProcessorCallbacks> = {
-      processItem: onProcessItem,
-      serverRetry,
-      downloadFromStorage,
+      processItem: (...args) => onProcessItemRef.current(...args),
+      serverRetry: (...args) => serverRetryRef.current?.(...args) ?? Promise.resolve(false),
+      downloadFromStorage: (...args) => downloadFromStorageRef.current?.(...args) ?? Promise.resolve(null),
       onItemQueued: () => updateUI(),
       onItemStarted: () => updateUI(),
       onItemProgress: () => updateUI(),
@@ -237,7 +245,7 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
     return () => {
       batchProcessor.setCallbacks({});
     };
-  }, [onProcessItem, maxConcurrent, serverRetry, downloadFromStorage]);
+  }, [maxConcurrent]);
   
   // Prevent accidental data loss when closing page during processing
   useEffect(() => {
