@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Camera, Zap, ScanLine, MapPin, ArrowRight, Layers, WifiOff, ZoomIn, ZoomOut } from 'lucide-react';
+import { Camera, Zap, ScanLine, MapPin, ArrowRight, Layers, WifiOff, ZoomIn, ZoomOut, CameraOff } from 'lucide-react';
 import ARSafetyWarning from './ARSafetyWarning';
 
 interface ARSceneProps {
@@ -20,14 +20,26 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   const [zoomRange, setZoomRange] = useState({ min: 1, max: 1, step: 0.1 });
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [showSafetyWarning, setShowSafetyWarning] = useState(true);
+  const [cameraError, setCameraError] = useState<string | null>(null);
+  // Ref tracks the stream independently so cleanup works even if unmount
+  // races with the getUserMedia promise resolution.
+  const streamRef = useRef<MediaStream | null>(null);
+  const unmountedRef = useRef(false);
 
   useEffect(() => {
     if (showSafetyWarning) return;
+    unmountedRef.current = false;
 
     // 1. Request camera + AR session
     navigator.mediaDevices.getUserMedia({
       video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
     }).then(newStream => {
+      // If component unmounted while we were awaiting permission, stop immediately
+      if (unmountedRef.current) {
+        newStream.getTracks().forEach(track => track.stop());
+        return;
+      }
+      streamRef.current = newStream;
       setStream(newStream);
       
       const track = newStream.getVideoTracks()[0];
@@ -47,7 +59,18 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
         videoRef.current.play();
       }
     }).catch(err => {
+        if (unmountedRef.current) return;
         console.error("Camera access denied or failed:", err);
+        const name = (err as DOMException)?.name;
+        if (name === 'NotAllowedError') {
+          setCameraError('Camera permission was denied. Please allow camera access in your browser settings and reload.');
+        } else if (name === 'NotFoundError') {
+          setCameraError('No camera found on this device.');
+        } else if (name === 'NotReadableError') {
+          setCameraError('Camera is in use by another application.');
+        } else {
+          setCameraError(`Camera could not be started: ${(err as Error).message || 'Unknown error'}`);
+        }
     });
 
     // Simulate finding AR nodes nearby
@@ -66,17 +89,19 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
     }, 2000);
 
     return () => {
+        unmountedRef.current = true;
         clearInterval(interval);
-        // We'll handle cleanup in a separate effect or just here if we don't depend on stream
+        // Stop stream via ref (handles race where stream resolved after unmount)
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
     };
   }, [showSafetyWarning]);
 
+  // Sync ref when stream state changes (for zoom/other effects)
   useEffect(() => {
-    return () => {
-        if (stream) {
-            stream.getTracks().forEach(track => track.stop());
-        }
-    };
+    streamRef.current = stream;
   }, [stream]);
 
   useEffect(() => {
@@ -117,6 +142,36 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
       {showSafetyWarning && <ARSafetyWarning onAccept={() => setShowSafetyWarning(false)} />}
       
       <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
+
+      {/* Camera Error State */}
+      {cameraError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/95 z-30 p-8 text-center" role="alert">
+          <CameraOff size={48} className="text-red-400 mb-4" />
+          <p className="text-lg font-semibold text-white mb-2">Camera Unavailable</p>
+          <p className="text-sm text-slate-400 max-w-sm mb-6">{cameraError}</p>
+          <button
+            onClick={() => { setCameraError(null); setShowSafetyWarning(true); }}
+            className="px-6 py-2.5 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
+
+      {/* Camera Error State */}
+      {cameraError && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/95 z-30 p-8 text-center" role="alert">
+          <CameraOff size={48} className="text-red-400 mb-4" />
+          <p className="text-lg font-semibold text-white mb-2">Camera Unavailable</p>
+          <p className="text-sm text-slate-400 max-w-sm mb-6">{cameraError}</p>
+          <button
+            onClick={() => { setCameraError(null); setShowSafetyWarning(true); }}
+            className="px-6 py-2.5 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
       
       {/* Flash Overlay */}
       <div className={`absolute inset-0 bg-white pointer-events-none transition-opacity duration-150 ${flash ? 'opacity-50' : 'opacity-0'}`}></div>

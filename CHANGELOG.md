@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.16.1] - 2026-04-09
+
+### Workflow UX Fixes
+
+**Camera Error UI (ARScene.tsx)**
+- Camera permission denial now shows a full-screen error overlay with `CameraOff` icon, human-readable message, and "Try Again" button instead of a silent black screen
+- Error messages are mapped per `DOMException` name: `NotAllowedError` → permission instructions, `NotFoundError` → no camera detected, `NotReadableError` → camera in use by another app
+
+**Camera Stream Unmount Race Condition (ARScene.tsx)**
+- Added `unmountedRef` guard so `getUserMedia` promises that resolve after component unmount immediately stop all tracks instead of leaking the camera stream
+- Consolidated stream cleanup into a single effect return, eliminating the separate `[stream]` effect that could miss cleanup during rapid tab switches
+
+**Accessible AR Session Leave Dialog (App.tsx)**
+- Replaced `window.confirm()` with an in-app modal dialog (`role="dialog"`, `aria-modal`, `aria-labelledby`)
+- Three clear actions: "Process & Continue", "Discard & Leave", "Stay in AR Scanner"
+- Dismiss confirmation also supports the user's original navigation target
+
+**Batch Panel Dismiss from AR (App.tsx)**
+- Closing the batch processing panel while on the AR tab now navigates to the dashboard, so users see their processed results instead of returning to a live camera with no context
+
 ## [2.16.0] - 2026-04-08
 
 ### EXIF GPS Extraction & Coordinate Source Tracking

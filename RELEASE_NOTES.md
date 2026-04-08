@@ -1,4 +1,11 @@
-# 🚀 GeoGraph Node: v2.16.0 Release Notes
+# 🚀 GeoGraph Node: v2.16.1 Release Notes
+
+## 🛡️ v2.16.1 — Workflow UX Fixes (2026-04-09)
+
+- **Camera error UI**: Permission denial shows full-screen error with icon, message, and retry button instead of black screen
+- **Unmount race fix**: Camera stream no longer leaks when user switches tabs during the permission dialog
+- **Accessible AR leave dialog**: Replaced `window.confirm` with ARIA-compliant in-app modal (process / discard / stay)
+- **Batch panel dismiss**: Closing batch panel from AR tab navigates to dashboard instead of returning to live camera
 
 ## 🌍 v2.16.0 — EXIF GPS Extraction & Coordinate Source Tracking (2026-04-08)
 
