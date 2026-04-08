@@ -18,7 +18,7 @@
 import { supabase, isSupabaseConfigured } from '../lib/supabaseClient';
 import { compressImage, CompressionOptions } from '../lib/imageCompression';
 import { logger } from '../lib/logger';
-import { ScanType, DigitalAsset, AssetStatus } from '../types';
+import { ScanType, DigitalAsset, AssetStatus, CoordinateSource } from '../types';
 import { saveAsset, loadAssets } from '../lib/indexeddb';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -42,6 +42,7 @@ export interface QueueJob {
   startedAt?: Date;
   completedAt?: Date;
   location?: { lat: number; lng: number };
+  coordinateSource?: CoordinateSource;
 }
 
 export type JobStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | 'CANCELLED';
@@ -53,6 +54,8 @@ export interface QueueOptions {
   scanType?: ScanType;
   /** GPS coordinates */
   location?: { lat: number; lng: number };
+  /** How GPS coordinates were obtained */
+  coordinateSource?: CoordinateSource;
   /** Compress before upload */
   compress?: boolean;
   /** Compression options */
@@ -396,17 +399,43 @@ class ProcessingQueueService {
     
     // Compress if requested
     let fileToUpload = file;
+    let exifGps: { lat: number; lng: number } | undefined;
     if (options.compress !== false) {
       try {
         const compressed = await compressImage(file, options.compressionOptions);
         fileToUpload = compressed.file;
+        exifGps = compressed.gpsCoordinates;
         logger.debug('Image compressed', {
           original: file.size,
           compressed: compressed.compressedSize,
           savings: `${compressed.savingsPercent}%`,
+          hasExifGps: !!exifGps,
         });
       } catch (e) {
         logger.warn('Compression failed, using original file', { error: e });
+      }
+    }
+
+    // Resolve best available coordinates:
+    // Priority: EXIF GPS (from photo) > caller-provided device GPS
+    // Also determine coordinateSource for downstream trust decisions
+    let resolvedLocation = options.location;
+    let resolvedSource: CoordinateSource = options.coordinateSource || 'none';
+
+    if (exifGps) {
+      // EXIF GPS is the gold standard — taken at shutter time
+      resolvedLocation = exifGps;
+      resolvedSource = 'exif';
+      logger.debug('Using EXIF GPS coordinates', { lat: exifGps.lat, lng: exifGps.lng });
+    } else if (options.location) {
+      // Device GPS provided by caller — check staleness via File.lastModified
+      const photoAge = Date.now() - file.lastModified;
+      const STALENESS_THRESHOLD_MS = 30_000; // 30 seconds
+      if (photoAge > STALENESS_THRESHOLD_MS) {
+        resolvedSource = options.coordinateSource || 'device-delayed';
+        logger.debug('Device GPS is stale (photo older than 30s)', { photoAgeMs: photoAge });
+      } else {
+        resolvedSource = options.coordinateSource || 'device-live';
       }
     }
     
@@ -416,7 +445,11 @@ class ProcessingQueueService {
     if (!canUseServer) {
       const reason = !this.isOnline ? 'offline' : !isSupabaseConfigured() ? 'supabase not configured' : 'user not logged in';
       logger.warn(`Cannot queue to server (${reason}), using local queue`, { assetId });
-      return this.queueLocally(assetId, fileToUpload, options);
+      return this.queueLocally(assetId, fileToUpload, {
+        ...options,
+        location: resolvedLocation,
+        coordinateSource: resolvedSource,
+      });
     }
     
     try {
@@ -432,7 +465,8 @@ class ProcessingQueueService {
         imagePath,
         scanType,
         priority,
-        location: options.location,
+        location: resolvedLocation,
+        coordinateSource: resolvedSource,
         metadata: options.metadata,
       });
       logger.info(`Job inserted successfully: ${job.id}`);
@@ -452,7 +486,11 @@ class ProcessingQueueService {
       });
       // Fallback to local queue but LOG IT
       logger.warn(`FALLBACK: Queuing locally due to server error: ${error.message}`);
-      return this.queueLocally(assetId, fileToUpload, options);
+      return this.queueLocally(assetId, fileToUpload, {
+        ...options,
+        location: resolvedLocation,
+        coordinateSource: resolvedSource,
+      });
     }
   }
 
@@ -988,6 +1026,7 @@ class ProcessingQueueService {
     scanType: ScanType;
     priority: number;
     location?: { lat: number; lng: number };
+    coordinateSource?: CoordinateSource;
     metadata?: Record<string, unknown>;
   }): Promise<QueueJob> {
     // Cancel any existing PENDING/PROCESSING jobs for the same asset to prevent duplicates
@@ -1023,6 +1062,7 @@ class ProcessingQueueService {
         PRIORITY: params.priority,
         LATITUDE: params.location?.lat,
         LONGITUDE: params.location?.lng,
+        COORDINATE_SOURCE: params.coordinateSource || (params.location ? 'device-live' : 'none'),
         METADATA: params.metadata || {},
         STATUS: 'PENDING',
       })
@@ -1053,6 +1093,7 @@ class ProcessingQueueService {
       retryCount: 0,
       createdAt: new Date(),
       location: options.location,
+      coordinateSource: options.coordinateSource,
     };
     
     this.pendingLocalJobs.push(job);
@@ -1333,6 +1374,7 @@ class ProcessingQueueService {
       location: (row.latitude || row.LATITUDE) && (row.longitude || row.LONGITUDE)
         ? { lat: row.latitude || row.LATITUDE, lng: row.longitude || row.LONGITUDE }
         : undefined,
+      coordinateSource: (row.coordinate_source || row.COORDINATE_SOURCE) as CoordinateSource | undefined,
     };
   }
 

@@ -88,6 +88,9 @@ interface ProcessResponse {
   alt_text_long?: string;
   reading_order?: ReadingOrderBlock[];
   accessibility_score?: number;
+
+  // AI-inferred coordinates (when no EXIF/device GPS available)
+  inferredCoordinates?: { lat: number; lng: number; confidence: number } | null;
 }
 
 // Lazy initialization to avoid top-level crashes
@@ -138,7 +141,7 @@ const processImageWithGeminiInternal = async (
 
   const locString = location 
     ? `The image was captured at Latitude: ${location.lat}, Longitude: ${location.lng}.` 
-    : "No geolocation data available for this image. Infer location context solely from visual cues.";
+    : "No geolocation data available for this image. Estimate GPS coordinates from visible landmarks, signage, architecture, vegetation, road markings, language on signs, and any other visual cues. Return your best estimate in the inferredCoordinates field with a confidence score.";
 
   const prompt = `
     You are an expert data extraction specialist and knowledge graph engineer.
@@ -216,6 +219,19 @@ const processImageWithGeminiInternal = async (
       },
       ocrDerivedGisZone: { type: Type.STRING, nullable: true },
       nlpDerivedGisZone: { type: Type.STRING, nullable: true },
+
+      // AI-inferred coordinates (when no device GPS)
+      inferredCoordinates: {
+        type: Type.OBJECT,
+        nullable: true,
+        description: "Estimated GPS coordinates derived from visual cues (landmarks, signage, architecture). Only populate when no device GPS is provided.",
+        properties: {
+          lat: { type: Type.NUMBER, description: "Estimated latitude in decimal degrees" },
+          lng: { type: Type.NUMBER, description: "Estimated longitude in decimal degrees" },
+          confidence: { type: Type.NUMBER, description: "0.0-1.0 confidence in coordinate estimate" }
+        },
+        required: ["lat", "lng", "confidence"]
+      },
 
       // Timestamps
       ocrDerivedTimestamp: { type: Type.STRING, nullable: true, description: "Specific date found in text" },
@@ -416,7 +432,8 @@ const processImageWithGeminiInternal = async (
       alt_text_long: parsed.alt_text_long,
       reading_order: parsed.reading_order,
       accessibility_score: parsed.accessibility_score,
-      suggestedCollection: parsed.suggestedCollection || "Unsorted Processing"
+      suggestedCollection: parsed.suggestedCollection || "Unsorted Processing",
+      inferredCoordinates: parsed.inferredCoordinates || null,
     };
 
   } catch (error: unknown) {

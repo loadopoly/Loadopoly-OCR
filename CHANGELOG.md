@@ -3,6 +3,49 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.16.0] - 2026-04-08
+
+### EXIF GPS Extraction & Coordinate Source Tracking
+
+**Core Problem:** When photos were queued for processing after a delay (gallery picks, offline uploads, batch imports from desktop), the device GPS captured at ingest time reflected where the user *currently is*, not where the photo was *taken*. The EXIF GPS parser in `imageCompression.ts` was scaffolded but returned `null` unconditionally.
+
+**Result:** Photos with embedded EXIF GPS data now have their true capture-time coordinates extracted automatically. A new `CoordinateSource` type tracks how coordinates were obtained (`exif`, `device-live`, `device-delayed`, `ai-inferred`, `none`), enabling downstream consumers (dedup, knowledge graph, marketplace) to make trust-aware decisions. When no GPS is available at all, Gemini now returns structured `inferredCoordinates` from visual cues.
+
+#### EXIF GPS Parser (imageCompression.ts)
+- Implemented full TIFF IFD0 → GPS IFD tag parser: reads byte order, walks IFD entries, extracts GPS rational values (tags 0x0001–0x0004)
+- Handles both little-endian and big-endian EXIF headers
+- Converts DMS (degrees/minutes/seconds) rationals to decimal degrees
+- Rejects invalid coordinates (out of range, 0/0 Null Island)
+- Zero new dependencies — pure DataView arithmetic (~120 lines)
+- Exported `extractGpsFromExif()` for use in ingest pipelines
+
+#### Coordinate Source Tracking (types, processingQueueService)
+- New `CoordinateSource` type: `'exif' | 'device-live' | 'device-delayed' | 'ai-inferred' | 'none'`
+- `QueueJob` and `QueueOptions` carry `coordinateSource` field
+- `queueFile()` auto-resolves best coordinates: EXIF GPS → device GPS (with staleness check via `File.lastModified`) → none
+- `insertJob()` persists `COORDINATE_SOURCE` column to processing_queue
+- `File.lastModified` staleness threshold (30s) distinguishes live camera captures from gallery/delayed uploads
+
+#### Ingest Pipeline Updates (App.tsx)
+- Single-file ingest: tries EXIF GPS (dynamic import, JPEG only) before falling back to device `getCurrentPosition`
+- Batch handler: uses `compressionResult.gpsCoordinates` from already-called `compressImage()`, avoiding redundant EXIF reads
+- Both paths pass `coordinateSource` through to `queueFile()`
+
+#### Gemini Visual Geo-Inference (geminiService.ts)
+- New `inferredCoordinates` field in `ProcessResponse` and Gemini response schema: `{ lat, lng, confidence }`
+- No-GPS prompt strengthened: instructs Gemini to estimate coordinates from landmarks, signage, architecture, vegetation, road markings, and language on signs
+- `inferredCoordinates` preserved in response sanitization
+
+#### Coordinate Priority Chain
+```
+EXIF GPS (photo metadata) → Device GPS live (<30s) → Device GPS delayed (>30s) → Gemini AI inference → none
+```
+
+#### Bundle Impact
+- **+0.27KB gzip** to App.js (EXIF parser in deferred imageCompression module)
+- Zero impact to Entry path (88.2KB unchanged)
+- No new chunks, no new dependencies, no new workers
+
 ## [2.15.6] - 2026-04-07
 
 ### Web Worker Graph Construction: Eliminate 26s Sidebar Freeze

@@ -87,9 +87,10 @@ const DEFAULT_OPTIONS: Required<Omit<CompressionOptions, 'onProgress'>> = {
 // ============================================
 
 /**
- * Extract GPS coordinates from EXIF data in JPEG images
+ * Extract GPS coordinates from EXIF data in JPEG images.
+ * Exported for use in ingest pipelines that need GPS before compression.
  */
-async function extractGpsFromExif(file: File): Promise<{ lat: number; lng: number } | null> {
+export async function extractGpsFromExif(file: File): Promise<{ lat: number; lng: number } | null> {
   try {
     const buffer = await file.arrayBuffer();
     const view = new DataView(buffer);
@@ -122,7 +123,10 @@ async function extractGpsFromExif(file: File): Promise<{ lat: number; lng: numbe
 }
 
 /**
- * Parse GPS data from EXIF bytes (simplified parser)
+ * Parse GPS data from EXIF bytes.
+ * Reads the TIFF header, walks IFD0 to find the GPS IFD pointer,
+ * then extracts GPS latitude/longitude rational values (tags 0x0001-0x0004).
+ * Zero-dependency — no external EXIF library required.
  */
 function parseExifGps(exifData: Uint8Array): { lat: number; lng: number } | null {
   // Check for "Exif\0\0" header
@@ -130,10 +134,104 @@ function parseExifGps(exifData: Uint8Array): { lat: number; lng: number } | null
   if (header !== 'Exif') {
     return null;
   }
-  
-  // This is a simplified parser - for production, consider using a library like exif-js
-  // For now, return null and let Gemini extract location from image content
+
+  // TIFF header starts at byte 6 (after "Exif\0\0")
+  const tiffOffset = 6;
+  if (exifData.length < tiffOffset + 8) return null;
+
+  const dv = new DataView(exifData.buffer, exifData.byteOffset + tiffOffset, exifData.length - tiffOffset);
+
+  // Determine byte order: 0x4949 = little-endian, 0x4D4D = big-endian
+  const byteOrder = dv.getUint16(0, false);
+  const le = byteOrder === 0x4949;
+
+  // Verify TIFF magic number (42)
+  if (dv.getUint16(2, le) !== 0x002A) return null;
+
+  // Offset to first IFD
+  const ifd0Offset = dv.getUint32(4, le);
+  const gpsIfdOffset = findGpsIfdOffset(dv, ifd0Offset, le);
+  if (gpsIfdOffset === null) return null;
+
+  return readGpsCoordinates(dv, gpsIfdOffset, le);
+}
+
+/** Walk an IFD to find the GPS IFD pointer (tag 0x8825). */
+function findGpsIfdOffset(dv: DataView, ifdOffset: number, le: boolean): number | null {
+  if (ifdOffset + 2 > dv.byteLength) return null;
+  const entryCount = dv.getUint16(ifdOffset, le);
+  for (let i = 0; i < entryCount; i++) {
+    const entryOffset = ifdOffset + 2 + i * 12;
+    if (entryOffset + 12 > dv.byteLength) return null;
+    const tag = dv.getUint16(entryOffset, le);
+    if (tag === 0x8825) {
+      // GPS IFD pointer — value is the offset to the GPS IFD
+      return dv.getUint32(entryOffset + 8, le);
+    }
+  }
   return null;
+}
+
+/** Read GPS lat/lng from the GPS IFD. */
+function readGpsCoordinates(dv: DataView, gpsOffset: number, le: boolean): { lat: number; lng: number } | null {
+  if (gpsOffset + 2 > dv.byteLength) return null;
+  const entryCount = dv.getUint16(gpsOffset, le);
+
+  let latRef: string | null = null;
+  let lngRef: string | null = null;
+  let latRationals: [number, number, number] | null = null;
+  let lngRationals: [number, number, number] | null = null;
+
+  for (let i = 0; i < entryCount; i++) {
+    const entryOffset = gpsOffset + 2 + i * 12;
+    if (entryOffset + 12 > dv.byteLength) break;
+    const tag = dv.getUint16(entryOffset, le);
+    const valueOffset = dv.getUint32(entryOffset + 8, le);
+
+    switch (tag) {
+      case 0x0001: // GPSLatitudeRef  ('N' or 'S')
+        latRef = String.fromCharCode(dv.getUint8(entryOffset + 8));
+        break;
+      case 0x0002: // GPSLatitude     (3 rationals)
+        latRationals = readThreeRationals(dv, valueOffset, le);
+        break;
+      case 0x0003: // GPSLongitudeRef ('E' or 'W')
+        lngRef = String.fromCharCode(dv.getUint8(entryOffset + 8));
+        break;
+      case 0x0004: // GPSLongitude    (3 rationals)
+        lngRationals = readThreeRationals(dv, valueOffset, le);
+        break;
+    }
+  }
+
+  if (!latRef || !lngRef || !latRationals || !lngRationals) return null;
+
+  const lat = rationalsToDegrees(latRationals) * (latRef === 'S' ? -1 : 1);
+  const lng = rationalsToDegrees(lngRationals) * (lngRef === 'W' ? -1 : 1);
+
+  // Sanity check — reject obviously invalid coordinates
+  if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+  // Reject 0,0 — almost certainly missing data, not Null Island
+  if (lat === 0 && lng === 0) return null;
+
+  return { lat, lng };
+}
+
+/** Read 3 consecutive TIFF RATIONAL values (each = uint32 numerator / uint32 denominator). */
+function readThreeRationals(dv: DataView, offset: number, le: boolean): [number, number, number] | null {
+  if (offset + 24 > dv.byteLength) return null;
+  const vals: number[] = [];
+  for (let i = 0; i < 3; i++) {
+    const num = dv.getUint32(offset + i * 8, le);
+    const den = dv.getUint32(offset + i * 8 + 4, le);
+    vals.push(den === 0 ? 0 : num / den);
+  }
+  return vals as [number, number, number];
+}
+
+/** Convert [degrees, minutes, seconds] to decimal degrees. */
+function rationalsToDegrees(vals: [number, number, number]): number {
+  return vals[0] + vals[1] / 60 + vals[2] / 3600;
 }
 
 // ============================================
