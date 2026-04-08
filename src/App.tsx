@@ -68,7 +68,7 @@ import {
 // processImageWithGemini is only called on user-triggered actions (camera capture),
 // so we lazy-import it inside the functions that use it.
 // import { processImageWithGemini } from './services/geminiService';
-import { createBundles, createUserBundle } from './services/bundleService';
+import { createBundles, createUserBundle, createBundleFromGroup } from './services/bundleService';
 import { initSync, isSyncEnabled } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset, saveArQueueItem, loadArQueue, clearArQueue } from './lib/indexeddb';
 // PERF FIX: Supabase-dependent services deferred from static imports.
@@ -1254,10 +1254,9 @@ export default function App() {
   }, [isGlobalView]);
 
   // C1 FIX: createBundles() runs O(n²) dedup (74K+ comparisons for 387 assets).
-  // Debounce to requestIdleCallback and cache by asset-ID fingerprint so it only
-  // re-runs when the actual set of assets changes, not on every reference change.
+  // PERF v2.16.2: Moved to Web Worker so the main thread is never blocked.
+  // Fingerprint check still runs on main thread (avoids posting when nothing changed).
   const bundleCacheRef = useRef<{ fingerprint: string; items: (DigitalAsset | ImageBundle)[] } | null>(null);
-  const bundleIdleRef = useRef<any>(null);
 
   useEffect(() => {
     if (!isLocalDataLoaded) return;
@@ -1272,65 +1271,90 @@ export default function App() {
     const processedAssets = assets.filter(a => !!a.sqlRecord);
     const processingAssets = assets.filter(a => !a.sqlRecord);
 
-    // Fast fingerprint: sorted asset IDs joined. If unchanged, skip O(n²) dedup entirely.
+    // Fast fingerprint: sorted asset IDs joined. If unchanged, skip entirely.
     const fingerprint = processedAssets.map(a => a.id).sort().join(',');
     if (bundleCacheRef.current?.fingerprint === fingerprint) {
-      // Asset set unchanged — reuse cached bundles, just update processing assets
       setDisplayItems([...processingAssets, ...bundleCacheRef.current.items]);
       setIsAppReady(true);
       return;
     }
 
-    // Show processing assets immediately (instant feedback), defer heavy bundling
+    // Show processing assets + raw assets immediately (instant feedback)
     setDisplayItems([...processingAssets, ...processedAssets]);
-    // PERF FIX: Mark app ready immediately so UI is interactive while bundling runs
     if (!isAppReady) setIsAppReady(true);
 
-    // Cancel any pending idle callback
-    if (bundleIdleRef.current !== null) {
-      if ('cancelIdleCallback' in window) {
-        (window as any).cancelIdleCallback(bundleIdleRef.current);
+    const worker = bundleWorkerRef.current;
+    if (!worker) {
+      // Fallback: run on main thread via idle callback if worker failed to create
+      const runBundling = () => {
+        const bundles = createBundles(processedAssets);
+        bundleCacheRef.current = { fingerprint, items: bundles };
+        setDisplayItems([...processingAssets, ...bundles]);
+      };
+      if ('requestIdleCallback' in window) {
+        (window as any).requestIdleCallback(runBundling, { timeout: 8000 });
       } else {
-        clearTimeout(bundleIdleRef.current);
+        setTimeout(runBundling, 500);
       }
+      return;
     }
 
-    const runBundling = () => {
-      const bundles = createBundles(processedAssets);
-      bundleCacheRef.current = { fingerprint, items: bundles };
-      setDisplayItems([...processingAssets, ...bundles]);
-      setIsAppReady(true);
-    };
+    // Post minimal asset data to the bundle worker
+    const gen = ++bundleGenRef.current;
+    const minAssets = processedAssets.map(a => {
+      const r = a.sqlRecord;
+      return {
+        id: a.id,
+        ocrText: a.ocrText,
+        location: a.location,
+        status: a.status,
+        sqlRecord: r ? {
+          DOCUMENT_TITLE: r.DOCUMENT_TITLE,
+          DOCUMENT_DESCRIPTION: r.DOCUMENT_DESCRIPTION,
+          ENTITIES_EXTRACTED: r.ENTITIES_EXTRACTED,
+          KEYWORDS_TAGS: r.KEYWORDS_TAGS,
+          SOURCE_COLLECTION: r.SOURCE_COLLECTION,
+          NLP_DERIVED_GIS_ZONE: r.NLP_DERIVED_GIS_ZONE,
+          LOCAL_GIS_ZONE: r.LOCAL_GIS_ZONE,
+          NLP_DERIVED_TIMESTAMP: r.NLP_DERIVED_TIMESTAMP,
+          CONFIDENCE_SCORE: r.CONFIDENCE_SCORE,
+          USER_BUNDLE_ID: r.USER_BUNDLE_ID,
+        } : null,
+        graphData: a.graphData ? { nodes: a.graphData.nodes.map(n => ({ id: n.id })) } : undefined,
+      };
+    });
 
-    if (!isAppReady) {
-      // PERF FIX: Always defer bundling — even on first render. Show raw assets
-      // immediately (setDisplayItems above) and run O(n²) dedup in idle callback.
-      // This avoids blocking the main thread for 200-800ms during initial paint.
-      if ('requestIdleCallback' in window) {
-        bundleIdleRef.current = (window as any).requestIdleCallback(() => {
-          runBundling();
-        }, { timeout: 8000 });
-      } else {
-        bundleIdleRef.current = setTimeout(runBundling, 500);
-      }
-    } else {
-      // Defer to idle so the sidebar / tab switch animation isn't blocked
-      if ('requestIdleCallback' in window) {
-        bundleIdleRef.current = (window as any).requestIdleCallback(runBundling, { timeout: 5000 });
-      } else {
-        bundleIdleRef.current = setTimeout(runBundling, 300);
-      }
-    }
+    worker.onmessage = (e: MessageEvent<{ gen: number; groups: any[]; singleIds: string[] }>) => {
+      if (e.data.gen !== gen) return; // stale result
 
-    return () => {
-      if (bundleIdleRef.current !== null) {
-        if ('cancelIdleCallback' in window) {
-          (window as any).cancelIdleCallback(bundleIdleRef.current);
-        } else {
-          clearTimeout(bundleIdleRef.current);
+      const assetMap = new Map(processedAssets.map(a => [a.id, a]));
+      const bundledItems: (DigitalAsset | ImageBundle)[] = [];
+
+      // Reconstruct full ImageBundle objects from worker's ID-based assignments
+      for (const group of e.data.groups) {
+        const groupAssets = group.assetIds.map((id: string) => assetMap.get(id)).filter(Boolean) as DigitalAsset[];
+        if (groupAssets.length === 0) continue;
+        try {
+          const bundle = createBundleFromGroup(groupAssets);
+          bundle.bundleId = group.bundleId;
+          if (group.isUserDefined) bundle.isUserDefined = true;
+          bundledItems.push(bundle);
+        } catch {
+          bundledItems.push(...groupAssets);
         }
       }
+
+      // Add singles
+      for (const id of e.data.singleIds) {
+        const asset = assetMap.get(id);
+        if (asset) bundledItems.push(asset);
+      }
+
+      bundleCacheRef.current = { fingerprint, items: bundledItems };
+      setDisplayItems([...processingAssets, ...bundledItems]);
     };
+
+    worker.postMessage({ gen, assets: minAssets });
   }, [assets, isLocalDataLoaded, isAppReady]);
 
   const handleAssetUpdate = async (updatedAsset: DigitalAsset) => {
@@ -2682,6 +2706,13 @@ export default function App() {
   const graphGenRef = useRef(0);
   const prevGraphInputKeyRef = useRef('');
 
+  // PERF v2.16.2: Bundle dedup computed in a Web Worker.
+  // findDuplicateClustersV2 runs O(n²) pair comparisons (~75K for 387 assets)
+  // with Levenshtein, n-gram, shingle, and phonetic operations — 10-50s on mobile.
+  // Moving to a worker keeps the UI responsive during sidebar / tab interactions.
+  const bundleWorkerRef = useRef<Worker | null>(null);
+  const bundleGenRef = useRef(0);
+
   // Create / destroy graph worker with component lifecycle
   useEffect(() => {
     try {
@@ -2695,6 +2726,22 @@ export default function App() {
     return () => {
       graphWorkerRef.current?.terminate();
       graphWorkerRef.current = null;
+    };
+  }, []);
+
+  // Create / destroy bundle worker with component lifecycle
+  useEffect(() => {
+    try {
+      bundleWorkerRef.current = new Worker(
+        new URL('./workers/bundleWorker.ts', import.meta.url),
+        { type: 'module' }
+      );
+    } catch {
+      bundleWorkerRef.current = null;
+    }
+    return () => {
+      bundleWorkerRef.current?.terminate();
+      bundleWorkerRef.current = null;
     };
   }, []);
 

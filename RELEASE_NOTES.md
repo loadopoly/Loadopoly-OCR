@@ -1,6 +1,13 @@
-# 🚀 GeoGraph Node: v2.16.1 Release Notes
+# 🚀 GeoGraph Node: v2.16.2 Release Notes
 
-## 🛡️ v2.16.1 — Workflow UX Fixes (2026-04-09)
+## ⚡ v2.16.2 — Fix 50-Second Sidebar Freeze (2026-04-08)
+
+- **Root cause**: O(n²) dedup (75K similarity comparisons) ran on the main thread via `requestIdleCallback`, blocking UI for up to 50s when sidebar was touched at ~10s
+- **Fix**: Created `bundleWorker.ts` — dedicated Web Worker for all dedup + bundling computation
+- **Result**: Main thread now only posts stripped asset data and receives ID-based assignments; zero O(n²) work on the UI thread
+- **Bundle impact**: +15KB async worker chunk, entry chunk unchanged
+
+## 🛡️ v2.16.1 — Workflow UX Fixes (2026-04-08)
 
 - **Camera error UI**: Permission denial shows full-screen error with icon, message, and retry button instead of black screen
 - **Unmount race fix**: Camera stream no longer leaks when user switches tabs during the permission dialog

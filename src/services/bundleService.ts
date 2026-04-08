@@ -149,7 +149,7 @@ const generateBundleKey = (asset: DigitalAsset, allAssets: DigitalAsset[]): stri
   return `title_${normalized.substring(0, 10)}_${era}`;
 };
 
-const createBundleFromGroup = (group: DigitalAsset[], preComputedMetadata?: ConsolidatedMetadata): ImageBundle => {
+export const createBundleFromGroup = (group: DigitalAsset[], preComputedMetadata?: ConsolidatedMetadata): ImageBundle => {
   if (!group || group.length === 0) throw new Error("Empty group passed to bundle creator");
 
   const resolveAssetImageUrl = (asset: DigitalAsset): string => {
