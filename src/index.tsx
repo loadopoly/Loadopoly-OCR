@@ -73,6 +73,17 @@ if ('serviceWorker' in navigator) {
 import('./lib/performanceMonitor').then(m => m.initPerformanceMonitoring());
 import('./lib/pwaUtils').then(m => m.initPWA());
 
+// iOS Safari standalone PWA: when the OS evicts the page from bfcache and
+// restores it, the page can appear blank (stale render, dead JS context).
+// A `pageshow` with `event.persisted` detects bfcache restoration — reload
+// the page to get a fresh React tree and live camera/network state.
+window.addEventListener('pageshow', (event) => {
+  if (event.persisted) {
+    console.log('[GeoGraph] Restored from bfcache — reloading for fresh state');
+    location.reload();
+  }
+});
+
 // PERF FIX: Start module bootstrap in background via dynamic import.
 // This breaks the static import chain that was pulling ~600KB of vendor libs
 // (supabase, google-genai, cluster-sync) into the entry chunk.
