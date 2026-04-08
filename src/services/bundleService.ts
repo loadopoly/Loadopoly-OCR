@@ -1,20 +1,16 @@
 import { DigitalAsset, ImageBundle, HistoricalDocumentMetadata, AssetStatus } from '../types';
-import { 
-  findDuplicateClustersV2, 
-  consolidateMetadataV2, 
-  ConsolidatedMetadata,
-  DEFAULT_CONFIG,
-  DeduplicationConfig 
-} from './deduplicationServiceV2';
+import type { ConsolidatedMetadata } from './deduplicationServiceV2';
 import { logger } from '../lib/logger';
 
-// Enhanced config for better recall
-const BUNDLE_DEDUP_CONFIG: DeduplicationConfig = {
-  ...DEFAULT_CONFIG,
-  threshold: 0.40, // Lower threshold for more aggressive bundling
-};
+// PERF v2.16.3: deduplicationServiceV2 is NOT imported statically.
+// It was pulling 1000+ lines of string algorithms into the App chunk parse path,
+// blocking the main thread for hundreds of ms on startup. Now dynamically imported
+// inside createBundles() (which is only the fallback — the worker handles the normal path).
 
-export const createBundles = (assets: DigitalAsset[]): (DigitalAsset | ImageBundle)[] => {
+export const createBundles = async (assets: DigitalAsset[]): Promise<(DigitalAsset | ImageBundle)[]> => {
+  const { findDuplicateClustersV2, DEFAULT_CONFIG } = await import('./deduplicationServiceV2');
+  const BUNDLE_DEDUP_CONFIG = { ...DEFAULT_CONFIG, threshold: 0.40 };
+
   const bundles: Record<string, DigitalAsset[]> = {};
   const singles: DigitalAsset[] = [];
 

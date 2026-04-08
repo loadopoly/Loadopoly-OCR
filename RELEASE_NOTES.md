@@ -1,4 +1,11 @@
-# 🚀 GeoGraph Node: v2.16.2 Release Notes
+# 🚀 GeoGraph Node: v2.16.3 Release Notes
+
+## ⚡ v2.16.3 — Fix Startup Freeze & Batch Panel Navigation (2026-04-08)
+
+- **Bundle worker was crashing**: `deduplicationServiceV2` → `../types` → `lucide-react` → React = undefined in Worker. Changed to `import type` (erased at compile time) + dynamic import in worker
+- **App chunk bloat**: Dedup module (1000+ lines) was statically imported via `bundleService.ts`. Moved to dynamic import — App chunk shrank 10KB
+- **Worker format**: Added `worker.format: 'es'` to Vite config so dynamic imports work in workers
+- **Batch panel close**: Removed forced navigation to dashboard; stays on AR Scanner as expected (instant close)
 
 ## ⚡ v2.16.2 — Fix 50-Second Sidebar Freeze (2026-04-08)
 

@@ -9,6 +9,11 @@ const __dirname = dirname(__filename);
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Workers must use ES module format to support dynamic import() for code-splitting.
+  // Default 'iife' format cannot split chunks (needed for deduplicationServiceV2 in bundleWorker).
+  worker: {
+    format: 'es',
+  },
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),

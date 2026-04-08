@@ -6,24 +6,22 @@
  * For ~387 assets this performs ~75K similarity calculations
  * (Levenshtein, n-gram, shingle, phonetic) — 10-50s on mobile.
  *
+ * IMPORTANT: This worker must NOT import from '../types' (which pulls in
+ * lucide-react → React → crashes in Worker context). All types are defined
+ * locally as plain interfaces matching the shapes we receive via postMessage.
+ *
  * Protocol:
  *   Main→Worker  { gen, assets: MinBundleAsset[] }
- *   Worker→Main  { gen, assignments: BundleAssignment[] }
+ *   Worker→Main  { gen, groups: BundleGroupAssignment[], singleIds: string[] }
  */
 
-import {
-  findDuplicateClustersV2,
-  type DeduplicationConfig,
-} from '../services/deduplicationServiceV2';
-import type { DigitalAsset, AssetStatus } from '../types';
-
 // Minimal asset shape — only the fields dedup + bundling actually access.
-// Structured clone cost: ~300KB instead of ~2MB+ for full assets with blobs.
+// These are plain objects received via structured clone (no class instances).
 interface MinBundleAsset {
   id: string;
   ocrText?: string;
   location?: { latitude: number; longitude: number };
-  status: AssetStatus;
+  status: string;
   sqlRecord: {
     DOCUMENT_TITLE?: string;
     DOCUMENT_DESCRIPTION?: string;
@@ -68,16 +66,7 @@ interface BundleWorkerResult {
 
 // ---------- Bundling logic (mirrors bundleService.ts but returns IDs only) ----------
 
-const BUNDLE_DEDUP_CONFIG: DeduplicationConfig = {
-  threshold: 0.40,
-  titleWeight: 3,
-  entityWeight: 4,
-  semanticWeight: 3.5,
-  temporalWeight: 3,
-  spatialWeight: 2,
-  usePhonetic: true,
-  useNgrams: true,
-};
+// ---------- Bundling logic (mirrors bundleService.ts but returns IDs only) ----------
 
 function extractYear(ts: string | null | undefined): number {
   if (!ts) return 9999;
@@ -119,8 +108,13 @@ function generateBundleKey(asset: MinBundleAsset, allAssets: MinBundleAsset[]): 
   return `title_${normalized.substring(0, 10)}_${era}`;
 }
 
-self.onmessage = (e: MessageEvent<BundleWorkerRequest>) => {
+self.onmessage = async (e: MessageEvent<BundleWorkerRequest>) => {
   const { gen, assets } = e.data;
+
+  // Dynamic import avoids pulling ../types → lucide-react → React into the worker.
+  // deduplicationServiceV2 is self-contained once we pass plain objects.
+  const { findDuplicateClustersV2, DEFAULT_CONFIG } = await import('../services/deduplicationServiceV2');
+  const BUNDLE_DEDUP_CONFIG = { ...DEFAULT_CONFIG, threshold: 0.40 };
 
   const groups: BundleGroupAssignment[] = [];
   const singleIds: string[] = [];
@@ -131,7 +125,7 @@ self.onmessage = (e: MessageEvent<BundleWorkerRequest>) => {
 
   // PHASE 1: Enhanced semantic deduplication (the O(n²) heavy operation)
   const dedupResult = findDuplicateClustersV2(
-    autoBundleAssets as unknown as DigitalAsset[],
+    autoBundleAssets as any[],
     BUNDLE_DEDUP_CONFIG,
   );
 
@@ -148,8 +142,8 @@ self.onmessage = (e: MessageEvent<BundleWorkerRequest>) => {
 
   // PHASE 2: Traditional bundling for unique assets
   const traditionalBuckets: Record<string, string[]> = {};
-  dedupResult.uniqueAssets.forEach(asset => {
-    const ma = asset as unknown as MinBundleAsset;
+  dedupResult.uniqueAssets.forEach((asset: any) => {
+    const ma = asset as MinBundleAsset;
     const key = generateBundleKey(ma, dedupResult.uniqueAssets as unknown as MinBundleAsset[]);
     if (key && ma.sqlRecord?.CONFIDENCE_SCORE && ma.sqlRecord.CONFIDENCE_SCORE > 0.6) {
       if (!traditionalBuckets[key]) traditionalBuckets[key] = [];

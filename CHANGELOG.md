@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.16.3] - 2026-04-08
+
+### Fix Startup Freeze & Batch Panel Navigation
+
+**Problem 1 — Startup freeze:** The v2.16.2 bundle worker was DOA. `deduplicationServiceV2` statically imports `DigitalAsset` from `../types/index.ts`, which imports `lucide-react`, which imports React — undefined in a Worker context. The worker crashed silently on module load, the `onerror` handler was missing, and the fallback ran the full O(n²) dedup on the main thread. Additionally, `bundleService.ts` was statically imported in `App.tsx`, pulling the entire 1000-line dedup module into the App chunk parse path (~10KB gzip), blocking the main thread for hundreds of ms even before any bundling ran.
+
+**Fix:**
+- Changed `deduplicationServiceV2.ts` to use `import type` for `DigitalAsset` (erased at compile time, breaks the lucide-react cascade)
+- Changed `bundleService.ts` to dynamically import `deduplicationServiceV2` inside `createBundles()` (no longer in the App chunk parse path)
+- Changed `bundleWorker.ts` to dynamically import dedup at message time with async `onmessage`
+- Added `worker.format: 'es'` to Vite config (IIFE workers can't do dynamic imports)
+- Added `onerror` handler on the Worker to null out the ref on crash (triggers fallback)
+- Removed `createBundles` from static import — only `createBundleFromGroup` and `createUserBundle` imported statically (neither touches dedup at runtime)
+
+**Result:** App chunk shrank from 186.93KB → 177.14KB (−10KB). Dedup module is now a separate 10.69KB async chunk, only loaded by the worker. Worker initializes correctly.
+
+**Problem 2 — Batch panel close from AR took 20s:** v2.16.1 routed to `dashboard` on batch panel close, which triggers heavy asset card rendering + thumbnails + signed URL resolution.
+
+**Fix:** Removed the dashboard navigation on batch panel close. When dismissed from AR, user stays on AR Scanner as expected. Instant close.
+
 ## [2.16.2] - 2026-04-08
 
 ### Fix 50-Second Sidebar Freeze — Bundle Dedup Moved to Web Worker

@@ -15,7 +15,7 @@
  * - "Fuzzy String Matching" (Navarro, 2001)
  */
 
-import { DigitalAsset } from '../types';
+import type { DigitalAsset } from '../types';
 import { logger } from '../lib/logger';
 
 // ============================================
