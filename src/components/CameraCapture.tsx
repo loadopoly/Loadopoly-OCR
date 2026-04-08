@@ -28,6 +28,46 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
     };
   }, [stream]);
 
+  // Handle app background/resume: stop dead camera on hide, restart on resume.
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        if (stream) {
+          stream.getTracks().forEach(t => t.stop());
+          setStream(null);
+        }
+      } else if (document.visibilityState === 'visible' && videoRef.current) {
+        // Restart camera when app resumes
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false,
+        }).then(newStream => {
+          const track = newStream.getVideoTracks()[0];
+          const caps = track.getCapabilities() as any;
+          if (caps.zoom) {
+            setZoomSupported(true);
+            setZoomRange({ min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step });
+            setZoom(caps.zoom.min);
+          } else {
+            setZoomSupported(false);
+          }
+          setStream(newStream);
+          if (videoRef.current) {
+            videoRef.current.srcObject = newStream;
+            videoRef.current.play();
+          }
+        }).catch(err => {
+          console.error('Camera restart failed:', err);
+          alert('Camera could not restart. Please close and reopen.');
+          setIsOpen(false);
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [isOpen, stream, facingMode]);
+
   useEffect(() => {
     if (stream && zoomSupported) {
       const track = stream.getVideoTracks()[0];

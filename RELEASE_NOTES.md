@@ -1,4 +1,10 @@
-# 🚀 GeoGraph Node: v2.16.3 Release Notes
+# 🚀 GeoGraph Node: v2.16.4 Release Notes
+
+## 📱 v2.16.4 — Fix Blank Screen on App Resume (2026-04-08)
+
+- **Camera resume**: ARScene + CameraCapture now handle `visibilitychange` — stop dead stream on hide, restart camera on resume. No more black screen.
+- **iOS bfcache**: Added `pageshow` handler in entry point — detects stale bfcache restoration and forces clean reload.
+- **Cleanup**: Removed duplicate camera error UI block in ARScene.
 
 ## ⚡ v2.16.3 — Fix Startup Freeze & Batch Panel Navigation (2026-04-08)
 

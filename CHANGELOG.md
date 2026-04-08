@@ -3,6 +3,19 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.16.4] - 2026-04-08
+
+### Fix Blank Screen on App Resume
+
+**Problem:** When the user switches to another app or locks their phone, the OS kills camera media tracks. On return, the video element renders a dead black frame inside the `bg-black` AR/Camera overlay, which looks like a completely blank screen. There was no `visibilitychange` handler in either camera component to detect this.
+
+Additionally, iOS Safari can restore standalone PWA pages from bfcache in a stale/blank state. No `pageshow` handler existed to detect this.
+
+**Fixes:**
+- **ARScene.tsx**: Added `visibilitychange` handler — stops the dead stream on hide, reinitialises camera on resume. Cleaned up duplicate camera error UI block.
+- **CameraCapture.tsx**: Added matching `visibilitychange` handler — stops stream on hide, restarts with current `facingMode` on resume.
+- **index.tsx**: Added `pageshow` handler — detects bfcache restoration (`event.persisted`) and forces a clean reload.
+
 ## [2.16.3] - 2026-04-08
 
 ### Fix Startup Freeze & Batch Panel Navigation

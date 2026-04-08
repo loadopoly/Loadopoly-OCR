@@ -104,6 +104,53 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
     streamRef.current = stream;
   }, [stream]);
 
+  // Handle app background/resume: the OS kills camera tracks when the app is
+  // hidden. On resume the video element shows a black frame (looks like a blank
+  // screen). We stop the dead stream on hide and reinitialise it on resume.
+  useEffect(() => {
+    if (showSafetyWarning) return;
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        // Proactively release camera — the OS may have already killed it
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(t => t.stop());
+          streamRef.current = null;
+          setStream(null);
+        }
+      } else if (document.visibilityState === 'visible') {
+        // Reinitialise camera on resume
+        if (unmountedRef.current) return;
+        setCameraError(null);
+        navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+          audio: false,
+        }).then(newStream => {
+          if (unmountedRef.current) { newStream.getTracks().forEach(t => t.stop()); return; }
+          streamRef.current = newStream;
+          setStream(newStream);
+          const track = newStream.getVideoTracks()[0];
+          const caps = track.getCapabilities() as any;
+          if (caps.zoom) {
+            setZoomSupported(true);
+            setZoomRange({ min: caps.zoom.min, max: caps.zoom.max, step: caps.zoom.step });
+            setZoom(caps.zoom.min);
+          }
+          if (videoRef.current) {
+            videoRef.current.srcObject = newStream;
+            videoRef.current.play();
+          }
+        }).catch(err => {
+          if (unmountedRef.current) return;
+          setCameraError(`Camera could not restart: ${(err as Error).message || 'Unknown error'}`);
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [showSafetyWarning]);
+
   useEffect(() => {
       if (stream && zoomSupported) {
           const track = stream.getVideoTracks()[0];
@@ -142,21 +189,6 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
       {showSafetyWarning && <ARSafetyWarning onAccept={() => setShowSafetyWarning(false)} />}
       
       <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
-
-      {/* Camera Error State */}
-      {cameraError && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-900/95 z-30 p-8 text-center" role="alert">
-          <CameraOff size={48} className="text-red-400 mb-4" />
-          <p className="text-lg font-semibold text-white mb-2">Camera Unavailable</p>
-          <p className="text-sm text-slate-400 max-w-sm mb-6">{cameraError}</p>
-          <button
-            onClick={() => { setCameraError(null); setShowSafetyWarning(true); }}
-            className="px-6 py-2.5 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors"
-          >
-            Try Again
-          </button>
-        </div>
-      )}
 
       {/* Camera Error State */}
       {cameraError && (
