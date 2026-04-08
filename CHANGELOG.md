@@ -3,6 +3,25 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.16.2] - 2026-04-08
+
+### Fix 50-Second Sidebar Freeze — Bundle Dedup Moved to Web Worker
+
+**Root Cause:** `createBundles()` → `findDuplicateClustersV2()` runs O(n²) pair comparisons (~75K for 387 assets) with Levenshtein, n-gram, shingle, and phonetic similarity calculations. This ran on the main thread via `requestIdleCallback` with a forced timeout at 5-8 seconds. When the user touched the sidebar at ~10s, the callback fired during the React re-render cycle, blocking the UI for up to 50 seconds on mobile.
+
+**Fix:** Created `bundleWorker.ts` — a dedicated Web Worker that offloads the entire dedup + bundling computation. The main thread only does:
+1. Fingerprint check (skip if asset set unchanged)
+2. Strip assets to minimal fields needed for dedup (~300KB vs ~2MB)
+3. Post to worker, receive ID-based assignments
+4. Reconstruct `ImageBundle` objects from the assignments (fast — no O(n²))
+
+**Files:**
+- `src/workers/bundleWorker.ts` — New worker: imports deduplicationServiceV2, runs findDuplicateClustersV2 + traditional bundling, returns ID-based group assignments
+- `src/App.tsx` — Replaced requestIdleCallback-based bundling with worker-based approach; added bundleWorkerRef lifecycle; fallback to main-thread if worker creation fails
+- `src/services/bundleService.ts` — Exported `createBundleFromGroup` for main-thread bundle reconstruction
+
+**Bundle impact:** +15KB worker chunk (self-contained, loaded async). Entry chunk unchanged (3.38KB gzip). App chunk +0.34KB gzip.
+
 ## [2.16.1] - 2026-04-09
 
 ### Workflow UX Fixes
