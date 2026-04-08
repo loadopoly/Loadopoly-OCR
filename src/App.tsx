@@ -68,7 +68,11 @@ import {
 // processImageWithGemini is only called on user-triggered actions (camera capture),
 // so we lazy-import it inside the functions that use it.
 // import { processImageWithGemini } from './services/geminiService';
-import { createBundles, createUserBundle, createBundleFromGroup } from './services/bundleService';
+// PERF v2.16.3: createBundles NOT statically imported — it pulls deduplicationServiceV2
+// (1000+ lines of string algorithms) into the App chunk, blocking parse.
+// Only createUserBundle + createBundleFromGroup are needed on the main thread;
+// they don't depend on dedup at runtime.
+import { createUserBundle, createBundleFromGroup } from './services/bundleService';
 import { initSync, isSyncEnabled } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset, saveArQueueItem, loadArQueue, clearArQueue } from './lib/indexeddb';
 // PERF FIX: Supabase-dependent services deferred from static imports.
@@ -1285,16 +1289,17 @@ export default function App() {
 
     const worker = bundleWorkerRef.current;
     if (!worker) {
-      // Fallback: run on main thread via idle callback if worker failed to create
-      const runBundling = () => {
-        const bundles = createBundles(processedAssets);
+      // Fallback: dynamic import + run on main thread if worker failed to create
+      const runBundling = async () => {
+        const { createBundles } = await import('./services/bundleService');
+        const bundles = await createBundles(processedAssets);
         bundleCacheRef.current = { fingerprint, items: bundles };
         setDisplayItems([...processingAssets, ...bundles]);
       };
       if ('requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(runBundling, { timeout: 8000 });
+        (window as any).requestIdleCallback(() => runBundling(), { timeout: 8000 });
       } else {
-        setTimeout(runBundling, 500);
+        setTimeout(() => runBundling(), 500);
       }
       return;
     }
@@ -2732,10 +2737,17 @@ export default function App() {
   // Create / destroy bundle worker with component lifecycle
   useEffect(() => {
     try {
-      bundleWorkerRef.current = new Worker(
+      const w = new Worker(
         new URL('./workers/bundleWorker.ts', import.meta.url),
         { type: 'module' }
       );
+      // If the worker module fails to load (e.g. transitive import error),
+      // null out the ref so the fallback path runs instead of hanging.
+      w.onerror = () => {
+        console.warn('[bundleWorker] Worker crashed — falling back to main thread');
+        bundleWorkerRef.current = null;
+      };
+      bundleWorkerRef.current = w;
     } catch {
       bundleWorkerRef.current = null;
     }
@@ -4416,16 +4428,12 @@ export default function App() {
           <div className="fixed inset-4 md:inset-8 lg:inset-16 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => {
               setShowNewBatchPanel(false);
-              // If AR is active, navigate to dashboard so user sees results
-              // instead of returning to live camera with no feedback
-              if (activeTab === 'ar') setActiveTab('dashboard');
             }} />
             <div className="relative w-full max-w-4xl h-full max-h-[90vh]">
               <BatchProcessingPanel
                 onProcessItem={handleNewBatchProcess}
                 onClose={() => {
                   setShowNewBatchPanel(false);
-                  if (activeTab === 'ar') setActiveTab('dashboard');
                 }}
                 maxConcurrent={3}
                 defaultScanType={selectedScanType || ScanType.DOCUMENT}
