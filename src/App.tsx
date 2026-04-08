@@ -1725,21 +1725,41 @@ export default function App() {
         const scanType = (file as any).scanType || selectedScanType || ScanType.DOCUMENT;
         startUploadTracking();
 
-        // #3: Capture GPS coordinates at the moment of ingest so the edge function
-        // can associate the image with the exact location where it was taken.
+        // #3: Resolve best GPS coordinates for the image.
+        // Priority: EXIF GPS (embedded at shutter time) > device GPS (current position)
+        // Also track coordinate source for downstream trust decisions.
         let captureLocation: { lat: number; lng: number } | undefined;
-        if (navigator.geolocation) {
+        let coordinateSource: 'exif' | 'device-live' | 'device-delayed' | 'none' = 'none';
+
+        // Try EXIF GPS first (zero-cost, embedded in photo at capture time)
+        if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
+          try {
+            const { extractGpsFromExif } = await import('./lib/imageCompression');
+            const exifGps = await extractGpsFromExif(file);
+            if (exifGps) {
+              captureLocation = exifGps;
+              coordinateSource = 'exif';
+            }
+          } catch { /* EXIF extraction failed — continue to device GPS */ }
+        }
+
+        // Fall back to device GPS if no EXIF coordinates
+        if (!captureLocation && navigator.geolocation) {
           try {
             const pos = await new Promise<GeolocationPosition>((res, rej) =>
               navigator.geolocation.getCurrentPosition(res, rej, { timeout: 3000, maximumAge: 10000 })
             );
             captureLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+            // Check staleness: is the photo older than 30 seconds?
+            const photoAge = Date.now() - file.lastModified;
+            coordinateSource = photoAge > 30_000 ? 'device-delayed' : 'device-live';
           } catch { /* location unavailable — continue without it */ }
         }
         
         await processingQueueService.queueFile(file, {
           scanType,
           location: captureLocation,
+          coordinateSource,
           metadata: {
             DOCUMENT_TITLE: newAsset.sqlRecord?.DOCUMENT_TITLE,
             SOURCE_COLLECTION: source
@@ -1807,14 +1827,18 @@ export default function App() {
       
       onProgress(15, 'Getting location...');
       
-      // Get location
-      let location: { lat: number; lng: number } | null = null;
-      if (navigator.geolocation) {
+      // Resolve best GPS: EXIF (from compression) > device GPS
+      let location: { lat: number; lng: number } | null = compressionResult.gpsCoordinates || null;
+      let coordinateSource: 'exif' | 'device-live' | 'device-delayed' | 'none' = location ? 'exif' : 'none';
+
+      if (!location && navigator.geolocation) {
         try {
           const position = await new Promise<GeolocationPosition>((resolve, reject) => 
             navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 })
           );
           location = { lat: position.coords.latitude, lng: position.coords.longitude };
+          const photoAge = Date.now() - file.lastModified;
+          coordinateSource = photoAge > 30_000 ? 'device-delayed' : 'device-live';
         } catch (e) {}
       }
       
@@ -1833,6 +1857,7 @@ export default function App() {
             scanType,
             priority: 5,
             location: location || undefined,
+            coordinateSource,
             metadata: {
               DOCUMENT_TITLE: file.name,
               SOURCE_COLLECTION: 'AR Scanner / Batch Import'

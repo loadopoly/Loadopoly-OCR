@@ -8,6 +8,14 @@ export interface LocationData {
   accuracy: number;
 }
 
+/** Describes how GPS coordinates were obtained. Ordered by trust level. */
+export type CoordinateSource =
+  | 'exif'           // From photo EXIF data — highest trust
+  | 'device-live'    // Device GPS captured within 30s of photo — high trust
+  | 'device-delayed' // Device GPS captured >30s after photo — lower trust
+  | 'ai-inferred'    // Gemini visual inference — variable trust
+  | 'none';          // No coordinates available
+
 export enum AssetStatus {
   PENDING = 'PENDING',
   PROCESSING = 'PROCESSING',

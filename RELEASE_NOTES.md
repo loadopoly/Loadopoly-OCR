@@ -1,4 +1,19 @@
-# 🚀 GeoGraph Node: v2.15.6 Release Notes
+# 🚀 GeoGraph Node: v2.16.0 Release Notes
+
+## 🌍 v2.16.0 — EXIF GPS Extraction & Coordinate Source Tracking (2026-04-08)
+
+### 🎯 Overview
+Photos uploaded after a delay (gallery picks, offline batch imports, processing queue backlog) previously received the user's **current** GPS, not where the photo was **taken**. The EXIF GPS parser — scaffolded but stubbed out — now fully extracts capture-time coordinates from JPEG EXIF data. A new `CoordinateSource` type lets downstream consumers (dedup, knowledge graph, marketplace) make trust-aware decisions about coordinate quality.
+
+#### Key Changes
+- **EXIF GPS parser** implemented: reads TIFF IFD0 → GPS IFD, extracts rational lat/lng values, handles LE/BE byte order. Zero new dependencies (~120 lines of DataView arithmetic)
+- **`CoordinateSource` type**: `'exif' | 'device-live' | 'device-delayed' | 'ai-inferred' | 'none'` — tracks provenance through the full pipeline
+- **Staleness detection**: `File.lastModified` compared to `Date.now()` — photos older than 30s are flagged as `device-delayed` when using device GPS
+- **Gemini geo-inference**: new `inferredCoordinates: { lat, lng, confidence }` field in the response schema; no-GPS prompt now instructs Gemini to estimate coordinates from visual cues
+- **Priority chain**: EXIF GPS → device GPS live → device GPS delayed → AI inference → none
+- **Bundle impact**: +0.27KB gzip to App.js. Entry path unchanged (88.2KB). No new chunks or dependencies.
+
+---
 
 ## ⚡ v2.15.6 — Web Worker Graph Construction (2026-04-07)
 
