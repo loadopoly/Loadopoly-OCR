@@ -748,8 +748,22 @@ export default function App() {
   // The heavy lifting is done by the direct Realtime subscription below
   useEffect(() => {
     if (user?.id) {
-      _pqsP.then(() => {
-        processingQueueService.init(user.id);
+      _pqsP.then(async () => {
+        await processingQueueService.init(user.id);
+        
+        // Reconcile local PROCESSING assets with server results.
+        // syncLocalWithServerQueue (inside init) only checks processing_queue;
+        // reconcileWithServer also checks historical_documents_global where
+        // completed results actually live — recovers assets whose Realtime
+        // completion events were missed (e.g., browser closed mid-processing).
+        const reconcileResult = await processingQueueService.reconcileWithServer();
+        if (reconcileResult.recovered > 0 || reconcileResult.failed > 0 || reconcileResult.orphaned > 0) {
+          console.log(`[Reconcile] Recovered ${reconcileResult.recovered}, failed ${reconcileResult.failed}, orphaned ${reconcileResult.orphaned}`);
+          // Reload local assets to reflect reconciled state
+          const { loadAssets } = await import('./lib/indexeddb');
+          const refreshed = await loadAssets();
+          setLocalAssets(refreshed);
+        }
       
         // Lightweight callbacks for progress updates only
         processingQueueService.setCallbacks({
@@ -1631,7 +1645,7 @@ export default function App() {
     }
   };
 
-  // Concurrent restart of stuck assets - processes while resetting more
+  // Concurrent restart of stuck assets - reconciles with server first, then reprocesses remaining
   const restartStuckAssets = useCallback(async () => {
     const stuckAssets = localAssets.filter(a => 
       a.status === AssetStatus.PROCESSING && (a.imageBlob || a.imageUrl?.startsWith('http'))
@@ -1639,10 +1653,45 @@ export default function App() {
     
     if (stuckAssets.length === 0) return 0;
     
-    console.log(`[AutoRestart] Found ${stuckAssets.length} stuck assets - starting concurrent recovery`);
+    console.log(`[AutoRestart] Found ${stuckAssets.length} stuck assets - trying server reconciliation first`);
     announce(`Recovering ${stuckAssets.length} stuck item${stuckAssets.length !== 1 ? 's' : ''}...`);
     
-    // Process in concurrent batches - reset a few, process them, continue
+    // Phase 1: Try reconciling with server — many may already be completed there
+    try {
+      await _pqsP;
+      const reconcileResult = await processingQueueService.reconcileWithServer();
+      if (reconcileResult.recovered > 0 || reconcileResult.failed > 0) {
+        console.log(`[AutoRestart] Server reconciliation: ${reconcileResult.recovered} recovered, ${reconcileResult.failed} failed, ${reconcileResult.orphaned} orphaned`);
+        // Reload local assets to reflect reconciled state
+        const { loadAssets: reloadAssets } = await import('./lib/indexeddb');
+        const refreshed = await reloadAssets();
+        setLocalAssets(refreshed);
+        
+        // If all were reconciled, we're done
+        const stillStuck = refreshed.filter(a => 
+          a.status === AssetStatus.PROCESSING && (a.imageBlob || a.imageUrl?.startsWith('http'))
+        );
+        if (stillStuck.length === 0) {
+          announce(`Recovered ${reconcileResult.recovered} items from server. All items reconciled.`);
+          return reconcileResult.recovered + reconcileResult.failed;
+        }
+        
+        announce(`Recovered ${reconcileResult.recovered} from server. Processing ${stillStuck.length} remaining locally...`);
+      }
+    } catch (e) {
+      console.warn('[AutoRestart] Server reconciliation failed, falling back to local processing:', e);
+    }
+    
+    // Phase 2: Re-check for still-stuck assets after reconciliation
+    const { loadAssets: reloadAssets2 } = await import('./lib/indexeddb');
+    const currentAssets = await reloadAssets2();
+    const remainingStuck = currentAssets.filter(a => 
+      a.status === AssetStatus.PROCESSING && (a.imageBlob || a.imageUrl?.startsWith('http'))
+    );
+    
+    if (remainingStuck.length === 0) return stuckAssets.length;
+    
+    // Phase 3: Process remaining stuck assets locally (original behavior)
     const CONCURRENT_RESET = 3; // Match MAX_CONCURRENT_BATCH_JOBS
     let restarted = 0;
     let activeProcessing = 0;
@@ -1677,20 +1726,20 @@ export default function App() {
       }
     };
     
-    // Process all stuck assets with concurrency limit
-    for (let i = 0; i < stuckAssets.length; i++) {
+    // Process all remaining stuck assets with concurrency limit
+    for (let i = 0; i < remainingStuck.length; i++) {
       // Wait if at capacity
       while (activeProcessing >= CONCURRENT_RESET) {
         await new Promise(r => setTimeout(r, 200));
       }
       
-      const asset = stuckAssets[i];
+      const asset = remainingStuck[i];
       // Don't await - fire and continue to next
       processOne(asset);
       restarted++;
       
       // Small stagger to prevent overwhelming
-      if (i < stuckAssets.length - 1) {
+      if (i < remainingStuck.length - 1) {
         await new Promise(r => setTimeout(r, 50));
       }
     }

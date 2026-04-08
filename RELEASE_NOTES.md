@@ -1,4 +1,17 @@
-# 🚀 GeoGraph Node: v2.16.4 Release Notes
+# 🚀 GeoGraph Node: v2.17.0 Release Notes
+
+## 🔄 v2.17.0 — Server Queue Reconciliation & Processing Pipeline Hardening (2026-04-09)
+
+- **Root cause**: Browser close/refresh during server processing lost Realtime completion events — only React state was updated, not IndexedDB. Completed assets reverted to PROCESSING on reload (e.g., 58 phantom stuck items)
+- **New `reconcileWithServer()`**: Queries `historical_documents_global` + `processing_queue` for stuck local assets; recovers completed results, marks server failures, resets orphans to PENDING
+- **IndexedDB persistence**: All Realtime status changes (PROCESSING/COMPLETED/FAILED) now immediately persisted to IndexedDB via new `persistJob*ToIndexedDB()` methods
+- **Startup reconciliation**: App init now runs server reconciliation after queue init; `restartStuckAssets()` tries server recovery before local reprocessing
+- **serverJobId fix**: `requeueLocalAssets()` now saves actual `job.id` (was saving `asset.id`), writes PROCESSING only after server calls succeed, deduplicates by asset ID
+- **Stats accuracy**: `getStats()` deduplicates all 4 statuses by ASSET_ID, excludes CANCELLED; `syncLocalWithServerQueue()` uses dual lookup (jobById + assetId)
+- **Channel cleanup**: `destroy()` uses `supabase.removeChannel()` instead of `.unsubscribe()` (prevents channel leaks)
+- **Periodic reconciliation**: Every 3 minutes during continuous processing
+- **UI**: New "Reconcile with Server" button in QueueMonitor; clearer "tracked locally" label; fixed log spam from BatchProcessingPanel re-renders
+- **Files**: 5 files, +395 -45 lines
 
 ## 📱 v2.16.4 — Fix Blank Screen on App Resume (2026-04-08)
 

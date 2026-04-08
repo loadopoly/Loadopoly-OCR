@@ -3,6 +3,37 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.17.0] - 2026-04-09
+
+### Server Queue Reconciliation & Processing Pipeline Hardening
+
+**Problem:** When the browser was closed or refreshed while assets were being processed on the server, completion events delivered via Supabase Realtime were lost. The `onJobCompleted` callback only updated React state — never IndexedDB. On reload, completed assets reverted to PROCESSING, inflating the "stuck assets" count (e.g., 58 phantom stuck items). `syncLocalWithServerQueue` only checked `processing_queue`, missing results in `historical_documents_global` where completed data actually lives.
+
+**Fixes — Persistence & Recovery:**
+- **processingQueueService.ts**: New `reconcileWithServer()` method queries `historical_documents_global` and `processing_queue` for stuck local assets, recovering completed results, marking server failures, and resetting true orphans to PENDING
+- **processingQueueService.ts**: New `persistJobStatusToIndexedDB()`, `persistJobCompletionToIndexedDB()`, `persistJobFailureToIndexedDB()` — all Realtime status changes (PROCESSING, COMPLETED, FAILED) now persisted to IndexedDB immediately, surviving page refresh
+- **App.tsx**: Startup init now calls `reconcileWithServer()` after queue init, reloads local assets if any were recovered
+- **App.tsx**: `restartStuckAssets()` tries server reconciliation first (Phase 1), re-checks for remaining stuck assets (Phase 2), then processes locally with concurrency limit (Phase 3)
+
+**Fixes — Data Accuracy:**
+- **processingQueueService.ts**: `requeueLocalAssets()` now saves actual `job.id` as `serverJobId` (was incorrectly saving `asset.id`), and writes PROCESSING status only AFTER server calls succeed (prevents orphaned PROCESSING on upload failure)
+- **processingQueueService.ts**: `requeueLocalAssets()` deduplicates by asset ID to prevent double-queuing
+- **processingQueueService.ts**: `getStats()` deduplicates all 4 statuses (PENDING, PROCESSING, COMPLETED, FAILED) by ASSET_ID and excludes CANCELLED jobs
+- **processingQueueService.ts**: `syncLocalWithServerQueue()` uses dual lookup (jobById + jobByAssetId) and includes FAILED in status filter
+
+**Fixes — Resource Cleanup & Stability:**
+- **processingQueueService.ts**: `destroy()` uses `supabase.removeChannel()` for proper Realtime channel cleanup (was using `.unsubscribe()` which leaks channels)
+- **processingQueueService.ts**: `enableContinuousProcessing()` adds periodic reconciliation every 3 minutes
+- **BatchProcessingPanel.tsx**: Stable refs for callback props prevent useEffect re-fires that spammed "Configuration updated: maxConcurrent=3" logs every render
+- **batchProcessorService.ts**: `configure()` skips if values unchanged
+
+**UI Improvements:**
+- **QueueMonitor.tsx**: New "Reconcile with Server" button appears when local items are tracked but server has no active jobs
+- **QueueMonitor.tsx**: Queue label changed from "X on server queue" to "X tracked locally (server: Y pending, Z active)" for clarity
+- **QueueMonitor.tsx**: Removed FAILED from "local pending" count (FAILED items are not pending)
+
+**Files changed:** 5 files, +395 -45 lines
+
 ## [2.16.4] - 2026-04-08
 
 ### Fix Blank Screen on App Resume

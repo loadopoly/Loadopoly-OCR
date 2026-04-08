@@ -181,7 +181,7 @@ class ProcessingQueueService {
       const localAssets = await loadAssets();
       const assetsWithServerJob = localAssets.filter(a => 
         a.serverJobId && 
-        (a.status === AssetStatus.PROCESSING || a.status === AssetStatus.PENDING)
+        (a.status === AssetStatus.PROCESSING || a.status === AssetStatus.PENDING || a.status === AssetStatus.FAILED)
       );
 
       if (assetsWithServerJob.length === 0) {
@@ -191,8 +191,10 @@ class ProcessingQueueService {
 
       logger.info(`Syncing ${assetsWithServerJob.length} local assets with server queue`);
 
-      // Get all jobs for this user (both by asset_id lookup)
+      // Get all jobs for this user
       const serverJobs = await this.getUserJobs({ limit: 500 });
+      // Index by both job ID and asset ID for flexible lookups
+      const jobById = new Map(serverJobs.map(j => [j.id, j]));
       const jobByAssetId = new Map(serverJobs.map(j => [j.assetId, j]));
 
       let synced = 0;
@@ -200,8 +202,8 @@ class ProcessingQueueService {
       let failed = 0;
 
       for (const asset of assetsWithServerJob) {
-        // Look up by asset.id (since serverJobId === asset.id in requeueLocalAssets)
-        const serverJob = jobByAssetId.get(asset.id);
+        // Try looking up by actual serverJobId first, fallback to asset.id
+        const serverJob = jobById.get(asset.serverJobId!) || jobByAssetId.get(asset.id);
         
         if (!serverJob) {
           // Job not found on server - may have expired, been deleted, or failed to create
@@ -256,6 +258,127 @@ class ProcessingQueueService {
     } catch (error: any) {
       logger.error('Failed to sync local assets with server queue', error);
       return { synced: 0, completed: 0, failed: 0 };
+    }
+  }
+
+  /**
+   * Reconcile local PROCESSING assets with server results.
+   * Unlike syncLocalWithServerQueue (which only checks processing_queue),
+   * this checks historical_documents_global — where completed results actually live.
+   * Fixes the scenario where browser closed before Realtime delivered completion events.
+   */
+  async reconcileWithServer(): Promise<{ recovered: number; failed: number; orphaned: number; details: string[] }> {
+    if (!isSupabaseConfigured() || !this.userId || !supabase) {
+      logger.debug('Cannot reconcile with server: not configured or not logged in');
+      return { recovered: 0, failed: 0, orphaned: 0, details: [] };
+    }
+
+    try {
+      const localAssets = await loadAssets();
+      // Include assets with serverJobId that are stuck, AND assets in PROCESSING
+      // without serverJobId (from older code that set serverJobId = asset.id, or
+      // assets where the server call failed silently)
+      const stuckAssets = localAssets.filter(a =>
+        (a.status === AssetStatus.PROCESSING || a.status === AssetStatus.PENDING) &&
+        (a.serverJobId || a.status === AssetStatus.PROCESSING)
+      );
+
+      if (stuckAssets.length === 0) {
+        logger.debug('No stuck local assets need reconciliation');
+        return { recovered: 0, failed: 0, orphaned: 0, details: [] };
+      }
+
+      logger.info(`Reconciling ${stuckAssets.length} stuck local assets with server results`);
+
+      // Batch-query historical_documents_global for these asset IDs
+      const assetIds = stuckAssets.map(a => a.id);
+      const { data: serverResults, error: fetchError } = await (supabase as any)
+        .from('historical_documents_global')
+        .select('*')
+        .eq('USER_ID', this.userId)
+        .in('ASSET_ID', assetIds);
+
+      if (fetchError) {
+        logger.error('Failed to query historical_documents_global for reconciliation', fetchError);
+        return { recovered: 0, failed: 0, orphaned: 0, details: [`Query error: ${fetchError.message}`] };
+      }
+
+      const serverResultMap = new Map<string, any>();
+      (serverResults || []).forEach((row: any) => {
+        // ASSET_ID is the correct key — it matches local asset IDs
+        if (row.ASSET_ID) {
+          serverResultMap.set(row.ASSET_ID, row);
+        }
+      });
+
+      // Also check processing_queue for FAILED jobs that never made it to results
+      const { data: failedJobs } = await (supabase as any)
+        .from(QUEUE_TABLE)
+        .select('ASSET_ID, LAST_ERROR, STATUS')
+        .eq('USER_ID', this.userId)
+        .in('ASSET_ID', assetIds)
+        .eq('STATUS', 'FAILED');
+
+      const failedJobMap = new Map<string, string>();
+      (failedJobs || []).forEach((row: any) => {
+        failedJobMap.set(row.ASSET_ID, row.LAST_ERROR || 'Server processing failed');
+      });
+
+      let recovered = 0;
+      let failed = 0;
+      let orphaned = 0;
+      const details: string[] = [];
+
+      for (const asset of stuckAssets) {
+        const serverResult = serverResultMap.get(asset.id);
+
+        if (serverResult) {
+          // Server has completed results — recover them into local IndexedDB
+          // Build a partial update from the server row
+          await saveAsset({
+            ...asset,
+            status: AssetStatus.MINTED,
+            progress: 100,
+            sqlRecord: {
+              ...asset.sqlRecord,
+              ...serverResult,
+            },
+          });
+          recovered++;
+          details.push(`${asset.id}: recovered from server (COMPLETED)`);
+          logger.debug(`Reconciled asset ${asset.id} as COMPLETED from historical_documents_global`);
+        } else if (failedJobMap.has(asset.id)) {
+          // Server has a FAILED job — update local status
+          const errorMsg = failedJobMap.get(asset.id)!;
+          await saveAsset({
+            ...asset,
+            status: AssetStatus.FAILED,
+            errorMessage: errorMsg,
+            progress: 0,
+          });
+          failed++;
+          details.push(`${asset.id}: server processing FAILED — ${errorMsg}`);
+          logger.debug(`Reconciled asset ${asset.id} as FAILED`);
+        } else {
+          // Not found in either table — truly orphaned
+          // Reset to PENDING so user can re-upload
+          await saveAsset({
+            ...asset,
+            status: AssetStatus.PENDING,
+            serverJobId: undefined,
+            progress: 0,
+          });
+          orphaned++;
+          details.push(`${asset.id}: orphaned — reset to PENDING`);
+          logger.debug(`Asset ${asset.id} orphaned, reset to PENDING`);
+        }
+      }
+
+      logger.info(`Reconciliation complete: ${recovered} recovered, ${failed} failed, ${orphaned} orphaned`);
+      return { recovered, failed, orphaned, details };
+    } catch (error: any) {
+      logger.error('Failed to reconcile with server', error);
+      return { recovered: 0, failed: 0, orphaned: 0, details: [`Error: ${error.message}`] };
     }
   }
 
@@ -529,11 +652,12 @@ class ProcessingQueueService {
     
     try {
       // Query the processing_queue table directly for accurate user-specific stats
-      // The queue_stats view doesn't filter by user and has case issues
+      // Exclude CANCELLED jobs and select only fields needed for stats
       const { data, error } = await (supabase as any)
         .from(QUEUE_TABLE)
-        .select('STATUS, CREATED_AT, STARTED_AT, COMPLETED_AT')
-        .eq('USER_ID', this.userId);
+        .select('STATUS, ASSET_ID, STARTED_AT, COMPLETED_AT')
+        .eq('USER_ID', this.userId)
+        .in('STATUS', ['PENDING', 'PROCESSING', 'COMPLETED', 'FAILED']);
       
       if (error) throw error;
       
@@ -548,9 +672,12 @@ class ProcessingQueueService {
       let totalProcessingTime = 0;
       let completedCount = 0;
       
-      // Track unique ASSET_IDs per active status to avoid counting duplicates
+      // Track unique ASSET_IDs per status to avoid counting duplicates
+      // (retried jobs create multiple rows for same asset)
       const seenPendingAssets = new Set<string>();
       const seenProcessingAssets = new Set<string>();
+      const seenCompletedAssets = new Set<string>();
+      const seenFailedAssets = new Set<string>();
       
       data?.forEach((row: any) => {
         // Handle both lowercase and uppercase column names
@@ -571,7 +698,10 @@ class ProcessingQueueService {
             }
             break;
           case 'COMPLETED':
-            stats.completed++;
+            if (!seenCompletedAssets.has(assetId)) {
+              seenCompletedAssets.add(assetId);
+              stats.completed++;
+            }
             // Calculate processing time if we have timestamps
             const startedAt = row.started_at || row.STARTED_AT;
             const completedAt = row.completed_at || row.COMPLETED_AT;
@@ -582,7 +712,10 @@ class ProcessingQueueService {
             }
             break;
           case 'FAILED':
-            stats.failed++;
+            if (!seenFailedAssets.has(assetId)) {
+              seenFailedAssets.add(assetId);
+              stats.failed++;
+            }
             break;
         }
       });
@@ -914,7 +1047,18 @@ class ProcessingQueueService {
    * Unsubscribe from all Realtime channels
    */
   destroy(): void {
-    this.subscriptions.forEach(sub => sub.unsubscribe());
+    // Properly remove channels from Supabase to prevent dangling subscriptions
+    if (supabase) {
+      this.subscriptions.forEach((channel) => {
+        try {
+          supabase!.removeChannel(channel);
+        } catch (e) {
+          // Channel may already be removed
+        }
+      });
+    } else {
+      this.subscriptions.forEach(sub => sub.unsubscribe());
+    }
     this.subscriptions.clear();
   }
 
@@ -1179,8 +1323,18 @@ class ProcessingQueueService {
     // Report initial progress
     onProgress?.(0, total, '');
     
+    // Deduplicate by asset ID to prevent double-queuing
+    const processedIds = new Set<string>();
+    
     for (let i = 0; i < assets.length; i++) {
       const asset = assets[i];
+      
+      if (processedIds.has(asset.id)) {
+        logger.debug(`Skipping duplicate asset ${asset.id}`);
+        onProgress?.(i + 1, total, asset.id);
+        continue;
+      }
+      processedIds.add(asset.id);
       
       try {
         let imageBlob = asset.imageBlob;
@@ -1220,35 +1374,33 @@ class ProcessingQueueService {
         // Create a File from the Blob
         const file = new File([imageBlob], `${asset.id}.jpg`, { type: imageBlob.type || 'image/jpeg' });
         
-        // Mark local asset as PROCESSING optimistically BEFORE server calls
-        // This prevents the partial-success window where server insert succeeds
-        // but local update fails, causing duplicate queue rows on retry
-        const localAsset = assetMap.get(asset.id);
-        if (localAsset) {
-          const updatedAsset: DigitalAsset = {
-            ...localAsset,
-            status: AssetStatus.PROCESSING,
-            serverJobId: asset.id, // Track that it's been queued
-            progress: 5, // Initial progress to show it's been sent
-          };
-          await saveAsset(updatedAsset);
-        }
-        
         // Upload to storage (upsert: true handles re-uploads gracefully)
         const imagePath = await this.uploadToStorage(asset.id, file);
         
         // Insert job into queue (cancels any existing active jobs for same asset)
-        await this.insertJob({
+        const job = await this.insertJob({
           assetId: asset.id,
           imagePath,
           scanType: (asset.scanType as ScanType) || ScanType.DOCUMENT,
           priority: 5,
         });
         
-        logger.debug(`Updated local asset ${asset.id} to PROCESSING`);
+        // Mark local asset as PROCESSING AFTER server calls succeed
+        // This avoids orphaned PROCESSING state if upload/insert fails
+        const localAsset = assetMap.get(asset.id);
+        if (localAsset) {
+          const updatedAsset: DigitalAsset = {
+            ...localAsset,
+            status: AssetStatus.PROCESSING,
+            serverJobId: job.id, // Track actual server job ID, not asset.id
+            progress: 5,
+          };
+          await saveAsset(updatedAsset);
+        }
+        
+        logger.debug(`Queued asset ${asset.id} with job ${job.id}`);
         
         results.queued++;
-        logger.debug(`Re-queued asset ${asset.id}`);
       } catch (error: any) {
         results.failed++;
         results.errors.push(`Asset ${asset.id}: ${error.message}`);
@@ -1340,6 +1492,11 @@ class ProcessingQueueService {
     
     switch (job.status) {
       case 'PROCESSING':
+        // Persist PROCESSING status so it survives page refresh
+        // (prevents re-queuing an asset that's already being processed)
+        this.persistJobStatusToIndexedDB(job.assetId, AssetStatus.PROCESSING, job.progress).catch(e =>
+          logger.debug('Failed to persist PROCESSING status to IndexedDB', { assetId: job.assetId })
+        );
         if (payload.old?.STATUS === 'PENDING') {
           this.callbacks.onJobStarted?.(job);
         } else {
@@ -1347,11 +1504,82 @@ class ProcessingQueueService {
         }
         break;
       case 'COMPLETED':
+        // Persist to IndexedDB immediately so completion survives page refresh
+        this.persistJobCompletionToIndexedDB(job).catch(e =>
+          logger.warn('Failed to persist job completion to IndexedDB', { jobId: job.id, error: e })
+        );
         this.callbacks.onJobCompleted?.(job);
         break;
       case 'FAILED':
+        // Persist failure to IndexedDB so status survives page refresh
+        this.persistJobFailureToIndexedDB(job).catch(e =>
+          logger.warn('Failed to persist job failure to IndexedDB', { jobId: job.id, error: e })
+        );
         this.callbacks.onJobFailed?.(job);
         break;
+    }
+  }
+
+  /**
+   * Persist a status change to IndexedDB for an asset.
+   * Prevents stale status after page refresh.
+   */
+  private async persistJobStatusToIndexedDB(assetId: string, status: AssetStatus, progress?: number): Promise<void> {
+    try {
+      const localAssets = await loadAssets();
+      const asset = localAssets.find(a => a.id === assetId);
+      if (asset && asset.status !== status) {
+        await saveAsset({
+          ...asset,
+          status,
+          progress: progress ?? asset.progress,
+        });
+      }
+    } catch (error) {
+      logger.debug('Error persisting job status to IndexedDB', { assetId });
+    }
+  }
+
+  /**
+   * Persist job completion status to IndexedDB.
+   * This ensures local state survives browser restart even if React callbacks are lost.
+   */
+  private async persistJobCompletionToIndexedDB(job: QueueJob): Promise<void> {
+    try {
+      const localAssets = await loadAssets();
+      const asset = localAssets.find(a => a.id === job.assetId);
+      if (asset && asset.status !== AssetStatus.MINTED) {
+        await saveAsset({
+          ...asset,
+          status: AssetStatus.MINTED,
+          progress: 100,
+          sqlRecord: job.resultData ? { ...asset.sqlRecord, ...job.resultData } as any : asset.sqlRecord,
+        });
+        logger.debug(`Persisted COMPLETED status to IndexedDB for asset ${job.assetId}`);
+      }
+    } catch (error) {
+      logger.error('Error persisting job completion to IndexedDB', { assetId: job.assetId, error });
+    }
+  }
+
+  /**
+   * Persist job failure status to IndexedDB.
+   */
+  private async persistJobFailureToIndexedDB(job: QueueJob): Promise<void> {
+    try {
+      const localAssets = await loadAssets();
+      const asset = localAssets.find(a => a.id === job.assetId);
+      if (asset && asset.status !== AssetStatus.FAILED) {
+        await saveAsset({
+          ...asset,
+          status: AssetStatus.FAILED,
+          errorMessage: job.error || 'Server processing failed',
+          progress: 0,
+        });
+        logger.debug(`Persisted FAILED status to IndexedDB for asset ${job.assetId}`);
+      }
+    } catch (error) {
+      logger.error('Error persisting job failure to IndexedDB', { assetId: job.assetId, error });
     }
   }
 
@@ -1733,6 +1961,18 @@ class ProcessingQueueService {
         }
       }
     }, pollingFallbackMs));
+
+    // Periodic reconciliation — check if local PROCESSING items have completed on server
+    intervals.push(setInterval(async () => {
+      try {
+        const result = await this.reconcileWithServer();
+        if (result.recovered > 0 || result.failed > 0) {
+          logger.info(`Periodic reconciliation: ${result.recovered} recovered, ${result.failed} failed, ${result.orphaned} orphaned`);
+        }
+      } catch (err) {
+        logger.debug('Periodic reconciliation check failed (non-critical)');
+      }
+    }, 180000)); // Every 3 minutes
 
     logger.info('Continuous processing monitoring enabled');
 

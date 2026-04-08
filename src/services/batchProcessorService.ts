@@ -136,6 +136,10 @@ class BatchProcessorService {
    * Configure the batch processor
    */
   configure(config: Partial<BatchProcessorConfig>): void {
+    const changed = Object.keys(config).some(
+      k => (config as any)[k] !== (this.config as any)[k]
+    );
+    if (!changed) return;
     this.config = { ...this.config, ...config };
     this.log(`Configuration updated: maxConcurrent=${this.config.maxConcurrent}`, 'info');
   }
