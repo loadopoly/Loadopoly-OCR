@@ -145,6 +145,15 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
     
     logger.info(`Service Worker registered: ${registration.scope}`);
     
+    // Pass Supabase config to SW so it can invoke Edge Functions directly
+    // when no app clients are alive (e.g., app killed on mobile)
+    if (navigator.serviceWorker.controller) {
+      sendEdgeConfigToSW();
+    }
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      sendEdgeConfigToSW();
+    });
+    
     // Get version from SW
     getServiceWorkerVersion();
     
@@ -176,6 +185,26 @@ export async function registerServiceWorker(): Promise<ServiceWorkerRegistration
   } catch (error) {
     logger.error('Service Worker registration failed', error instanceof Error ? error : undefined);
     return null;
+  }
+}
+
+/**
+ * Send Supabase Edge config to the Service Worker so it can invoke
+ * Edge Functions directly when no app clients are alive.
+ */
+function sendEdgeConfigToSW(): void {
+  try {
+    const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL;
+    const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY;
+    if (supabaseUrl && supabaseAnonKey && navigator.serviceWorker.controller) {
+      navigator.serviceWorker.controller.postMessage({
+        type: 'EDGE_CONFIG',
+        supabaseUrl,
+        supabaseAnonKey,
+      });
+    }
+  } catch (e) {
+    logger.debug('Failed to send edge config to SW');
   }
 }
 

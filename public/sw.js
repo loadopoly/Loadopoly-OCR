@@ -16,11 +16,15 @@
  * - Performance optimizations with preload hints
  */
 
-const CACHE_VERSION = '3.6.0';
+const CACHE_VERSION = '3.7.0';
 const CACHE_NAME = `geograph-v${CACHE_VERSION}`;
 const IMAGE_CACHE_NAME = `geograph-images-v${CACHE_VERSION}`;
 const API_CACHE_NAME = `geograph-api-v${CACHE_VERSION}`;
 const BUNDLE_CACHE_NAME = `geograph-bundles-v${CACHE_VERSION}`;
+
+// Edge Function config — passed from the app so the SW can invoke
+// Edge Functions directly when no clients (app windows) are alive.
+let edgeConfig = null;
 
 // Only cache truly static assets that don't change per build
 // IMPORTANT: Do NOT cache index.html - it references versioned JS bundles
@@ -309,15 +313,37 @@ self.addEventListener('sync', (event) => {
 });
 
 async function syncProcessingQueue() {
-  // Tell the main app to flush pending jobs and upload pending assets
+  // Try to delegate to an active app window first
   const clients = await self.clients.matchAll({ type: 'window' });
   if (clients.length > 0) {
     clients.forEach(client => {
       client.postMessage({ type: 'SYNC_QUEUE' });
     });
     log('Processing queue sync delegated to app');
+    return;
+  }
+  
+  // No active clients — invoke the Edge Function directly
+  // This is the critical path for when the app is killed/backgrounded on mobile
+  if (edgeConfig?.supabaseUrl && edgeConfig?.supabaseAnonKey) {
+    try {
+      const response = await fetch(
+        `${edgeConfig.supabaseUrl}/functions/v1/process-ocr`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${edgeConfig.supabaseAnonKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ maxJobs: 5, triggeredBy: 'service_worker' }),
+        }
+      );
+      log(`Edge Function invoked directly: ${response.status}`);
+    } catch (err) {
+      log('Direct Edge Function invocation failed:', err.message);
+    }
   } else {
-    log('No active clients for queue sync — will retry on next app open');
+    log('No active clients and no edge config — will retry on next app open');
   }
 }
 
@@ -449,5 +475,13 @@ self.addEventListener('message', (event) => {
         event.ports[0]?.postMessage({ success: true });
       })
     );
+  }
+  
+  if (event.data?.type === 'EDGE_CONFIG') {
+    edgeConfig = {
+      supabaseUrl: event.data.supabaseUrl,
+      supabaseAnonKey: event.data.supabaseAnonKey,
+    };
+    log('Edge config received');
   }
 });
