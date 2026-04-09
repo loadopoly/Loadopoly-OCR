@@ -462,11 +462,48 @@ export default function App() {
   }, [isOnline, localAssets]);
 
   // App resume: re-hydrate state from IndexedDB when the app comes back from background.
+  // Auto-upload PENDING assets that haven't been sent to server yet.
+  // Called on init, on visibility resume, and when the SW fires background sync.
+  const autoUploadPendingAssets = useCallback(async () => {
+    try {
+      await _pqsP;
+      const diag = processingQueueService.getDiagnostics();
+      if (!diag.canProcessServer) return; // Not logged in or offline
+      
+      const allAssets = await loadAssets();
+      const pendingNoServer = allAssets.filter(a =>
+        !a.serverJobId &&
+        (a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING) &&
+        (a.imageBlob || (a.imageUrl && !a.imageUrl.startsWith('blob:')))
+      );
+      
+      if (pendingNoServer.length === 0) return;
+      
+      console.log(`[AutoUpload] Found ${pendingNoServer.length} pending assets — uploading to server in background`);
+      const result = await processingQueueService.requeueLocalAssets(
+        pendingNoServer.map(a => ({
+          id: a.id,
+          imageBlob: a.imageBlob,
+          imageUrl: a.imageUrl,
+          scanType: a.scanType,
+        }))
+      );
+      
+      if (result.queued > 0 || (result as any).skippedRecovered > 0) {
+        console.log(`[AutoUpload] ${result.queued} queued, ${(result as any).skippedRecovered || 0} recovered, ${result.failed} failed`);
+        const refreshed = await loadAssets();
+        setLocalAssets(refreshed);
+      }
+    } catch (e) {
+      console.debug('[AutoUpload] Background upload failed (non-critical):', e);
+    }
+  }, []);
+
   // On Android, the PWA process may be killed; on return the entire React tree
   // remounts fresh which is fine. But if the process survives (tab hidden → visible),
   // we need to refresh data and reconnect subscriptions.
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    const handleVisibilityChange = async () => {
       if (document.visibilityState === 'visible') {
         // Refresh local data from IndexedDB (covers process-survived case)
         loadAssets().then(loaded => setLocalAssets(loaded)).catch(() => {});
@@ -474,11 +511,40 @@ export default function App() {
         import('./lib/auth').then(m => m.getCurrentUser()).then(({ data }) => {
           if (data.user) setUser(data.user);
         }).catch(() => {});
+        
+        // Background data operations on resume:
+        // 1. Reconcile with server — recover any completed results missed while in background
+        // 2. Auto-upload any pending assets that haven't been queued
+        // 3. Trigger Edge Function if jobs are pending
+        try {
+          await _pqsP;
+          const result = await processingQueueService.reconcileWithServer();
+          if (result.recovered > 0 || result.failed > 0 || result.orphaned > 0) {
+            console.log(`[Resume] Reconciled: ${result.recovered} recovered, ${result.failed} failed`);
+            const refreshed = await loadAssets();
+            setLocalAssets(refreshed);
+          }
+        } catch { /* non-critical */ }
+        
+        // Auto-upload anything pending
+        autoUploadPendingAssets();
       }
     };
+    
+    // Listen for Service Worker background sync requests
+    const handleSyncRequested = () => {
+      console.log('[SW-Sync] Background sync requested — flushing pending jobs and uploading');
+      autoUploadPendingAssets();
+      _pqsP.then(() => processingQueueService.flushPendingJobs()).catch(() => {});
+    };
+    
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
-  }, []);
+    window.addEventListener('geograph-sync-requested', handleSyncRequested);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('geograph-sync-requested', handleSyncRequested);
+    };
+  }, [autoUploadPendingAssets]);
 
   const startUploadTracking = useCallback((count = 1) => {
     setUploadProgress(prev => {
@@ -747,6 +813,8 @@ export default function App() {
   // Initialize Processing Queue Service with simplified callbacks
   // The heavy lifting is done by the direct Realtime subscription below
   useEffect(() => {
+    let continuousCleanup: (() => void) | undefined;
+    
     if (user?.id) {
       _pqsP.then(async () => {
         await processingQueueService.init(user.id);
@@ -764,6 +832,27 @@ export default function App() {
           const refreshed = await loadAssets();
           setLocalAssets(refreshed);
         }
+        
+        // Enable continuous background processing — health checks, stale lock
+        // release, local job flush, Realtime polling fallback, periodic reconciliation.
+        // This runs all data operations in the background automatically.
+        continuousCleanup = processingQueueService.enableContinuousProcessing({
+          healthCheckIntervalMs: 60000,    // Health check every 1 min
+          staleJobCheckIntervalMs: 300000, // Stale lock release every 5 min
+          pollingFallbackMs: 30000,        // Poll when Realtime fails
+        });
+        
+        // Auto-upload any PENDING assets that haven't been sent to server yet.
+        // This catches assets created while offline or from previous sessions.
+        autoUploadPendingAssets();
+        
+        // Register Service Worker background sync so queue processing
+        // continues even when the app is backgrounded on mobile.
+        import('./lib/pwaUtils').then(({ registerBackgroundSync, registerPeriodicSync }) => {
+          registerBackgroundSync('sync-queue').catch(() => {});
+          // Periodic sync: check for pending work every 15 minutes (minimum browser allows)
+          registerPeriodicSync('sync-queue', 15 * 60 * 1000).catch(() => {});
+        }).catch(() => {});
       
         // Lightweight callbacks for progress updates only
         processingQueueService.setCallbacks({
@@ -806,6 +895,9 @@ export default function App() {
         });
       });
     }
+    return () => {
+      continuousCleanup?.();
+    };
   }, [user?.id]);
 
   // Direct Realtime subscription to processing_queue for job updates

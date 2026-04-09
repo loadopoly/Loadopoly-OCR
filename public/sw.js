@@ -16,7 +16,7 @@
  * - Performance optimizations with preload hints
  */
 
-const CACHE_VERSION = '3.5.0';
+const CACHE_VERSION = '3.6.0';
 const CACHE_NAME = `geograph-v${CACHE_VERSION}`;
 const IMAGE_CACHE_NAME = `geograph-images-v${CACHE_VERSION}`;
 const API_CACHE_NAME = `geograph-api-v${CACHE_VERSION}`;
@@ -303,7 +303,23 @@ self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-contributions') {
     event.waitUntil(syncContributions());
   }
+  if (event.tag === 'sync-queue') {
+    event.waitUntil(syncProcessingQueue());
+  }
 });
+
+async function syncProcessingQueue() {
+  // Tell the main app to flush pending jobs and upload pending assets
+  const clients = await self.clients.matchAll({ type: 'window' });
+  if (clients.length > 0) {
+    clients.forEach(client => {
+      client.postMessage({ type: 'SYNC_QUEUE' });
+    });
+    log('Processing queue sync delegated to app');
+  } else {
+    log('No active clients for queue sync — will retry on next app open');
+  }
+}
 
 async function syncOfflineData() {
   // Notify clients that sync is happening
@@ -328,6 +344,9 @@ self.addEventListener('periodicsync', (event) => {
   }
   if (event.tag === 'check-notifications') {
     event.waitUntil(checkForNotifications());
+  }
+  if (event.tag === 'sync-queue') {
+    event.waitUntil(syncProcessingQueue());
   }
 });
 
