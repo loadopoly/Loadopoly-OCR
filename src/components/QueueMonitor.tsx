@@ -223,6 +223,9 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       // Save result for display
       setLastRequeueResult({ queued: result.queued, failed: result.failed, time: new Date() });
       
+      // Build result message
+      const recoveredCount = (result as any).skippedRecovered || 0;
+      
       // Show result with more context
       if (result.failed > 0) {
         // Group errors by type for cleaner display instead of listing each UUID
@@ -236,9 +239,13 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
         const groupedSummary = Array.from(errorGroups.entries())
           .map(([type, count]) => `  ${count}x: ${type}`)
           .join('\n');
-        alert(`Uploaded ${result.queued} to server queue. ${result.failed} failed.\n\nError summary:\n${groupedSummary}`);
-      } else if (result.queued > 0) {
-        alert(`✓ Successfully uploaded ${result.queued} items to server queue!\n\nCheck the "Waitlist" counter above - it should increase.\nJobs will be processed by the Edge Function.`);
+        const recoveredMsg = recoveredCount > 0 ? `\n\n✓ ${recoveredCount} already completed on server (recovered).` : '';
+        alert(`Uploaded ${result.queued} to server queue. ${result.failed} failed.${recoveredMsg}\n\nError summary:\n${groupedSummary}`);
+      } else if (result.queued > 0 || recoveredCount > 0) {
+        const parts = [];
+        if (result.queued > 0) parts.push(`${result.queued} uploaded to server queue`);
+        if (recoveredCount > 0) parts.push(`${recoveredCount} already completed (recovered from server)`);
+        alert(`✓ ${parts.join(', ')}!\n\nJobs will be processed by the Edge Function.`);
       } else {
         alert('No items were queued. All assets may be missing image data.');
       }

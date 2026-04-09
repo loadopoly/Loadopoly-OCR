@@ -1355,12 +1355,34 @@ class ProcessingQueueService {
       return { queued: 0, failed: assets.length, errors: ['Supabase not configured or user not logged in'] };
     }
 
-    const results = { queued: 0, failed: 0, errors: [] as string[] };
+    const results = { queued: 0, failed: 0, skippedRecovered: 0, errors: [] as string[] };
     const total = assets.length;
     
     // Load all local assets to get full objects for updating
     const localAssets = await loadAssets();
     const assetMap = new Map(localAssets.map(a => [a.id, a]));
+    
+    // Pre-check: batch-query historical_documents_global to see if any of these
+    // assets already have completed results (avoids re-uploading needlessly).
+    // This catches assets falsely orphaned by previous reconciliation bugs.
+    const alreadyCompleted = new Set<string>();
+    try {
+      const assetIds = assets.map(a => a.id);
+      const { data: existingResults } = await (supabase as any)
+        .from('historical_documents_global')
+        .select('ASSET_ID')
+        .eq('USER_ID', this.userId)
+        .in('ASSET_ID', assetIds);
+      
+      if (existingResults?.length) {
+        for (const row of existingResults) {
+          if (row.ASSET_ID) alreadyCompleted.add(row.ASSET_ID);
+        }
+        logger.info(`Pre-check: ${alreadyCompleted.size} of ${assetIds.length} assets already have server results`);
+      }
+    } catch (preCheckErr) {
+      logger.debug('Pre-check for existing results failed (non-critical), proceeding with requeue');
+    }
     
     // Report initial progress
     onProgress?.(0, total, '');
@@ -1377,6 +1399,44 @@ class ProcessingQueueService {
         continue;
       }
       processedIds.add(asset.id);
+      
+      // Skip if this asset already has completed results on the server
+      if (alreadyCompleted.has(asset.id)) {
+        const localAsset = assetMap.get(asset.id);
+        if (localAsset && localAsset.status !== AssetStatus.MINTED) {
+          // Recover the result — fetch the full row
+          try {
+            const { data: fullResult } = await (supabase as any)
+              .from('historical_documents_global')
+              .select('*')
+              .eq('USER_ID', this.userId)
+              .eq('ASSET_ID', asset.id)
+              .single();
+            
+            if (fullResult) {
+              await saveAsset({
+                ...localAsset,
+                status: AssetStatus.MINTED,
+                progress: 100,
+                sqlRecord: { ...localAsset.sqlRecord, ...fullResult },
+              });
+              results.skippedRecovered++;
+              logger.debug(`Asset ${asset.id} already completed on server — recovered results`);
+            }
+          } catch {
+            // Fall through to normal requeue
+            logger.debug(`Failed to recover existing result for ${asset.id}, will requeue`);
+            alreadyCompleted.delete(asset.id);
+          }
+        } else {
+          results.skippedRecovered++;
+        }
+        
+        if (alreadyCompleted.has(asset.id)) {
+          onProgress?.(i + 1, total, asset.id);
+          continue;
+        }
+      }
       
       try {
         let imageBlob = asset.imageBlob;
@@ -1407,8 +1467,21 @@ class ProcessingQueueService {
         }
         
         if (!imageBlob) {
+          // Last resort: try downloading from Supabase Storage (image may already be uploaded from previous session)
+          try {
+            const storageFile = await this.downloadFromStorage(asset.id);
+            if (storageFile) {
+              imageBlob = storageFile;
+              logger.debug(`Recovered image from Supabase Storage for ${asset.id}: ${imageBlob.size} bytes`);
+            }
+          } catch (storageErr: any) {
+            logger.warn(`Cannot download from storage for ${asset.id}: ${storageErr.message}`);
+          }
+        }
+        
+        if (!imageBlob) {
           results.failed++;
-          results.errors.push(`Asset ${asset.id}: No image available (blob missing and URL fetch failed)`);
+          results.errors.push(`Asset ${asset.id}: No image available (blob missing, URL fetch failed, storage download failed)`);
           onProgress?.(i + 1, total, asset.id);
           continue;
         }
