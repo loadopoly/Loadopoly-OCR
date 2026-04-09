@@ -390,6 +390,10 @@ export function initPWA(): void {
       // Dispatch custom event so App.tsx can trigger the processing queue
       window.dispatchEvent(new CustomEvent('geograph-sync-requested'));
     }
+    if (event.data?.type === 'SYNC_QUEUE') {
+      logger.info('Processing queue sync requested by Service Worker');
+      window.dispatchEvent(new CustomEvent('geograph-sync-requested'));
+    }
     if (event.data?.type === 'NOTIFICATION_CLICKED') {
       logger.info('Notification clicked', { module: 'pwa', data: event.data.data });
     }
