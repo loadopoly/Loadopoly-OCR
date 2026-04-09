@@ -117,9 +117,9 @@ class ProcessingQueueService {
   
   // Exponential backoff for realtime reconnection
   private reconnectAttempts: number = 0;
-  private readonly maxReconnectAttempts: number = 10;
+  private readonly maxReconnectAttempts: number = 50;
   private readonly baseReconnectDelay: number = 1000;
-  private readonly maxReconnectDelay: number = 30000;
+  private readonly maxReconnectDelay: number = 60000;
   
   /**
    * Calculate reconnect delay with exponential backoff and jitter
@@ -1102,6 +1102,11 @@ class ProcessingQueueService {
       this.subscriptions.forEach(sub => sub.unsubscribe());
     }
     this.subscriptions.clear();
+    // Stop polling fallback if active
+    if (this.pollingFallbackInterval) {
+      clearInterval(this.pollingFallbackInterval);
+      this.pollingFallbackInterval = null;
+    }
   }
 
   /**
@@ -1575,7 +1580,8 @@ class ProcessingQueueService {
             this.subscriptions.delete('user-jobs');
             
             if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-              logger.error('Max reconnection attempts reached, giving up');
+              logger.warn('Max reconnection attempts reached, switching to polling fallback');
+              this.startPollingFallback();
               return;
             }
             
@@ -1811,6 +1817,36 @@ class ProcessingQueueService {
       logger.error('Exception polling job status', { jobId, error: e });
       return null;
     }
+  }
+
+  /**
+  /**
+   * Start a polling fallback when Realtime subscription permanently fails.
+   * Polls active jobs every 15s and processes updates as if they came from Realtime.
+   */
+  private pollingFallbackInterval: ReturnType<typeof setInterval> | null = null;
+
+  private startPollingFallback(): void {
+    if (this.pollingFallbackInterval) return; // Already running
+    
+    logger.info('Starting polling fallback for Realtime (every 15s)');
+    this.pollingFallbackInterval = setInterval(async () => {
+      try {
+        const activeJobs = await this.pollActiveJobs();
+        for (const job of activeJobs) {
+          // Simulate Realtime update callbacks
+          if (job.status === 'COMPLETED') {
+            this.callbacks.onJobCompleted?.(job);
+          } else if (job.status === 'FAILED') {
+            this.callbacks.onJobFailed?.(job);
+          } else if (job.status === 'PROCESSING') {
+            this.callbacks.onJobProgress?.(job);
+          }
+        }
+      } catch (e) {
+        logger.debug('Polling fallback iteration failed (non-critical)');
+      }
+    }, 15000);
   }
 
   /**
@@ -2088,6 +2124,42 @@ class ProcessingQueueService {
         logger.debug('Periodic reconciliation check failed (non-critical)');
       }
     }, 180000)); // Every 3 minutes
+
+    // Continuous auto-upload — find PENDING assets without serverJobId and queue them
+    intervals.push(setInterval(async () => {
+      if (!this.isOnline || !this.userId) return;
+      try {
+        const localAssets = await loadAssets();
+        const needsUpload = localAssets.filter(a =>
+          !a.serverJobId &&
+          (a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING) &&
+          (a.imageBlob || (a.imageUrl && !a.imageUrl.startsWith('blob:')))
+        );
+        if (needsUpload.length > 0) {
+          logger.info(`[AutoUpload] Found ${needsUpload.length} unqueued assets — uploading`);
+          await this.requeueLocalAssets(
+            needsUpload.map(a => ({
+              id: a.id,
+              imageBlob: a.imageBlob,
+              imageUrl: a.imageUrl,
+              scanType: a.scanType,
+            }))
+          );
+        }
+      } catch (e) {
+        logger.debug('Continuous auto-upload check failed (non-critical)');
+      }
+    }, 30000)); // Every 30 seconds
+
+    // Edge Function keepalive — trigger processing if any PENDING jobs exist on server
+    intervals.push(setInterval(async () => {
+      if (!this.isOnline || !this.userId) return;
+      try {
+        this.triggerEdgeProcessing();
+      } catch (e) {
+        logger.debug('Edge keepalive trigger failed (non-critical)');
+      }
+    }, 120000)); // Every 2 minutes
 
     logger.info('Continuous processing monitoring enabled');
 
