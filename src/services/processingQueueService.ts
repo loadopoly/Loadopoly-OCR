@@ -267,10 +267,10 @@ class ProcessingQueueService {
    * this checks historical_documents_global — where completed results actually live.
    * Fixes the scenario where browser closed before Realtime delivered completion events.
    */
-  async reconcileWithServer(): Promise<{ recovered: number; failed: number; orphaned: number; details: string[] }> {
+  async reconcileWithServer(): Promise<{ recovered: number; failed: number; orphaned: number; stillActive: number; details: string[] }> {
     if (!isSupabaseConfigured() || !this.userId || !supabase) {
       logger.debug('Cannot reconcile with server: not configured or not logged in');
-      return { recovered: 0, failed: 0, orphaned: 0, details: [] };
+      return { recovered: 0, failed: 0, orphaned: 0, stillActive: 0, details: [] };
     }
 
     try {
@@ -285,7 +285,7 @@ class ProcessingQueueService {
 
       if (stuckAssets.length === 0) {
         logger.debug('No stuck local assets need reconciliation');
-        return { recovered: 0, failed: 0, orphaned: 0, details: [] };
+        return { recovered: 0, failed: 0, orphaned: 0, stillActive: 0, details: [] };
       }
 
       logger.info(`Reconciling ${stuckAssets.length} stuck local assets with server results`);
@@ -300,7 +300,7 @@ class ProcessingQueueService {
 
       if (fetchError) {
         logger.error('Failed to query historical_documents_global for reconciliation', fetchError);
-        return { recovered: 0, failed: 0, orphaned: 0, details: [`Query error: ${fetchError.message}`] };
+        return { recovered: 0, failed: 0, orphaned: 0, stillActive: 0, details: [`Query error: ${fetchError.message}`] };
       }
 
       const serverResultMap = new Map<string, any>();
@@ -311,30 +311,38 @@ class ProcessingQueueService {
         }
       });
 
-      // Also check processing_queue for FAILED jobs that never made it to results
-      const { data: failedJobs } = await (supabase as any)
+      // Also check processing_queue for ALL jobs (any status) for these assets
+      const { data: queueJobs } = await (supabase as any)
         .from(QUEUE_TABLE)
         .select('ASSET_ID, LAST_ERROR, STATUS')
         .eq('USER_ID', this.userId)
-        .in('ASSET_ID', assetIds)
-        .eq('STATUS', 'FAILED');
+        .in('ASSET_ID', assetIds);
 
-      const failedJobMap = new Map<string, string>();
-      (failedJobs || []).forEach((row: any) => {
-        failedJobMap.set(row.ASSET_ID, row.LAST_ERROR || 'Server processing failed');
+      // Build a map of ASSET_ID → most recent job status
+      // If multiple jobs exist for same asset, prefer active states over terminal ones
+      const STATUS_PRIORITY: Record<string, number> = { 'PROCESSING': 4, 'PENDING': 3, 'COMPLETED': 2, 'FAILED': 1, 'CANCELLED': 0 };
+      const queueJobMap = new Map<string, { status: string; error?: string }>();
+      (queueJobs || []).forEach((row: any) => {
+        const existing = queueJobMap.get(row.ASSET_ID);
+        const rowPriority = STATUS_PRIORITY[row.STATUS] ?? -1;
+        const existingPriority = existing ? (STATUS_PRIORITY[existing.status] ?? -1) : -1;
+        if (!existing || rowPriority > existingPriority) {
+          queueJobMap.set(row.ASSET_ID, { status: row.STATUS, error: row.LAST_ERROR });
+        }
       });
 
       let recovered = 0;
       let failed = 0;
       let orphaned = 0;
+      let stillActive = 0;
       const details: string[] = [];
 
       for (const asset of stuckAssets) {
         const serverResult = serverResultMap.get(asset.id);
+        const queueJob = queueJobMap.get(asset.id);
 
         if (serverResult) {
           // Server has completed results — recover them into local IndexedDB
-          // Build a partial update from the server row
           await saveAsset({
             ...asset,
             status: AssetStatus.MINTED,
@@ -347,9 +355,32 @@ class ProcessingQueueService {
           recovered++;
           details.push(`${asset.id}: recovered from server (COMPLETED)`);
           logger.debug(`Reconciled asset ${asset.id} as COMPLETED from historical_documents_global`);
-        } else if (failedJobMap.has(asset.id)) {
+        } else if (queueJob?.status === 'COMPLETED') {
+          // Job completed in processing_queue but not yet in historical_documents_global
+          // Mark as MINTED — results will arrive via Realtime or next reconciliation
+          await saveAsset({
+            ...asset,
+            status: AssetStatus.MINTED,
+            progress: 100,
+          });
+          recovered++;
+          details.push(`${asset.id}: recovered from queue (COMPLETED, awaiting results)`);
+          logger.debug(`Reconciled asset ${asset.id} as COMPLETED from processing_queue`);
+        } else if (queueJob?.status === 'PENDING' || queueJob?.status === 'PROCESSING') {
+          // Job is still active on server — keep local status as PROCESSING, don't touch
+          if (asset.status !== AssetStatus.PROCESSING) {
+            await saveAsset({
+              ...asset,
+              status: AssetStatus.PROCESSING,
+              progress: queueJob.status === 'PROCESSING' ? Math.max(asset.progress || 0, 10) : 5,
+            });
+          }
+          stillActive++;
+          details.push(`${asset.id}: still ${queueJob.status} on server — no action`);
+          logger.debug(`Asset ${asset.id} still ${queueJob.status} on server, keeping`);
+        } else if (queueJob?.status === 'FAILED') {
           // Server has a FAILED job — update local status
-          const errorMsg = failedJobMap.get(asset.id)!;
+          const errorMsg = queueJob.error || 'Server processing failed';
           await saveAsset({
             ...asset,
             status: AssetStatus.FAILED,
@@ -359,6 +390,17 @@ class ProcessingQueueService {
           failed++;
           details.push(`${asset.id}: server processing FAILED — ${errorMsg}`);
           logger.debug(`Reconciled asset ${asset.id} as FAILED`);
+        } else if (queueJob?.status === 'CANCELLED') {
+          // Job was cancelled — reset to PENDING for re-upload
+          await saveAsset({
+            ...asset,
+            status: AssetStatus.PENDING,
+            serverJobId: undefined,
+            progress: 0,
+          });
+          orphaned++;
+          details.push(`${asset.id}: CANCELLED on server — reset to PENDING`);
+          logger.debug(`Asset ${asset.id} was CANCELLED, reset to PENDING`);
         } else {
           // Not found in either table — truly orphaned
           // Reset to PENDING so user can re-upload
@@ -374,11 +416,11 @@ class ProcessingQueueService {
         }
       }
 
-      logger.info(`Reconciliation complete: ${recovered} recovered, ${failed} failed, ${orphaned} orphaned`);
-      return { recovered, failed, orphaned, details };
+      logger.info(`Reconciliation complete: ${recovered} recovered, ${failed} failed, ${orphaned} orphaned, ${stillActive} still active`);
+      return { recovered, failed, orphaned, stillActive, details };
     } catch (error: any) {
       logger.error('Failed to reconcile with server', error);
-      return { recovered: 0, failed: 0, orphaned: 0, details: [`Error: ${error.message}`] };
+      return { recovered: 0, failed: 0, orphaned: 0, stillActive: 0, details: [`Error: ${error.message}`] };
     }
   }
 
@@ -1966,8 +2008,8 @@ class ProcessingQueueService {
     intervals.push(setInterval(async () => {
       try {
         const result = await this.reconcileWithServer();
-        if (result.recovered > 0 || result.failed > 0) {
-          logger.info(`Periodic reconciliation: ${result.recovered} recovered, ${result.failed} failed, ${result.orphaned} orphaned`);
+        if (result.recovered > 0 || result.failed > 0 || result.orphaned > 0) {
+          logger.info(`Periodic reconciliation: ${result.recovered} recovered, ${result.failed} failed, ${result.orphaned} orphaned, ${result.stillActive} still active`);
         }
       } catch (err) {
         logger.debug('Periodic reconciliation check failed (non-critical)');

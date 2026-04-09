@@ -87,7 +87,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
   const [localNeedsUploadCount, setLocalNeedsUploadCount] = useState(0);
   const [localOnServerCount, setLocalOnServerCount] = useState(0);
   const [isReconciling, setIsReconciling] = useState(false);
-  const [reconcileResult, setReconcileResult] = useState<{ recovered: number; failed: number; orphaned: number } | null>(null);
+  const [reconcileResult, setReconcileResult] = useState<{ recovered: number; failed: number; orphaned: number; stillActive: number } | null>(null);
   
   // New state for detailed job list
   const [jobs, setJobs] = useState<QueueJob[]>([]);
@@ -1046,7 +1046,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
           </div>
           
           {/* Reconcile with server - recover completed results */}
-          {localOnServerCount > 0 && (stats?.pending || 0) === 0 && (stats?.processing || 0) === 0 && (
+          {localOnServerCount > 0 && (
             <button
               onClick={async () => {
                 setIsReconciling(true);
@@ -1054,8 +1054,13 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
                 try {
                   const result = await processingQueueService.reconcileWithServer();
                   setReconcileResult(result);
-                  if (result.recovered > 0 || result.failed > 0 || result.orphaned > 0) {
-                    alert(`Reconciliation complete:\n✓ ${result.recovered} recovered from server\n✗ ${result.failed} failed on server\n⚠ ${result.orphaned} orphaned (reset to pending)`);
+                  if (result.recovered > 0 || result.failed > 0 || result.orphaned > 0 || result.stillActive > 0) {
+                    const lines = ['Reconciliation complete:'];
+                    if (result.recovered > 0) lines.push(`✓ ${result.recovered} recovered from server`);
+                    if (result.failed > 0) lines.push(`✗ ${result.failed} failed on server`);
+                    if (result.stillActive > 0) lines.push(`⏳ ${result.stillActive} still processing on server`);
+                    if (result.orphaned > 0) lines.push(`⚠ ${result.orphaned} orphaned (reset to pending)`);
+                    alert(lines.join('\n'));
                     await fetchStats();
                     onRequeueComplete?.();
                   } else {
@@ -1088,7 +1093,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
           {/* Reconcile result */}
           {reconcileResult && (
             <div className="px-2 py-1.5 bg-cyan-900/20 border border-cyan-700/30 rounded text-[9px] text-cyan-400">
-              Reconciled: {reconcileResult.recovered} recovered, {reconcileResult.failed} failed, {reconcileResult.orphaned} orphaned
+              Reconciled: {reconcileResult.recovered} recovered, {reconcileResult.failed} failed, {reconcileResult.orphaned} orphaned{reconcileResult.stillActive > 0 ? `, ${reconcileResult.stillActive} still active` : ''}
             </div>
           )}
 

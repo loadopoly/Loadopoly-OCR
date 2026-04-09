@@ -758,7 +758,7 @@ export default function App() {
         // completion events were missed (e.g., browser closed mid-processing).
         const reconcileResult = await processingQueueService.reconcileWithServer();
         if (reconcileResult.recovered > 0 || reconcileResult.failed > 0 || reconcileResult.orphaned > 0) {
-          console.log(`[Reconcile] Recovered ${reconcileResult.recovered}, failed ${reconcileResult.failed}, orphaned ${reconcileResult.orphaned}`);
+          console.log(`[Reconcile] Recovered ${reconcileResult.recovered}, failed ${reconcileResult.failed}, orphaned ${reconcileResult.orphaned}, stillActive ${reconcileResult.stillActive}`);
           // Reload local assets to reflect reconciled state
           const { loadAssets } = await import('./lib/indexeddb');
           const refreshed = await loadAssets();
@@ -1661,7 +1661,7 @@ export default function App() {
       await _pqsP;
       const reconcileResult = await processingQueueService.reconcileWithServer();
       if (reconcileResult.recovered > 0 || reconcileResult.failed > 0) {
-        console.log(`[AutoRestart] Server reconciliation: ${reconcileResult.recovered} recovered, ${reconcileResult.failed} failed, ${reconcileResult.orphaned} orphaned`);
+        console.log(`[AutoRestart] Server reconciliation: ${reconcileResult.recovered} recovered, ${reconcileResult.failed} failed, ${reconcileResult.orphaned} orphaned, ${reconcileResult.stillActive} still active`);
         // Reload local assets to reflect reconciled state
         const { loadAssets: reloadAssets } = await import('./lib/indexeddb');
         const refreshed = await reloadAssets();
