@@ -336,8 +336,27 @@ export function StoryNarrator({
   onStartAdventure,
 
 }: StoryNarratorProps) {
-  // State
-  const narrativeEngine = useMemo(() => createNarrativeEngine(graphData, assets), [graphData, assets]);
+  // Persist narrative engine in a ref so journey context survives re-renders.
+  // Only recreate when the graph structurally changes (different node set).
+  const engineRef = useRef<NarrativeEngine | null>(null);
+  const graphSignatureRef = useRef('');
+
+  const graphSignature = useMemo(() => {
+    const nodeIds = graphData.nodes.map(n => n.id).sort().join(',');
+    return `${nodeIds}|${graphData.links.length}`;
+  }, [graphData.nodes, graphData.links.length]);
+
+  // Create engine on first render; update data (preserving context) on graph changes
+  if (!engineRef.current) {
+    engineRef.current = createNarrativeEngine(graphData, assets);
+    graphSignatureRef.current = graphSignature;
+  } else if (graphSignatureRef.current !== graphSignature) {
+    engineRef.current.updateData(graphData, assets);
+    graphSignatureRef.current = graphSignature;
+  }
+
+  const narrativeEngine = engineRef.current;
+
   const [currentChapter, setCurrentChapter] = useState<StoryChapter | null>(null);
   const [storyPath, setStoryPath] = useState<StoryPath | null>(null);
   const [pathIndex, setPathIndex] = useState(0);
@@ -349,8 +368,17 @@ export function StoryNarrator({
   
   const contentRef = useRef<HTMLDivElement>(null);
 
-  // Generate chapter when a node is selected
+  // Track selected node ID so the effect only fires when the actual
+  // selection changes, not when the parent passes a new object with the
+  // same ID (e.g. after force-simulation position updates).
+  const selectedNodeIdRef = useRef<string | null>(null);
+
+  // Generate chapter when a DIFFERENT node is selected
   useEffect(() => {
+    const newId = selectedNode?.id ?? null;
+    if (newId === selectedNodeIdRef.current) return;
+    selectedNodeIdRef.current = newId;
+
     if (selectedNode && narrativeEngine) {
       const chapter = narrativeEngine.generateChapter(selectedNode);
       setCurrentChapter(chapter);
@@ -390,6 +418,7 @@ export function StoryNarrator({
   const handleResetJourney = useCallback(() => {
     if (narrativeEngine) {
       narrativeEngine.resetContext();
+      selectedNodeIdRef.current = null;
       setCurrentChapter(null);
       setStoryPath(null);
       setPathIndex(0);

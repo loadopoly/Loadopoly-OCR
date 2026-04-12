@@ -1,8 +1,8 @@
 -- =============================================
 -- LOADOPOLY-OCR CONSOLIDATED DATABASE SCHEMA
 -- =============================================
--- Version: 3.1.0
--- Last Updated: 2026-02-22
+-- Version: 3.2.0
+-- Last Updated: 2026-04-09
 --
 -- This is the SINGLE SOURCE OF TRUTH for the Loadopoly-OCR database schema.
 -- Run this script to set up a fresh Supabase project or verify existing schema.
@@ -23,6 +23,10 @@
 --   11. Performance Indexes
 --   12. Monitoring Views
 --   13. Storage Bucket Policies
+--   14. Scheduled Jobs (pg_cron — always-on Edge processing)
+-- =============================================
+-- NOTE: Before running, store the service_role key in Vault:
+--   SELECT vault.create_secret('YOUR_SERVICE_ROLE_KEY', 'supabase_service_role_key');
 -- =============================================
 
 BEGIN;
@@ -1756,10 +1760,101 @@ TO service_role
 USING (bucket_id = 'processing-uploads')
 WITH CHECK (bucket_id = 'processing-uploads');
 
+-- ============================================
+-- 14. SCHEDULED JOBS (pg_cron)
+-- ============================================
+-- Ensures OCR processing and stale lock cleanup run continuously
+-- on the server side, independent of any client app.
+--
+-- Prerequisites:
+--   - pg_cron extension enabled (section 1 above)
+--   - pg_net extension enabled (section 1 above)
+--   - service_role key stored in Vault:
+--       SELECT vault.create_secret('YOUR_KEY', 'supabase_service_role_key');
+-- ============================================
+
+-- 14.1 Scheduled OCR Processing (every 5 minutes)
+-- Invokes the process-ocr Edge Function to claim and process
+-- up to 5 PENDING jobs. Short-circuits if queue is empty.
+
+SELECT cron.unschedule('scheduled-ocr-processing')
+WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'scheduled-ocr-processing');
+
+SELECT cron.schedule(
+  'scheduled-ocr-processing',
+  '*/5 * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://kuofzjhrrjgimtomgact.supabase.co/functions/v1/process-ocr',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer ' || (
+        SELECT decrypted_secret FROM vault.decrypted_secrets
+        WHERE name = 'supabase_service_role_key' LIMIT 1
+      ),
+      'Content-Type', 'application/json'
+    ),
+    body := '{"maxJobs": 5, "triggeredBy": "pg_cron"}'::jsonb,
+    timeout_milliseconds := 120000
+  );
+  $$
+);
+
+-- 14.2 Stale Lock Cleanup (every 10 minutes)
+-- Releases jobs stuck in PROCESSING state > 2 minutes.
+-- Prevents queue blockage when an Edge Function invocation
+-- times out or crashes without updating the job status.
+
+SELECT cron.unschedule('scheduled-stale-lock-release')
+WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'scheduled-stale-lock-release');
+
+SELECT cron.schedule(
+  'scheduled-stale-lock-release',
+  '*/10 * * * *',
+  $$
+  UPDATE processing_queue
+  SET "STATUS" = 'PENDING',
+      "WORKER_ID" = NULL,
+      "LOCKED_AT" = NULL,
+      "UPDATED_AT" = now()
+  WHERE "STATUS" = 'PROCESSING'
+    AND "LOCKED_AT" < now() - interval '2 minutes';
+  $$
+);
+
+-- 14.3 Knowledge Graph Backfill (every hour)
+-- Extracts entities and relationships from completed assets
+-- that haven't been processed for KG yet.
+
+SELECT cron.unschedule('kg-backfill-auto')
+WHERE EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'kg-backfill-auto');
+
+SELECT cron.schedule(
+  'kg-backfill-auto',
+  '0 * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://kuofzjhrrjgimtomgact.supabase.co/functions/v1/kg-backfill',
+    headers := jsonb_build_object(
+      'Authorization', 'Bearer ' || (
+        SELECT decrypted_secret FROM vault.decrypted_secrets
+        WHERE name = 'supabase_service_role_key' LIMIT 1
+      ),
+      'Content-Type', 'application/json'
+    ),
+    body := '{"batchSize": 50, "onlyUnprocessed": true}'::jsonb,
+    timeout_milliseconds := 60000
+  );
+  $$
+);
+
+-- Verify scheduled jobs (run manually after applying):
+-- SELECT jobname, schedule, active FROM cron.job ORDER BY jobname;
+-- SELECT * FROM cron.job_run_details ORDER BY start_time DESC LIMIT 20;
+
 COMMIT;
 
 -- ============================================
 -- COMPLETION MESSAGE
 -- ============================================
-SELECT '✅ Loadopoly-OCR v3.1.0 Consolidated Schema Setup Complete!' as result,
-       'All tables, functions, policies, indexes, and storage buckets created' as status;
+SELECT '✅ Loadopoly-OCR v3.2.0 Consolidated Schema Setup Complete!' as result,
+       'All tables, functions, policies, indexes, storage buckets, and scheduled jobs created' as status;

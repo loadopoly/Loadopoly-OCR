@@ -1,4 +1,13 @@
-# 🚀 GeoGraph Node: v2.17.0 Release Notes
+# 🚀 GeoGraph Node: v2.18.0 Release Notes
+
+## 📏 v2.18.0 — Relational Sizing Dynamic & Physical Dimension Tracking (2026-04-12)
+
+- **Relational Sizing**: New ability to infer absolute physical dimensions of objects (like trees) by comparing them to known reference objects (like bottles) in the same scene.
+- **`relationalSizingStrategy`**: Added to the Graph Healer module to automatically propagate sizes from reference nodes to connected unknown nodes via calculated scale ratios.
+- **Schema Updates**: Extended `graph_nodes` and `graph_edges` with `PHYSICAL_HEIGHT_M`, `PHYSICAL_WIDTH_M`, `IS_REFERENCE_OBJECT`, and `RELATIVE_SCALE`.
+- **Reference Library**: Seeded standard items (Water Bottle, Soda Can, Credit Card, iPhone 15, A4/US Letter paper) as universal "Standard Units" for scaling.
+- **Vision Integration**: Updated Gemini `process-ocr` Edge Function to recognize these references and provide `RELATIVE_SCALE` in the vision results.
+- **Type Safety**: Full TypeScript support for physical dimensions across the library and frontend.
 
 ## 🔄 v2.17.0 — Server Queue Reconciliation & Processing Pipeline Hardening (2026-04-09)
 

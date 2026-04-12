@@ -354,7 +354,8 @@ async function callGemini(
     4. **Entities**: Names, places, dates, organizations
     5. **Keywords**: Key topics and themes
     6. **Graph Data**: Entity relationships as nodes/links
-    7. **Confidence Score**: 0.0-1.0 rating of extraction quality
+    7. **Sizing Reference**: If a standard reference object (like a water bottle) is present alongside other objects (like a tree), compute the **RELATIVE_SCALE** (target height / reference height).
+    8. **Confidence Score**: 0.0-1.0 rating of extraction quality
     
     ${locationContext}
     
@@ -366,8 +367,8 @@ async function callGemini(
       "entities": ["string"],
       "keywords": ["string"],
       "graphData": {
-        "nodes": [{"id": "string", "label": "string", "type": "DOCUMENT|PERSON|PLACE|DATE|CONCEPT"}],
-        "links": [{"source": "string", "target": "string", "relationship": "string"}]
+        "nodes": [{"id": "string", "label": "string", "type": "DOCUMENT|PERSON|PLACE|DATE|CONCEPT", "isReference": boolean}],
+        "links": [{"source": "string", "target": "string", "relationship": "string", "relativeScale": number}]
       },
       "gisMetadata": {
         "zoneType": "string",
