@@ -254,9 +254,9 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   let query = supabase
     .from('processing_queue')
-    .select('id, asset_id, user_id, result_data')
+    .select('"ID", "ASSET_ID", "USER_ID", "RESULT_DATA"')
     .eq('STATUS', 'COMPLETED')
-    .not('result_data', 'is', null)
+    .not('RESULT_DATA', 'is', null)
     .limit(batchSize);
 
   if (userId) {
@@ -283,14 +283,14 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
   // Filter to only those with no existing asset_graph_nodes entries
   if (onlyUnprocessed) {
-    const assetIds = jobs.map((j: { asset_id: string }) => j.asset_id).filter(Boolean);
+    const assetIds = jobs.map((j: { ASSET_ID: string }) => j.ASSET_ID).filter(Boolean);
     const { data: existing } = await supabase
       .from('asset_graph_nodes')
       .select('ASSET_ID')
       .in('ASSET_ID', assetIds);
 
     const processedSet = new Set((existing ?? []).map((r: { ASSET_ID: string }) => r.ASSET_ID));
-    const unprocessedJobs = jobs.filter((j: { asset_id: string }) => !processedSet.has(j.asset_id));
+    const unprocessedJobs = jobs.filter((j: { ASSET_ID: string }) => !processedSet.has(j.ASSET_ID));
 
     if (unprocessedJobs.length === 0) {
       return new Response(
@@ -307,7 +307,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
   const processAllJobs = async (): Promise<{ processed: number; skipped: number; errors: number }> => {
     const jobResults = await Promise.allSettled(
       jobs.map(async (job): Promise<boolean> => {
-        const resultData = job.result_data as Record<string, unknown> | null;
+        const resultData = job.RESULT_DATA as Record<string, unknown> | null;
         if (!resultData) return false;
 
         // Gather text from the OCR result stored by process-ocr function
@@ -322,7 +322,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
 
         if (!rawText.trim()) return false;
 
-        const ownerUserId = job.user_id ?? userId ?? 'system';
+        const ownerUserId = job.USER_ID ?? userId ?? 'system';
 
         // Extract entities with Gemini
         const { entities, relationships } = await extractEntities(genAI, rawText);
@@ -341,7 +341,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
               .from('asset_graph_nodes')
               .upsert(
                 {
-                  ASSET_ID: job.asset_id,
+                  ASSET_ID: job.ASSET_ID,
                   NODE_ID: nodeId,
                   CONFIDENCE: entity.confidence,
                   CONTEXT_SNIPPET: entity.contextSnippet ?? null,
@@ -362,7 +362,7 @@ Deno.serve(async (req: Request): Promise<Response> => {
             toId,
             rel.relationship,
             rel.confidence,
-            job.asset_id
+            job.ASSET_ID
           );
         }
         return true;

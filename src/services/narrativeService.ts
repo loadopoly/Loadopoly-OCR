@@ -614,6 +614,32 @@ export class NarrativeEngine {
       plotThreads: [],
     };
   }
+
+  /**
+   * Update the underlying graph data without resetting journey context.
+   * Rebuilds internal lookup structures while preserving visited nodes,
+   * themes, character arcs, and plot threads.
+   */
+  updateData(graphData: GraphData, assets: DigitalAsset[]): void {
+    this.graphData = graphData;
+    this.assets = assets;
+    this.nodeMap = new Map(graphData.nodes.map(n => [n.id, n]));
+    this.adjacencyList = new Map();
+
+    graphData.links.forEach(link => {
+      const sourceId = typeof link.source === 'string' ? link.source : (link.source as any).id;
+      const targetId = typeof link.target === 'string' ? link.target : (link.target as any).id;
+      const sourceNode = this.nodeMap.get(sourceId);
+      const targetNode = this.nodeMap.get(targetId);
+
+      if (sourceNode && targetNode) {
+        if (!this.adjacencyList.has(sourceId)) this.adjacencyList.set(sourceId, []);
+        if (!this.adjacencyList.has(targetId)) this.adjacencyList.set(targetId, []);
+        this.adjacencyList.get(sourceId)!.push({ node: targetNode, relationship: link.relationship });
+        this.adjacencyList.get(targetId)!.push({ node: sourceNode, relationship: link.relationship });
+      }
+    });
+  }
 }
 
 // ============================================

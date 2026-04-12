@@ -6,8 +6,8 @@ import ReactDOM from 'react-dom/client';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider, ConnectionStatus } from './components/Toast';
 // PERF FIX: Onboarding only shown for first-time users. Skip import entirely for returning users.
-const shouldOnboard = !localStorage.getItem('geograph-onboarding-completed');
-const LazyOnboarding = shouldOnboard ? lazy(() => import('./components/Onboarding').then(m => ({ default: m.Onboarding }))) : () => null;
+const shouldOnboard = !localStorage.getItem('geograph-onboarding-v2');
+const LazyOnboarding = shouldOnboard ? lazy(() => import('./components/EnhancedOnboarding').then(m => ({ default: m.EnhancedOnboarding }))) : () => null;
 // PERF FIX: ModuleProvider, bootstrap, App, pwaUtils, performanceMonitor are
 // ALL dynamic imports. The entry chunk only needs: React (193KB) + lucide-react
 // icons (50KB) + vendor-preload (1KB) + this file (13KB) = ~257KB total.
@@ -146,14 +146,46 @@ const AppShellFallback = () => (
   </div>
 );
 
+// Landing page: shown to first-time visitors, lightweight (no heavy deps)
+const LazyLandingPage = lazy(() => import('./components/LandingPage'));
+
+// Entrypoint wrapper: decides whether to show landing page or app
+const hasVisited = localStorage.getItem('geograph-has-visited');
+const isReturningUser = !!hasVisited;
+
+function AppEntry() {
+  const [showApp, setShowApp] = React.useState(isReturningUser);
+
+  if (!showApp) {
+    return (
+      <Suspense fallback={<AppShellFallback />}>
+        <LazyLandingPage
+          onGetStarted={() => {
+            localStorage.setItem('geograph-has-visited', 'true');
+            setShowApp(true);
+          }}
+          onSignIn={() => {
+            localStorage.setItem('geograph-has-visited', 'true');
+            setShowApp(true);
+          }}
+        />
+      </Suspense>
+    );
+  }
+
+  return (
+    <Suspense fallback={<AppShellFallback />}>
+      <LazyAppShell />
+    </Suspense>
+  );
+}
+
 // Mount React immediately — Suspense shows the AppShellFallback (branded header + spinner)
 // while LazyAppShell downloads. No blank screen, no layout shift.
 root.render(
   <React.StrictMode>
     <ErrorBoundary>
-      <Suspense fallback={<AppShellFallback />}>
-        <LazyAppShell />
-      </Suspense>
+      <AppEntry />
     </ErrorBoundary>
   </React.StrictMode>
 );

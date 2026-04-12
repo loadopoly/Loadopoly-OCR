@@ -17,6 +17,7 @@ import { GraphData, GraphNode, GraphLink, DigitalAsset } from '../types';
 import { moduleRegistry } from './registry';
 import { eventEmitter } from './events';
 import { logger } from '../lib/logger';
+import { relationalSizingStrategy } from './sizingStrategy';
 
 // ============================================
 // Default Healing Options
@@ -44,6 +45,7 @@ export class GraphHealer {
     this.registerStrategy(orphanLinkingStrategy);
     this.registerStrategy(edgeInferenceStrategy);
     this.registerStrategy(conflictResolutionStrategy);
+    this.registerStrategy(relationalSizingStrategy);
   }
 
   /**

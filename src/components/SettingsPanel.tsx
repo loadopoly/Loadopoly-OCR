@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { enableAutoSync, disableAutoSync, isSyncEnabled, setScannerUrl as setEngineScannerUrl } from '../lib/syncEngine';
 import { clearAllAssets } from '../lib/indexeddb';
-import { FolderSync, Radio, CheckCircle, User, LogIn, Trash2, AlertTriangle, Wallet, Globe, Cpu, Key, Shield, RefreshCw, Camera } from 'lucide-react';
+import { FolderSync, Radio, CheckCircle, User, LogIn, Trash2, AlertTriangle, Wallet, Globe, Cpu, Key, Shield, RefreshCw, Camera, Puzzle, Eye, EyeOff } from 'lucide-react';
 import { getCurrentUser } from '../lib/auth';
 import AuthModal from './AuthModal';
 import ProfileSettings from './ProfileSettings';
+import { useUXPreferences } from '../hooks/useUXPreferences';
+import type { ExtensionFlags, Persona } from '../hooks/useUXPreferences';
 
 interface SettingsPanelProps {
     onOpenPrivacy: () => void;
@@ -44,6 +46,7 @@ export default function SettingsPanel({
   const [llmKey, setLlmKey] = useState(localStorage.getItem(`geograph-llm-key-${selectedLLM}`) || '');
   const [llmUser, setLlmUser] = useState(localStorage.getItem(`geograph-llm-user-${selectedLLM}`) || '');
   const [llmLogin, setLlmLogin] = useState(localStorage.getItem(`geograph-llm-login-${selectedLLM}`) || '');
+  const uxPrefs = useUXPreferences();
 
   useEffect(() => {
     const storedUrl = localStorage.getItem('geograph-scanner-url');
@@ -404,6 +407,84 @@ export default function SettingsPanel({
                     Useful for troubleshooting AI extraction failures.
                 </p>
             </div>
+        </div>
+      </div>
+
+      {/* Extensions & Progressive Disclosure */}
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+        <div className="flex items-start gap-4 mb-6">
+          <div className="p-3 rounded-lg bg-purple-900/30 text-purple-500">
+            <Puzzle size={24} />
+          </div>
+          <div className="flex-1">
+            <h3 className="text-lg font-bold text-white mb-1">Feature Extensions</h3>
+            <p className="text-sm text-slate-400">
+              Toggle advanced feature modules on or off. Core features (Dashboard, Quick Processing, Assets, Knowledge Graph) are always available.
+            </p>
+          </div>
+        </div>
+
+        {/* Simplified mode toggle */}
+        <div className="flex items-center justify-between p-3 mb-4 bg-slate-800/50 rounded-lg border border-slate-700">
+          <div className="flex items-center gap-3">
+            {uxPrefs.simplifiedMode ? <Eye size={18} className="text-primary-400" /> : <EyeOff size={18} className="text-slate-400" />}
+            <div>
+              <span className="text-sm font-medium text-white">Simplified Mode</span>
+              <p className="text-xs text-slate-500">Show only core tabs when enabled</p>
+            </div>
+          </div>
+          <button
+            onClick={() => uxPrefs.setSimplifiedMode(!uxPrefs.simplifiedMode)}
+            className={`w-12 h-6 rounded-full transition-colors flex-shrink-0 ${uxPrefs.simplifiedMode ? 'bg-primary-600' : 'bg-slate-700'}`}
+          >
+            <div className={`w-5 h-5 rounded-full bg-white transition-transform ${uxPrefs.simplifiedMode ? 'translate-x-6' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+
+        {/* Extension toggles */}
+        <div className="space-y-2">
+          {([
+            { key: 'web3' as const, label: 'Web3 / NFT Minting', desc: 'Blockchain integration and data shard minting' },
+            { key: 'threeD' as const, label: '3D World View', desc: 'Interactive 3D visualization of your collection' },
+            { key: 'social' as const, label: 'Social Hub', desc: 'Community collaboration and shared collections' },
+            { key: 'marketplace' as const, label: 'Data Marketplace', desc: 'Buy and sell curated datasets' },
+            { key: 'curatorMode' as const, label: 'Curator Mode', desc: 'Advanced annotation and review tools' },
+            { key: 'arScanner' as const, label: 'AR Scanner', desc: 'Augmented reality document capture' },
+          ] as { key: keyof ExtensionFlags; label: string; desc: string }[]).map(ext => (
+            <div key={ext.key} className="flex items-center justify-between p-3 rounded-lg hover:bg-slate-800/30 transition-colors">
+              <div>
+                <span className="text-sm text-white">{ext.label}</span>
+                <p className="text-xs text-slate-500">{ext.desc}</p>
+              </div>
+              <button
+                onClick={() => uxPrefs.setExtension(ext.key, !uxPrefs.extensions[ext.key])}
+                className={`w-11 h-6 rounded-full transition-colors flex-shrink-0 ${uxPrefs.extensions[ext.key] ? 'bg-primary-600' : 'bg-slate-700'}`}
+              >
+                <div className={`w-5 h-5 rounded-full bg-white transition-transform ${uxPrefs.extensions[ext.key] ? 'translate-x-5' : 'translate-x-0.5'}`} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        {/* Persona shortcut */}
+        <div className="mt-4 pt-4 border-t border-slate-700">
+          <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Persona Preset</label>
+          <div className="grid grid-cols-4 gap-2">
+            {(['researcher', 'archivist', 'explorer', 'developer'] as Persona[]).map(p => (
+              <button
+                key={p}
+                onClick={() => uxPrefs.setPersona(p)}
+                className={`py-2 px-3 rounded-lg text-xs font-medium capitalize transition-colors ${
+                  uxPrefs.persona === p ? 'bg-primary-600 text-white' : 'bg-slate-800 text-slate-400 hover:text-white'
+                }`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-slate-500 mt-2">
+            Presets configure which extensions are enabled. Custom changes override preset defaults.
+          </p>
         </div>
       </div>
 

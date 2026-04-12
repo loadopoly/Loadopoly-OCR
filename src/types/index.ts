@@ -82,6 +82,10 @@ export interface GraphNode {
   relevance: number; // 0-1
   license?: string; // e.g., 'CC0' or 'COMMERCIAL'
   confidence?: number;
+  PHYSICAL_HEIGHT_M?: number;
+  IS_REFERENCE_OBJECT?: boolean;
+  CANONICAL_ID?: string;
+  LABEL?: string; // for internal mapping
 }
 
 export interface GraphLink {

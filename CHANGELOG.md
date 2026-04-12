@@ -3,6 +3,26 @@
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
 
+## [2.18.0] - 2026-04-12
+
+### Relational Sizing Dynamic & Physical Dimension Tracking
+
+**Feature:** Expanded the system to support "Relational Sizing" — the ability to infer the absolute physical dimensions of objects (like trees) by comparing them to known reference objects (like bottles) within the same scene.
+
+**Core Changes:**
+- **Relational Sizing Strategy**: New `relationalSizingStrategy` in the Graph Healer module. It automatically propagates physical height/width from reference nodes to connected unknown nodes using calculated scale ratios.
+- **Physical Schema Extension**: Updated `graph_nodes` and `graph_edges` tables with `PHYSICAL_HEIGHT_M`, `PHYSICAL_WIDTH_M`, `IS_REFERENCE_OBJECT`, and `RELATIVE_SCALE` fields.
+- **Sizing Reference Library**: Seeded the database with standard reference objects (500ml Water Bottle, Soda Can, Credit Card, iPhone 15, A4/US Letter paper) to provide grounding for real-world scaling.
+- **Enhanced OCR Pipeline**: Updated the Gemini-based `process-ocr` Edge Function to recognize reference objects and compute relative bounding box ratios.
+
+**Files changed:**
+- `src/modules/sizingStrategy.ts` (New)
+- `api/process-ocr/index.ts`
+- `src/modules/graphHealer.ts`
+- `src/types/index.ts`
+- `supabase/migrations/20260412000000_relational_sizing.sql` (New)
+- `supabase/migrations/20260412000100_seed_sizing_references.sql` (New)
+
 ## [2.17.0] - 2026-04-09
 
 ### Server Queue Reconciliation & Processing Pipeline Hardening

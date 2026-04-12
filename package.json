@@ -1,6 +1,6 @@
 {
   "name": "geograph-ocr-node",
-  "version": "2.17.0",
+  "version": "2.18.0",
   "description": "Advanced OCR-to-Graph platform with GIS metadata, semantic NLP, deduplication, and metaverse navigation",
   "type": "module",
   "scripts": {
@@ -17,6 +17,7 @@
     "@google/genai": "^1.0.0",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^9.0.0",
+    "@stripe/stripe-js": "^9.1.0",
     "@supabase/supabase-js": "^2.45.4",
     "assert": "^2.1.0",
     "browserify-zlib": "^0.2.0",

@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Camera, 
   Map as MapIcon, 
@@ -64,63 +63,46 @@ import {
   Community,
   CommunityAdmissionRequest
 } from './types';
-// PERF FIX: geminiService statically imports @google/genai (253KB vendor-ai).
-// processImageWithGemini is only called on user-triggered actions (camera capture),
-// so we lazy-import it inside the functions that use it.
-// import { processImageWithGemini } from './services/geminiService';
-// PERF v2.16.3: createBundles NOT statically imported — it pulls deduplicationServiceV2
-// (1000+ lines of string algorithms) into the App chunk, blocking parse.
-// Only createUserBundle + createBundleFromGroup are needed on the main thread;
-// they don't depend on dedup at runtime.
-import { createUserBundle, createBundleFromGroup } from './services/bundleService';
+import { processImageWithGemini } from './services/geminiService';
+import { canProcess, consumeCredit } from './services/creditService';
+import { createBundles, createUserBundle } from './services/bundleService';
 import { initSync, isSyncEnabled } from './lib/syncEngine';
-import { loadAssets, saveAsset, deleteAsset, saveArQueueItem, loadArQueue, clearArQueue } from './lib/indexeddb';
-// PERF FIX: Supabase-dependent services deferred from static imports.
-// vendor-supabase (44KB gzip) + vendor-storage (32KB gzip) no longer block App chunk parse.
-// processingQueueService/downloadService keep same variable names; all call sites work unchanged.
-// supabaseService functions + auth use inline dynamic import() at each call site.
-import type { QueueStats, QueueJob } from './services/processingQueueService';
-import type { DownloadQueueItem } from './services/downloadService';
-
-type PQSType = Awaited<typeof import('./services/processingQueueService')>['processingQueueService'];
-type DLSType = Awaited<typeof import('./services/downloadService')>['downloadService'];
-let processingQueueService: PQSType;
-let downloadService: DLSType;
-const _pqsP = import('./services/processingQueueService').then(m => { processingQueueService = m.processingQueueService; });
-const _dlsP = import('./services/downloadService').then(m => { downloadService = m.downloadService; });
-import { canInstall as canInstallPWA, promptInstall } from './lib/pwaUtils';
-import { getRecentUXEvents, trackUXEvent } from './lib/uxTelemetry';
-// PERF FIX: compressImage dynamically imported inside ingestFile() to avoid
-// pulling 445-line imageCompression module into the critical parse path.
+import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
+import { redeemPhygitalCertificate } from './services/web3Service';
+import { getCurrentUser } from './lib/auth';
+import { fetchGlobalCorpus, contributeAssetToGlobalCorpus, fetchUserAssets, subscribeToAssetUpdates } from './services/supabaseService';
+import { processingQueueService } from './services/processingQueueService';
+import { compressImage } from './lib/imageCompression';
 import { WorkerPool } from './lib/workerPool';
-import { GraphVisualizerLazy as GraphVisualizer, ARSceneLazy as ARScene, SemanticCanvasLazy as SemanticCanvas, BatchImporterLazy as BatchImporter, AnnotationEditorLazy as AnnotationEditor, SocialAppLazy as SocialApp, IntegrationsHubLazy as IntegrationsHub, QueueMonitorLazy as QueueMonitor, ClusterSyncStatsPanelLazy as ClusterSyncStatsPanel, BatchProcessingPanelLazy as BatchProcessingPanel, SmartSuggestionsLazy as SmartSuggestions } from './lib/lazyComponents';
-// PERF FIX: Lazy-load components not needed at first paint.
-// ContributeButton and BundleCard pull in web3Service → ethers (400KB).
-// SettingsPanel and PurchaseModal are only shown on specific tabs/modals.
-const ContributeButton = React.lazy(() => import('./components/ContributeButton'));
-const BundleCard = React.lazy(() => import('./components/BundleCard'));
-const SettingsPanel = React.lazy(() => import('./components/SettingsPanel'));
-const PurchaseModal = React.lazy(() => import('./components/PurchaseModal'));
-import { ErrorBoundary } from './components/ErrorBoundary';
+import GraphVisualizer from './components/GraphVisualizer';
+import ContributeButton from './components/ContributeButton';
+import BundleCard from './components/BundleCard';
+import ARScene from './components/ARScene';
+import SemanticCanvas from './components/SemanticCanvas';
 import CameraCapture from './components/CameraCapture';
+import BatchImporter from './components/BatchImporter';
+import SettingsPanel from './components/SettingsPanel';
+import SmartUploadSelector from './components/SmartUploadSelector';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
+import PurchaseModal from './components/PurchaseModal';
+import SmartSuggestions from './components/SmartSuggestions';
+import SocialApp from './components/SocialApp';
 import StatusBar from './components/StatusBar';
-import { useToast } from './components/Toast';
+import AnnotationEditor from './components/AnnotationEditor';
 import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/KeyboardShortcuts';
 import { announce } from './lib/accessibility';
-import { WorldRendererLazy as WorldRenderer } from './lib/lazyComponents';
+import { WorldRenderer } from './components/metaverse';
 import { useAvatar } from './hooks/useAvatar';
+import IntegrationsHub from './components/IntegrationsHub';
 import { FilterProvider, useFilterContext } from './contexts/FilterContext';
 import UnifiedFilterPanel, { InlineFilterBar, FilterBadge } from './components/UnifiedFilterPanel';
-// PERF FIX: ClusterSyncButton is lazy-loaded because importing it from
-// ClusterSyncStatsPanel.tsx pulls in chunk-cluster-sync (138KB) which
-// cascades to vendor-supabase (169KB) + vendor-ai (253KB). The button is
-// only shown in Curator Mode tab, so it's safe to defer.
-const ClusterSyncButton = React.lazy(() =>
-  import('./components/ClusterSyncStatsPanel').then(m => ({
-    default: m.ClusterSyncButton,
-  }))
-);
+import { ClusterSyncStatsPanel, ClusterSyncButton } from './components/ClusterSyncStatsPanel';
+import { QueueMonitor } from './components/QueueMonitor';
+import BatchProcessingPanel from './components/BatchProcessingPanel';
+import CreditGate, { CreditBadge } from './components/CreditGate';
+import { useUXPreferences, EXTENSION_TAB_MAP } from './hooks/useUXPreferences';
+import type { Persona } from './hooks/useUXPreferences';
+import { batchProcessor } from './services/batchProcessorService';
 
 // --- Custom Hooks ---
 function useOnlineStatus() {
@@ -172,11 +154,10 @@ async function calculateSHA256(file: File): Promise<string> {
 const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
   <button
     onClick={onClick}
-    style={{ touchAction: 'manipulation' }}
-    className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-all duration-75 ${
+    className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors ${
       active 
         ? 'bg-primary-600/10 text-primary-500 border-r-2 border-primary-500' 
-        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800 active:bg-slate-700 active:scale-[0.97]'
+        : 'text-slate-400 hover:text-slate-100 hover:bg-slate-800'
     }`}
   >
     <Icon size={18} />
@@ -187,94 +168,20 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
 const StatCard = ({ label, value, icon: Icon, color, onClick }: any) => (
   <div 
     onClick={onClick}
-    className={`bg-slate-900 border border-slate-800 p-3 sm:p-4 rounded-xl flex items-center justify-between overflow-hidden ${onClick ? 'cursor-pointer hover:bg-slate-800/50 hover:border-slate-700 transition-all active:scale-[0.98]' : ''}`}
+    className={`bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between ${onClick ? 'cursor-pointer hover:bg-slate-800/50 hover:border-slate-700 transition-all active:scale-[0.98]' : ''}`}
   >
-    <div className="min-w-0 flex-1">
-      <p className="text-slate-500 text-[10px] sm:text-xs uppercase tracking-wider mb-1 truncate">{label}</p>
-      <p className="text-xl sm:text-2xl font-bold text-white truncate">{value}</p>
+    <div>
+      <p className="text-slate-500 text-xs uppercase tracking-wider mb-1">{label}</p>
+      <p className="text-2xl font-bold text-white">{value}</p>
     </div>
-    <div className={`p-2 sm:p-3 rounded-lg bg-opacity-10 flex-shrink-0 ml-2 ${color.replace('text-', 'bg-')}`}>
-      <Icon className={color} size={20} />
+    <div className={`p-3 rounded-lg bg-opacity-10 ${color.replace('text-', 'bg-')}`}>
+      <Icon className={color} size={24} />
     </div>
   </div>
 );
 
-// MobileNavigation — portals to document.body so it escapes the <header>'s
-// backdrop-blur containing block (which was clipping position:fixed children).
-const MobileNavigation = ({ activeTab, switchTab }: { activeTab: string; switchTab: (tab: string) => void }) => {
-  const [isOpen, setIsOpen] = useState(false);
-
-  // Portal target — always document.body so sidebar is never clipped
-  const overlay = isOpen ? createPortal(
-    <div className="fixed inset-0 z-[9999] lg:hidden" role="dialog" aria-modal="true">
-      {/* Scrim */}
-      <div
-        className="absolute inset-0 bg-black/60"
-        onClick={() => setIsOpen(false)}
-        style={{ touchAction: 'none' }}
-      />
-      {/* Sidebar panel */}
-      <div
-        className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 border-r border-slate-800 flex flex-col shadow-2xl"
-        style={{ animation: 'slideInLeft 200ms ease-out' }}
-      >
-        <div className="p-6 flex items-center justify-between flex-shrink-0">
-          <div className="flex items-center gap-2 text-primary-500">
-            <Database size={24} />
-            <h1 className="text-xl font-bold tracking-tight text-white">GeoGraph</h1>
-          </div>
-          <button
-            onClick={() => setIsOpen(false)}
-            className="p-2 -mr-2 text-slate-400 hover:text-white rounded-lg"
-            style={{ touchAction: 'manipulation' }}
-          >
-            <X size={20} />
-          </button>
-        </div>
-        <nav className="flex-1 px-2 space-y-1 overflow-y-auto">
-          <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { switchTab('dashboard'); setIsOpen(false); }} />
-          <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => { switchTab('batch'); setIsOpen(false); }} />
-          <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => { switchTab('ar'); setIsOpen(false); }} />
-          <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => { switchTab('assets'); setIsOpen(false); }} />
-          <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => { switchTab('curator'); setIsOpen(false); }} />
-          <SidebarItem icon={Network} label="Explore" active={activeTab === 'explore'} onClick={() => { switchTab('explore'); setIsOpen(false); }} />
-          <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsOpen(false); }} />
-          <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => { switchTab('social'); setIsOpen(false); }} />
-          <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { switchTab('market'); setIsOpen(false); }} />
-          <div className="pt-4 mt-4 border-t border-slate-800">
-            <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsOpen(false); }} />
-          </div>
-        </nav>
-      </div>
-    </div>,
-    document.body
-  ) : null;
-
-  return (
-    <>
-      <button
-        onClick={() => setIsOpen(true)}
-        className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 active:bg-slate-700 active:scale-90 transition-transform duration-75 rounded-lg"
-        style={{ touchAction: 'manipulation' }}
-        aria-label="Open navigation menu"
-      >
-        <List size={24} />
-      </button>
-      {overlay}
-    </>
-  );
-};
-
 export default function App() {
-  const [activeTab, setActiveTab] = useState(() => {
-    if (typeof window === 'undefined') return 'dashboard';
-    const savedMobileTab = localStorage.getItem('geograph-mobile-last-tab');
-    const mobileEligible = ['dashboard', 'database', 'batch', 'curator', 'settings', 'explore', 'assets'];
-    if (window.innerWidth < 1024 && savedMobileTab && mobileEligible.includes(savedMobileTab)) {
-      return savedMobileTab;
-    }
-    return 'dashboard';
-  });
+  const [activeTab, setActiveTab] = useState('dashboard');
   const [localAssets, setLocalAssets] = useState<DigitalAsset[]>([]);
   const [globalAssets, setGlobalAssets] = useState<DigitalAsset[]>([]);
   const [user, setUser] = useState<any>(null);
@@ -293,20 +200,9 @@ export default function App() {
   const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [geoPermission, setGeoPermission] = useState<boolean>(false);
-  const [groupBy, setGroupBy] = useState<'SOURCE' | 'ZONE' | 'CATEGORY' | 'RIGHTS'>(() => {
-    if (typeof window === 'undefined') return 'SOURCE';
-    const saved = localStorage.getItem('geograph-db-group-by');
-    return saved === 'SOURCE' || saved === 'ZONE' || saved === 'CATEGORY' || saved === 'RIGHTS' ? saved : 'SOURCE';
-  });
-  const [dbViewMode, setDbViewMode] = useState<'GROUPS' | 'DRILLDOWN'>(() => {
-    if (typeof window === 'undefined') return 'DRILLDOWN';
-    const saved = localStorage.getItem('geograph-db-view-mode');
-    return saved === 'GROUPS' || saved === 'DRILLDOWN' ? saved : 'DRILLDOWN';
-  });
-  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(() => {
-    if (typeof window === 'undefined') return null;
-    return localStorage.getItem('geograph-db-selected-group');
-  });
+  const [groupBy, setGroupBy] = useState<'SOURCE' | 'ZONE' | 'CATEGORY' | 'RIGHTS'>('SOURCE');
+  const [dbViewMode, setDbViewMode] = useState<'GROUPS' | 'DRILLDOWN'>('DRILLDOWN');
+  const [selectedGroupKey, setSelectedGroupKey] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 50;
   const [graphViewMode, setGraphViewMode] = useState<'SINGLE' | 'GLOBAL'>('SINGLE');
@@ -316,21 +212,11 @@ export default function App() {
   const [isPublicBroadcast, setIsPublicBroadcast] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [arSessionQueue, setArSessionQueue] = useState<File[]>([]);
-
-  // Restore persisted AR session queue on mount
-  useEffect(() => {
-    loadArQueue().then(files => {
-      if (files.length > 0) {
-        setArSessionQueue(prev => prev.length > 0 ? prev : files);
-      }
-    }).catch(() => {});
-  }, []);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showProcessingPanel, setShowProcessingPanel] = useState(false);
   const [showNewBatchPanel, setShowNewBatchPanel] = useState(false);
-  const [arLeaveConfirm, setArLeaveConfirm] = useState<{ targetTab: string } | null>(null);
-  const [isLocalDataLoaded, setIsLocalDataLoaded] = useState(false);
-  const [isAppReady, setIsAppReady] = useState(false);
+  const [showCreditGate, setShowCreditGate] = useState(false);
+  const [pendingCreditFile, setPendingCreditFile] = useState<{ file: File; source: string } | null>(null);
   
   // Batch processing concurrency control (legacy - kept for compatibility)
   const [activeBatchJobs, setActiveBatchJobs] = useState(0);
@@ -371,8 +257,8 @@ export default function App() {
       }
     }
   }, [selectedLLM]);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { isOpen: isShortcutsOpen, setIsOpen: setIsShortcutsOpen } = useKeyboardShortcutsHelp() as any;
-  const { showToast } = useToast();
   const isOnline = useOnlineStatus();
   const [syncOn, setSyncOn] = useState(false);
   const [web3Enabled, setWeb3Enabled] = useState(false);
@@ -380,524 +266,65 @@ export default function App() {
   const [showIntegrationsHub, setShowIntegrationsHub] = useState(false);
   const [showUnifiedFilters, setShowUnifiedFilters] = useState(false);
   const [showClusterSyncStats, setShowClusterSyncStats] = useState(false);
-  const isDevBuild = import.meta.env.DEV;
-  // Dashboard queue monitor — default visible so users can always see queue status
-  const [showDashboardQueue, setShowDashboardQueue] = useState(() => {
-    try { return localStorage.getItem('geograph-queue-visible') !== '0'; } catch { return true; }
-  });
-  // SW update available — set by geograph-sw-updated custom event, shows a soft banner
-  const [swUpdateAvailable, setSwUpdateAvailable] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState<{ current: number; total: number }>({ current: 0, total: 0 });
-  const [downloadQueueItems, setDownloadQueueItems] = useState<DownloadQueueItem[]>([]);
-  const [downloadProgressByAsset, setDownloadProgressByAsset] = useState<Record<string, {
-    loaded: number;
-    total: number;
-    status: 'idle' | 'downloading' | 'completed' | 'failed' | 'cancelled';
-    error?: string;
-  }>>({});
-  const [signedPreviewUrls, setSignedPreviewUrls] = useState<Record<string, string>>({});
-  const signedPreviewPendingRef = useRef<Set<string>>(new Set());
-  const [queueDiagnostics, setQueueDiagnostics] = useState<any>(null);
-  const [isStandaloneMode, setIsStandaloneMode] = useState(false);
-  const [isInstallPromptAvailable, setIsInstallPromptAvailable] = useState(false);
-  const [isInstallingPWA, setIsInstallingPWA] = useState(false);
-  const [installBannerDismissed, setInstallBannerDismissed] = useState(() => {
-    try { return localStorage.getItem('geograph-install-banner-dismissed') === '1'; } catch { return false; }
-  });
-  const [showQaPanel, setShowQaPanel] = useState(false);
-  const [safeAreaDebug, setSafeAreaDebug] = useState({ top: 0, right: 0, bottom: 0, left: 0, viewportHeight: 0, innerHeight: 0 });
-  const [recentUxEvents, setRecentUxEvents] = useState<Array<Record<string, unknown>>>([]);
-  const [qaFailedJobs, setQaFailedJobs] = useState<QueueJob[]>([]);
-  const [dbProcessFeedback, setDbProcessFeedback] = useState<{ type: 'success' | 'error' | 'info' | 'warning'; message: string; action?: 'settings' | 'queue' | 'releaseRetry' } | null>(null);
-  const [dbQueueStats, setDbQueueStats] = useState<QueueStats | null>(null);
-  const [processingOnlySince, setProcessingOnlySince] = useState<number | null>(null);
-  const [dbProcessRun, setDbProcessRun] = useState<{
-    running: boolean;
-    total: number;
-    processed: number;
-    failed: number;
-    currentAssetId: string | null;
-    batchPending: number;
-    cancelRequested: boolean;
-    step: 'idle' | 'preparing' | 'queueing' | 'triggering' | 'local-processing' | 'finalizing';
-  }>({
-    running: false,
-    total: 0,
-    processed: 0,
-    failed: 0,
-    currentAssetId: null,
-    batchPending: 0,
-    cancelRequested: false,
-    step: 'idle',
-  });
-  const dbProcessCancelRef = useRef(false);
-  // Explore tab sub-view (merges Knowledge Graph + 3D World into one tab)
-  const [exploreSubTab, setExploreSubTab] = useState<'graph' | '3d' | 'semantic'>('3d');
+  const [worldViewMode, setWorldViewMode] = useState<'3d' | 'semantic'>('3d');
 
-  // #8: 3D World is always the landing page when entering Explore tab.
-  // Any prior setExploreSubTab('graph') from stat card clicks is reset on re-entry.
-  useEffect(() => {
-    if (activeTab === 'explore') setExploreSubTab('3d');
-  }, [activeTab]);
+  // UX Preferences — progressive disclosure, persona-based tabs, extensions
+  const uxPrefs = useUXPreferences();
+  const isTabVisible = uxPrefs.isTabVisible;
 
-  // #11: Listen for SW update event dispatched by index.tsx — show soft update banner.
-  useEffect(() => {
-    const handleSwUpdate = () => setSwUpdateAvailable(true);
-    window.addEventListener('geograph-sw-updated', handleSwUpdate);
-    return () => window.removeEventListener('geograph-sw-updated', handleSwUpdate);
-  }, []);
+  // Track first successful OCR for auto-navigation to graph
+  const firstOcrCompletedRef = useRef(false);
+  const prevMintedCountRef = useRef(0);
 
-  // #12/#13: Register background sync when we have pending assets and go back online.
-  useEffect(() => {
-    if (isOnline && 'serviceWorker' in navigator) {
-      const pending = localAssets.filter(
-        a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING
-      ).length;
-      if (pending > 0) {
-        navigator.serviceWorker.ready
-          .then(reg => (reg as any).sync?.register?.('sync-contributions'))
-          .catch(() => { /* Background Sync not supported */ });
-      }
-    }
-  }, [isOnline, localAssets]);
-
-  // App resume: re-hydrate state from IndexedDB when the app comes back from background.
-  // Auto-upload PENDING assets that haven't been sent to server yet.
-  // Called on init, on visibility resume, and when the SW fires background sync.
-  const autoUploadPendingAssets = useCallback(async () => {
-    try {
-      await _pqsP;
-      const diag = processingQueueService.getDiagnostics();
-      if (!diag.canProcessServer) return; // Not logged in or offline
-      
-      const allAssets = await loadAssets();
-      const pendingNoServer = allAssets.filter(a =>
-        !a.serverJobId &&
-        (a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING) &&
-        (a.imageBlob || (a.imageUrl && !a.imageUrl.startsWith('blob:')))
-      );
-      
-      if (pendingNoServer.length === 0) return;
-      
-      console.log(`[AutoUpload] Found ${pendingNoServer.length} pending assets — uploading to server in background`);
-      const result = await processingQueueService.requeueLocalAssets(
-        pendingNoServer.map(a => ({
-          id: a.id,
-          imageBlob: a.imageBlob,
-          imageUrl: a.imageUrl,
-          scanType: a.scanType,
-        }))
-      );
-      
-      if (result.queued > 0 || (result as any).skippedRecovered > 0) {
-        console.log(`[AutoUpload] ${result.queued} queued, ${(result as any).skippedRecovered || 0} recovered, ${result.failed} failed`);
-        const refreshed = await loadAssets();
-        setLocalAssets(refreshed);
-      }
-    } catch (e) {
-      console.debug('[AutoUpload] Background upload failed (non-critical):', e);
-    }
-  }, []);
-
-  // On Android, the PWA process may be killed; on return the entire React tree
-  // remounts fresh which is fine. But if the process survives (tab hidden → visible),
-  // we need to refresh data and reconnect subscriptions.
-  useEffect(() => {
-    const handleVisibilityChange = async () => {
-      if (document.visibilityState === 'visible') {
-        // Refresh local data from IndexedDB (covers process-survived case)
-        loadAssets().then(loaded => setLocalAssets(loaded)).catch(() => {});
-        // Refresh auth session — keeps Supabase token alive
-        import('./lib/auth').then(m => m.getCurrentUser()).then(({ data }) => {
-          if (data.user) setUser(data.user);
-        }).catch(() => {});
-        
-        // Background data operations on resume:
-        // 1. Reconcile with server — recover any completed results missed while in background
-        // 2. Auto-upload any pending assets that haven't been queued
-        // 3. Trigger Edge Function if jobs are pending
-        try {
-          await _pqsP;
-          const result = await processingQueueService.reconcileWithServer();
-          if (result.recovered > 0 || result.failed > 0 || result.orphaned > 0) {
-            console.log(`[Resume] Reconciled: ${result.recovered} recovered, ${result.failed} failed`);
-            const refreshed = await loadAssets();
-            setLocalAssets(refreshed);
-          }
-        } catch { /* non-critical */ }
-        
-        // Auto-upload anything pending
-        autoUploadPendingAssets();
-      }
-    };
-    
-    // Listen for Service Worker background sync requests
-    const handleSyncRequested = () => {
-      console.log('[SW-Sync] Background sync requested — flushing pending jobs and uploading');
-      autoUploadPendingAssets();
-      _pqsP.then(() => processingQueueService.flushPendingJobs()).catch(() => {});
-    };
-    
-    document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('geograph-sync-requested', handleSyncRequested);
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('geograph-sync-requested', handleSyncRequested);
-    };
-  }, [autoUploadPendingAssets]);
-
-  const startUploadTracking = useCallback((count = 1) => {
-    setUploadProgress(prev => {
-      const reset = prev.current >= prev.total ? { current: 0, total: 0 } : prev;
-      return {
-        current: reset.current,
-        total: reset.total + count,
-      };
-    });
-  }, []);
-
-  const completeUploadTracking = useCallback(() => {
-    setUploadProgress(prev => ({
-      ...prev,
-      current: Math.min(prev.total, prev.current + 1),
-    }));
-  }, []);
-
-  useEffect(() => {
-    if (uploadProgress.total > 0 && uploadProgress.current >= uploadProgress.total) {
-      const timeout = setTimeout(() => {
-        setUploadProgress({ current: 0, total: 0 });
-      }, 1400);
-      return () => clearTimeout(timeout);
-    }
-  }, [uploadProgress]);
-
-  useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
-    _dlsP.then(() => {
-      unsubscribe = downloadService.subscribeToQueue(setDownloadQueueItems);
-    });
-    return () => unsubscribe?.();
-  }, []);
-
-  useEffect(() => {
-    // PERF FIX: Defer queue diagnostics polling — not needed for first paint.
-    // Start after 10s so the initial render and data loading aren't competing.
-    const startTimeout = setTimeout(async () => {
-      await _pqsP;
-      setQueueDiagnostics(processingQueueService.getDiagnostics());
-    }, 10000);
-    const interval = setInterval(async () => {
-      await _pqsP;
-      setQueueDiagnostics(processingQueueService.getDiagnostics());
-    }, 15000); // Also reduced frequency from 5s to 15s
-    return () => {
-      clearTimeout(startTimeout);
-      clearInterval(interval);
-    };
-  }, []);
-
-  useEffect(() => {
-    const checkStandaloneMode = () => {
-      const standalone = window.matchMedia('(display-mode: standalone)').matches || (navigator as any).standalone === true;
-      setIsStandaloneMode(standalone);
-      setIsInstallPromptAvailable(canInstallPWA());
-    };
-
-    checkStandaloneMode();
-    const mediaQuery = window.matchMedia('(display-mode: standalone)');
-    const handleDisplayModeChange = (event: MediaQueryListEvent) => {
-      setIsStandaloneMode(event.matches || (navigator as any).standalone === true);
-    };
-
-    mediaQuery.addEventListener('change', handleDisplayModeChange);
-    window.addEventListener('resize', checkStandaloneMode);
-
-    return () => {
-      mediaQuery.removeEventListener('change', handleDisplayModeChange);
-      window.removeEventListener('resize', checkStandaloneMode);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!isDevBuild || typeof window === 'undefined') return;
-
-    const toNumber = (value: string) => {
-      const parsed = Number.parseFloat(value || '0');
-      return Number.isFinite(parsed) ? parsed : 0;
-    };
-
-    const measureSafeArea = () => {
-      const probe = document.createElement('div');
-      probe.style.position = 'fixed';
-      probe.style.pointerEvents = 'none';
-      probe.style.visibility = 'hidden';
-      probe.style.paddingTop = 'env(safe-area-inset-top, 0px)';
-      probe.style.paddingRight = 'env(safe-area-inset-right, 0px)';
-      probe.style.paddingBottom = 'env(safe-area-inset-bottom, 0px)';
-      probe.style.paddingLeft = 'env(safe-area-inset-left, 0px)';
-      document.body.appendChild(probe);
-      const computed = window.getComputedStyle(probe);
-      setSafeAreaDebug({
-        top: toNumber(computed.paddingTop),
-        right: toNumber(computed.paddingRight),
-        bottom: toNumber(computed.paddingBottom),
-        left: toNumber(computed.paddingLeft),
-        viewportHeight: Math.round(window.visualViewport?.height || window.innerHeight),
-        innerHeight: window.innerHeight,
-      });
-      probe.remove();
-    };
-
-    const refreshTelemetry = () => {
-      const latest = getRecentUXEvents().slice(-8).reverse();
-      setRecentUxEvents(latest);
-    };
-
-    const handleTelemetry = (event: Event) => {
-      const detail = (event as CustomEvent<Record<string, unknown>>).detail;
-      if (!detail || typeof detail !== 'object') return;
-      setRecentUxEvents(prev => [detail, ...prev].slice(0, 8));
-    };
-
-    measureSafeArea();
-    refreshTelemetry();
-
-    window.addEventListener('resize', measureSafeArea);
-    window.addEventListener('orientationchange', measureSafeArea);
-    window.visualViewport?.addEventListener('resize', measureSafeArea);
-    window.visualViewport?.addEventListener('scroll', measureSafeArea);
-    window.addEventListener('geograph:ux-event', handleTelemetry as EventListener);
-
-    return () => {
-      window.removeEventListener('resize', measureSafeArea);
-      window.removeEventListener('orientationchange', measureSafeArea);
-      window.visualViewport?.removeEventListener('resize', measureSafeArea);
-      window.visualViewport?.removeEventListener('scroll', measureSafeArea);
-      window.removeEventListener('geograph:ux-event', handleTelemetry as EventListener);
-    };
-  }, [isDevBuild]);
-
-  useEffect(() => {
-    if (!isDevBuild || !showQaPanel || !user?.id) {
-      setQaFailedJobs([]);
-      return;
-    }
-
-    let mounted = true;
-    const loadFailedJobs = async () => {
-      try {
-        const failed = await processingQueueService.getUserJobs({ status: ['FAILED'], limit: 8 });
-        if (mounted) setQaFailedJobs(failed);
-      } catch {
-        if (mounted) setQaFailedJobs([]);
-      }
-    };
-
-    loadFailedJobs();
-    const interval = setInterval(loadFailedJobs, 12000);
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [isDevBuild, showQaPanel, user?.id, dbQueueStats?.failed]);
-
-  useEffect(() => {
-    const updateInstallPromptAvailability = () => setIsInstallPromptAvailable(canInstallPWA());
-
-    updateInstallPromptAvailability();
-    window.addEventListener('beforeinstallprompt', updateInstallPromptAvailability);
-    window.addEventListener('appinstalled', updateInstallPromptAvailability);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', updateInstallPromptAvailability);
-      window.removeEventListener('appinstalled', updateInstallPromptAvailability);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!dbProcessFeedback) return;
-
-    const timeout = setTimeout(() => {
-      setDbProcessFeedback(null);
-    }, 9000);
-
-    return () => clearTimeout(timeout);
-  }, [dbProcessFeedback]);
-
-  useEffect(() => {
-    localStorage.setItem('geograph-db-view-mode', dbViewMode);
-  }, [dbViewMode]);
-
-  useEffect(() => {
-    localStorage.setItem('geograph-db-group-by', groupBy);
-  }, [groupBy]);
-
-  useEffect(() => {
-    if (selectedGroupKey) {
-      localStorage.setItem('geograph-db-selected-group', selectedGroupKey);
-    } else {
-      localStorage.removeItem('geograph-db-selected-group');
-    }
-  }, [selectedGroupKey]);
-
-  useEffect(() => {
-    if (!user?.id || (activeTab !== 'database' && activeTab !== 'dashboard')) return;
-
-    let mounted = true;
-    const fetchQueueStats = async () => {
-      try {
-        const stats = await processingQueueService.getStats();
-        if (mounted) setDbQueueStats(stats);
-      } catch {
-        if (mounted) setDbQueueStats(null);
-      }
-    };
-
-    fetchQueueStats();
-    const interval = setInterval(fetchQueueStats, 15000);
-
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, [activeTab, user?.id, localAssets.length, batchQueue.length]);
-
-  useEffect(() => {
-    if (!dbQueueStats) {
-      setProcessingOnlySince(null);
-      return;
-    }
-
-    if (dbQueueStats.pending === 0 && dbQueueStats.processing > 0) {
-      setProcessingOnlySince(prev => prev || Date.now());
-      return;
-    }
-
-    setProcessingOnlySince(null);
-  }, [dbQueueStats]);
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (window.innerWidth < 1024) {
-      localStorage.setItem('geograph-mobile-last-tab', activeTab);
-    }
-  }, [activeTab]);
-
-  // H3 FIX: Removed eager preload of ARScene + GraphVisualizer.
-  // These are already wrapped in React.lazy/Suspense and will load on-demand
-  // when the user actually navigates to the Explore or AR tab.
-  // Removing this stops ~200KB+ of chunk downloads from competing with the
-  // critical auth + data path during cold start.
-
-  // H1 FIX: Lazy-init WorkerPool — pass minWorkers: 0 so no workers are
-  // spawned at mount. Workers are created on-demand when first task is queued.
-  const workerPoolRef = useRef<WorkerPool | null>(null);
-  const getWorkerPool = useCallback(() => {
-    if (!workerPoolRef.current) {
-      workerPoolRef.current = new WorkerPool('../workers/parallelWorker.ts', { maxWorkers: 4, minWorkers: 0 });
-    }
-    return workerPoolRef.current;
-  }, []);
-
-  const mergeIncomingAssetPreserveImage = useCallback((current: DigitalAsset, incoming: DigitalAsset): DigitalAsset => {
-    if (!current.imageBlob) return incoming;
-    return {
-      ...incoming,
-      imageBlob: current.imageBlob,
-      imageUrl: current.imageUrl || incoming.imageUrl,
-    };
-  }, []);
+  // Initialize Worker Pool for parallel processing
+  const workerPool = useMemo(() => new WorkerPool('../workers/parallelWorker.ts', { maxWorkers: 4 }), []);
 
   // Initialize Processing Queue Service with simplified callbacks
   // The heavy lifting is done by the direct Realtime subscription below
   useEffect(() => {
-    let continuousCleanup: (() => void) | undefined;
-    
     if (user?.id) {
-      _pqsP.then(async () => {
-        await processingQueueService.init(user.id);
-        
-        // Reconcile local PROCESSING assets with server results.
-        // syncLocalWithServerQueue (inside init) only checks processing_queue;
-        // reconcileWithServer also checks historical_documents_global where
-        // completed results actually live — recovers assets whose Realtime
-        // completion events were missed (e.g., browser closed mid-processing).
-        const reconcileResult = await processingQueueService.reconcileWithServer();
-        if (reconcileResult.recovered > 0 || reconcileResult.failed > 0 || reconcileResult.orphaned > 0) {
-          console.log(`[Reconcile] Recovered ${reconcileResult.recovered}, failed ${reconcileResult.failed}, orphaned ${reconcileResult.orphaned}, stillActive ${reconcileResult.stillActive}`);
-          // Reload local assets to reflect reconciled state
-          const { loadAssets } = await import('./lib/indexeddb');
-          const refreshed = await loadAssets();
-          setLocalAssets(refreshed);
-        }
-        
-        // Enable continuous background processing — health checks, stale lock
-        // release, local job flush, Realtime polling fallback, periodic reconciliation.
-        // This runs all data operations in the background automatically.
-        continuousCleanup = processingQueueService.enableContinuousProcessing({
-          healthCheckIntervalMs: 60000,    // Health check every 1 min
-          staleJobCheckIntervalMs: 300000, // Stale lock release every 5 min
-          pollingFallbackMs: 30000,        // Poll when Realtime fails
-        });
-        
-        // Auto-upload any PENDING assets that haven't been sent to server yet.
-        // This catches assets created while offline or from previous sessions.
-        autoUploadPendingAssets();
-        
-        // Register Service Worker background sync so queue processing
-        // continues even when the app is backgrounded on mobile.
-        import('./lib/pwaUtils').then(({ registerBackgroundSync, registerPeriodicSync }) => {
-          registerBackgroundSync('sync-queue').catch(() => {});
-          // Periodic sync: check for pending work every 15 minutes (minimum browser allows)
-          registerPeriodicSync('sync-queue', 15 * 60 * 1000).catch(() => {});
-        }).catch(() => {});
+      processingQueueService.init(user.id);
       
-        // Lightweight callbacks for progress updates only
-        processingQueueService.setCallbacks({
-          onJobStarted: (job) => {
-            setLocalAssets(prev => prev.map(a => 
-              a.id === job.assetId ? { ...a, status: AssetStatus.PROCESSING, progress: 10 } : a
-            ));
-            // Also update batch queue if item exists there
-            setBatchQueue(prev => prev.map(item => 
-              item.assetId === job.assetId ? { ...item, status: 'PROCESSING', progress: 10, stage: 'Started' } : item
-            ));
-          },
-          onJobProgress: (job) => {
-            setLocalAssets(prev => prev.map(a => 
-              a.id === job.assetId ? { ...a, progress: Math.min(90, job.progress) } : a
-            ));
-            setBatchQueue(prev => prev.map(item => 
-              item.assetId === job.assetId ? { ...item, progress: job.progress, stage: job.stage } : item
-            ));
-          },
-          // onJobCompleted is now handled by the direct Realtime subscription below
-          // This avoids double-fetching and redundant sync
-          onJobCompleted: (job) => {
-            // Mark as completed in UI immediately - Realtime will provide full data
-            setLocalAssets(prev => prev.map(a => 
-              a.id === job.assetId ? { ...a, progress: 100 } : a
-            ));
-            setBatchQueue(prev => prev.map(item => 
-              item.assetId === job.assetId ? { ...item, status: 'COMPLETED', progress: 100, stage: 'Done' } : item
-            ));
-          },
-          onJobFailed: (job) => {
-            setLocalAssets(prev => prev.map(a => 
-              a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, progress: 0, errorMessage: job.error } : a
-            ));
-            setBatchQueue(prev => prev.map(item => 
-              item.assetId === job.assetId ? { ...item, status: 'FAILED', progress: 0, errorMsg: job.error || 'Processing failed' } : item
-            ));
-          }
-        });
+      // Lightweight callbacks for progress updates only
+      processingQueueService.setCallbacks({
+        onJobStarted: (job) => {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, status: AssetStatus.PROCESSING, progress: 10 } : a
+          ));
+          // Also update batch queue if item exists there
+          setBatchQueue(prev => prev.map(item => 
+            item.assetId === job.assetId ? { ...item, status: 'PROCESSING', progress: 10, stage: 'Started' } : item
+          ));
+        },
+        onJobProgress: (job) => {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, progress: Math.min(90, job.progress) } : a
+          ));
+          setBatchQueue(prev => prev.map(item => 
+            item.assetId === job.assetId ? { ...item, progress: job.progress, stage: job.stage } : item
+          ));
+        },
+        // onJobCompleted is now handled by the direct Realtime subscription below
+        // This avoids double-fetching and redundant sync
+        onJobCompleted: (job) => {
+          // Mark as completed in UI immediately - Realtime will provide full data
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, progress: 100 } : a
+          ));
+          setBatchQueue(prev => prev.map(item => 
+            item.assetId === job.assetId ? { ...item, status: 'COMPLETED', progress: 100, stage: 'Done' } : item
+          ));
+        },
+        onJobFailed: (job) => {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, progress: 0, errorMessage: job.error } : a
+          ));
+          setBatchQueue(prev => prev.map(item => 
+            item.assetId === job.assetId ? { ...item, status: 'FAILED', progress: 0, errorMsg: job.error || 'Processing failed' } : item
+          ));
+        }
       });
     }
-    return () => {
-      continuousCleanup?.();
-    };
   }, [user?.id]);
 
   // Direct Realtime subscription to processing_queue for job updates
@@ -905,48 +332,45 @@ export default function App() {
   useEffect(() => {
     if (!user?.id) return;
 
-    let subscription: { unsubscribe: () => void } | undefined;
-    _pqsP.then(() => {
-      subscription = processingQueueService.subscribeToJobUpdates(
-        user.id,
-        (job) => {
-          console.log('📡 Queue Realtime update:', job.id, job.status, job.stage);
-          
-          // Update batch queue UI based on job status
-          setBatchQueue(prev => prev.map(item => {
-            if (item.assetId !== job.assetId) return item;
+    const subscription = processingQueueService.subscribeToJobUpdates(
+      user.id,
+      (job) => {
+        console.log('📡 Queue Realtime update:', job.id, job.status, job.stage);
+        
+        // Update batch queue UI based on job status
+        setBatchQueue(prev => prev.map(item => {
+          if (item.assetId !== job.assetId) return item;
 
-            switch (job.status) {
-              case 'COMPLETED':
-                return { ...item, status: 'COMPLETED', progress: 100, stage: 'Done' };
-              case 'FAILED':
-                return { ...item, status: 'FAILED', progress: 0, errorMsg: job.error || 'Failed' };
-              case 'PROCESSING':
-                return { ...item, status: 'PROCESSING', progress: job.progress, stage: job.stage || 'Processing...' };
-              default:
-                return item;
-            }
-          }));
-
-          // Update local assets based on job status
-          if (job.status === 'COMPLETED') {
-            setLocalAssets(prev => prev.map(a => 
-              a.id === job.assetId ? { ...a, status: AssetStatus.MINTED, progress: 100 } : a
-            ));
-          } else if (job.status === 'FAILED') {
-            setLocalAssets(prev => prev.map(a => 
-              a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, progress: 0, errorMessage: job.error } : a
-            ));
-          } else if (job.status === 'PROCESSING') {
-            setLocalAssets(prev => prev.map(a => 
-              a.id === job.assetId ? { ...a, status: AssetStatus.PROCESSING, progress: job.progress } : a
-            ));
+          switch (job.status) {
+            case 'COMPLETED':
+              return { ...item, status: 'COMPLETED', progress: 100, stage: 'Done' };
+            case 'FAILED':
+              return { ...item, status: 'FAILED', progress: 0, errorMsg: job.error || 'Failed' };
+            case 'PROCESSING':
+              return { ...item, status: 'PROCESSING', progress: job.progress, stage: job.stage || 'Processing...' };
+            default:
+              return item;
           }
-        }
-      );
-    });
+        }));
 
-    return () => subscription?.unsubscribe();
+        // Update local assets based on job status
+        if (job.status === 'COMPLETED') {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, status: AssetStatus.MINTED, progress: 100 } : a
+          ));
+        } else if (job.status === 'FAILED') {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, status: AssetStatus.FAILED, progress: 0, errorMessage: job.error } : a
+          ));
+        } else if (job.status === 'PROCESSING') {
+          setLocalAssets(prev => prev.map(a => 
+            a.id === job.assetId ? { ...a, status: AssetStatus.PROCESSING, progress: job.progress } : a
+          ));
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, [user?.id]);
 
   // Direct Realtime subscription to historical_documents_global
@@ -955,239 +379,46 @@ export default function App() {
   useEffect(() => {
     if (!user?.id) return;
 
-    let unsubscribe: (() => void) | undefined;
-    import('./services/supabaseService').then(({ subscribeToAssetUpdates, mirrorEdgeAssetToMasterIfNeeded }) => {
-      unsubscribe = subscribeToAssetUpdates(
-        user.id,
-        // On asset UPDATE (e.g., edge processing completed)
-        (updatedAsset) => {
-          setLocalAssets(prev => {
-            const current = prev.find(a => a.id === updatedAsset.id);
-            if (current) {
-              const merged = mergeIncomingAssetPreserveImage(current, updatedAsset);
-              return prev.map(a => a.id === updatedAsset.id ? merged : a);
-            }
-            return prev;
-          });
+    const unsubscribe = subscribeToAssetUpdates(
+      user.id,
+      // On asset UPDATE (e.g., edge processing completed)
+      (updatedAsset) => {
+        setLocalAssets(prev => {
+          const exists = prev.some(a => a.id === updatedAsset.id);
+          if (exists) {
+            return prev.map(a => a.id === updatedAsset.id ? updatedAsset : a);
+          }
+          return prev;
+        });
+        // Also persist to local IndexedDB
+        saveAsset(updatedAsset).catch(e => console.error('Failed to persist updated asset', e));
+      },
+      // On asset INSERT (e.g., new asset from edge function)
+      (newAsset) => {
+        setLocalAssets(prev => {
+          // Avoid duplicates
+          if (prev.some(a => a.id === newAsset.id)) {
+            return prev.map(a => a.id === newAsset.id ? newAsset : a);
+          }
+          return [newAsset, ...prev];
+        });
+        saveAsset(newAsset).catch(e => console.error('Failed to persist new asset', e));
+      }
+    );
 
-          mirrorEdgeAssetToMasterIfNeeded(updatedAsset, user.id).catch(err =>
-            console.warn('Master mirror after edge update failed:', err)
-          );
+    return () => unsubscribe();
+  }, [user?.id]);
 
-          // Also persist to local IndexedDB
-          saveAsset(updatedAsset).catch(e => console.error('Failed to persist updated asset', e));
-        },
-        // On asset INSERT (e.g., new asset from edge function)
-        (newAsset) => {
-          setLocalAssets(prev => {
-            // Avoid duplicates
-            const current = prev.find(a => a.id === newAsset.id);
-            if (current) {
-              const merged = mergeIncomingAssetPreserveImage(current, newAsset);
-              return prev.map(a => a.id === newAsset.id ? merged : a);
-            }
-            return [newAsset, ...prev];
-          });
+  // Avatar & Metaverse state
+  const { avatar, nearbyUsers, currentSector, updatePosition } = useAvatar(user?.id || null);
 
-          mirrorEdgeAssetToMasterIfNeeded(newAsset, user.id).catch(err =>
-            console.warn('Master mirror after edge insert failed:', err)
-          );
-
-          saveAsset(newAsset).catch(e => console.error('Failed to persist new asset', e));
-        }
-      );
-    });
-
-    return () => unsubscribe?.();
-  }, [mergeIncomingAssetPreserveImage, user?.id]);
-
-  // C3 FIX: Only activate avatar/presence tracking when user navigates to Explore tab.
-  // Previously this fired on every mount, hitting Supabase for presence even on Dashboard.
-  const avatarUserId = (activeTab === 'explore' && user?.id) ? user.id : null;
-  const { avatar, nearbyUsers, currentSector, updatePosition } = useAvatar(avatarUserId);
-
-  // Memoized to avoid re-computing on every render (can be large with 387+ assets)
-  const totalTokens = useMemo(() => assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0), [assets]);
-  const knowledgeNodeCount = useMemo(() => assets.reduce((a, c) => a + (c.graphData?.nodes?.length || 0), 0), [assets]);
-  const pendingLocalCount = useMemo(() => localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length, [localAssets]);
-  const pendingGlobalCount = useMemo(() => globalAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length, [globalAssets]);
+  const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
+  const pendingLocalCount = localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
+  const pendingGlobalCount = globalAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
   const totalPendingCount = pendingLocalCount + pendingGlobalCount;
   
   // Count stuck assets (PROCESSING but likely from prior session)
-  const stuckAssetsCount = useMemo(() => localAssets.filter(a => a.status === AssetStatus.PROCESSING).length, [localAssets]);
-  const activeDownloads = useMemo(
-    () => downloadQueueItems.filter(item => item.status === 'downloading' || item.status === 'pending'),
-    [downloadQueueItems]
-  );
-  const failedDownloads = useMemo(
-    () => downloadQueueItems.filter(item => item.status === 'failed').length,
-    [downloadQueueItems]
-  );
-  const structuredCompleteCount = useMemo(() => assets.filter(a =>
-    a.sqlRecord?.STRUCTURED_TEMPORAL &&
-    a.sqlRecord?.STRUCTURED_SPATIAL &&
-    a.sqlRecord?.STRUCTURED_CONTENT &&
-    a.sqlRecord?.STRUCTURED_KNOWLEDGE_GRAPH &&
-    a.sqlRecord?.STRUCTURED_PROVENANCE &&
-    a.sqlRecord?.STRUCTURED_DISCOVERY
-  ).length, [assets]);
-  const syncQueuedCount = (dbQueueStats?.pending || 0) + (dbQueueStats?.processing || 0);
-  const failedAssetCount = useMemo(() => assets.filter(a => a.status === AssetStatus.FAILED).length, [assets]);
-  const syncFailureCount = (dbQueueStats?.failed || 0) + failedAssetCount;
-  const qaFailedAssets = useMemo(() => {
-    const merged = [...localAssets, ...globalAssets].filter(a => a.status === AssetStatus.FAILED);
-    const deduped = new Map<string, DigitalAsset>();
-    merged.forEach(asset => {
-      if (!deduped.has(asset.id)) deduped.set(asset.id, asset);
-    });
-    return Array.from(deduped.values()).slice(0, 8);
-  }, [localAssets, globalAssets]);
-  const staleProcessingEligible = Boolean(
-    dbQueueStats &&
-    dbQueueStats.pending === 0 &&
-    dbQueueStats.processing > 0 &&
-    processingOnlySince &&
-    Date.now() - processingOnlySince > 90_000
-  );
-
-  const mapProcessingRemediation = useCallback((message: string): { action?: 'settings' | 'queue' | 'releaseRetry'; hint: string } => {
-    const lower = message.toLowerCase();
-    if (lower.includes('not logged in') || lower.includes('authenticated')) {
-      return { action: 'settings', hint: 'Sign in from Settings to enable server queue processing.' };
-    }
-    if (lower.includes('offline') || lower.includes('network')) {
-      return { action: 'queue', hint: 'Open Queue panel and retry once connection is restored.' };
-    }
-    if (lower.includes('stale') || lower.includes('processing') || lower.includes('claim')) {
-      return { action: 'releaseRetry', hint: 'Release stale locks, then retry queue processing.' };
-    }
-    return { action: 'queue', hint: 'Open Queue panel to inspect service diagnostics and retry.' };
-  }, []);
-
-  const handleReleaseStaleAndRetry = useCallback(async () => {
-    try {
-      const released = await processingQueueService.releaseStaleJobs();
-      await processingQueueService.invokeEdgeFunction(10);
-      showToast('success', `Released ${released} stale lock${released !== 1 ? 's' : ''} and retriggered queue.`);
-      setDbProcessFeedback({ type: 'success', message: `Released ${released} stale locks and retriggered queue.` });
-      trackUXEvent('release_stale_retry', { released });
-      setShowProcessingPanel(true);
-    } catch (error: any) {
-      const message = error?.message || 'Failed to release stale locks.';
-      showToast('error', message);
-      setDbProcessFeedback({ type: 'error', message, action: 'queue' });
-    }
-  }, [showToast]);
-
-  const handleCancelDbProcess = useCallback(() => {
-    dbProcessCancelRef.current = true;
-    setDbProcessRun(prev => ({ ...prev, cancelRequested: true, step: 'finalizing' }));
-    showToast('info', 'Stopping after current operation finishes...');
-    trackUXEvent('process_pending_cancel', {
-      processed: dbProcessRun.processed,
-      total: dbProcessRun.total,
-    });
-  }, [dbProcessRun.processed, dbProcessRun.total, showToast]);
-
-  const toggleQueuePanel = useCallback((source: string) => {
-    setShowProcessingPanel(prev => {
-      const next = !prev;
-      trackUXEvent('queue_panel_toggle', { source, open: next });
-      return next;
-    });
-  }, []);
-
-  const handleAssetDownload = useCallback(async (asset: DigitalAsset, format: 'json' | 'image' = 'image') => {
-    if (format === 'json') {
-      if (!asset.sqlRecord) return;
-      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(asset.sqlRecord, null, 2));
-      const downloadAnchorNode = document.createElement('a');
-      downloadAnchorNode.setAttribute('href', dataStr);
-      downloadAnchorNode.setAttribute('download', `GEOGRAPH_DB_${asset.id}.json`);
-      document.body.appendChild(downloadAnchorNode);
-      downloadAnchorNode.click();
-      downloadAnchorNode.remove();
-      return;
-    }
-
-    setDownloadProgressByAsset(prev => ({
-      ...prev,
-      [asset.id]: {
-        loaded: 0,
-        total: 0,
-        status: 'downloading',
-      },
-    }));
-
-    await downloadService.downloadAsset(asset, {
-      onProgress: (loaded, total) => {
-        setDownloadProgressByAsset(prev => ({
-          ...prev,
-          [asset.id]: {
-            loaded,
-            total,
-            status: 'downloading',
-          },
-        }));
-      },
-      onComplete: () => {
-        setDownloadProgressByAsset(prev => ({
-          ...prev,
-          [asset.id]: {
-            loaded: prev[asset.id]?.total || prev[asset.id]?.loaded || 0,
-            total: prev[asset.id]?.total || 0,
-            status: 'completed',
-          },
-        }));
-      },
-      onError: (error) => {
-        const cancelled = error.name === 'AbortError' || /cancel/i.test(error.message);
-        setDownloadProgressByAsset(prev => ({
-          ...prev,
-          [asset.id]: {
-            loaded: prev[asset.id]?.loaded || 0,
-            total: prev[asset.id]?.total || 0,
-            status: cancelled ? 'cancelled' : 'failed',
-            error: error.message,
-          },
-        }));
-
-        if (!cancelled) {
-          showToast('warning', 'Image download unavailable — exporting JSON instead.');
-          handleAssetDownload(asset, 'json');
-        }
-      }
-    });
-  }, [showToast]);
-
-  const handleCancelDownload = useCallback((assetId: string) => {
-    const cancelled = downloadService.cancelDownload(assetId);
-    if (cancelled) {
-      setDownloadProgressByAsset(prev => ({
-        ...prev,
-        [assetId]: {
-          loaded: prev[assetId]?.loaded || 0,
-          total: prev[assetId]?.total || 0,
-          status: 'cancelled',
-          error: 'Cancelled by user',
-        },
-      }));
-    }
-  }, []);
-
-  const handleInstallPWA = useCallback(async () => {
-    if (!isInstallPromptAvailable || isInstallingPWA) return;
-
-    setIsInstallingPWA(true);
-    try {
-      const result = await promptInstall();
-      if (result === 'accepted') {
-        setIsInstallPromptAvailable(false);
-      }
-    } finally {
-      setIsInstallingPWA(false);
-    }
-  }, [isInstallPromptAvailable, isInstallingPWA]);
+  const stuckAssetsCount = localAssets.filter(a => a.status === AssetStatus.PROCESSING).length;
 
   useEffect(() => {
     const handleShortcuts = (e: KeyboardEvent) => {
@@ -1198,58 +429,36 @@ export default function App() {
         case '2': setActiveTab('batch'); break;
         case '3': setActiveTab('ar'); break;
         case '4': setActiveTab('assets'); break;
-        case '5': setActiveTab('explore'); setExploreSubTab('3d'); break;
+        case '5': setActiveTab('graph'); break;
         case '6': setActiveTab('database'); break;
         case '7': if (isAdmin) setActiveTab('review'); break;
         case 's': setActiveTab('settings'); break;
         case 'g': setIsGlobalView(prev => !prev); break;
         case 'r': if (isGlobalView) refreshGlobalData(); break;
-        case 'w': setActiveTab('explore'); setExploreSubTab('3d'); break;
-        case 'q': toggleQueuePanel('keyboard'); break; // Queue panel toggle
+        case 'w': setActiveTab('world'); break;
+        case 'q': setShowProcessingPanel(prev => !prev); break; // Queue panel toggle
       }
     };
 
     window.addEventListener('keydown', handleShortcuts);
     return () => window.removeEventListener('keydown', handleShortcuts);
-  }, [isGlobalView, toggleQueuePanel]);
+  }, [isGlobalView]);
 
   useEffect(() => {
-    // Defer geo permission check — no need to block render for a status dot
-    const checkGeo = () => navigator.permissions.query({ name: 'geolocation' }).then((result) => setGeoPermission(result.state === 'granted'));
-    if ('requestIdleCallback' in window) {
-      (window as any).requestIdleCallback(checkGeo, { timeout: 5000 });
-    } else {
-      setTimeout(checkGeo, 3000);
-    }
-
+    navigator.permissions.query({ name: 'geolocation' }).then((result) => setGeoPermission(result.state === 'granted'));
+    
     initSync();
     isSyncEnabled().then(setSyncOn);
     setWeb3Enabled(localStorage.getItem('geograph-web3-enabled') === 'true');
     setScannerConnected(!!localStorage.getItem('geograph-scanner-url'));
 
     const storedPurchases = localStorage.getItem('geograph-owned-assets');
-    if (storedPurchases) {
-      try {
-        const parsed = JSON.parse(storedPurchases);
-        setOwnedAssetIds(new Set(Array.isArray(parsed) ? parsed : []));
-      } catch {
-        setOwnedAssetIds(new Set());
-      }
-    }
+    if (storedPurchases) setOwnedAssetIds(new Set(JSON.parse(storedPurchases)));
     
     const handleNewFile = (event: CustomEvent<File>) => ingestFile(event.detail, "Auto-Sync");
     window.addEventListener('geograph-new-file', handleNewFile as any);
 
-    // PHASE 0: Load from IndexedDB IMMEDIATELY — no network dependency (~5ms).
-    // This gives the user instant content while auth + cloud sync happen in background.
-    let localSnapshot: DigitalAsset[] = [];
-    const localReady = loadAssets().then((cached) => {
-      localSnapshot = cached;
-      setLocalAssets(cached);
-      setIsLocalDataLoaded(true);
-    });
-
-    import('./lib/auth').then(m => m.getCurrentUser()).then(async ({ data }) => { 
+    getCurrentUser().then(async ({ data }) => { 
       if(data.user) { 
         setUser(data.user); 
         
@@ -1257,75 +466,68 @@ export default function App() {
         const isSuperUser = data.user.email === 'loadopoly@gmail.com';
         setIsAdmin(isSuperUser);
         setIsEnterprise(true); // Authenticated users are treated as enterprise-tier
-
-        // Ensure Phase 0 is complete before using localSnapshot
-        await localReady;
-
-        // PHASE 2: Defer cloud sync to idle so UI is interactive first
-        const deferredSync = async () => {
-          try {
-            const { contributeAssetToGlobalCorpus, fetchUserAssets } = await import('./services/supabaseService');
-            // Sync unsynced local assets to cloud
-            const syncPromises = localSnapshot
-              .filter(asset => asset.status === AssetStatus.MINTED && !asset.sqlRecord?.USER_ID)
-              .map(async (asset) => {
-                try {
-                  await contributeAssetToGlobalCorpus(asset, data.user.id, 'GEOGRAPH_CORPUS_1.0', true);
-                  if (asset.sqlRecord) asset.sqlRecord.USER_ID = data.user.id;
-                  await saveAsset(asset);
-                } catch (e) {
-                  console.error("Failed to sync local asset to cloud:", e);
-                }
-              });
-            
-            await Promise.all(syncPromises);
-
-            // Fetch remote assets and merge
-            const remoteAssets = await fetchUserAssets(data.user.id);
-            const assetMap = new Map<string, DigitalAsset>();
-            localSnapshot.forEach(a => assetMap.set(a.id, a));
-            // Merge remote data INTO local: preserve local imageBlob and imageUrl
-            // when the local version has binary data (remote always lacks imageBlob).
-            remoteAssets.forEach(a => {
-              const local = assetMap.get(a.id);
-              if (local?.imageBlob) {
-                // Keep the local blob and its valid blob URL; merge the rest from remote
-                assetMap.set(a.id, { ...a, imageBlob: local.imageBlob, imageUrl: local.imageUrl });
-              } else {
-                assetMap.set(a.id, a);
-              }
-            });
-            
-            const mergedAssets = Array.from(assetMap.values()).sort((a, b) => 
-              new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-            );
-
-            setLocalAssets(mergedAssets);
-            
-            // Persist merged state to IndexedDB in background
-            for (const asset of mergedAssets) {
+        
+        // 1. Sync local assets to cloud if they aren't there yet
+        const local = await loadAssets();
+        const syncPromises = local.map(async (asset) => {
+          if (asset.status === AssetStatus.MINTED && !asset.sqlRecord?.USER_ID) {
+            try {
+              await contributeAssetToGlobalCorpus(asset, data.user.id, 'GEOGRAPH_CORPUS_1.0', true);
+              // Update local record to show it's synced (optional, but good for UI)
+              if (asset.sqlRecord) asset.sqlRecord.USER_ID = data.user.id;
               await saveAsset(asset);
+            } catch (e) {
+              console.error("Failed to sync local asset to cloud:", e);
             }
-          } catch (err) {
-            console.error('Failed to sync with cloud:', err);
-            // Local data is already shown — no action needed
           }
-        };
+          return asset;
+        });
+        
+        await Promise.all(syncPromises);
 
-        // Kick off cloud sync after the browser has finished painting
-        if ('requestIdleCallback' in window) {
-          (window as any).requestIdleCallback(deferredSync, { timeout: 10000 });
-        } else {
-          setTimeout(deferredSync, 2000);
+        // 2. Load user's assets from Supabase and MERGE with local
+        try {
+          const remoteAssets = await fetchUserAssets(data.user.id);
+          const localAssetsAfterSync = await loadAssets();
+          
+          // Create a map of assets by ID
+          const assetMap = new Map<string, DigitalAsset>();
+          
+          // Add local assets first
+          localAssetsAfterSync.forEach(a => assetMap.set(a.id, a));
+          
+          // Merge remote assets (overwriting local if they exist, as remote is "truth" for synced items)
+          // BUT preserve local-only items (like pending uploads or guest work)
+          remoteAssets.forEach(a => assetMap.set(a.id, a));
+          
+          const mergedAssets = Array.from(assetMap.values()).sort((a, b) => 
+            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          );
+
+          setLocalAssets(mergedAssets);
+          
+          // Update IndexedDB with the merged state to ensure consistency
+          for (const asset of mergedAssets) {
+            await saveAsset(asset);
+          }
+          
+        } catch (err) {
+          console.error('Failed to load user assets:', err);
+          // Fallback to just local assets if remote fetch fails
+          loadAssets().then(setLocalAssets);
         }
       } else {
-        // Unauthenticated: local data already loaded in Phase 0.
-        // Handle cleanup for sessions that expired.
+        // Unauthenticated: load from IndexedDB only
+        loadAssets().then(setLocalAssets);
+        
+        // Clear session data when page unloads for unauthenticated users
         const handleUnload = () => {
+          // Mark for cleanup on next load if still unauthenticated
           sessionStorage.setItem('geograph-cleanup-needed', 'true');
         };
         window.addEventListener('beforeunload', handleUnload);
         
+        // Cleanup from previous session if needed
         if (sessionStorage.getItem('geograph-cleanup-needed') === 'true') {
           import('./lib/indexeddb').then(({ clearAllAssets }) => {
             clearAllAssets().then(() => {
@@ -1336,7 +538,7 @@ export default function App() {
       }
     }).catch(err => {
       console.error("Auth check failed (likely offline):", err);
-      // Local data already loaded in Phase 0 — no action needed
+      loadAssets().then(setLocalAssets);
     });
 
     return () => {
@@ -1348,7 +550,6 @@ export default function App() {
     setIsProcessing(true);
     try {
       // If not admin, only fetch enterprise-ready assets
-      const { fetchGlobalCorpus } = await import('./services/supabaseService');
       const data = await fetchGlobalCorpus(!isAdmin);
       setGlobalAssets(data);
       announce(`Synced ${data.length} cloud assets.`);
@@ -1363,110 +564,39 @@ export default function App() {
     if (isGlobalView && globalAssets.length === 0) refreshGlobalData();
   }, [isGlobalView]);
 
-  // C1 FIX: createBundles() runs O(n²) dedup (74K+ comparisons for 387 assets).
-  // PERF v2.16.2: Moved to Web Worker so the main thread is never blocked.
-  // Fingerprint check still runs on main thread (avoids posting when nothing changed).
-  const bundleCacheRef = useRef<{ fingerprint: string; items: (DigitalAsset | ImageBundle)[] } | null>(null);
-
   useEffect(() => {
-    if (!isLocalDataLoaded) return;
-
-    if (assets.length === 0) {
-      setDisplayItems([]);
-      bundleCacheRef.current = null;
-      setIsAppReady(true);
-      return;
+    if (assets.length > 0) {
+        const processedAssets = assets.filter(a => !!a.sqlRecord);
+        const processingAssets = assets.filter(a => !a.sqlRecord);
+        createBundles(processedAssets).then(bundles => {
+          setDisplayItems([...processingAssets, ...bundles]);
+        });
+    } else {
+        setDisplayItems([]);
     }
+  }, [assets]);
 
-    const processedAssets = assets.filter(a => !!a.sqlRecord);
-    const processingAssets = assets.filter(a => !a.sqlRecord);
-
-    // Fast fingerprint: sorted asset IDs joined. If unchanged, skip entirely.
-    const fingerprint = processedAssets.map(a => a.id).sort().join(',');
-    if (bundleCacheRef.current?.fingerprint === fingerprint) {
-      setDisplayItems([...processingAssets, ...bundleCacheRef.current.items]);
-      setIsAppReady(true);
-      return;
+  // Auto-navigate to Knowledge Graph after first successful OCR
+  useEffect(() => {
+    if (firstOcrCompletedRef.current) return;
+    const mintedCount = localAssets.filter(a => a.status === AssetStatus.MINTED && a.graphData?.nodes?.length).length;
+    if (mintedCount > prevMintedCountRef.current && prevMintedCountRef.current === 0 && mintedCount >= 1) {
+      firstOcrCompletedRef.current = true;
+      uxPrefs.markFirstAssetProcessed();
+      // Navigate to graph tab to show the newly extracted knowledge graph
+      const firstMinted = localAssets.find(a => a.status === AssetStatus.MINTED && a.graphData?.nodes?.length);
+      if (firstMinted) {
+        setSelectedAssetId(firstMinted.id);
+        setActiveTab('graph');
+      }
     }
+    prevMintedCountRef.current = mintedCount;
+  }, [localAssets]);
 
-    // Show processing assets + raw assets immediately (instant feedback)
-    setDisplayItems([...processingAssets, ...processedAssets]);
-    if (!isAppReady) setIsAppReady(true);
-
-    const worker = bundleWorkerRef.current;
-    if (!worker) {
-      // Fallback: dynamic import + run on main thread if worker failed to create
-      const runBundling = async () => {
-        const { createBundles } = await import('./services/bundleService');
-        const bundles = await createBundles(processedAssets);
-        bundleCacheRef.current = { fingerprint, items: bundles };
-        setDisplayItems([...processingAssets, ...bundles]);
-      };
-      if ('requestIdleCallback' in window) {
-        (window as any).requestIdleCallback(() => runBundling(), { timeout: 8000 });
-      } else {
-        setTimeout(() => runBundling(), 500);
-      }
-      return;
-    }
-
-    // Post minimal asset data to the bundle worker
-    const gen = ++bundleGenRef.current;
-    const minAssets = processedAssets.map(a => {
-      const r = a.sqlRecord;
-      return {
-        id: a.id,
-        ocrText: a.ocrText,
-        location: a.location,
-        status: a.status,
-        sqlRecord: r ? {
-          DOCUMENT_TITLE: r.DOCUMENT_TITLE,
-          DOCUMENT_DESCRIPTION: r.DOCUMENT_DESCRIPTION,
-          ENTITIES_EXTRACTED: r.ENTITIES_EXTRACTED,
-          KEYWORDS_TAGS: r.KEYWORDS_TAGS,
-          SOURCE_COLLECTION: r.SOURCE_COLLECTION,
-          NLP_DERIVED_GIS_ZONE: r.NLP_DERIVED_GIS_ZONE,
-          LOCAL_GIS_ZONE: r.LOCAL_GIS_ZONE,
-          NLP_DERIVED_TIMESTAMP: r.NLP_DERIVED_TIMESTAMP,
-          CONFIDENCE_SCORE: r.CONFIDENCE_SCORE,
-          USER_BUNDLE_ID: r.USER_BUNDLE_ID,
-        } : null,
-        graphData: a.graphData ? { nodes: a.graphData.nodes.map(n => ({ id: n.id })) } : undefined,
-      };
-    });
-
-    worker.onmessage = (e: MessageEvent<{ gen: number; groups: any[]; singleIds: string[] }>) => {
-      if (e.data.gen !== gen) return; // stale result
-
-      const assetMap = new Map(processedAssets.map(a => [a.id, a]));
-      const bundledItems: (DigitalAsset | ImageBundle)[] = [];
-
-      // Reconstruct full ImageBundle objects from worker's ID-based assignments
-      for (const group of e.data.groups) {
-        const groupAssets = group.assetIds.map((id: string) => assetMap.get(id)).filter(Boolean) as DigitalAsset[];
-        if (groupAssets.length === 0) continue;
-        try {
-          const bundle = createBundleFromGroup(groupAssets);
-          bundle.bundleId = group.bundleId;
-          if (group.isUserDefined) bundle.isUserDefined = true;
-          bundledItems.push(bundle);
-        } catch {
-          bundledItems.push(...groupAssets);
-        }
-      }
-
-      // Add singles
-      for (const id of e.data.singleIds) {
-        const asset = assetMap.get(id);
-        if (asset) bundledItems.push(asset);
-      }
-
-      bundleCacheRef.current = { fingerprint, items: bundledItems };
-      setDisplayItems([...processingAssets, ...bundledItems]);
-    };
-
-    worker.postMessage({ gen, assets: minAssets });
-  }, [assets, isLocalDataLoaded, isAppReady]);
+  // Keep UX prefs asset count in sync
+  useEffect(() => {
+    uxPrefs.updateAssetCount(localAssets.length);
+  }, [localAssets.length]);
 
   const handleAssetUpdate = async (updatedAsset: DigitalAsset) => {
     if (isGlobalView) {
@@ -1478,9 +608,8 @@ export default function App() {
     if (user?.id || isGlobalView) {
       // Authenticated users or global view: update in Supabase
       const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-      import('./services/supabaseService').then(m =>
-        m.contributeAssetToGlobalCorpus(updatedAsset, user?.id, license as any, true)
-      ).catch(err => console.error("Failed to update asset in Supabase", err));
+      contributeAssetToGlobalCorpus(updatedAsset, user?.id, license as any, true)
+        .catch(err => console.error("Failed to update asset in Supabase", err));
     } else {
       // Unauthenticated users: save to IndexedDB only
       await saveAsset(updatedAsset);
@@ -1497,34 +626,16 @@ export default function App() {
   };
 
   const switchTab = async (newTab: string) => {
-      trackUXEvent('tab_navigation', { from: activeTab, to: newTab, mobile: window.innerWidth < 1024 });
       if (activeTab === 'ar' && newTab !== 'ar' && arSessionQueue.length > 0) {
-          // Show accessible confirmation dialog instead of window.confirm
-          setArLeaveConfirm({ targetTab: newTab });
-      } else {
-          setActiveTab(newTab);
+          if (window.confirm(`Process ${arSessionQueue.length} items from your AR Session?`)) {
+              handleBatchFiles(arSessionQueue);
+              setArSessionQueue([]);
+          } else {
+              // If user cancels, stay on AR tab and keep the queue
+              return;
+          }
       }
-  };
-
-  const handleArLeaveProcess = () => {
-      const target = arLeaveConfirm?.targetTab || 'batch';
-      handleBatchFiles(arSessionQueue);
-      setArSessionQueue([]);
-      clearArQueue().catch(() => {});
-      setArLeaveConfirm(null);
-      setActiveTab(target);
-  };
-
-  const handleArLeaveDiscard = () => {
-      const target = arLeaveConfirm?.targetTab || 'dashboard';
-      setArSessionQueue([]);
-      clearArQueue().catch(() => {});
-      setArLeaveConfirm(null);
-      setActiveTab(target);
-  };
-
-  const handleArLeaveCancel = () => {
-      setArLeaveConfirm(null);
+      setActiveTab(newTab);
   };
 
   const createInitialAsset = async (file: File): Promise<DigitalAsset> => {
@@ -1613,7 +724,6 @@ export default function App() {
       }
 
       const scanType = (asset.sqlRecord?.SCAN_TYPE as ScanType) || ScanType.DOCUMENT;
-      const { processImageWithGemini } = await import('./services/geminiService');
       const analysis = await processImageWithGemini(file, location, scanType, debugMode);
       
       const updatedSqlRecord: HistoricalDocumentMetadata = {
@@ -1686,7 +796,7 @@ export default function App() {
 
       // Auto-store to Supabase (Automatic Cloud Sync)
       const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-      import('./services/supabaseService').then(m => m.contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true)).then(syncResult => {
+      contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true).then(syncResult => {
         if (syncResult.success && syncResult.publicUrl) {
           // Update state with the permanent cloud URL
           const updatedAsset = { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl };
@@ -1695,9 +805,6 @@ export default function App() {
           } else {
             setLocalAssets(prev => prev.map(a => a.id === asset.id ? updatedAsset : a));
           }
-          // #14: Persist the permanent HTTPS URL to IndexedDB so it survives reloads.
-          // Without this, the blob: URL from ingest time becomes a broken link on next open.
-          saveAsset(updatedAsset).catch(e => console.warn('Failed to persist publicUrl to IndexedDB', e));
         }
       }).catch(err => console.error("Auto-sync to Supabase failed", err));
 
@@ -1737,7 +844,7 @@ export default function App() {
     }
   };
 
-  // Concurrent restart of stuck assets - reconciles with server first, then reprocesses remaining
+  // Concurrent restart of stuck assets - processes while resetting more
   const restartStuckAssets = useCallback(async () => {
     const stuckAssets = localAssets.filter(a => 
       a.status === AssetStatus.PROCESSING && (a.imageBlob || a.imageUrl?.startsWith('http'))
@@ -1745,45 +852,10 @@ export default function App() {
     
     if (stuckAssets.length === 0) return 0;
     
-    console.log(`[AutoRestart] Found ${stuckAssets.length} stuck assets - trying server reconciliation first`);
+    console.log(`[AutoRestart] Found ${stuckAssets.length} stuck assets - starting concurrent recovery`);
     announce(`Recovering ${stuckAssets.length} stuck item${stuckAssets.length !== 1 ? 's' : ''}...`);
     
-    // Phase 1: Try reconciling with server — many may already be completed there
-    try {
-      await _pqsP;
-      const reconcileResult = await processingQueueService.reconcileWithServer();
-      if (reconcileResult.recovered > 0 || reconcileResult.failed > 0) {
-        console.log(`[AutoRestart] Server reconciliation: ${reconcileResult.recovered} recovered, ${reconcileResult.failed} failed, ${reconcileResult.orphaned} orphaned, ${reconcileResult.stillActive} still active`);
-        // Reload local assets to reflect reconciled state
-        const { loadAssets: reloadAssets } = await import('./lib/indexeddb');
-        const refreshed = await reloadAssets();
-        setLocalAssets(refreshed);
-        
-        // If all were reconciled, we're done
-        const stillStuck = refreshed.filter(a => 
-          a.status === AssetStatus.PROCESSING && (a.imageBlob || a.imageUrl?.startsWith('http'))
-        );
-        if (stillStuck.length === 0) {
-          announce(`Recovered ${reconcileResult.recovered} items from server. All items reconciled.`);
-          return reconcileResult.recovered + reconcileResult.failed;
-        }
-        
-        announce(`Recovered ${reconcileResult.recovered} from server. Processing ${stillStuck.length} remaining locally...`);
-      }
-    } catch (e) {
-      console.warn('[AutoRestart] Server reconciliation failed, falling back to local processing:', e);
-    }
-    
-    // Phase 2: Re-check for still-stuck assets after reconciliation
-    const { loadAssets: reloadAssets2 } = await import('./lib/indexeddb');
-    const currentAssets = await reloadAssets2();
-    const remainingStuck = currentAssets.filter(a => 
-      a.status === AssetStatus.PROCESSING && (a.imageBlob || a.imageUrl?.startsWith('http'))
-    );
-    
-    if (remainingStuck.length === 0) return stuckAssets.length;
-    
-    // Phase 3: Process remaining stuck assets locally (original behavior)
+    // Process in concurrent batches - reset a few, process them, continue
     const CONCURRENT_RESET = 3; // Match MAX_CONCURRENT_BATCH_JOBS
     let restarted = 0;
     let activeProcessing = 0;
@@ -1818,20 +890,20 @@ export default function App() {
       }
     };
     
-    // Process all remaining stuck assets with concurrency limit
-    for (let i = 0; i < remainingStuck.length; i++) {
+    // Process all stuck assets with concurrency limit
+    for (let i = 0; i < stuckAssets.length; i++) {
       // Wait if at capacity
       while (activeProcessing >= CONCURRENT_RESET) {
         await new Promise(r => setTimeout(r, 200));
       }
       
-      const asset = remainingStuck[i];
+      const asset = stuckAssets[i];
       // Don't await - fire and continue to next
       processOne(asset);
       restarted++;
       
       // Small stagger to prevent overwhelming
-      if (i < remainingStuck.length - 1) {
+      if (i < stuckAssets.length - 1) {
         await new Promise(r => setTimeout(r, 50));
       }
     }
@@ -1882,7 +954,23 @@ export default function App() {
     }
   }, [isOnline, localAssets.length]);
 
-  const ingestFile = async (file: File, source: string = "Upload", shouldSwitchTab: boolean = true) => {
+  const ingestFile = async (file: File, source: string = "Upload") => {
+    // Credit gate: check if user can process before proceeding
+    const hasCredits = await canProcess(user?.id);
+    if (!hasCredits) {
+      setPendingCreditFile({ file, source });
+      setShowCreditGate(true);
+      return;
+    }
+    
+    // Consume one credit
+    const consumed = await consumeCredit(user?.id);
+    if (!consumed) {
+      setPendingCreditFile({ file, source });
+      setShowCreditGate(true);
+      return;
+    }
+
     setIsProcessing(true);
     try {
       const newAsset = await createInitialAsset(file);
@@ -1897,7 +985,7 @@ export default function App() {
       // Save locally as fallback
       await saveAsset(newAsset);
 
-      if (shouldSwitchTab && source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
+      if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
       
       if (!isOnline) {
         announce("Offline: Asset saved locally. Processing will resume when online.");
@@ -1908,54 +996,17 @@ export default function App() {
       // Background Processing Queue Integration
       try {
         const scanType = (file as any).scanType || selectedScanType || ScanType.DOCUMENT;
-        startUploadTracking();
-
-        // #3: Resolve best GPS coordinates for the image.
-        // Priority: EXIF GPS (embedded at shutter time) > device GPS (current position)
-        // Also track coordinate source for downstream trust decisions.
-        let captureLocation: { lat: number; lng: number } | undefined;
-        let coordinateSource: 'exif' | 'device-live' | 'device-delayed' | 'none' = 'none';
-
-        // Try EXIF GPS first (zero-cost, embedded in photo at capture time)
-        if (file.type === 'image/jpeg' || file.type === 'image/jpg') {
-          try {
-            const { extractGpsFromExif } = await import('./lib/imageCompression');
-            const exifGps = await extractGpsFromExif(file);
-            if (exifGps) {
-              captureLocation = exifGps;
-              coordinateSource = 'exif';
-            }
-          } catch { /* EXIF extraction failed — continue to device GPS */ }
-        }
-
-        // Fall back to device GPS if no EXIF coordinates
-        if (!captureLocation && navigator.geolocation) {
-          try {
-            const pos = await new Promise<GeolocationPosition>((res, rej) =>
-              navigator.geolocation.getCurrentPosition(res, rej, { timeout: 3000, maximumAge: 10000 })
-            );
-            captureLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            // Check staleness: is the photo older than 30 seconds?
-            const photoAge = Date.now() - file.lastModified;
-            coordinateSource = photoAge > 30_000 ? 'device-delayed' : 'device-live';
-          } catch { /* location unavailable — continue without it */ }
-        }
         
         await processingQueueService.queueFile(file, {
           scanType,
-          location: captureLocation,
-          coordinateSource,
           metadata: {
             DOCUMENT_TITLE: newAsset.sqlRecord?.DOCUMENT_TITLE,
             SOURCE_COLLECTION: source
           }
         }, newAsset.id);
-
-        completeUploadTracking();
         
         announce("Asset queued for background processing.");
       } catch (queueErr) {
-        completeUploadTracking();
         console.error("Failed to queue for background processing, falling back to client-side:", queueErr);
         // Fallback to legacy client-side pipeline if queue fails
         const processedAsset = await processAssetPipeline(newAsset, file);
@@ -1979,8 +1030,7 @@ export default function App() {
     try {
       onProgress(5, 'Creating asset...');
       
-      // Create local asset — dynamically import compressImage to keep it off critical path
-      const { compressImage } = await import('./lib/imageCompression');
+      // Create local asset
       const compressionResult = await compressImage(file);
       const imageUrl = URL.createObjectURL(compressionResult.file);
       
@@ -2012,18 +1062,14 @@ export default function App() {
       
       onProgress(15, 'Getting location...');
       
-      // Resolve best GPS: EXIF (from compression) > device GPS
-      let location: { lat: number; lng: number } | null = compressionResult.gpsCoordinates || null;
-      let coordinateSource: 'exif' | 'device-live' | 'device-delayed' | 'none' = location ? 'exif' : 'none';
-
-      if (!location && navigator.geolocation) {
+      // Get location
+      let location: { lat: number; lng: number } | null = null;
+      if (navigator.geolocation) {
         try {
           const position = await new Promise<GeolocationPosition>((resolve, reject) => 
             navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 2000 })
           );
           location = { lat: position.coords.latitude, lng: position.coords.longitude };
-          const photoAge = Date.now() - file.lastModified;
-          coordinateSource = photoAge > 30_000 ? 'device-delayed' : 'device-live';
         } catch (e) {}
       }
       
@@ -2036,22 +1082,16 @@ export default function App() {
         onProgress(20, 'Queueing for server processing...');
         
         try {
-          startUploadTracking();
           // Queue to server for processing - this uploads to storage and inserts into queue
           const job = await processingQueueService.queueFile(compressionResult.file, {
             scanType,
             priority: 5,
             location: location || undefined,
-            coordinateSource,
             metadata: {
               DOCUMENT_TITLE: file.name,
               SOURCE_COLLECTION: 'AR Scanner / Batch Import'
             }
           }, itemId);
-          
-          // Track serverJobId on batch item for server-side retry
-          const { batchProcessor } = await import('./services/batchProcessorService');
-          batchProcessor.setServerJobId(itemId, job.id);
           
           // Update local asset to show it's been queued
           const queuedAsset: DigitalAsset = {
@@ -2072,11 +1112,9 @@ export default function App() {
           
           // Return early - server will handle the rest
           onProgress(100, 'Queued (processing on server)');
-          completeUploadTracking();
           return itemId;
           
         } catch (queueError: any) {
-          completeUploadTracking();
           // Failed to queue to server - fall back to client-side processing
           debugLogger(`Server queue failed, falling back to client processing: ${queueError.message}`, 'warn');
           onProgress(25, 'Server unavailable, processing locally...');
@@ -2086,7 +1124,6 @@ export default function App() {
       onProgress(25, 'AI analysis...');
       
       // Process with Gemini (client-side fallback or when server not available)
-      const { processImageWithGemini } = await import('./services/geminiService');
       const analysis = await processImageWithGemini(file, location, scanType, debugMode);
       
       onProgress(70, 'Building metadata...');
@@ -2152,15 +1189,11 @@ export default function App() {
       // Auto-sync to cloud
       const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
       try {
-        const { contributeAssetToGlobalCorpus } = await import('./services/supabaseService');
         const syncResult = await contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true);
         if (syncResult.success && syncResult.publicUrl) {
-          const updatedWithUrl = { ...resultAsset, imageUrl: syncResult.publicUrl };
           setLocalAssets(prev => prev.map(a => 
-            a.id === itemId ? updatedWithUrl : a
+            a.id === itemId ? { ...a, imageUrl: syncResult.publicUrl || a.imageUrl } : a
           ));
-          // #14: Persist permanent HTTPS URL to IndexedDB so images survive reloads.
-          saveAsset(updatedWithUrl).catch(e => console.warn('Failed to persist publicUrl', e));
         }
       } catch (e) {
         console.warn('Cloud sync failed, asset saved locally:', e);
@@ -2177,19 +1210,16 @@ export default function App() {
       ));
       throw error;
     }
-  }, [user?.id, debugMode, selectedLLM, isPublicBroadcast, startUploadTracking, completeUploadTracking]);
+  }, [user?.id, debugMode, selectedLLM, isPublicBroadcast]);
 
   // Legacy batch handler - now delegates to new system
-  const handleBatchFiles = async (files: File[]) => {
-    // Dynamically load the batch processor only when needed
-    const { batchProcessor } = await import('./services/batchProcessorService');
+  const handleBatchFiles = (files: File[]) => {
+    // Add files to new batch processor
     batchProcessor.addFiles(files, selectedScanType || ScanType.DOCUMENT);
     
-    // Show the batch panel UI but do NOT switch tabs here.
-    // The caller (switchTab, BatchImporter, onFinishSession) decides which tab
-    // to navigate to after invoking this function. This prevents AR session
-    // submissions from hijacking the user back to the Quick Processing tab.
+    // Show the new batch panel
     setShowNewBatchPanel(true);
+    setActiveTab('batch');
     
     // Announce for accessibility
     if (files.length > 50) {
@@ -2214,164 +1244,99 @@ export default function App() {
   }, []);
 
   const handleProcessAllPending = async () => {
-    let pendingAssets = (isGlobalView ? globalAssets : localAssets).filter(
-      a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING
-    );
-
-    const batchPendingCount = batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').length;
-
-    if (isGlobalView && pendingAssets.length === 0 && pendingLocalCount > 0) {
-      pendingAssets = localAssets.filter(
-        a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING
+      // Include both PENDING and PROCESSING (stuck) assets - unified state check
+      let pendingAssets = (isGlobalView ? globalAssets : localAssets).filter(
+          a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING
       );
-      showToast('info', `Using ${pendingAssets.length} pending local assets while in master view.`);
-    }
-
-    if (pendingAssets.length === 0 && batchPendingCount === 0) {
-      setDbProcessFeedback({ type: 'info', message: 'No pending assets found.' });
-      showToast('info', 'No pending assets found in Structured DB.');
-      announce('All assets have been processed.');
-      return;
-    }
-
-    const totalToProcess = pendingAssets.length + batchPendingCount;
-
-    setIsProcessing(true);
-    setShowProcessingPanel(true);
-    dbProcessCancelRef.current = false;
-    setDbProcessRun({
-      running: true,
-      total: totalToProcess,
-      processed: 0,
-      failed: 0,
-      currentAssetId: null,
-      batchPending: batchPendingCount,
-      cancelRequested: false,
-      step: 'preparing',
-    });
-    showToast('info', `Started processing ${totalToProcess} pending items.`);
-    trackUXEvent('process_pending_start', { total: totalToProcess, queueReady: isOnline, tab: activeTab });
-
-    let processedCount = 0;
-    let failedCount = 0;
-
-    try {
-      const diagnostics = processingQueueService.getDiagnostics();
-      const queueReady = isOnline && diagnostics.canProcessServer;
-
-      if (queueReady) {
-        setDbProcessRun(prev => ({ ...prev, step: 'queueing' }));
-        const needsUpload = pendingAssets.filter(a => !a.serverJobId);
-        const alreadyOnServer = pendingAssets.filter(a => !!a.serverJobId);
-
-        if (needsUpload.length > 0) {
-          setUploadProgress({ current: 0, total: needsUpload.length });
-
-          const result = await processingQueueService.requeueLocalAssets(
-            needsUpload.map(a => ({
-              id: a.id,
-              imageBlob: a.imageBlob,
-              imageUrl: a.imageUrl,
-              scanType: a.sqlRecord?.SCAN_TYPE,
-            })),
-            (done, total, currentAssetId) => {
-              setUploadProgress({ current: done, total });
-              setDbProcessRun(prev => ({ ...prev, processed: done, currentAssetId: currentAssetId || prev.currentAssetId, step: 'queueing' }));
-            }
-          );
-
-          processedCount += result.queued;
-          failedCount += result.failed;
-          setDbProcessRun(prev => ({ ...prev, processed: result.queued, failed: result.failed, step: 'queueing' }));
-        }
-
-        if (!dbProcessCancelRef.current && (processedCount > 0 || alreadyOnServer.length > 0)) {
-          try {
-            setDbProcessRun(prev => ({ ...prev, step: 'triggering' }));
-            await processingQueueService.invokeEdgeFunction(10);
-          } catch (edgeErr) {
-            console.warn('Edge trigger failed after requeue:', edgeErr);
+      
+      // Also check batch queue for queued items not yet in assets
+      const batchPendingCount = batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').length;
+      
+      // If in global view and no global pending, but there are local pending, offer to process local
+      if (isGlobalView && pendingAssets.length === 0 && pendingLocalCount > 0) {
+          if (window.confirm(`No pending global assets, but there are ${pendingLocalCount} pending local assets. Process them now?`)) {
+              pendingAssets = localAssets.filter(
+                  a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING
+              );
+          } else {
+              return;
           }
-        }
-      } else {
-        setDbProcessRun(prev => ({ ...prev, step: 'local-processing' }));
-        for (const asset of pendingAssets) {
-          if (dbProcessCancelRef.current) break;
-          try {
-            if (asset.imageBlob || (asset.imageUrl && asset.imageUrl.startsWith('http'))) {
-              setDbProcessRun(prev => ({ ...prev, currentAssetId: asset.id }));
-              let file: File;
-              if (asset.imageBlob) {
-                file = new File([asset.imageBlob], `reprocess_${asset.id}.jpg`, { type: 'image/jpeg' });
-              } else {
-                const response = await fetch(asset.imageUrl);
-                const blob = await response.blob();
-                file = new File([blob], `reprocess_${asset.id}.jpg`, { type: blob.type });
-              }
+      }
 
-              const processedAsset = await processAssetPipeline(asset, file);
-              if (isGlobalView) {
-                setGlobalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+      if (pendingAssets.length === 0 && batchPendingCount === 0) {
+          announce("All assets have been processed.");
+          return;
+      }
+      
+      const totalToProcess = pendingAssets.length + batchPendingCount;
+      if (!window.confirm(`Process ${totalToProcess} pending asset${totalToProcess !== 1 ? 's' : ''}?`)) return;
+      
+      setIsProcessing(true);
+      let processedCount = 0;
+      let failedCount = 0;
+      
+      // Process assets from localAssets/globalAssets
+      for (const asset of pendingAssets) {
+          try {
+              if (asset.imageBlob || (asset.imageUrl && asset.imageUrl.startsWith('http'))) {
+                  let file: File;
+                  if (asset.imageBlob) {
+                      file = new File([asset.imageBlob], `reprocess_${asset.id}.jpg`, { type: 'image/jpeg' });
+                  } else {
+                      const response = await fetch(asset.imageUrl);
+                      const blob = await response.blob();
+                      file = new File([blob], `reprocess_${asset.id}.jpg`, { type: blob.type });
+                  }
+
+                  if (isOnline) {
+                      // Use background queue
+                      try {
+                          await processingQueueService.queueFile(file, {
+                              scanType: (asset.sqlRecord?.SCAN_TYPE as ScanType) || ScanType.DOCUMENT,
+                              metadata: {
+                                  DOCUMENT_TITLE: asset.sqlRecord?.DOCUMENT_TITLE,
+                                  SOURCE_COLLECTION: asset.sqlRecord?.SOURCE_COLLECTION || "Reprocess"
+                              }
+                          }, asset.id);
+                          processedCount++;
+                      } catch (queueErr) {
+                          // Fallback to client-side
+                          const processedAsset = await processAssetPipeline(asset, file);
+                          if (isGlobalView) {
+                              setGlobalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+                          } else {
+                              setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+                          }
+                          processedCount++;
+                      }
+                  } else {
+                      // Offline: manual client-side processing
+                      const processedAsset = await processAssetPipeline(asset, file);
+                      if (isGlobalView) {
+                          setGlobalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+                      } else {
+                          setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+                      }
+                      processedCount++;
+                  }
               } else {
-                setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
+                  console.warn(`Asset ${asset.id} has no image data to process`);
+                  failedCount++;
               }
-              processedCount++;
-              setDbProcessRun(prev => ({ ...prev, processed: prev.processed + 1, step: 'local-processing' }));
-            } else {
-              failedCount++;
-              setDbProcessRun(prev => ({ ...prev, failed: prev.failed + 1, processed: prev.processed + 1, step: 'local-processing' }));
-            }
           } catch (err) {
-            console.error(`Failed to process asset ${asset.id}:`, err);
-            failedCount++;
-            setDbProcessRun(prev => ({ ...prev, failed: prev.failed + 1, processed: prev.processed + 1, step: 'local-processing' }));
+              console.error(`Failed to process asset ${asset.id}:`, err);
+              failedCount++;
           }
-        }
       }
-
-      setDbProcessRun(prev => ({ ...prev, step: 'finalizing' }));
-      if (!dbProcessCancelRef.current && batchPendingCount > 0) {
-        processNextBatchItem();
+      
+      // Trigger batch queue processing if there are items
+      if (batchPendingCount > 0) {
+          processNextBatchItem();
       }
-
-      const wasCancelled = dbProcessCancelRef.current;
-      const feedbackType: 'success' | 'warning' = failedCount > 0 || wasCancelled ? 'warning' : 'success';
-      const feedbackMessage = wasCancelled
-        ? `Stopped early. Processed ${processedCount}, failed ${failedCount}.`
-        : `Queued ${processedCount}, failed ${failedCount}, batch started ${batchPendingCount}.`;
-      setDbProcessFeedback({ type: feedbackType, message: feedbackMessage });
-      showToast(feedbackType, `Structured DB: ${feedbackMessage}`);
-      trackUXEvent('process_pending_complete', {
-        processedCount,
-        failedCount,
-        batchPendingCount,
-        cancelled: wasCancelled,
-      });
-
-      announce(`Processed ${processedCount} asset${processedCount !== 1 ? 's' : ''}${failedCount > 0 ? `, ${failedCount} failed` : ''}.`);
-    } catch (error: any) {
-      const message = error?.message || 'Failed to process pending assets.';
-      const remediation = mapProcessingRemediation(message);
-      setDbProcessFeedback({ type: 'error', message: `${message} ${remediation.hint}`, action: remediation.action });
-      showToast('error', `Structured DB: ${message}`);
-      trackUXEvent('process_pending_error', { message });
-    } finally {
+      
       setIsProcessing(false);
-      setDbProcessRun(prev => ({ ...prev, running: false, currentAssetId: null, step: 'idle' }));
-    }
+      announce(`Processed ${processedCount} asset${processedCount !== 1 ? 's' : ''}${failedCount > 0 ? `, ${failedCount} failed` : ''}.`);
   };
-
-  // #13: Background sync — when SW fires sync-contributions, trigger the processing queue
-  useEffect(() => {
-    const handleSyncRequested = () => {
-      if (isOnline) {
-        handleProcessAllPending();
-      }
-    };
-    window.addEventListener('geograph-sync-requested', handleSyncRequested);
-    return () => window.removeEventListener('geograph-sync-requested', handleSyncRequested);
-    // handleProcessAllPending is stable (useCallback) — intentionally omitted from deps
-  }, [isOnline]);
 
   const handleSendMessage = (receiverId: string, content: string, giftId?: string, isBundle?: boolean) => {
     const newMessage: UserMessage = {
@@ -2490,11 +1455,9 @@ export default function App() {
 
     // Sync to Supabase
     const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-    import('./services/supabaseService').then(m => {
-      for (const asset of updatedAssets) {
-        m.contributeAssetToGlobalCorpus(asset, user?.id, license as any, true).catch(e => console.error("Failed to sync manual bundle", e));
-      }
-    });
+    for (const asset of updatedAssets) {
+      contributeAssetToGlobalCorpus(asset, user?.id, license as any, true).catch(e => console.error("Failed to sync manual bundle", e));
+    }
 
     setSelectedAssetIds(new Set());
     announce(`Created manual bundle: ${bundleTitle}`);
@@ -2619,7 +1582,6 @@ export default function App() {
         // Integration with background processing queue
         try {
           debugLogger(`Queueing ${item.file.name} for server processing`);
-          startUploadTracking();
           
           await processingQueueService.queueFile(item.file, {
             scanType: item.scanType || selectedScanType || ScanType.DOCUMENT,
@@ -2629,12 +1591,10 @@ export default function App() {
               SOURCE_COLLECTION: "Batch Ingest"
             }
           }, newAsset.id);
-          completeUploadTracking();
           
           debugLogger(`Successfully queued ${item.file.name}`);
           setBatchQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
         } catch (queueErr) {
-          completeUploadTracking();
           debugLogger(`Server queue failed for ${item.file.name}, falling back to client processing: ${queueErr}`, 'warn');
           
           // Fallback to client-side processing with timeout protection
@@ -2664,321 +1624,67 @@ export default function App() {
       batchProcessingTimeoutRef.current = setTimeout(() => processNextBatchItem(), 200);
     }
     
-  }, [isOnline, selectedScanType, user, debugLogger, startUploadTracking, completeUploadTracking]);
+  }, [isOnline, selectedScanType, user, debugLogger]);
 
-  const asText = (value: unknown, fallback = ''): string =>
-    typeof value === 'string' ? value : fallback;
-
-  const truncateText = (value: unknown, length: number): string => {
-    if (typeof value !== 'string') return '';
-    return value.slice(0, length);
-  };
-
-  const thumbnailBlobUrlRef = useRef<Map<string, string>>(new Map());
-
-  useEffect(() => {
-    return () => {
-      thumbnailBlobUrlRef.current.forEach((url) => URL.revokeObjectURL(url));
-      thumbnailBlobUrlRef.current.clear();
-    };
-  }, []);
-
-  const getBlobThumbnailUrl = useCallback((asset: DigitalAsset): string => {
-    if (!asset.imageBlob) return '';
-    const existing = thumbnailBlobUrlRef.current.get(asset.id);
-    if (existing) return existing;
-    const blobUrl = URL.createObjectURL(asset.imageBlob);
-    thumbnailBlobUrlRef.current.set(asset.id, blobUrl);
-    return blobUrl;
-  }, []);
-
-  const isUsableImageUrl = useCallback((value: unknown): value is string => {
-    if (typeof value !== 'string' || !value.trim()) return false;
-    // blob: URLs are valid within the current session (loadAssets regenerates them
-    // from stored imageBlobs and clears dead ones on startup)
-    return /^(https?:|blob:|data:)/i.test(value);
-  }, []);
-
-  const attemptedSignedUrlsRef = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    if (!user?.id || assets.length === 0) return;
-
-    const unresolvedIds = assets
-      .filter((asset) => {
-        if (attemptedSignedUrlsRef.current.has(asset.id)) return false;
-        if (!asset.sqlRecord) return false;
-        // Cloud-fetched assets don't include imageBlob; proactively hydrate a signed URL
-        // even if they have an http URL, because many historical ORIGINAL_IMAGE_URL values
-        // are stale/private and fail at render time.
-        return !asset.imageBlob;
-      })
-      .map((asset) => asset.id);
-
-    if (unresolvedIds.length === 0) return;
-
-    let cancelled = false;
-    (async () => {
-      const BATCH_SIZE = 80;
-      for (let index = 0; index < unresolvedIds.length; index += BATCH_SIZE) {
-        if (cancelled) return;
-        const batchIds = unresolvedIds.slice(index, index + BATCH_SIZE);
-        batchIds.forEach((id) => attemptedSignedUrlsRef.current.add(id));
-        const result = await downloadService.getPreviewUrls(batchIds);
-        if (cancelled) return;
-        if (result && Object.keys(result).length > 0) {
-          setSignedPreviewUrls((prev) => ({ ...prev, ...result }));
-        }
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [assets, user?.id, isUsableImageUrl]);
-
-  const getThumbnailSrc = useCallback((asset: DigitalAsset): string => {
-    // 1. Best: fresh blob URL from stored imageBlob (always valid within current session)
-    const blobUrl = getBlobThumbnailUrl(asset);
-    if (blobUrl) return blobUrl;
-    // 2. Signed URL from storage (generated for this session)
-    const signed = signedPreviewUrls[asset.id];
-    if (isUsableImageUrl(signed)) return signed;
-    // 3. Persisted http(s) imageUrl
-    if (isUsableImageUrl(asset.imageUrl)) return asset.imageUrl;
-    // 4. Database ORIGINAL_IMAGE_URL
-    const originalUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
-      ? asset.sqlRecord.ORIGINAL_IMAGE_URL
-      : '';
-    if (isUsableImageUrl(originalUrl)) return originalUrl;
-    // 5. Inline placeholder SVG
-    return 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
-  }, [getBlobThumbnailUrl, isUsableImageUrl, signedPreviewUrls]);
-
-  const handleThumbnailError = useCallback(async (event: React.SyntheticEvent<HTMLImageElement>, asset: DigitalAsset) => {
-    const img = event.currentTarget;
-    const currentSrc = img.src;
-
-    // Collect all viable candidates, try each in order
-    const blobUrl = getBlobThumbnailUrl(asset);
-    const signed = signedPreviewUrls[asset.id] || '';
-    const originalUrl = typeof asset.sqlRecord?.ORIGINAL_IMAGE_URL === 'string'
-      ? asset.sqlRecord.ORIGINAL_IMAGE_URL
-      : '';
-
-    const candidates = [blobUrl, signed, asset.imageUrl, originalUrl].filter(
-      (c): c is string => typeof c === 'string' && c.length > 0 && c !== currentSrc && !c.startsWith('data:')
-    );
-
-    const nextSrc = candidates[0];
-    if (nextSrc) {
-      img.src = nextSrc;
-      return;
-    }
-
-    // Last resort: request a fresh signed URL from storage
-    if (user?.id && !signedPreviewPendingRef.current.has(asset.id)) {
-      signedPreviewPendingRef.current.add(asset.id);
-      try {
-        const refreshed = await downloadService.getPreviewUrl(asset.id);
-        if (refreshed && refreshed !== currentSrc) {
-          setSignedPreviewUrls((prev) => ({ ...prev, [asset.id]: refreshed }));
-          img.src = refreshed;
-          return;
-        }
-      } catch {
-        // no-op; fallback below
-      } finally {
-        signedPreviewPendingRef.current.delete(asset.id);
-      }
-    }
-
-    img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100" viewBox="0 0 24 24" fill="none" stroke="%234A5568" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>';
-  }, [getBlobThumbnailUrl, signedPreviewUrls, user?.id]);
-
-  // MEMOIZED: Prevent expensive aggregation on every render (e.g. tab switch)
-  const aggregatedGroups = useMemo(() => {
+  const getAggregatedGroups = () => {
     const groups: Record<string, DigitalAsset[]> = {};
     assets.forEach(asset => {
         let key = 'Unknown';
-        if (groupBy === 'SOURCE') key = asText(asset.sqlRecord?.SOURCE_COLLECTION, 'Unknown') || 'Unknown';
-        if (groupBy === 'ZONE') key = asText(asset.sqlRecord?.LOCAL_GIS_ZONE, 'Unknown') || 'Unknown';
-        if (groupBy === 'CATEGORY') key = asText(asset.sqlRecord?.NLP_NODE_CATEGORIZATION, 'Uncategorized') || 'Uncategorized';
-        if (groupBy === 'RIGHTS') key = asText(asset.sqlRecord?.RIGHTS_STATEMENT, 'Unknown') || 'Unknown';
+        if (groupBy === 'SOURCE') key = asset.sqlRecord?.SOURCE_COLLECTION || 'Unknown';
+        if (groupBy === 'ZONE') key = asset.sqlRecord?.LOCAL_GIS_ZONE || 'Unknown';
+        if (groupBy === 'CATEGORY') key = asset.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized';
+        if (groupBy === 'RIGHTS') key = asset.sqlRecord?.RIGHTS_STATEMENT || 'Unknown';
         if (!groups[key]) groups[key] = [];
         groups[key].push(asset);
     });
     return groups;
-  }, [assets, groupBy]);
+  };
 
-  // MEMOIZED: Prevent drilldown calculation on every render
-  const drillDownAssets = useMemo(() => 
-    selectedGroupKey ? (aggregatedGroups[selectedGroupKey] || []) : assets
-  , [aggregatedGroups, selectedGroupKey, assets]);
+  const aggregatedGroups = getAggregatedGroups();
+  const drillDownAssets = selectedGroupKey ? (aggregatedGroups[selectedGroupKey] || []) : assets;
+  const paginatedAssets = drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  // MEMOIZED: Pagination only runs when page or assets change
-  const paginatedAssets = useMemo(() => 
-    drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
-  , [drillDownAssets, currentPage]);
-
-  const assetsById = useMemo(() => {
-    const map: Record<string, DigitalAsset> = {};
-    assets.forEach((asset) => {
-      const signed = signedPreviewUrls[asset.id];
-      map[asset.id] = signed ? { ...asset, imageUrl: signed } : asset;
-    });
-    return map;
-  }, [assets, signedPreviewUrls]);
-
-  const marketItems = useMemo<ImageBundle[]>(() => {
-    return displayItems.flatMap((item) => {
-      if ('bundleId' in item) return [item as ImageBundle];
-      const asset = item as DigitalAsset;
-      if (!asset.sqlRecord) return [];
-      try {
-        return [createUserBundle([asset], asset.sqlRecord?.DOCUMENT_TITLE || 'Single Asset Bundle')];
-      } catch {
-        return [];
-      }
-    });
-  }, [displayItems]);
-
-  // PERF v2.15.6: globalGraphData computed in a Web Worker.
-  // The previous useMemo ran ~30,000-42,000 string operations synchronously
-  // on the main thread (5-10s on mobile per invocation, triggered 2-3× during
-  // init as `assets` changes).  Moving to a worker keeps the UI responsive.
-  const [globalGraphData, setGlobalGraphData] = useState<GraphData>({ nodes: [], links: [] });
-  const graphWorkerRef = useRef<Worker | null>(null);
-  const graphGenRef = useRef(0);
-  const prevGraphInputKeyRef = useRef('');
-
-  // PERF v2.16.2: Bundle dedup computed in a Web Worker.
-  // findDuplicateClustersV2 runs O(n²) pair comparisons (~75K for 387 assets)
-  // with Levenshtein, n-gram, shingle, and phonetic operations — 10-50s on mobile.
-  // Moving to a worker keeps the UI responsive during sidebar / tab interactions.
-  const bundleWorkerRef = useRef<Worker | null>(null);
-  const bundleGenRef = useRef(0);
-
-  // Create / destroy graph worker with component lifecycle
-  useEffect(() => {
-    try {
-      graphWorkerRef.current = new Worker(
-        new URL('./workers/graphDataWorker.ts', import.meta.url),
-        { type: 'module' }
-      );
-    } catch {
-      graphWorkerRef.current = null;
-    }
-    return () => {
-      graphWorkerRef.current?.terminate();
-      graphWorkerRef.current = null;
-    };
-  }, []);
-
-  // Create / destroy bundle worker with component lifecycle
-  useEffect(() => {
-    try {
-      const w = new Worker(
-        new URL('./workers/bundleWorker.ts', import.meta.url),
-        { type: 'module' }
-      );
-      // If the worker module fails to load (e.g. transitive import error),
-      // null out the ref so the fallback path runs instead of hanging.
-      w.onerror = () => {
-        console.warn('[bundleWorker] Worker crashed — falling back to main thread');
-        bundleWorkerRef.current = null;
-      };
-      bundleWorkerRef.current = w;
-    } catch {
-      bundleWorkerRef.current = null;
-    }
-    return () => {
-      bundleWorkerRef.current?.terminate();
-      bundleWorkerRef.current = null;
-    };
-  }, []);
-
-  // Post asset data to worker whenever assets or graphFilters change
-  useEffect(() => {
-    const worker = graphWorkerRef.current;
-    if (!worker || assets.length === 0) return;
-
-    // Shallow key to skip redundant posts with identical data
-    const inputKey = `${assets.length}:${assets[0]?.id}:${assets[assets.length - 1]?.id}:${graphFilters.category}:${graphFilters.era}:${graphFilters.contested}`;
-    if (inputKey === prevGraphInputKeyRef.current) return;
-    prevGraphInputKeyRef.current = inputKey;
-
-    const gen = ++graphGenRef.current;
-
-    // Strip to ONLY the fields the graph worker needs — reduces structured
-    // clone cost from ~2MB (full sqlRecord) to ~200KB (7 fields).
-    const minAssets = assets.map(a => {
-      const r = a.sqlRecord;
-      return {
-        id: a.id,
-        sqlRecord: r ? {
-          NLP_NODE_CATEGORIZATION: r.NLP_NODE_CATEGORIZATION,
-          NLP_DERIVED_TIMESTAMP: r.NLP_DERIVED_TIMESTAMP,
-          DOCUMENT_DESCRIPTION: r.DOCUMENT_DESCRIPTION,
-          ACCESS_RESTRICTIONS: r.ACCESS_RESTRICTIONS,
-          DOCUMENT_TITLE: r.DOCUMENT_TITLE,
-          DATA_LICENSE: r.DATA_LICENSE,
-          STRUCTURED_KNOWLEDGE_GRAPH: r.STRUCTURED_KNOWLEDGE_GRAPH,
-        } : null,
-        graphData: a.graphData,
-      };
-    });
-
-    worker.onmessage = (e: MessageEvent<{ gen: number; graphData: GraphData }>) => {
-      if (e.data.gen !== gen) return; // stale result
-      setGlobalGraphData(e.data.graphData);
-    };
-
-    worker.postMessage({ gen, assets: minAssets, graphFilters });
+  const globalGraphData = useMemo<GraphData>(() => {
+      const filteredAssets = assets.filter(asset => {
+          const r = asset.sqlRecord;
+          if (!r) return false;
+          if (graphFilters.category !== 'all' && r.NLP_NODE_CATEGORIZATION !== graphFilters.category) return false;
+          const eraKey = r.NLP_DERIVED_TIMESTAMP?.match(/\d{4}/)?.[0]?.slice(0,3) + '0s' || 'Unknown';
+          if (graphFilters.era !== 'all' && eraKey !== graphFilters.era) return false;
+          const isContested = r.ACCESS_RESTRICTIONS || /controversy|removed|relocated/i.test(r.DOCUMENT_DESCRIPTION);
+          if (graphFilters.contested && !isContested) return false;
+          return true;
+      });
+      const docNodes = filteredAssets.map(a => ({ id: a.id, label: a.sqlRecord?.DOCUMENT_TITLE || 'Untitled', type: 'DOCUMENT' as const, relevance: 1.0, license: a.sqlRecord?.DATA_LICENSE }));
+      const entityNodesMap = new Map<string, GraphNode>();
+      const links: any[] = [];
+      filteredAssets.forEach(asset => {
+         const cat = asset.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized';
+         const catId = `CAT_${cat.replace(/\s+/g, '_')}`;
+         if (!entityNodesMap.has(catId)) entityNodesMap.set(catId, { id: catId, label: cat, type: 'CLUSTER', relevance: 0.8 });
+         links.push({ source: asset.id, target: catId, relationship: "CATEGORIZED_AS" });
+         if (asset.graphData?.nodes) {
+             asset.graphData.nodes.forEach(node => {
+                 const entityId = `ENT_${node.label.replace(/\s+/g, '_').toUpperCase()}`;
+                 if (!entityNodesMap.has(entityId)) entityNodesMap.set(entityId, { ...node, id: entityId });
+                 links.push({ source: asset.id, target: entityId, relationship: "CONTAINS" });
+             });
+         }
+      });
+      return { nodes: [...docNodes, ...Array.from(entityNodesMap.values())], links };
   }, [assets, graphFilters]);
 
-  if (!isAppReady) {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#020617', color: '#f8fafc', fontFamily: 'system-ui, sans-serif' }}>
-        <div style={{ width: '48px', height: '48px', border: '3px solid #334155', borderTopColor: '#3b82f6', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
-        <p style={{ marginTop: '16px', color: '#94a3b8', fontSize: '14px' }}>Loading GeoGraph...</p>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
+  // Stable graphData reference for the World tab — avoids recreating a new
+  // { nodes: [], links: [] } on every render when no asset is selected.
+  const EMPTY_GRAPH: GraphData = useMemo(() => ({ nodes: [], links: [] }), []);
+  const worldGraphData = useMemo(() => {
+    if (graphViewMode === 'GLOBAL') return globalGraphData;
+    return assets.find(a => a.id === selectedAssetId)?.graphData || EMPTY_GRAPH;
+  }, [graphViewMode, globalGraphData, assets, selectedAssetId, EMPTY_GRAPH]);
 
   return (
     <FilterProvider initialAssets={assets} initialGraphData={globalGraphData}>
-    <div className="flex h-[100dvh] w-full bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30 relative" style={{ maxWidth: '100vw', overflowX: 'hidden' }}>
-      
-      {/* #11: SW update notification — non-blocking, user-controlled */}
-      {swUpdateAvailable && (
-        <div className="fixed top-0 left-0 right-0 z-[100] bg-primary-700 text-white text-xs flex items-center justify-between px-4 py-2" role="alert">
-          <span>A new version of GeoGraph is available.</span>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => {
-                navigator.serviceWorker.ready.then(reg => {
-                  reg.waiting?.postMessage({ type: 'SKIP_WAITING' });
-                });
-                setTimeout(() => window.location.reload(), 500);
-              }}
-              className="px-3 py-1 bg-white text-primary-700 rounded font-bold text-xs hover:bg-primary-100"
-            >Update Now</button>
-            <button onClick={() => setSwUpdateAvailable(false)} className="text-primary-200 hover:text-white" aria-label="Dismiss"><X size={14} /></button>
-          </div>
-        </div>
-      )}
-
-      {/* #12: Offline state banner */}
-      {!isOnline && (
-        <div className="fixed top-0 left-0 right-0 z-[99] bg-amber-800/90 backdrop-blur-sm text-amber-100 text-xs flex items-center gap-2 px-4 py-2" role="status">
-          <span className="inline-block w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-          Offline — {localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length} queued
-          &nbsp;capture{localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length !== 1 ? 's' : ''}{' '}
-          will upload automatically when connection is restored.
-        </div>
-      )}
+    <div className="flex h-screen bg-slate-950 text-slate-200 overflow-hidden font-sans selection:bg-primary-500/30">
       
       {/* Sidebar - Desktop */}
       <div className="hidden lg:flex w-64 flex-shrink-0 bg-slate-900 border-r border-slate-800 flex-col">
@@ -2986,6 +1692,7 @@ export default function App() {
           <div className="flex items-center gap-2 text-primary-500 mb-1">
             <Database size={24} />
             <h1 className="text-xl font-bold tracking-tight text-white">GeoGraph<span className="text-slate-500">Node</span></h1>
+            <CreditBadge userId={user?.id} />
           </div>
           <p className="text-xs text-slate-500">OCR • GIS • Graph • NFT</p>
         </div>
@@ -2993,13 +1700,14 @@ export default function App() {
         <nav className="flex-1 space-y-1 overflow-y-auto custom-scrollbar">
           <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => switchTab('dashboard')} />
           <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => switchTab('batch')} />
-          <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => switchTab('ar')} />
+          {isTabVisible('ar') && <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => switchTab('ar')} />}
           <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => switchTab('assets')} />
-          <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => switchTab('curator')} />
-          <SidebarItem icon={Network} label="Explore" active={activeTab === 'explore'} onClick={() => switchTab('explore')} />
+          {isTabVisible('curator') && <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => switchTab('curator')} />}
+          <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => switchTab('graph')} />
+          {isTabVisible('world') && <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => switchTab('world')} />}
           <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => switchTab('database')} />
-          <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => switchTab('social')} />
-          <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => switchTab('market')} />
+          {isTabVisible('social') && <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => switchTab('social')} />}
+          {isTabVisible('market') && <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => switchTab('market')} />}
           {isAdmin && <SidebarItem icon={ShieldCheck} label="Review Queue" active={activeTab === 'review'} onClick={() => switchTab('review')} />}
           <div className="pt-4 mt-4 border-t border-slate-800">
              <SidebarItem icon={Sliders} label="Dynamic Filters" active={showUnifiedFilters} onClick={() => setShowUnifiedFilters(!showUnifiedFilters)} />
@@ -3044,21 +1752,76 @@ export default function App() {
         </div>
       </div>
 
+      {/* Mobile Sidebar Overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-[60] lg:hidden">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
+          <div className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 border-r border-slate-800 flex flex-col animate-in slide-in-from-left duration-300">
+            <div className="p-6 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-primary-500">
+                <Database size={24} />
+                <h1 className="text-xl font-bold tracking-tight text-white">GeoGraph</h1>
+              </div>
+              <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 hover:text-white">
+                <X size={20} />
+              </button>
+            </div>
+            <nav className="flex-1 px-2 space-y-1 overflow-y-auto custom-scrollbar">
+              <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { switchTab('dashboard'); setIsMobileMenuOpen(false); }} />
+              <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => { switchTab('batch'); setIsMobileMenuOpen(false); }} />
+              {isTabVisible('ar') && <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => { switchTab('ar'); setIsMobileMenuOpen(false); }} />}
+              <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => { switchTab('assets'); setIsMobileMenuOpen(false); }} />
+              {isTabVisible('curator') && <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => { switchTab('curator'); setIsMobileMenuOpen(false); }} />}
+              <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => { switchTab('graph'); setIsMobileMenuOpen(false); }} />
+              {isTabVisible('world') && <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => { switchTab('world'); setIsMobileMenuOpen(false); }} />}
+              <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsMobileMenuOpen(false); }} />
+              {isTabVisible('social') && <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => { switchTab('social'); setIsMobileMenuOpen(false); }} />}
+              {isTabVisible('market') && <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { switchTab('market'); setIsMobileMenuOpen(false); }} />}
+              <div className="pt-4 mt-4 border-t border-slate-800">
+                <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsMobileMenuOpen(false); }} />
+              </div>
+            </nav>
+
+            <div className="p-4 border-t border-slate-800">
+                <div className={`p-3 rounded-xl border transition-all ${isGlobalView ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-900 border-slate-800'}`}>
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold uppercase text-slate-400">View Mode</span>
+                        <div className="flex items-center gap-1">
+                            {isGlobalView && <Globe size={12} className="text-indigo-400" />}
+                            {isGlobalView ? <span className="text-[10px] text-indigo-400 font-bold">GLOBAL</span> : <span className="text-[10px] text-slate-500">LOCAL</span>}
+                        </div>
+                    </div>
+                    
+                    <button 
+                        onClick={() => { setIsGlobalView(!isGlobalView); setIsMobileMenuOpen(false); }}
+                        className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${
+                            isGlobalView 
+                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50' 
+                            : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+                        }`}
+                    >
+                        {isGlobalView ? <>Switch to Local <Lock size={12}/></> : <>Switch to Master <Globe size={12}/></>}
+                    </button>
+                </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-14 sm:h-16 border-b border-slate-800 flex items-center justify-between px-3 sm:px-4 lg:px-8 bg-slate-950/80 backdrop-blur z-10" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
-            <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-                <MobileNavigation 
-                  activeTab={activeTab} 
-                  switchTab={switchTab} 
-                />
+        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-4 lg:px-8 bg-slate-950/80 backdrop-blur z-10">
+            <div className="flex items-center gap-4">
+                <button 
+                  onClick={() => setIsMobileMenuOpen(true)}
+                  className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
+                >
+                  <List size={24} />
+                </button>
                 <h2 className="text-lg font-semibold text-white capitalize hidden sm:block">
-                  {activeTab === 'database' ? (isGlobalView ? 'CLOUD DATAFRAMES' : 'LOCAL DATAFRAMES')
-                    : activeTab === 'explore' ? (exploreSubTab === 'graph' ? 'Knowledge Graph' : exploreSubTab === '3d' ? '3D World' : 'Semantic Canvas')
-                    : activeTab}
+                  {activeTab === 'database' ? (isGlobalView ? 'CLOUD DATAFRAMES' : 'LOCAL DATAFRAMES') : activeTab}
                 </h2>
-                {/* Compact LOCAL/MASTER toggle — lightweight, always accessible */}
-                <div className="hidden sm:flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800 ml-1">
+                <div className="flex items-center bg-slate-900 rounded-lg p-1 border border-slate-800 ml-2">
                     <button 
                         onClick={() => setIsGlobalView(false)}
                         className={`px-3 py-1 rounded text-[10px] font-bold transition-all ${!isGlobalView ? 'bg-primary-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}
@@ -3073,14 +1836,11 @@ export default function App() {
                     </button>
                 </div>
             </div>
-          <div
-            className="flex items-center gap-1.5 sm:gap-2 min-w-0 max-w-[56vw] sm:max-w-none overflow-x-auto sm:overflow-visible touch-pan-x"
-            style={{ scrollbarWidth: 'none' }}
-          >
+          <div className="flex items-center gap-2">
              {/* Queue Status Button - ALWAYS VISIBLE */}
              <button 
-               onClick={() => toggleQueuePanel('header')}
-                 className={`flex-shrink-0 flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-full border transition-all ${
+                 onClick={() => setShowProcessingPanel(!showProcessingPanel)}
+                 className={`flex items-center gap-2 px-3 py-1.5 rounded-full border transition-all ${
                    showProcessingPanel 
                      ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' 
                      : totalPendingCount > 0 || stuckAssetsCount > 0
@@ -3092,87 +1852,57 @@ export default function App() {
                  {totalPendingCount > 0 || stuckAssetsCount > 0 ? (
                    <>
                      <div className={`w-2 h-2 rounded-full bg-amber-500 ${isProcessing ? 'animate-pulse' : ''}`}></div>
-                     <span className="hidden sm:inline text-xs font-bold">
+                     <span className="text-xs font-bold">
                        {totalPendingCount > 0 ? `${totalPendingCount} PENDING` : `${stuckAssetsCount} STUCK`}
                      </span>
                    </>
                  ) : (
                    <>
                      <CheckCircle size={14} className="text-emerald-500" />
-                     <span className="hidden sm:inline text-xs font-medium">Queue</span>
+                     <span className="text-xs font-medium">Queue</span>
                    </>
                  )}
              </button>
              {activeTab !== 'batch' && activeTab !== 'ar' && (
                 <>
                   <CameraCapture 
-                    onCapture={(file) => ingestFile(file, isGlobalView ? "Global Contribution" : "Mobile Camera", false)} 
+                    onCapture={(file) => ingestFile(file, isGlobalView ? "Global Contribution" : "Mobile Camera")} 
                     isOnline={isOnline}
                     zoomEnabled={zoomEnabled}
                   />
-                    <label className={`flex-shrink-0 flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 ${isGlobalView ? 'bg-indigo-900/40 border-indigo-500/50 hover:bg-indigo-900/60' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'} border text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
+                  <label className={`flex items-center gap-2 px-4 py-2 ${isGlobalView ? 'bg-indigo-900/40 border-indigo-500/50 hover:bg-indigo-900/60' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'} border text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                       {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Upload size={18} />}
-                      <span className="hidden sm:inline">{isGlobalView ? 'Contribute' : 'Upload'}</span>
+                      <span>{isGlobalView ? 'Contribute' : 'Upload'}</span>
                       <input type="file" className="hidden" accept="image/*, application/pdf" onChange={(e) => e.target.files?.[0] && ingestFile(e.target.files[0], isGlobalView ? "Global Contribution" : "Direct Upload")} disabled={isProcessing} />
                   </label>
                 </>
              )}
              {isGlobalView && (
-                  <button 
+                 <button 
                     onClick={refreshGlobalData}
                     disabled={isProcessing}
-                    className="flex-shrink-0 flex items-center gap-2 px-2.5 sm:px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50"
+                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-all disabled:opacity-50"
                  >
                      <RefreshCw size={18} className={isProcessing ? 'animate-spin' : ''} />
-                     <span className="hidden sm:inline">Refresh Cloud</span>
+                     <span>Refresh Cloud</span>
                  </button>
              )}
              <button 
                 onClick={() => setActiveTab('settings')}
-               className={`flex-shrink-0 p-2 rounded-full border transition-all ${user ? 'bg-primary-900/20 border-primary-500/50 text-primary-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
+                className={`p-2 rounded-full border transition-all ${user ? 'bg-primary-900/20 border-primary-500/50 text-primary-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
              >
                 <User size={20} />
              </button>
           </div>
         </header>
 
-        {/* PWA Install Banner — shown in browser mode on mobile, hidden once installed or dismissed */}
-        {!isStandaloneMode && !installBannerDismissed && (
-          <div className="flex lg:hidden items-center gap-2 px-3 py-2 bg-primary-900/80 border-b border-primary-700/50 text-xs text-primary-100">
-            <Download size={13} className="flex-shrink-0 text-primary-300" />
-            <span className="flex-1 min-w-0">
-              {isInstallPromptAvailable
-                ? 'Install app to hide the browser bar'
-                : 'Add to Home Screen to hide the browser bar'}
-            </span>
-            {isInstallPromptAvailable ? (
-              <button
-                onClick={() => { handleInstallPWA(); setInstallBannerDismissed(true); try { localStorage.setItem('geograph-install-banner-dismissed','1'); } catch {} }}
-                disabled={isInstallingPWA}
-                className="flex-shrink-0 px-2 py-0.5 bg-primary-600 hover:bg-primary-500 rounded font-semibold disabled:opacity-50"
-              >
-                {isInstallingPWA ? 'Installing…' : 'Install'}
-              </button>
-            ) : (
-              <span className="flex-shrink-0 text-primary-400 text-[10px]">⋮ → Add to Home Screen</span>
-            )}
-            <button
-              onClick={() => { setInstallBannerDismissed(true); try { localStorage.setItem('geograph-install-banner-dismissed','1'); } catch {} }}
-              className="flex-shrink-0 p-1 text-primary-400 hover:text-white"
-              aria-label="Dismiss"
-            >
-              <X size={12} />
-            </button>
-          </div>
-        )}
-
-        <div className="flex-1 overflow-auto p-4 sm:p-6 lg:p-8 pb-28 sm:pb-20 relative">
+        <div className="flex-1 overflow-auto p-8 relative">
           
           {activeTab === 'dashboard' && (
-            <div className="space-y-5 sm:space-y-6 lg:space-y-8 max-w-6xl mx-auto">
-              {/* Processing Queue Status - deferred to prevent cold-start Supabase calls */}
-              <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 border border-slate-700 rounded-xl p-4 sm:p-5 shadow-lg">
-                <div className="flex items-center justify-between gap-2 mb-4">
+            <div className="space-y-8 max-w-6xl mx-auto">
+              {/* Processing Queue Status - ALWAYS VISIBLE on Dashboard */}
+              <div className="bg-gradient-to-r from-slate-900 via-slate-900 to-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg">
+                <div className="flex items-center justify-between mb-4">
                   <h3 className="text-white font-bold flex items-center gap-2">
                     <Server size={18} className="text-primary-500" />
                     Processing Queue Status
@@ -3185,26 +1915,9 @@ export default function App() {
                   </button>
                 </div>
                 {user?.id ? (
-                  showDashboardQueue ? (
-                    <QueueMonitor userId={user.id} onRequeueComplete={() => {
-                      loadAssets().then(loaded => setLocalAssets(loaded));
-                    }} uploadProgress={uploadProgress} />
-                  ) : (
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 py-3 px-1">
-                      <span className="text-sm text-slate-400">
-                        {totalPendingCount > 0
-                          ? `${totalPendingCount} item${totalPendingCount !== 1 ? 's' : ''} pending`
-                          : 'Queue is clear'}
-                      </span>
-                      <button
-                        onClick={() => setShowDashboardQueue(true)}
-                        className="text-xs text-primary-400 hover:text-primary-300 flex items-center gap-1 px-3 py-1.5 bg-slate-800 rounded-lg"
-                      >
-                        <Activity size={12} />
-                        Expand Queue
-                      </button>
-                    </div>
-                  )
+                  <QueueMonitor userId={user.id} onRequeueComplete={() => {
+                    loadAssets().then(loaded => setLocalAssets(loaded));
+                  }} />
                 ) : (
                   <div className="text-center py-6 text-slate-400">
                     <User size={32} className="mx-auto mb-2 text-slate-600" />
@@ -3221,25 +1934,10 @@ export default function App() {
                   </div>
                 )}
               </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
-                  <p className="text-[10px] uppercase text-slate-500">Sync Queue</p>
-                  <p className="text-lg font-bold text-white">{syncQueuedCount}</p>
-                </div>
-                <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
-                  <p className="text-[10px] uppercase text-slate-500">Structured Complete</p>
-                  <p className="text-lg font-bold text-emerald-400">{structuredCompleteCount}</p>
-                </div>
-                <div className="bg-slate-900 border border-slate-800 rounded-lg p-3">
-                  <p className="text-[10px] uppercase text-slate-500">Failure Signals</p>
-                  <p className="text-lg font-bold text-rose-400">{syncFailureCount}</p>
-                </div>
-              </div>
               
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3" style={{ maxWidth: '100%', overflowX: 'hidden' }}>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <StatCard label="Total Assets" value={assets.length} icon={FileText} color="text-blue-500" onClick={() => setActiveTab('assets')} />
-                <StatCard label="Knowledge Nodes" value={knowledgeNodeCount} icon={Network} color="text-purple-500" onClick={() => { setActiveTab('explore'); setExploreSubTab('graph'); }} />
+                <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} icon={Network} color="text-purple-500" onClick={() => setActiveTab('graph')} />
                 <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" onClick={() => setActiveTab('database')} />
                 <StatCard label="Active Bundles" value={displayItems.filter(i => 'bundleId' in i).length} icon={Package} color="text-amber-500" onClick={() => setActiveTab('market')} />
               </div>
@@ -3259,169 +1957,36 @@ export default function App() {
                 onOpenIntegrationsHub={() => setShowIntegrationsHub(true)}
               />
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <div className="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-xl p-5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4">
-                    <h3 className="text-white font-bold flex items-center gap-2">
-                      <CloudDownload size={16} className="text-blue-400" />
-                      Upload / Download Activity
-                    </h3>
-                    <button
-                      onClick={() => downloadService.cancelAll()}
-                      disabled={activeDownloads.length === 0}
-                      className="text-[11px] px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-300 rounded-lg"
-                    >
-                      Cancel Active Downloads
-                    </button>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3">
-                      <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Cloud Upload Queueing</p>
-                      <div className="flex items-center justify-between text-xs text-slate-300 mb-2">
-                        <span>{uploadProgress.total > 0 ? `${uploadProgress.current}/${uploadProgress.total} queued` : 'No active uploads'}</span>
-                        {uploadProgress.total > 0 && (
-                          <span className="text-blue-400 font-mono">{Math.round((uploadProgress.current / uploadProgress.total) * 100)}%</span>
-                        )}
-                      </div>
-                      <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-300"
-                          style={{ width: `${uploadProgress.total > 0 ? (uploadProgress.current / uploadProgress.total) * 100 : 0}%` }}
-                        />
-                      </div>
-                    </div>
-                    <div className="bg-slate-950 border border-slate-800 rounded-lg p-3">
-                      <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Binary Downloads</p>
-                      <div className="flex items-center justify-between text-xs text-slate-300">
-                        <span>{activeDownloads.length} active</span>
-                        <span>{failedDownloads} failed</span>
-                      </div>
-                      <p className="text-[10px] text-slate-500 mt-2">Includes image/file transfer progress and cancellation.</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    {assets.slice(0, 3).map(asset => {
-                      const downloadState = downloadProgressByAsset[asset.id];
-                      const isDownloading = downloadState?.status === 'downloading';
-                      const progressPercent = downloadState?.total
-                        ? Math.min(100, Math.round((downloadState.loaded / downloadState.total) * 100))
-                        : 0;
-
-                      return (
-                        <div key={asset.id} className="bg-slate-950 border border-slate-800 rounded-lg p-3">
-                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                            <div className="min-w-0">
-                              <p className="text-sm text-slate-200 truncate">{asset.sqlRecord?.DOCUMENT_TITLE || `Asset ${truncateText(asset.id, 8)}`}</p>
-                              <p className="text-[10px] text-slate-500">{downloadState?.status ? `Status: ${downloadState.status}` : 'Ready to download'}</p>
-                            </div>
-                            <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                              <button
-                                onClick={() => handleAssetDownload(asset, 'image')}
-                                className="px-2.5 py-1.5 text-[11px] bg-blue-600 hover:bg-blue-500 text-white rounded-lg"
-                              >
-                                Download File
-                              </button>
-                              <button
-                                onClick={() => handleAssetDownload(asset, 'json')}
-                                className="px-2.5 py-1.5 text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg"
-                              >
-                                JSON
-                              </button>
-                              {isDownloading && (
-                                <button
-                                  onClick={() => handleCancelDownload(asset.id)}
-                                  className="px-2.5 py-1.5 text-[11px] bg-rose-900/50 hover:bg-rose-900 text-rose-300 rounded-lg"
-                                >
-                                  Cancel
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                          {isDownloading && (
-                            <div className="mt-2">
-                              <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-500 transition-all duration-200" style={{ width: `${progressPercent}%` }} />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {activeDownloads.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-slate-800">
-                      <p className="text-[10px] uppercase tracking-wider text-slate-500 mb-2">Live Download Queue</p>
-                      <div className="space-y-2">
-                        {activeDownloads.slice(0, 4).map(item => (
-                          <div key={item.assetId} className="flex items-center justify-between gap-3 text-xs bg-slate-900/60 border border-slate-800 rounded-lg px-3 py-2">
-                            <div className="min-w-0">
-                              <p className="text-slate-300 truncate">{item.filename}</p>
-                              <p className="text-[10px] text-slate-500">{Math.round(item.progress)}%</p>
-                            </div>
-                            <button
-                              onClick={() => handleCancelDownload(item.assetId)}
-                              className="px-2 py-1 text-[10px] bg-rose-900/50 hover:bg-rose-900 text-rose-300 rounded"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-5">
-                  <h3 className="text-white font-bold flex items-center gap-2 mb-3">
-                    <Server size={16} className="text-emerald-400" />
-                    EDGE Runtime
-                  </h3>
-                  <div className="space-y-2 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Connectivity</span>
-                      <span className={isOnline ? 'text-emerald-400' : 'text-rose-400'}>{isOnline ? 'Online' : 'Offline'}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Server Queue Ready</span>
-                      <span className={queueDiagnostics?.canProcessServer ? 'text-emerald-400' : 'text-amber-400'}>
-                        {queueDiagnostics?.canProcessServer ? 'Ready' : 'Limited'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Supabase</span>
-                      <span className={queueDiagnostics?.supabaseConfigured ? 'text-emerald-400' : 'text-rose-400'}>
-                        {queueDiagnostics?.supabaseConfigured ? 'Configured' : 'Missing'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Session</span>
-                      <span className={user?.id ? 'text-emerald-400' : 'text-amber-400'}>{user?.id ? 'Authenticated' : 'Guest'}</span>
-                    </div>
-                    <div className="pt-2 border-t border-slate-800 text-[10px] text-slate-500">
-                      {isStandaloneMode
-                        ? 'Running in app mode. Browser URL/share chrome is minimized by install mode.'
-                        : 'Browser chrome is controlled by mobile browser. Install to Home Screen for app-like fullscreen mode.'}
-                    </div>
-                    {!isStandaloneMode && isInstallPromptAvailable && (
-                      <button
-                        onClick={handleInstallPWA}
-                        disabled={isInstallingPWA}
-                        className="mt-2 w-full px-3 py-2 text-[11px] font-semibold bg-emerald-700/80 hover:bg-emerald-600 text-white rounded-lg disabled:opacity-60"
-                      >
-                        {isInstallingPWA ? 'Opening install prompt…' : 'Install App Mode'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
               {assets.length === 0 ? (
-                <div className="h-64 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 gap-4">
-                    <Globe size={48} className="mx-auto mb-4 text-slate-600" />
-                    <p>{isGlobalView ? 'Global Corpus is empty.' : 'Upload items to begin extraction.'}</p>
+                <div className="h-80 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 gap-6 bg-gradient-to-b from-slate-900/50 to-slate-950/50">
+                    <div className="relative">
+                      <Camera size={56} className="text-primary-500 animate-pulse" />
+                      <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-slate-950 animate-bounce" />
+                    </div>
+                    <div className="text-center">
+                      <h3 className="text-xl font-bold text-white mb-2">Scan Your First Document</h3>
+                      <p className="text-sm text-slate-400 max-w-md mx-auto">
+                        {isGlobalView 
+                          ? 'Global Corpus is empty. Switch to Local mode to begin.' 
+                          : 'Upload an image or use your camera to capture a document. AI will extract text, entities, and build a knowledge graph in seconds.'}
+                      </p>
+                    </div>
+                    {!isGlobalView && (
+                      <div className="flex gap-3">
+                        <label className="flex items-center gap-2 px-6 py-3 bg-primary-600 hover:bg-primary-500 text-white font-bold rounded-xl cursor-pointer transition-all shadow-lg shadow-primary-900/30 text-sm">
+                          <Upload size={18} />
+                          Upload Document
+                          <input type="file" className="hidden" accept="image/*, application/pdf" onChange={(e) => e.target.files?.[0] && ingestFile(e.target.files[0], "Direct Upload")} />
+                        </label>
+                        <button 
+                          onClick={() => switchTab('batch')}
+                          className="flex items-center gap-2 px-6 py-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold rounded-xl transition-all border border-slate-700 text-sm"
+                        >
+                          <Zap size={18} />
+                          Batch Import
+                        </button>
+                      </div>
+                    )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -3451,7 +2016,7 @@ export default function App() {
                     <div className="space-y-4">
                         {assets.slice(0, 3).map(asset => (
                             <div key={asset.id} className="flex items-start gap-4 p-3 rounded bg-slate-950/50 border border-slate-800 group relative">
-                                <img src={getThumbnailSrc(asset)} className="w-16 h-16 object-cover rounded" alt="thumb" onError={(e) => handleThumbnailError(e, asset)} />
+                                <img src={asset.imageUrl} className="w-16 h-16 object-cover rounded" alt="thumb" />
                                 <div className="flex-1">
                                     <div className="flex justify-between items-start">
                                         <h4 className="text-sm font-bold text-slate-200">{asset.gisMetadata?.zoneType || 'Processing...'}</h4>
@@ -3504,16 +2069,15 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'curator' && (
-            <div className="space-y-4 sm:space-y-6 max-w-6xl mx-auto h-full flex flex-col">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
-                <div className="min-w-0">
-                  <h3 className="text-lg sm:text-2xl font-bold text-white">Curator Mode</h3>
-                  <p className="text-xs sm:text-sm text-slate-400 truncate">Manage bundles and refine annotations.</p>
+          {activeTab === 'curator' && isTabVisible('curator') && (
+            <div className="space-y-6 max-w-6xl mx-auto h-full flex flex-col">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h3 className="text-2xl font-bold text-white">Curator Mode</h3>
+                  <p className="text-sm text-slate-400">Manually manage bundles and refine AI-extracted annotations.</p>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex gap-2">
                   {/* Cluster Sync Statistics Button - Human-in-the-Loop Overview */}
-                  <Suspense fallback={<div className="h-9 w-32 bg-slate-800 rounded-lg animate-pulse" />}>
                   <ClusterSyncButton 
                     onClick={() => setShowClusterSyncStats(true)}
                     stats={{
@@ -3528,7 +2092,6 @@ export default function App() {
                       total: assets.length
                     }}
                   />
-                  </Suspense>
                   <FilterBadge count={0} onClick={() => setShowUnifiedFilters(true)} />
                   {selectedAssetIds.size > 0 && (
                     <button 
@@ -3541,9 +2104,9 @@ export default function App() {
                   )}
                   <button 
                     onClick={() => setSelectedAssetIds(new Set())}
-                    className="px-3 sm:px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs sm:text-sm font-medium"
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-sm font-medium"
                   >
-                    Clear
+                    Clear Selection
                   </button>
                 </div>
               </div>
@@ -3564,7 +2127,7 @@ export default function App() {
                       <tr>
                         <th className="px-4 py-3 border-b border-slate-800 w-10"></th>
                         {['Preview', 'Title', 'Collection', 'Status', 'Annotated', 'Action'].map(h => (
-                          <th key={h} className={`px-2 sm:px-4 py-2 sm:py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950 ${(h === 'Collection' || h === 'Annotated') ? 'hidden sm:table-cell' : ''}`}>{h}</th>
+                          <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -3587,30 +2150,29 @@ export default function App() {
                               className="rounded border-slate-700 bg-slate-800 text-primary-600 focus:ring-primary-500"
                             />
                           </td>
-                          <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800">
-                            <img src={getThumbnailSrc(asset)} alt="Preview" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded border border-slate-700" onError={(e) => handleThumbnailError(e, asset)} />
+                          <td className="px-4 py-3 border-r border-slate-800">
+                            <img src={asset.imageUrl} alt="Preview" className="w-12 h-12 object-cover rounded border border-slate-700" />
                           </td>
-                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-white border-r border-slate-800 font-bold truncate max-w-[120px] sm:max-w-none">{asset.sqlRecord?.DOCUMENT_TITLE || 'Untitled'}</td>
-                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-blue-400 border-r border-slate-800 hidden sm:table-cell">{asset.sqlRecord?.SOURCE_COLLECTION || 'Unsorted'}</td>
-                          <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800">
+                          <td className="px-4 py-3 text-white border-r border-slate-800 font-bold">{asset.sqlRecord?.DOCUMENT_TITLE || 'Untitled'}</td>
+                          <td className="px-4 py-3 text-blue-400 border-r border-slate-800">{asset.sqlRecord?.SOURCE_COLLECTION || 'Unsorted'}</td>
+                          <td className="px-4 py-3 border-r border-slate-800">
                             <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${asset.status === AssetStatus.MINTED ? 'bg-green-500/20 text-green-500' : 'bg-amber-500/20 text-amber-500'}`}>
                               {asset.status}
                             </span>
                           </td>
-                          <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800 text-center hidden sm:table-cell">
+                          <td className="px-4 py-3 border-r border-slate-800 text-center">
                             {asset.sqlRecord?.IS_USER_ANNOTATED ? (
                               <CheckCircle size={16} className="text-green-500 mx-auto" />
                             ) : (
                               <span className="text-slate-600">-</span>
                             )}
                           </td>
-                          <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                          <td className="px-4 py-3 text-center">
                             <button 
                               onClick={() => setEditingAsset(asset)}
-                              className="px-2 sm:px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-bold border border-slate-700"
+                              className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[10px] font-bold border border-slate-700"
                             >
-                              <span className="hidden sm:inline">EDIT ANNOTATIONS</span>
-                              <span className="sm:hidden">EDIT</span>
+                              EDIT ANNOTATIONS
                             </button>
                           </td>
                         </tr>
@@ -3623,25 +2185,13 @@ export default function App() {
           )}
 
           {activeTab === 'database' && (
-             <ErrorBoundary
-               fallback={({ resetError }) => (
-                 <div className="flex flex-col items-center justify-center h-full gap-4 text-slate-400">
-                   <AlertCircle size={32} className="text-rose-500" />
-                   <p className="text-sm">The database view encountered an error.</p>
-                   <button
-                     onClick={() => { resetError(); setCurrentPage(1); setDbViewMode('DRILLDOWN'); setSelectedGroupKey(null); }}
-                     className="px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-xs rounded-lg"
-                   >Reset View</button>
-                 </div>
-               )}
-             >
              <div className="h-full flex flex-col gap-4">
                {/* Processing Queue Status Banner for Master View */}
                {user?.id && isGlobalView && (
                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
                    <QueueMonitor userId={user.id} onRequeueComplete={() => {
                      loadAssets().then(loaded => setLocalAssets(loaded));
-                   }} uploadProgress={uploadProgress} />
+                   }} />
                  </div>
                )}
                
@@ -3655,77 +2205,21 @@ export default function App() {
                          <span className="text-slate-500">View:</span> Tabular Dataframes
                          <span className="px-1.5 py-0.5 bg-slate-800 rounded text-slate-300 ml-2">{drillDownAssets.length} items</span>
                       </p>
-                      {dbProcessFeedback && (
-                        <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <p className={`text-[11px] ${
-                          dbProcessFeedback.type === 'success'
-                            ? 'text-emerald-400'
-                            : dbProcessFeedback.type === 'warning'
-                              ? 'text-amber-400'
-                              : dbProcessFeedback.type === 'error'
-                                ? 'text-rose-400'
-                                : 'text-blue-400'
-                        }`}>
-                          Last action: {dbProcessFeedback.message}
-                        </p>
-                        {dbProcessFeedback.action === 'settings' && (
-                          <button onClick={() => setActiveTab('settings')} className="text-[10px] px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300">Open Settings</button>
-                        )}
-                        {dbProcessFeedback.action === 'queue' && (
-                          <button onClick={() => setShowProcessingPanel(true)} className="text-[10px] px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-300">Open Queue</button>
-                        )}
-                        {dbProcessFeedback.action === 'releaseRetry' && (
-                          <button onClick={handleReleaseStaleAndRetry} className="text-[10px] px-2 py-1 bg-orange-900/40 hover:bg-orange-900/60 rounded text-orange-300">Release & Retry</button>
-                        )}
-                        </div>
-                      )}
-                      {dbProcessRun.running && (
-                        <div className="mt-2 bg-slate-950 border border-slate-800 rounded-lg p-2">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-[11px] text-blue-300">
-                              Processing {dbProcessRun.processed}/{dbProcessRun.total}
-                              {dbProcessRun.currentAssetId ? ` • ${truncateText(dbProcessRun.currentAssetId, 8)}` : ''}
-                              {dbProcessRun.batchPending > 0 ? ` • batch ${dbProcessRun.batchPending}` : ''}
-                            </p>
-                            <span className="text-[10px] text-slate-500 uppercase">{dbProcessRun.step.replace('-', ' ')}</span>
-                            <button
-                              onClick={handleCancelDbProcess}
-                              disabled={dbProcessRun.cancelRequested}
-                              className="text-[10px] px-2 py-1 bg-rose-900/50 hover:bg-rose-900 text-rose-300 rounded disabled:opacity-60"
-                            >
-                              {dbProcessRun.cancelRequested ? 'Stopping…' : 'Cancel'}
-                            </button>
-                          </div>
-                          <div className="mt-2 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500 transition-all duration-200" style={{ width: `${dbProcessRun.total > 0 ? (dbProcessRun.processed / dbProcessRun.total) * 100 : 0}%` }} />
-                          </div>
-                        </div>
-                      )}
-                      {staleProcessingEligible && !dbProcessRun.running && (
-                        <button
-                          onClick={handleReleaseStaleAndRetry}
-                          className="mt-2 text-[11px] px-3 py-1.5 bg-orange-900/40 hover:bg-orange-900/60 text-orange-300 rounded-lg"
-                        >
-                          Release stale locks & retry ({dbQueueStats?.processing || 0} stuck)
-                        </button>
-                      )}
                    </div>
-                   <div className="flex flex-wrap gap-2 sm:gap-4">
+                   <div className="flex flex-wrap gap-4">
                        <FilterBadge count={groupBy !== 'SOURCE' ? 1 : 0} onClick={() => setShowUnifiedFilters(true)} />
                        <button 
                           onClick={handleProcessAllPending}
-                          disabled={dbProcessRun.running}
-                          className="px-3 sm:px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg flex items-center gap-2 transition-all"
+                          className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg shadow-lg flex items-center gap-2 transition-all"
                        >
                           <Zap size={14} />
-                          <span className="hidden sm:inline">{dbProcessRun.running ? 'PROCESSING…' : 'PROCESS ALL PENDING'}</span>
-                          <span className="sm:hidden">{dbProcessRun.running ? '…' : 'Process'}</span>
+                          PROCESS ALL PENDING
                        </button>
                        <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
                             <button onClick={() => { setDbViewMode('DRILLDOWN'); setSelectedGroupKey(null); }} className={`px-3 py-1.5 text-xs font-medium rounded flex items-center gap-2 transition-colors ${dbViewMode === 'DRILLDOWN' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}><List size={14} /> Table</button>
                             <button onClick={() => setDbViewMode('GROUPS')} className={`px-3 py-1.5 text-xs font-medium rounded flex items-center gap-2 transition-colors ${dbViewMode === 'GROUPS' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}><FolderOpen size={14} /> Clusters</button>
                        </div>
-                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 min-w-0">
+                       <div className="flex items-center gap-2 bg-slate-950 px-3 py-2 rounded border border-slate-700 min-w-[200px]">
                            <Filter size={14} className="text-primary-500" />
                            <div className="flex-1 flex flex-col">
                               <span className="text-[9px] text-slate-500 uppercase font-bold">Grouping Feature</span>
@@ -3766,7 +2260,7 @@ export default function App() {
                         <thead className="bg-slate-950 sticky top-0 z-10">
                           <tr>
                             {['ID', 'TITLE', 'COLLECTION', 'ENTITIES', 'GIS ZONE', 'NODES', 'CATEGORY', 'PROGRESS', 'ACTION'].map(h => (
-                                <th key={h} className={`px-2 sm:px-4 py-2 sm:py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950 ${['ENTITIES', 'GIS ZONE', 'CATEGORY'].includes(h) ? 'hidden md:table-cell' : ''}`}>{h}</th>
+                                <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -3775,28 +2269,14 @@ export default function App() {
                                const rec = asset.sqlRecord;
                                return (
                                    <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
-                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{truncateText(asset.id, 8)}</td>
-                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[120px] sm:max-w-[200px] truncate">{rec?.DOCUMENT_TITLE || 'Processing...'}</td>
-                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-blue-400 border-r border-slate-800 whitespace-nowrap">{rec?.SOURCE_COLLECTION || 'Pending'}</td>
-                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px] hidden md:table-cell">{(Array.isArray(rec?.ENTITIES_EXTRACTED) ? rec.ENTITIES_EXTRACTED : []).slice(0, 3).join(', ') || '...'}</td>
-                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-emerald-400 border-r border-slate-800 hidden md:table-cell">{rec?.LOCAL_GIS_ZONE || '...'}</td>
-                                       <td className="px-4 py-3 text-center border-r border-slate-800">
-                                         <button
-                                           onClick={() => {
-                                             setSelectedAssetId(asset.id);
-                                             setGraphViewMode('SINGLE');
-                                             setActiveTab('explore');
-                                             setExploreSubTab('graph');
-                                           }}
-                                           className="inline-flex items-center gap-1 text-primary-400 hover:text-white underline-offset-2 hover:underline"
-                                           title="Open node/edge graph for this asset"
-                                         >
-                                           <Network size={10} />
-                                           {rec?.NODE_COUNT || 0}
-                                         </button>
-                                       </td>
-                                       <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800 whitespace-nowrap hidden md:table-cell">{rec?.NLP_NODE_CATEGORIZATION || '...'}</td>
-                                       <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800 min-w-0 sm:min-w-[120px]">
+                                       <td className="px-4 py-3 text-slate-500 border-r border-slate-800 whitespace-nowrap">{asset.id.substring(0,8)}</td>
+                                       <td className="px-4 py-3 text-white border-r border-slate-800 whitespace-nowrap max-w-[200px] truncate">{rec?.DOCUMENT_TITLE || 'Processing...'}</td>
+                                       <td className="px-4 py-3 text-blue-400 border-r border-slate-800 whitespace-nowrap">{rec?.SOURCE_COLLECTION || 'Pending'}</td>
+                                       <td className="px-4 py-3 text-slate-300 border-r border-slate-800 whitespace-nowrap truncate max-w-[150px]">{rec?.ENTITIES_EXTRACTED.slice(0, 3).join(', ') || '...'}</td>
+                                       <td className="px-4 py-3 text-emerald-400 border-r border-slate-800">{rec?.LOCAL_GIS_ZONE || '...'}</td>
+                                       <td className="px-4 py-3 text-center border-r border-slate-800">{rec?.NODE_COUNT || 0}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 whitespace-nowrap">{rec?.NLP_NODE_CATEGORIZATION || '...'}</td>
+                                       <td className="px-4 py-3 border-r border-slate-800 min-w-[120px]">
                                             <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
                                                 <div 
                                                     className={`h-full transition-all duration-500 ${asset.status === AssetStatus.FAILED ? 'bg-red-500' : asset.status === AssetStatus.MINTED ? 'bg-emerald-500' : 'bg-primary-500'}`}
@@ -3804,8 +2284,8 @@ export default function App() {
                                                 />
                                             </div>
                                        </td>
-                                       <td className="px-2 sm:px-4 py-2 sm:py-3 text-center flex gap-2 justify-center">
-                                            {rec && <button onClick={() => handleAssetDownload(asset, 'json')} className="text-primary-500 hover:text-white"><Download size={14} /></button>}
+                                       <td className="px-4 py-3 text-center flex gap-2 justify-center">
+                                          {rec && <button onClick={() => downloadJSON(asset)} className="text-primary-500 hover:text-white"><Download size={14} /></button>}
                                        </td>
                                    </tr>
                                )
@@ -3815,7 +2295,6 @@ export default function App() {
                  </div>
                )}
              </div>
-          </ErrorBoundary>
           )}
 
           {activeTab === 'batch' && (
@@ -3825,7 +2304,7 @@ export default function App() {
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4">
                     <QueueMonitor userId={user.id} onRequeueComplete={() => {
                       loadAssets().then(loaded => setLocalAssets(loaded));
-                    }} uploadProgress={uploadProgress} />
+                    }} />
                   </div>
                 )}
                 
@@ -3894,7 +2373,7 @@ export default function App() {
                                                 )}
                                             </td>
                                             <td className="px-4 py-2 text-slate-300 font-mono">{item.file.name}</td>
-                                            <td className="px-2 sm:px-4 py-2 min-w-0 sm:min-w-[150px]">
+                                            <td className="px-4 py-2 min-w-[150px]">
                                                 <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
                                                     <div 
                                                         className={`h-full transition-all duration-500 ${item.status === 'ERROR' ? 'bg-red-500' : item.status === 'COMPLETED' ? 'bg-emerald-500' : 'bg-primary-500'}`}
@@ -3945,13 +2424,12 @@ export default function App() {
                      <QueueMonitor userId={user.id} onRequeueComplete={() => {
                        // Refresh assets after requeue
                        loadAssets().then(loaded => setLocalAssets(loaded));
-                     }} uploadProgress={uploadProgress} />
+                     }} />
                    </div>
                  )}
                  
-                 <Suspense fallback={<div className="p-4 text-slate-500 text-sm">Loading...</div>}>
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
-                    {displayItems.map(item => ('bundleId' in item) ? <BundleCard key={item.bundleId} bundle={item as ImageBundle} assetsById={assetsById} onAssetUpdated={handleAssetUpdate} /> : (
+                     {displayItems.map(item => ('bundleId' in item) ? <BundleCard key={item.bundleId} bundle={item as ImageBundle} onAssetUpdated={handleAssetUpdate} /> : (
                         <div 
                             key={item.id} 
                             className={`bg-slate-900 border rounded-xl overflow-hidden hover:shadow-lg transition-all group relative ${selectedAssetIds.has(item.id) ? 'border-primary-500 ring-2 ring-primary-500/20' : 'border-slate-800'}`}
@@ -3970,7 +2448,7 @@ export default function App() {
                                 />
                             </div>
                             <div className="relative h-48 bg-slate-950 overflow-hidden">
-                                <img src={getThumbnailSrc(item)} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" onError={(e) => handleThumbnailError(e, item)} />
+                                <img src={item.imageUrl} className="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" alt="doc" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end p-4">
                                     <button 
                                         onClick={() => setEditingAsset(item)}
@@ -3983,154 +2461,132 @@ export default function App() {
                             <div className="p-4">
                                 <h4 className="font-bold text-white text-sm mb-1 truncate">{item.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
                                 <div className="flex gap-2 mt-4">
-                                    <button onClick={() => { setSelectedAssetId(item.id); setActiveTab('explore'); setExploreSubTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700">View Graph</button>
+                                    <button onClick={() => { setSelectedAssetId(item.id); setActiveTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700">View Graph</button>
                                     <ContributeButton asset={item} onAssetUpdated={handleAssetUpdate} />
                                 </div>
                             </div>
                         </div>
                      ))}
                  </div>
-                 </Suspense>
              </div>
           )}
 
-          {activeTab === 'explore' && (
-            <div className="h-full flex flex-col gap-0">
-              {/* Sub-tab selector */}
-              <div className="flex flex-wrap items-center gap-1 px-1 pb-3 flex-shrink-0">
-                <div className="flex flex-wrap bg-slate-900 p-1 rounded-lg border border-slate-800 gap-1">
-                  <button
-                    onClick={() => setExploreSubTab('3d')}
-                    className={`px-2 sm:px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 sm:gap-1.5 ${exploreSubTab === '3d' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    <Globe size={13} />
-                    3D World
-                  </button>
-                  <button
-                    onClick={() => setExploreSubTab('graph')}
-                    className={`px-2 sm:px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 sm:gap-1.5 ${exploreSubTab === 'graph' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    <Network size={13} />
-                    Graph
-                  </button>
-                  <button
-                    onClick={() => setExploreSubTab('semantic')}
-                    className={`px-2 sm:px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1 sm:gap-1.5 ${exploreSubTab === 'semantic' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                  >
-                    <Zap size={13} />
-                    <span className="hidden sm:inline">Semantic</span> Canvas
-                  </button>
-                </div>
-                <div className="ml-auto">
-                  <FilterBadge count={graphFilters.category !== 'all' || graphFilters.era !== 'all' || graphFilters.contested ? 1 : 0} onClick={() => setShowUnifiedFilters(true)} />
-                </div>
-              </div>
-
-              {/* Knowledge Graph sub-view */}
-              {exploreSubTab === 'graph' && (
-                <div className="flex gap-6 h-full flex-col flex-1 min-h-0">
-                   <div className="flex flex-wrap items-center justify-between gap-2 flex-shrink-0">
-                     <h3 className="text-base sm:text-lg font-bold text-white">Knowledge Graph</h3>
-                     <div className="flex items-center gap-2 sm:gap-3">
-                       <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
-                          <button 
-                            onClick={() => setGraphViewMode('SINGLE')} 
-                            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'SINGLE' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                          >
-                            Single Asset
-                          </button>
-                          <button 
-                            onClick={() => setGraphViewMode('GLOBAL')} 
-                            className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'GLOBAL' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
-                          >
-                            Global Corpus
-                          </button>
-                       </div>
-                     </div>
+          {activeTab === 'graph' && (
+            <div className="flex gap-6 h-full flex-col">
+               <div className="flex items-center justify-between">
+                 <h3 className="text-lg font-bold text-white">Knowledge Graph</h3>
+                 <div className="flex items-center gap-3">
+                   <FilterBadge count={graphFilters.category !== 'all' || graphFilters.era !== 'all' || graphFilters.contested ? 1 : 0} onClick={() => setShowUnifiedFilters(true)} />
+                   <div className="flex bg-slate-900 p-1 rounded-lg border border-slate-800">
+                      <button 
+                        onClick={() => setGraphViewMode('SINGLE')} 
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'SINGLE' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Single Asset
+                      </button>
+                      <button 
+                        onClick={() => setGraphViewMode('GLOBAL')} 
+                        className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${graphViewMode === 'GLOBAL' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      >
+                        Global Corpus
+                      </button>
                    </div>
-                   <InlineFilterBar activeView="graph" />
-                   {graphViewMode === 'SINGLE' && (
-                     <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col min-h-0">
-                       {selectedAssetId ? (
-                         <>
-                           <div className="flex justify-between items-center mb-4">
-                             <h4 className="text-sm font-bold text-slate-400 uppercase">Asset: {assets.find(a => a.id === selectedAssetId)?.sqlRecord?.DOCUMENT_TITLE || selectedAssetId}</h4>
-                             <button onClick={() => setSelectedAssetId(null)} className="text-xs text-primary-500 hover:underline">Clear Selection</button>
-                           </div>
-                           <div className="flex-1 relative">
-                             <GraphVisualizer 
-                               data={assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] }} 
-                               width={1000} 
-                               height={600} 
-                             />
-                           </div>
-                         </>
-                       ) : (
-                         <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
-                           <Network size={48} className="opacity-20" />
-                           <p>Select an asset from the Assets tab to view its specific graph.</p>
-                           <button onClick={() => setActiveTab('assets')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Go to Assets</button>
-                         </div>
-                       )}
+                 </div>
+               </div>
+               
+               {/* Inline Filter Bar for Knowledge Graph */}
+               <InlineFilterBar activeView="graph" />
+               
+               {graphViewMode === 'SINGLE' && (
+                 <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
+                   {selectedAssetId ? (
+                     <>
+                       <div className="flex justify-between items-center mb-4">
+                         <h4 className="text-sm font-bold text-slate-400 uppercase">Asset: {assets.find(a => a.id === selectedAssetId)?.sqlRecord?.DOCUMENT_TITLE || selectedAssetId}</h4>
+                         <button onClick={() => setSelectedAssetId(null)} className="text-xs text-primary-500 hover:underline">Clear Selection</button>
+                       </div>
+                       <div className="flex-1 relative">
+                         <GraphVisualizer 
+                           data={assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] }} 
+                           width={1000} 
+                           height={600} 
+                         />
+                       </div>
+                     </>
+                   ) : (
+                     <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
+                       <Network size={48} className="opacity-20" />
+                       <p>Select an asset from the Assets tab to view its specific graph.</p>
+                       <button onClick={() => setActiveTab('assets')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Go to Assets</button>
                      </div>
                    )}
-                   {graphViewMode === 'GLOBAL' && (
-                      <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col min-h-0">
-                          <div className="flex-1 relative"><GraphVisualizer data={globalGraphData} width={1000} height={600} /></div>
-                      </div>
-                   )}
-                </div>
-              )}
+                 </div>
+               )}
 
-              {/* 3D World sub-view — only mounts when selected to avoid eager WebGL context claim */}
-              {exploreSubTab === '3d' && (
-                <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 overflow-hidden min-h-0">
-                  <InlineFilterBar activeView="world" />
-                  <div className="h-full">
-                    <WorldRenderer
-                      graphData={graphViewMode === 'GLOBAL' ? globalGraphData : (assets.find(a => a.id === selectedAssetId)?.graphData || globalGraphData)}
-                      assets={assets}
-                      nearbyUsers={nearbyUsers}
-                      currentUserId={user?.id}
-                      onNodeSelect={(node) => {
-                        const asset = assets.find(a => a.id === node.id);
-                        if (asset) setSelectedAssetId(asset.id);
-                      }}
-                      onPositionChange={(pos) => {
-                        if (avatar) updatePosition(pos, [0, 0, 0, 1], avatar.lastSector);
-                      }}
-                      onStartAdventure={() => {
-                        showToast('info', 'Adventure Mode activated! Walk to discover nearby captures.');
-                      }}
-                    />
+               {graphViewMode === 'GLOBAL' && (
+                  <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
+                      <div className="flex-1 relative"><GraphVisualizer data={globalGraphData} width={1000} height={600} /></div>
+                  </div>
+               )}
+            </div>
+          )}
+
+          {activeTab === 'world' && isTabVisible('world') && (
+            <div className="h-full flex flex-col bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+              {/* Header with view mode toggle and filter integration */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+                <div className="flex items-center gap-4">
+                  <h3 className="text-lg font-bold text-white">{worldViewMode === '3d' ? '3D World' : 'Semantic Canvas'}</h3>
+                  <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+                    <button 
+                      onClick={() => setWorldViewMode('3d')} 
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${worldViewMode === '3d' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      <Globe size={14} />
+                      3D View
+                    </button>
+                    <button 
+                      onClick={() => setWorldViewMode('semantic')} 
+                      className={`px-3 py-1.5 text-xs font-medium rounded transition-colors flex items-center gap-1.5 ${worldViewMode === 'semantic' ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      <Zap size={14} />
+                      Semantic
+                    </button>
                   </div>
                 </div>
-              )}
-
-              {/* Semantic Canvas sub-view */}
-              {exploreSubTab === 'semantic' && (
-                <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 overflow-hidden min-h-0">
+                <FilterBadge count={0} onClick={() => setShowUnifiedFilters(true)} />
+              </div>
+              <InlineFilterBar activeView="world" />
+              <div className="flex-1">
+                {worldViewMode === '3d' ? (
+                  <WorldRenderer
+                    graphData={worldGraphData}
+                    nearbyUsers={nearbyUsers}
+                    currentUserId={user?.id}
+                    onNodeSelect={(node) => {
+                      const asset = assets.find(a => a.id === node.id);
+                      if (asset) {
+                        setSelectedAssetId(asset.id);
+                      }
+                    }}
+                    onPositionChange={(pos) => {
+                      if (avatar) {
+                        updatePosition(pos, [0, 0, 0, 1], avatar.lastSector);
+                      }
+                    }}
+                  />
+                ) : (
                   <SemanticCanvas assets={assets} />
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 
           {activeTab === 'ar' && (
             <div className="h-full rounded-xl overflow-hidden border border-slate-800 bg-black relative">
               <ARScene 
-                onCapture={(file) => {
-                  setArSessionQueue(prev => [...prev, file]);
-                  saveArQueueItem(file).catch(() => {});
-                }} 
-                onFinishSession={() => {
-                  if (arSessionQueue.length > 0) {
-                    handleBatchFiles(arSessionQueue);
-                    setArSessionQueue([]);
-                    clearArQueue().catch(() => {});
-                  }
-                  // Do not switch tab, stay in AR view
-                }}
+                onCapture={(file) => setArSessionQueue(prev => [...prev, file])} 
+                onFinishSession={() => switchTab('batch')}
                 sessionCount={arSessionQueue.length}
                 isOnline={isOnline}
                 zoomEnabled={zoomEnabled}
@@ -4138,7 +2594,7 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'social' && (
+          {activeTab === 'social' && isTabVisible('social') && (
             <SocialApp 
               user={user}
               communities={communities}
@@ -4158,21 +2614,21 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'market' && (
-            <div className="h-full flex flex-col gap-4 sm:gap-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="text-base sm:text-lg font-bold text-white">Data Marketplace</h3>
-                  <p className="text-xs sm:text-sm text-slate-400 truncate">Acquire training datasets and sharded document bundles.</p>
+          {activeTab === 'market' && isTabVisible('market') && (
+            <div className="h-full flex flex-col gap-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white">Data Marketplace</h3>
+                  <p className="text-sm text-slate-400">Acquire high-quality training datasets and sharded document bundles.</p>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-xs font-bold flex-shrink-0">
+                <div className="flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full text-indigo-400 text-xs font-bold">
                   <ShoppingBag size={14} />
-                  <span className="truncate">{marketItems.length} BUNDLES</span>
+                  {displayItems.filter(i => 'bundleId' in i).length} BUNDLES AVAILABLE
                 </div>
               </div>
 
               <div className="flex-1 overflow-auto pr-2 custom-scrollbar">
-                {marketItems.length === 0 ? (
+                {displayItems.filter(i => 'bundleId' in i).length === 0 ? (
                   <div className="h-64 border-2 border-dashed border-slate-800 rounded-xl flex flex-col items-center justify-center text-slate-500 gap-4">
                     <Package size={48} className="opacity-20" />
                     <div className="text-center">
@@ -4181,42 +2637,35 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                  <Suspense fallback={<div className="p-4 text-slate-500 text-sm">Loading bundles...</div>}>
                   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {marketItems.map((bundle) => (
+                    {displayItems
+                      .filter((item): item is ImageBundle => 'bundleId' in item)
+                      .map((bundle) => (
                         <BundleCard 
                           key={bundle.bundleId} 
                           bundle={bundle} 
-                          assetsById={assetsById}
-                          onClick={() => {
-                            const byIds = (bundle.assetIds || [])
-                              .map((id) => assetsById[id])
-                              .filter((a): a is DigitalAsset => !!a);
-                            const fallback = assets.filter(a => bundle.imageUrls.includes(a.imageUrl));
-                            setPurchaseModalData({ title: bundle.title, assets: byIds.length > 0 ? byIds : fallback });
-                          }}
+                          onClick={() => setPurchaseModalData({ title: bundle.title, assets: assets.filter(a => bundle.imageUrls.includes(a.imageUrl)) })}
                           onAssetUpdated={(updatedAsset) => {
                             setLocalAssets(prev => prev.map(a => a.id === updatedAsset.id ? updatedAsset : a));
                           }}
                         />
                       ))}
                   </div>
-                  </Suspense>
                 )}
               </div>
             </div>
           )}
 
           {activeTab === 'review' && isAdmin && (
-            <div className="h-full flex flex-col gap-4 sm:gap-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="text-base sm:text-lg font-bold text-white">Super-User Review Queue</h3>
-                  <p className="text-xs sm:text-sm text-slate-400 truncate">Process and validate images that failed automated extraction.</p>
+            <div className="h-full flex flex-col gap-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-white">Super-User Review Queue</h3>
+                  <p className="text-sm text-slate-400">Process and validate images that failed automated extraction.</p>
                 </div>
-                <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-amber-500 text-xs font-bold flex-shrink-0">
+                <div className="flex items-center gap-2 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-amber-500 text-xs font-bold">
                   <AlertCircle size={14} />
-                  <span className="truncate">{globalAssets.filter(a => a.sqlRecord?.PROCESSING_STATUS === AssetStatus.FAILED || !a.sqlRecord?.IS_ENTERPRISE).length} PENDING</span>
+                  {globalAssets.filter(a => a.sqlRecord?.PROCESSING_STATUS === AssetStatus.FAILED || !a.sqlRecord?.IS_ENTERPRISE).length} PENDING REVIEW
                 </div>
               </div>
 
@@ -4229,7 +2678,7 @@ export default function App() {
                     <thead className="bg-slate-950 sticky top-0 z-10">
                       <tr>
                         {['Preview', 'ID', 'Timestamp', 'Status', 'Error', 'Action'].map(h => (
-                          <th key={h} className={`px-2 sm:px-4 py-2 sm:py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950 ${(h === 'Timestamp' || h === 'Error') ? 'hidden sm:table-cell' : ''}`}>{h}</th>
+                          <th key={h} className="px-4 py-3 text-[10px] font-bold text-slate-400 uppercase border-b border-r border-slate-800 whitespace-nowrap bg-slate-950">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -4238,24 +2687,23 @@ export default function App() {
                         .filter(a => a.sqlRecord?.PROCESSING_STATUS === AssetStatus.FAILED || !a.sqlRecord?.IS_ENTERPRISE)
                         .map(asset => (
                           <tr key={asset.id} className="hover:bg-slate-800/50 transition-colors text-xs font-mono">
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800">
-                              <img src={getThumbnailSrc(asset)} alt="Preview" className="w-10 h-10 sm:w-12 sm:h-12 object-cover rounded border border-slate-700" onError={(e) => handleThumbnailError(e, asset)} />
+                            <td className="px-4 py-3 border-r border-slate-800">
+                              <img src={asset.imageUrl} alt="Preview" className="w-12 h-12 object-cover rounded border border-slate-700" />
                             </td>
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-500 border-r border-slate-800">{truncateText(asset.id, 8)}</td>
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-slate-300 border-r border-slate-800 hidden sm:table-cell">{new Date(asset.timestamp).toLocaleString()}</td>
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 border-r border-slate-800">
+                            <td className="px-4 py-3 text-slate-500 border-r border-slate-800">{asset.id.substring(0, 8)}</td>
+                            <td className="px-4 py-3 text-slate-300 border-r border-slate-800">{new Date(asset.timestamp).toLocaleString()}</td>
+                            <td className="px-4 py-3 border-r border-slate-800">
                               <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${asset.status === AssetStatus.FAILED ? 'bg-red-500/20 text-red-500' : 'bg-amber-500/20 text-amber-500'}`}>
                                 {asset.status}
                               </span>
                             </td>
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-red-400 border-r border-slate-800 max-w-[120px] sm:max-w-[200px] truncate hidden sm:table-cell">{asset.errorMessage || 'Manual Review Required'}</td>
-                            <td className="px-2 sm:px-4 py-2 sm:py-3 text-center">
+                            <td className="px-4 py-3 text-red-400 border-r border-slate-800 max-w-[200px] truncate">{asset.errorMessage || 'Manual Review Required'}</td>
+                            <td className="px-4 py-3 text-center">
                               <button 
                                 onClick={() => setEditingAsset(asset)}
-                                className="px-2 sm:px-3 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded text-[10px] font-bold"
+                                className="px-3 py-1 bg-primary-600 hover:bg-primary-500 text-white rounded text-[10px] font-bold"
                               >
-                                <span className="hidden sm:inline">REVIEW & FIX</span>
-                                <span className="sm:hidden">FIX</span>
+                                REVIEW & FIX
                               </button>
                             </td>
                           </tr>
@@ -4274,7 +2722,6 @@ export default function App() {
           )}
 
           {activeTab === 'settings' && (
-            <Suspense fallback={<div className="p-8 text-slate-500">Loading settings...</div>}>
             <SettingsPanel 
               onOpenPrivacy={() => setShowPrivacyPolicy(true)} 
               syncOn={syncOn}
@@ -4290,7 +2737,6 @@ export default function App() {
               selectedLLM={selectedLLM}
               setSelectedLLM={setSelectedLLM}
             />
-            </Suspense>
           )}
         </div>
         
@@ -4302,7 +2748,6 @@ export default function App() {
         )}
 
         {purchaseModalData && (
-          <Suspense fallback={null}>
           <PurchaseModal 
             bundleTitle={purchaseModalData.title}
             assets={purchaseModalData.assets}
@@ -4310,19 +2755,35 @@ export default function App() {
             onClose={() => setPurchaseModalData(null)}
             onConfirm={handlePurchase}
           />
-          </Suspense>
         )}
 
         {showPrivacyPolicy && (
           <PrivacyPolicyModal onClose={() => setShowPrivacyPolicy(false)} />
         )}
 
-        {showIntegrationsHub && (
-          <IntegrationsHub 
-            isOpen={showIntegrationsHub} 
-            onClose={() => setShowIntegrationsHub(false)} 
+        {showCreditGate && (
+          <CreditGate
+            userId={user?.id}
+            onBypassWithKey={() => {
+              setShowCreditGate(false);
+              setActiveTab('settings');
+            }}
+            onContinue={() => {
+              setShowCreditGate(false);
+              if (pendingCreditFile) {
+                const { file, source } = pendingCreditFile;
+                setPendingCreditFile(null);
+                // Retry — consumeCredit will be called inside ingestFile
+                ingestFile(file, source);
+              }
+            }}
           />
         )}
+
+        <IntegrationsHub 
+          isOpen={showIntegrationsHub} 
+          onClose={() => setShowIntegrationsHub(false)} 
+        />
 
         <KeyboardShortcutsHelp 
           isOpen={isShortcutsOpen} 
@@ -4340,28 +2801,19 @@ export default function App() {
             />
         )}
 
-        {showProcessingPanel && createPortal((
-          <div className="fixed inset-0 z-[60] pointer-events-none sm:p-4">
-            <div
-              className="bg-slate-900 border border-slate-800 sm:rounded-xl shadow-2xl flex flex-col pointer-events-auto absolute sm:relative sm:ml-auto w-full sm:w-[450px]"
-              style={{
-                top: 56,
-                right: 0,
-                bottom: 'env(safe-area-inset-bottom, 80px)',
-                maxHeight: 'calc(100dvh - 56px)',
-              }}
-            >
-                <div className="p-3 sm:p-4 border-b border-slate-800 flex items-center justify-between w-full box-border">
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2 min-w-0">
-                        <Zap size={14} className="text-amber-500 flex-shrink-0" />
-                        <span className="truncate">Processing Queue</span>
+        {showProcessingPanel && (
+            <div className="absolute top-16 right-8 w-96 bg-slate-900 border border-slate-800 rounded-xl shadow-2xl z-40 flex flex-col max-h-[calc(100vh-120px)] animate-in slide-in-from-top-4 duration-200">
+                <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <Zap size={14} className="text-amber-500" />
+                        Processing Queue
                         {(totalPendingCount > 0 || batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').length > 0) && (
-                            <span className="ml-1 sm:ml-2 px-1.5 sm:px-2 py-0.5 bg-amber-500/20 text-amber-500 text-[10px] font-bold rounded-full flex-shrink-0">
+                            <span className="ml-2 px-2 py-0.5 bg-amber-500/20 text-amber-500 text-[10px] font-bold rounded-full">
                                 {totalPendingCount + batchQueue.filter(i => i.status === 'QUEUED' || i.status === 'PROCESSING').length}
                             </span>
                         )}
                     </h3>
-                    <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 ml-2">
+                    <div className="flex items-center gap-2">
                         <button 
                             onClick={() => setShowDebugPanel(!showDebugPanel)}
                             className={`p-2 rounded text-xs font-mono ${showDebugPanel ? 'bg-blue-500/20 text-blue-400' : 'text-slate-500 hover:text-white'}`}
@@ -4372,7 +2824,7 @@ export default function App() {
                         <button onClick={() => setShowProcessingPanel(false)} className="text-slate-500 hover:text-white"><X size={16} /></button>
                     </div>
                 </div>
-                <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain p-2 pb-20 sm:pb-2 space-y-4 custom-scrollbar w-full" style={{ WebkitOverflowScrolling: 'touch' }}>
+                <div className="flex-1 overflow-auto p-2 space-y-4 custom-scrollbar">
                     {/* Debug Logs Panel */}
                     {showDebugPanel && (
                         <div className="px-2 py-2 border-b border-slate-800/50 pb-4">
@@ -4388,26 +2840,17 @@ export default function App() {
                                     Clear
                                 </button>
                             </div>
-                            <div className="bg-slate-950 border border-slate-800 rounded max-h-48 overflow-y-auto overflow-x-auto text-[8px] font-mono whitespace-pre-wrap break-all">
+                            <div className="bg-slate-950 border border-slate-800 rounded max-h-32 overflow-y-auto text-[8px] font-mono">
                                 {debugLogs.length === 0 ? (
                                     <div className="p-2 text-slate-600 text-center">No logs yet</div>
                                 ) : (
                                     debugLogs.map(log => (
-                                        <div key={log.id} className={`p-1.5 border-b border-slate-800/30 ${log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-yellow-400' : 'text-slate-300'}`}>
-                                            <span className="text-slate-500 mr-2">{log.timestamp}</span>
-                                            {log.message}
+                                        <div key={log.id} className={`p-1 border-b border-slate-800/30 ${log.level === 'error' ? 'text-red-400' : log.level === 'warn' ? 'text-yellow-400' : 'text-slate-300'}`}>
+                                            <span className="text-slate-500">{log.timestamp}</span> {log.message}
                                         </div>
                                     ))
                                 )}
                             </div>
-                        </div>
-                    )}
-
-                    {user?.id && (
-                        <div className="mb-3 pb-3 border-b border-slate-800/50">
-                            <QueueMonitor userId={user.id} onRequeueComplete={() => {
-                                loadAssets().then(loaded => setLocalAssets(loaded));
-                            }} uploadProgress={uploadProgress} />
                         </div>
                     )}
 
@@ -4425,7 +2868,7 @@ export default function App() {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex justify-between items-center mb-1">
-                                    <span className="text-[10px] font-mono text-slate-400 truncate">{truncateText(item.file?.name, 20)}</span>
+                                    <span className="text-[10px] font-mono text-slate-400 truncate">{item.file.name.slice(0, 20)}</span>
                                     <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${item.status === 'PROCESSING' ? 'bg-amber-500/20 text-amber-500' : 'bg-blue-500/20 text-blue-400'}`}>
                                         {item.status === 'PROCESSING' ? 'PROCESSING' : 'QUEUED'}
                                     </span>
@@ -4451,10 +2894,10 @@ export default function App() {
                             .filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING)
                             .map(asset => (
                             <div key={asset.id} className="p-3 bg-slate-950/50 border border-slate-800 rounded-lg flex items-center gap-3 group">
-                                <img src={getThumbnailSrc(asset)} className="w-10 h-10 object-cover rounded border border-slate-700" alt="thumb" onError={(e) => handleThumbnailError(e, asset)} />
+                                <img src={asset.imageUrl} className="w-10 h-10 object-cover rounded border border-slate-700" alt="thumb" />
                                 <div className="flex-1 min-w-0">
                                     <div className="flex justify-between items-center mb-1">
-                                        <span className="text-[10px] font-mono text-slate-400 truncate">{truncateText(asset.id, 8)}</span>
+                                        <span className="text-[10px] font-mono text-slate-400 truncate">{asset.id.slice(0,8)}</span>
                                         <div className="flex items-center gap-1">
                                             <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${asset.status === AssetStatus.PROCESSING ? 'bg-amber-500/20 text-amber-500' : 'bg-slate-800 text-slate-400'}`}>
                                                 {asset.status}
@@ -4486,6 +2929,15 @@ export default function App() {
                         <div className="flex items-center justify-center gap-2 text-amber-500 text-xs py-1">
                             <RefreshCw size={12} className="animate-spin" />
                             Processing in progress...
+                        </div>
+                    )}
+                    
+                    {/* Server Queue Monitor */}
+                    {user?.id && (
+                        <div className="mb-3 pb-3 border-b border-slate-800">
+                            <QueueMonitor userId={user.id} onRequeueComplete={() => {
+                                loadAssets().then(loaded => setLocalAssets(loaded));
+                            }} />
                         </div>
                     )}
                     
@@ -4527,208 +2979,19 @@ export default function App() {
                     </button>
                 </div>
             </div>
-          </div>
-        ), document.body)}
-
-        {/* AR Session Leave Confirmation */}
-        {arLeaveConfirm && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center" role="dialog" aria-modal="true" aria-labelledby="ar-leave-title">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={handleArLeaveCancel} />
-            <div className="relative bg-slate-900 border border-slate-700 rounded-2xl p-6 max-w-sm mx-4 shadow-2xl">
-              <h3 id="ar-leave-title" className="text-lg font-semibold text-white mb-2">AR Session in Progress</h3>
-              <p className="text-sm text-slate-400 mb-6">
-                You have {arSessionQueue.length} capture{arSessionQueue.length !== 1 ? 's' : ''} from this session. What would you like to do?
-              </p>
-              <div className="flex flex-col gap-2">
-                <button
-                  onClick={handleArLeaveProcess}
-                  className="w-full px-4 py-2.5 bg-primary-600 hover:bg-primary-500 text-white text-sm font-medium rounded-lg transition-colors"
-                  autoFocus
-                >
-                  Process {arSessionQueue.length} Capture{arSessionQueue.length !== 1 ? 's' : ''} & Continue
-                </button>
-                <button
-                  onClick={handleArLeaveDiscard}
-                  className="w-full px-4 py-2.5 bg-red-600/20 hover:bg-red-600/30 text-red-400 text-sm font-medium rounded-lg border border-red-500/30 transition-colors"
-                >
-                  Discard & Leave
-                </button>
-                <button
-                  onClick={handleArLeaveCancel}
-                  className="w-full px-4 py-2.5 text-slate-400 hover:text-white text-sm font-medium rounded-lg transition-colors"
-                >
-                  Stay in AR Scanner
-                </button>
-              </div>
-            </div>
-          </div>
         )}
 
         {/* New Scalable Batch Processing Panel */}
         {showNewBatchPanel && (
           <div className="fixed inset-4 md:inset-8 lg:inset-16 z-50 flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => {
-              setShowNewBatchPanel(false);
-            }} />
+            <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowNewBatchPanel(false)} />
             <div className="relative w-full max-w-4xl h-full max-h-[90vh]">
               <BatchProcessingPanel
                 onProcessItem={handleNewBatchProcess}
-                onClose={() => {
-                  setShowNewBatchPanel(false);
-                }}
+                onClose={() => setShowNewBatchPanel(false)}
                 maxConcurrent={3}
                 defaultScanType={selectedScanType || ScanType.DOCUMENT}
-                serverRetry={(jobId) => processingQueueService.retryJob(jobId)}
-                downloadFromStorage={(assetId) => processingQueueService.downloadFromStorage(assetId)}
               />
-            </div>
-          </div>
-        )}
-
-        <div className="lg:hidden fixed left-0 right-0 z-40 px-2 pointer-events-none" style={{ bottom: 'calc(env(safe-area-inset-bottom, 0px) + 28px)', maxWidth: '100vw', overflowX: 'hidden' }}>
-          <div className="max-w-md mx-auto pointer-events-auto bg-slate-950/90 backdrop-blur-md border border-slate-800 rounded-xl p-1.5 grid grid-cols-6 gap-1">
-            {[
-              { key: 'dashboard', label: 'Home', icon: Layers },
-              { key: 'database', label: 'DB', icon: Database },
-              { key: 'batch', label: 'Batch', icon: Zap },
-              { key: 'curator', label: 'Curate', icon: ShieldCheck },
-              { key: 'settings', label: 'Settings', icon: Settings },
-            ].map(item => {
-              const Icon = item.icon;
-              const active = activeTab === item.key;
-              return (
-                <button
-                  key={item.key}
-                  onClick={() => {
-                    trackUXEvent('mobile_quick_nav', { to: item.key });
-                    switchTab(item.key);
-                  }}
-                  className={`flex flex-col items-center justify-center py-1 rounded-lg text-[10px] ${active ? 'bg-primary-600 text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-                >
-                  <Icon size={14} />
-                  <span>{item.label}</span>
-                </button>
-              );
-            })}
-            <button
-              onClick={() => {
-                toggleQueuePanel('mobile_quick_nav');
-              }}
-              className={`flex flex-col items-center justify-center py-1 rounded-lg text-[10px] ${showProcessingPanel ? 'bg-amber-600/30 text-amber-300' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}
-            >
-              <Activity size={14} />
-              <span>Queue</span>
-            </button>
-          </div>
-        </div>
-
-        {isDevBuild && (
-          <div className="fixed top-20 right-2 z-50 w-[min(22rem,calc(100vw-1rem))] pointer-events-none">
-            <div className="pointer-events-auto bg-slate-950/95 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
-              <div className="px-3 py-2 border-b border-slate-800 flex items-center justify-between">
-                <div className="text-[11px] text-slate-300 font-semibold tracking-wide">QA Debug</div>
-                <button
-                  onClick={() => setShowQaPanel(prev => !prev)}
-                  className={`px-2 py-1 rounded text-[10px] font-bold ${showQaPanel ? 'bg-blue-600/30 text-blue-300' : 'bg-slate-800 text-slate-300 hover:text-white'}`}
-                >
-                  {showQaPanel ? 'Hide' : 'Show'}
-                </button>
-              </div>
-              {showQaPanel && (
-                <div className="p-3 space-y-3 text-[11px]">
-                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
-                    <div className="text-slate-400 uppercase tracking-wide text-[10px] mb-1">Safe Area</div>
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-slate-200 font-mono">
-                      <span>top: {safeAreaDebug.top}px</span>
-                      <span>right: {safeAreaDebug.right}px</span>
-                      <span>bottom: {safeAreaDebug.bottom}px</span>
-                      <span>left: {safeAreaDebug.left}px</span>
-                      <span>viewport: {safeAreaDebug.viewportHeight}px</span>
-                      <span>inner: {safeAreaDebug.innerHeight}px</span>
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
-                    <div className="text-slate-400 uppercase tracking-wide text-[10px] mb-1">Process Step</div>
-                    <div className="text-slate-100 font-mono">
-                      {dbProcessRun.running ? dbProcessRun.step : (isProcessing ? 'local-processing' : 'idle')}
-                    </div>
-                    <div className="mt-1 text-[10px] text-slate-400 font-mono">
-                      queued: {dbProcessRun.processed}/{dbProcessRun.total} • failed: {dbProcessRun.failed} • cancel: {dbProcessRun.cancelRequested ? 'yes' : 'no'}
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
-                    <div className="text-slate-400 uppercase tracking-wide text-[10px] mb-1">Recent UX Events</div>
-                    <div className="max-h-40 overflow-y-auto space-y-1 font-mono text-[10px]">
-                      {recentUxEvents.length === 0 ? (
-                        <div className="text-slate-500">No events yet</div>
-                      ) : (
-                        recentUxEvents.map((entry, index) => {
-                          const eventName = String(entry.event || 'unknown');
-                          const timestamp = String(entry.timestamp || '');
-                          return (
-                            <div key={`${eventName}-${timestamp}-${index}`} className="text-slate-300 border-b border-slate-800/60 pb-1">
-                              <div className="text-blue-300">{eventName}</div>
-                              <div className="text-slate-500">{timestamp}</div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-2">
-                    <div className="text-slate-400 uppercase tracking-wide text-[10px] mb-1 flex items-center justify-between">
-                      <span>Failed Drill-Down</span>
-                      <span className="text-red-400">{dbQueueStats?.failed || 0} queue failed</span>
-                    </div>
-                    <div className="max-h-40 overflow-y-auto space-y-1 font-mono text-[10px]">
-                      {qaFailedJobs.length === 0 && qaFailedAssets.length === 0 ? (
-                        <div className="text-slate-500">No failed jobs or assets</div>
-                      ) : (
-                        <>
-                          {qaFailedJobs.map((job) => (
-                            <div key={job.id} className="text-slate-300 border-b border-slate-800/60 pb-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-red-300">{truncateText(job.assetId, 8)} • {job.stage || 'FAILED_FINAL'}</span>
-                                <button
-                                  onClick={() => {
-                                    setSelectedAssetId(job.assetId);
-                                    setActiveTab('database');
-                                    setShowProcessingPanel(true);
-                                  }}
-                                  className="text-primary-400 hover:text-white"
-                                >
-                                  View
-                                </button>
-                              </div>
-                              <div className="text-slate-500 truncate">{job.error || 'No error payload'}</div>
-                            </div>
-                          ))}
-                          {qaFailedAssets.slice(0, Math.max(0, 8 - qaFailedJobs.length)).map((asset) => (
-                            <div key={asset.id} className="text-slate-300 border-b border-slate-800/60 pb-1">
-                              <div className="flex items-center justify-between gap-2">
-                                <span className="text-amber-300">{truncateText(asset.id, 8)} • asset failed</span>
-                                <button
-                                  onClick={() => {
-                                    setSelectedAssetId(asset.id);
-                                    setActiveTab('database');
-                                  }}
-                                  className="text-primary-400 hover:text-white"
-                                >
-                                  View
-                                </button>
-                              </div>
-                              <div className="text-slate-500 truncate">{asset.errorMessage || 'No local error message'}</div>
-                            </div>
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -4743,13 +3006,13 @@ export default function App() {
           onTabChange={(tab) => setActiveTab(tab)}
           pendingCount={totalPendingCount}
           stuckCount={stuckAssetsCount}
-          onQueueClick={() => toggleQueuePanel('status_bar')}
+          onQueueClick={() => setShowProcessingPanel(prev => !prev)}
         />
       </main>
 
       {/* Unified Filter Panel - Sliding */}
       {showUnifiedFilters && (
-        <div className="fixed inset-0 sm:inset-auto sm:right-0 sm:top-0 sm:bottom-0 sm:w-96 bg-slate-900/95 backdrop-blur-sm sm:border-l border-slate-800 shadow-2xl z-50 overflow-y-auto">
+        <div className="fixed right-0 top-0 bottom-0 w-96 bg-slate-900/95 backdrop-blur-sm border-l border-slate-800 shadow-2xl z-50 overflow-y-auto">
           <div className="p-4">
             <UnifiedFilterPanel
               activeView={activeTab as any}
@@ -4768,25 +3031,20 @@ export default function App() {
         <ClusterSyncStatsPanel
           assets={assets}
           onClose={() => setShowClusterSyncStats(false)}
-          onClassificationUpdate={(results) => {
-            // Merge classification results into local asset state
-            results.forEach(r => {
-              setLocalAssets(prev => prev.map(a => {
-                if (a.id !== r.assetId) return a;
-                const updatedRecord = { ...(a.sqlRecord || {}) } as any;
-                if (r.structuredTemporal) (updatedRecord as any).STRUCTURED_TEMPORAL = r.structuredTemporal;
-                if (r.structuredSpatial) (updatedRecord as any).STRUCTURED_SPATIAL = r.structuredSpatial;
-                if (r.structuredContent) (updatedRecord as any).STRUCTURED_CONTENT = r.structuredContent;
-                if (r.structuredKnowledgeGraph) (updatedRecord as any).STRUCTURED_KNOWLEDGE_GRAPH = r.structuredKnowledgeGraph;
-                if (r.structuredProvenance) (updatedRecord as any).STRUCTURED_PROVENANCE = r.structuredProvenance;
-                if (r.structuredDiscovery) (updatedRecord as any).STRUCTURED_DISCOVERY = r.structuredDiscovery;
-                return { ...a, sqlRecord: updatedRecord as any };
-              }));
-            });
-          }}
         />
       )}
     </div>
     </FilterProvider>
   );
+}
+
+function downloadJSON(asset: DigitalAsset) {
+  if (!asset.sqlRecord) return;
+  const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(asset.sqlRecord, null, 2));
+  const downloadAnchorNode = document.createElement('a');
+  downloadAnchorNode.setAttribute("href", dataStr);
+  downloadAnchorNode.setAttribute("download", `GEOGRAPH_DB_${asset.id}.json`);
+  document.body.appendChild(downloadAnchorNode);
+  downloadAnchorNode.click();
+  downloadAnchorNode.remove();
 }
