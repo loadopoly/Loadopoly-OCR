@@ -35,8 +35,12 @@ set -euo pipefail
 : "${REDDIT_USER_AGENT:="GeoGraphOCR/1.0 by u/${REDDIT_USERNAME:-yourhandle}"}"
 # ────────────────────────────────────────────────────────────
 
-# Pre-generated — do not change
-SOCIAL_LAUNCH_SECRET="e57d5e0baa21aa520101e66b28cc73ac7beebe121d3de458b88cb84dfbffd044"
+# Pre-generated — set via SOCIAL_LAUNCH_SECRET env var or fill in below
+: "${SOCIAL_LAUNCH_SECRET:=""}"
+if [[ -z "$SOCIAL_LAUNCH_SECRET" ]]; then
+  echo "ERROR: Set SOCIAL_LAUNCH_SECRET env var (get value from Vercel dashboard → Settings → Environment Variables)"
+  exit 1
+fi
 
 # ── Validate ─────────────────────────────────────────────────
 if [[ -z "$VERCEL_TOKEN" ]]; then
