@@ -148,7 +148,12 @@ async function postTweet(
     });
 
     if (!res.ok) {
-      // Don't leak API response body — just log the status code
+      if (res.status === 402) {
+        return { ok: false, error: 'Twitter monthly tweet quota depleted — upgrade to Basic ($100/mo) or wait for monthly reset' };
+      }
+      if (res.status === 403) {
+        return { ok: false, error: 'Twitter 403 — app permissions may be read-only; regenerate Access Token after enabling Read+Write' };
+      }
       return { ok: false, error: `Twitter API error ${res.status}` };
     }
 
