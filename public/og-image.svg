@@ -94,5 +94,5 @@
   <!-- Bottom strip -->
   <rect x="40" y="555" width="1120" height="35" rx="0" fill="#080f1e" opacity="0.85"/>
   <rect x="40" y="555" width="1120" height="35" fill="none" stroke="#1e293b" stroke-width="1"/>
-  <text x="600" y="577" text-anchor="middle" fill="#475569" font-family="system-ui,-apple-system,sans-serif" font-size="13" font-weight="500">GeoGraph OCR by Loadopoly · Free beta · geographocr.vercel.app</text>
+  <text x="600" y="577" text-anchor="middle" fill="#475569" font-family="system-ui,-apple-system,sans-serif" font-size="13" font-weight="500">GeoGraph OCR by Loadopoly · Free beta · geographocrnode.vercel.app</text>
 </svg>

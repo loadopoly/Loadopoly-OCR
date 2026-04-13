@@ -19,7 +19,7 @@
    - Enable **OAuth 1.0a**
    - App permissions: **Read and Write**
    - Type of app: **Web App, Automated App or Bot**
-   - Callback / Redirect URI: `https://geographocr.vercel.app/` *(required by the form — not used in server-side posting)*
+   - Callback / Redirect URI: `https://geographocrnode.vercel.app/` *(required by the form — not used in server-side posting)*
 4. Go to **Keys and Tokens** tab (NOT the OAuth 2.0 section):
    - Copy **API Key** → `TWITTER_API_KEY` (starts with something like `xai...`)
    - Copy **API Key Secret** → `TWITTER_API_SECRET`
@@ -37,7 +37,7 @@
 2. Fill in:
    - **Name:** `GeoGraphOCR`
    - **Type:** select **script** ← THIS IS CRITICAL
-   - **Redirect URI:** `https://geographocr.vercel.app/auth/callback` *(required field, but the password grant never redirects to it)*
+   - **Redirect URI:** `https://geographocrnode.vercel.app/auth/callback` *(required field, but the password grant never redirects to it)*
 3. Click **Create app**. You'll see:
    - The 14-character ID under your app name → `REDDIT_CLIENT_ID`
    - The **secret** field → `REDDIT_CLIENT_SECRET`
@@ -73,7 +73,7 @@ In the **Vercel Dashboard → Project → Settings → Environment Variables**, 
 
 Before posting, confirm link preview metadata is correct:
 
-- **Open Graph Debugger (opengraph.xyz):** https://www.opengraph.xyz/ — paste `https://geographocr.vercel.app/` and check the preview
+- **Open Graph Debugger (opengraph.xyz):** https://www.opengraph.xyz/ — paste `https://geographocrnode.vercel.app/` and check the preview
 - **Twitter Card Validator:** https://cards-dev.twitter.com/validator — paste the URL and verify the `summary_large_image` card renders
 
 ---
@@ -81,7 +81,7 @@ Before posting, confirm link preview metadata is correct:
 ## Step 4 — Trigger the launch endpoint
 
 ```bash
-curl -X POST https://geographocr.vercel.app/api/social/launch \
+curl -X POST https://geographocrnode.vercel.app/api/social/launch \
   -H "Authorization: Bearer YOUR_SOCIAL_LAUNCH_SECRET" \
   -H "Content-Type: application/json"
 ```
@@ -129,7 +129,7 @@ It works offline too with Bluetooth AR glasses (Xreal, RayNeo, Vuzix) for field 
 
 Free tier: 5 scans, no sign-up required. BYOK (Bring Your Own Gemini Key) for unlimited.
 
-URL: https://geographocr.vercel.app
+URL: https://geographocrnode.vercel.app
 
 Happy to answer technical questions about the OCR pipeline or knowledge graph architecture.
 ```
@@ -165,7 +165,7 @@ GeoGraph OCR turns any document photo into:
 
 Powered by Gemini 2.5 Flash. 40 hours → 5 minutes.
 
-Free beta → https://geographocr.vercel.app
+Free beta → https://geographocrnode.vercel.app
 No sign-up required.
 ```
 
@@ -180,7 +180,7 @@ Built for:
 
 Also: the structured output is LLM training-data ready.
 
-Try free (5 scans, no account) → https://geographocr.vercel.app
+Try free (5 scans, no account) → https://geographocrnode.vercel.app
 
 #DigitalHumanities #AI #OpenData #Archivists #MachineLearning #LLM
 ```

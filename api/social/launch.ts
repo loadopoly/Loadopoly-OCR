@@ -3,7 +3,7 @@ import { createHmac, randomBytes, timingSafeEqual as cryptoTimingSafeEqual } fro
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-const APP_URL = 'https://geographocr.vercel.app';
+const APP_URL = 'https://geographocrnode.vercel.app';
 
 const TWEET_TEXT =
   `🧠 Just launched: GeoGraph OCR — turn any historical document, artifact, or archive photo into a structured knowledge graph in seconds.\n\n` +
