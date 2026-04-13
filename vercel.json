@@ -1,14 +1,20 @@
 {
   "rewrites": [
     {
-      "source": "/((?!manifest\\.json|sw\\.js|icon-.*\\.png|icon\\.svg|screenshot-.*\\.png|favicon\\.ico|robots\\.txt|sitemap\\.xml|assets/.*).*)",
+      "source": "/((?!manifest\\.json|sw\\.js|icon-.*\\.png|icon\\.svg|og-image\\.svg|screenshot-.*\\.png|favicon\\.ico|robots\\.txt|sitemap\\.xml|assets/.*).*)",
       "destination": "/index.html"
     }
   ],
   "headers": [
     {
-      "source": "/manifest.json",
+      "source": "/og-image.svg",
       "headers": [
+        { "key": "Content-Type", "value": "image/svg+xml" },
+        { "key": "Cache-Control", "value": "public, max-age=86400, stale-while-revalidate=3600" }
+      ]
+    },
+    {
+      "source": "/manifest.json",      "headers": [
         { "key": "Content-Type", "value": "application/manifest+json" },
         { "key": "Cache-Control", "value": "public, max-age=3600" }
       ]

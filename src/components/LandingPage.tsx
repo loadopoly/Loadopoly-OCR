@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Camera, Network, Database, Scan, MapPin, ArrowRight, Shield, Key, Zap, CheckCircle, Users, BookOpen, Microscope, Archive } from 'lucide-react';
+import { Camera, Network, Database, Scan, MapPin, ArrowRight, Shield, Key, Zap, CheckCircle, Users, BookOpen, Microscope, Archive, Copy, Check } from 'lucide-react';
 
 interface LandingPageProps {
   onGetStarted: () => void;
@@ -23,6 +23,7 @@ export default function LandingPage({ onGetStarted, onSignIn }: LandingPageProps
           <div className="flex items-center gap-2">
             <Database size={28} className="text-primary-500" />
             <span className="text-xl font-bold tracking-tight">GeoGraph<span className="text-slate-500">OCR</span></span>
+            <span className="ml-1 px-2 py-0.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full text-emerald-400 text-xs font-medium">Free Beta</span>
           </div>
           <button 
             onClick={onSignIn}
@@ -227,6 +228,9 @@ export default function LandingPage({ onGetStarted, onSignIn }: LandingPageProps
         </div>
       </section>
 
+      {/* Share section */}
+      <ShareSection />
+
       {/* Footer */}
       <footer className="border-t border-slate-800 px-6 py-8">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -236,7 +240,9 @@ export default function LandingPage({ onGetStarted, onSignIn }: LandingPageProps
           </div>
           <div className="flex items-center gap-6 text-sm text-slate-500">
             <a href="/privacy-policy.html" className="hover:text-slate-300 transition-colors">Privacy</a>
-            <a href="https://github.com/loadopoly/Loadopoly-OCR" className="hover:text-slate-300 transition-colors">GitHub</a>
+            <a href="https://github.com/loadopoly/Loadopoly-OCR" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">GitHub</a>
+            <a href="https://x.com/GeoGraphOCR" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">Twitter / X</a>
+            <a href="https://reddit.com/r/digitalhumanities" target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">Reddit</a>
           </div>
         </div>
       </footer>
@@ -291,5 +297,70 @@ function PricingCard({ title, price, subtitle, features, cta, onCta, highlighted
         {cta}
       </button>
     </div>
+  );
+}
+
+function ShareSection() {
+  const [copied, setCopied] = useState(false);
+
+  const APP_URL = 'https://geographocr.vercel.app';
+  const TWEET_TEXT = encodeURIComponent(
+    'Turn any historical document into a queryable knowledge graph with @GeoGraphOCR — AI entity extraction, GPS tagging, cross-doc relationships. Free beta, no sign-up.\n\n' + APP_URL + '\n\n#DigitalHumanities #AI #OpenData'
+  );
+  const REDDIT_TITLE = encodeURIComponent('GeoGraph OCR — turn historical documents into knowledge graphs (free beta)');
+
+  const twitterUrl = `https://x.com/intent/tweet?text=${TWEET_TEXT}`;
+  const redditUrl = `https://reddit.com/submit?type=self&title=${REDDIT_TITLE}&url=${encodeURIComponent(APP_URL)}`;
+
+  function handleCopy() {
+    navigator.clipboard.writeText(APP_URL).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }
+
+  return (
+    <section className="max-w-4xl mx-auto px-6 pb-16 text-center">
+      <div className="p-8 rounded-2xl border border-slate-800 bg-slate-900/30">
+        <h2 className="text-lg font-semibold text-white mb-2">Help spread the word</h2>
+        <p className="text-sm text-slate-400 mb-6">
+          If GeoGraph saved you time, share it with your community.
+        </p>
+        <div className="flex flex-wrap gap-3 justify-center">
+          {/* X / Twitter */}
+          <a
+            href={twitterUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-sm font-medium text-slate-300 hover:text-white transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.742l7.73-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
+            </svg>
+            Share on X
+          </a>
+          {/* Reddit */}
+          <a
+            href={redditUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-sm font-medium text-slate-300 hover:text-white transition-colors"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0zm5.01 4.744c.688 0 1.25.561 1.25 1.249a1.25 1.25 0 0 1-2.498.056l-2.597-.547-.8 3.747c1.824.07 3.48.632 4.674 1.488.308-.309.73-.491 1.207-.491.968 0 1.754.786 1.754 1.754 0 .716-.435 1.333-1.01 1.614a3.111 3.111 0 0 1 .042.52c0 2.694-3.13 4.87-7.004 4.87-3.874 0-7.004-2.176-7.004-4.87 0-.183.015-.366.043-.534A1.748 1.748 0 0 1 4.028 12c0-.968.786-1.754 1.754-1.754.463 0 .898.196 1.207.49 1.207-.883 2.878-1.43 4.744-1.487l.885-4.182a.342.342 0 0 1 .14-.197.35.35 0 0 1 .238-.042l2.906.617a1.214 1.214 0 0 1 1.108-.701zM9.25 12C8.561 12 8 12.562 8 13.25c0 .687.561 1.248 1.25 1.248.687 0 1.248-.561 1.248-1.249 0-.688-.561-1.249-1.249-1.249zm5.5 0c-.687 0-1.248.561-1.248 1.25 0 .687.561 1.248 1.249 1.248.688 0 1.249-.561 1.249-1.249 0-.687-.562-1.249-1.25-1.249zm-5.466 3.99a.327.327 0 0 0-.231.094.33.33 0 0 0 0 .463c.842.842 2.484.913 2.961.913.477 0 2.105-.056 2.961-.913a.361.361 0 0 0 .029-.463.33.33 0 0 0-.464 0c-.547.533-1.684.73-2.512.73-.828 0-1.979-.196-2.512-.73a.326.326 0 0 0-.232-.095z"/>
+            </svg>
+            Share on Reddit
+          </a>
+          {/* Copy link */}
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-xl text-sm font-medium text-slate-300 hover:text-white transition-colors"
+          >
+            {copied ? <Check size={16} className="text-emerald-400" /> : <Copy size={16} />}
+            {copied ? 'Copied!' : 'Copy Link'}
+          </button>
+        </div>
+      </div>
+    </section>
   );
 }
