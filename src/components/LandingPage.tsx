@@ -303,7 +303,7 @@ function PricingCard({ title, price, subtitle, features, cta, onCta, highlighted
 function ShareSection() {
   const [copied, setCopied] = useState(false);
 
-  const APP_URL = 'https://geographocr.vercel.app';
+  const APP_URL = 'https://geographocrnode.vercel.app';
   const TWEET_TEXT = encodeURIComponent(
     'Turn any historical document into a queryable knowledge graph with @GeoGraphOCR — AI entity extraction, GPS tagging, cross-doc relationships. Free beta, no sign-up.\n\n' + APP_URL + '\n\n#DigitalHumanities #AI #OpenData'
   );
