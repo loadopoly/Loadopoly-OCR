@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#020617"/>
+      <stop offset="100%" style="stop-color:#0f172a"/>
+    </linearGradient>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#60a5fa"/>
+      <stop offset="100%" style="stop-color:#34d399"/>
+    </linearGradient>
+    <radialGradient id="glow1" cx="28%" cy="22%" r="42%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.18"/>
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:0"/>
+    </radialGradient>
+    <radialGradient id="glow2" cx="78%" cy="78%" r="36%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:0.12"/>
+      <stop offset="100%" style="stop-color:#10b981;stop-opacity:0"/>
+    </radialGradient>
+    <clipPath id="border-clip">
+      <rect x="40" y="40" width="1120" height="550" rx="16"/>
+    </clipPath>
+  </defs>
+
+  <!-- Background -->
+  <rect width="1200" height="630" fill="url(#bgGrad)"/>
+  <rect width="1200" height="630" fill="url(#glow1)"/>
+  <rect width="1200" height="630" fill="url(#glow2)"/>
+
+  <!-- Subtle dot grid -->
+  <g clip-path="url(#border-clip)" opacity="0.07">
+    <pattern id="dots" width="40" height="40" patternUnits="userSpaceOnUse">
+      <circle cx="1" cy="1" r="1.2" fill="#94a3b8"/>
+    </pattern>
+    <rect x="40" y="40" width="1120" height="550" fill="url(#dots)"/>
+  </g>
+
+  <!-- Outer border card -->
+  <rect x="40" y="40" width="1120" height="550" rx="16" fill="none" stroke="#1e293b" stroke-width="1.5"/>
+
+  <!-- Top badge -->
+  <rect x="468" y="76" width="264" height="30" rx="15" fill="#0f2a41" stroke="#3b82f6" stroke-width="1" stroke-opacity="0.35"/>
+  <text x="600" y="96" text-anchor="middle" fill="#60a5fa" font-family="system-ui,-apple-system,sans-serif" font-size="11" font-weight="600" letter-spacing="0.06em">BUILT FOR RESEARCHERS &amp; ARCHIVISTS</text>
+
+  <!-- Database icon (SVG path) centered above headline -->
+  <g transform="translate(572, 124)" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round">
+    <ellipse cx="28" cy="8" rx="26" ry="8"/>
+    <path d="M2 8 C2 8 2 30 28 30 C54 30 54 8 54 8"/>
+    <path d="M2 19 C2 25 14 30 28 30 C42 30 54 25 54 19" opacity="0.6"/>
+  </g>
+
+  <!-- Main headline line 1 -->
+  <text x="600" y="225" text-anchor="middle" fill="#f1f5f9" font-family="system-ui,-apple-system,sans-serif" font-size="54" font-weight="700" letter-spacing="-0.025em">Turn documents into</text>
+
+  <!-- Gradient headline line 2 -->
+  <text x="600" y="298" text-anchor="middle" fill="url(#textGrad)" font-family="system-ui,-apple-system,sans-serif" font-size="60" font-weight="800" letter-spacing="-0.03em">queryable knowledge</text>
+
+  <!-- Subline -->
+  <text x="600" y="348" text-anchor="middle" fill="#64748b" font-family="system-ui,-apple-system,sans-serif" font-size="19" font-weight="400" letter-spacing="0.01em">Extract entities · Build knowledge graphs · Own your data</text>
+
+  <!-- Divider -->
+  <line x1="200" y1="380" x2="1000" y2="380" stroke="#1e293b" stroke-width="1"/>
+
+  <!-- Feature cards row — Capture -->
+  <rect x="160" y="402" width="240" height="88" rx="12" fill="#0c1526" stroke="#1e293b" stroke-width="1.5"/>
+  <!-- camera icon -->
+  <rect x="180" y="418" width="28" height="22" rx="3" fill="none" stroke="#60a5fa" stroke-width="2"/>
+  <circle cx="194" cy="429" r="5.5" fill="none" stroke="#60a5fa" stroke-width="2"/>
+  <rect x="203" y="415" width="6" height="4" rx="1" fill="#60a5fa"/>
+  <text x="216" y="428" fill="#f1f5f9" font-family="system-ui,-apple-system,sans-serif" font-size="14" font-weight="600">Capture</text>
+  <text x="180" y="452" fill="#475569" font-family="system-ui,-apple-system,sans-serif" font-size="12">Phone · AR glasses · Offline</text>
+  <text x="180" y="470" fill="#475569" font-family="system-ui,-apple-system,sans-serif" font-size="12">GPS-tagged every shot</text>
+
+  <!-- Feature cards row — Extract -->
+  <rect x="480" y="402" width="240" height="88" rx="12" fill="#0c1526" stroke="#1e293b" stroke-width="1.5"/>
+  <!-- zap icon -->
+  <polygon points="508,415 496,433 506,433 494,451 510,429 500,429" fill="#fbbf24"/>
+  <text x="520" y="428" fill="#f1f5f9" font-family="system-ui,-apple-system,sans-serif" font-size="14" font-weight="600">Extract</text>
+  <text x="496" y="452" fill="#475569" font-family="system-ui,-apple-system,sans-serif" font-size="12">People · Places · Dates · Orgs</text>
+  <text x="496" y="470" fill="#475569" font-family="system-ui,-apple-system,sans-serif" font-size="12">Gemini 2.5 Flash · 5 min/collection</text>
+
+  <!-- Feature cards row — Connect -->
+  <rect x="800" y="402" width="240" height="88" rx="12" fill="#0c1526" stroke="#1e293b" stroke-width="1.5"/>
+  <!-- network icon -->
+  <circle cx="820" cy="421" r="5" fill="none" stroke="#34d399" stroke-width="2"/>
+  <circle cx="836" cy="437" r="5" fill="none" stroke="#34d399" stroke-width="2"/>
+  <circle cx="852" cy="421" r="5" fill="none" stroke="#34d399" stroke-width="2"/>
+  <line x1="824" y1="424" x2="832" y2="433" stroke="#34d399" stroke-width="1.5"/>
+  <line x1="839" y1="433" x2="848" y2="424" stroke="#34d399" stroke-width="1.5"/>
+  <line x1="824" y1="421" x2="848" y2="421" stroke="#34d399" stroke-width="1.5"/>
+  <text x="864" y="428" fill="#f1f5f9" font-family="system-ui,-apple-system,sans-serif" font-size="14" font-weight="600">Connect</text>
+  <text x="820" y="452" fill="#475569" font-family="system-ui,-apple-system,sans-serif" font-size="12">Cross-document knowledge graph</text>
+  <text x="820" y="470" fill="#475569" font-family="system-ui,-apple-system,sans-serif" font-size="12">Query relationships across corpus</text>
+
+  <!-- Bottom strip -->
+  <rect x="40" y="555" width="1120" height="35" rx="0" fill="#080f1e" opacity="0.85"/>
+  <rect x="40" y="555" width="1120" height="35" fill="none" stroke="#1e293b" stroke-width="1"/>
+  <text x="600" y="577" text-anchor="middle" fill="#475569" font-family="system-ui,-apple-system,sans-serif" font-size="13" font-weight="500">GeoGraph OCR by Loadopoly · Free beta · geographocr.vercel.app</text>
+</svg>
