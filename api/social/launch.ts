@@ -270,17 +270,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  // Temporary one-time launch bypass — remove after first successful post
-  const TEMP_LAUNCH_KEY = 'aec2cf66401da8688951fc547d75e8f00e66a0d50effcc04f881715e4949c669';
   const secret = process.env.SOCIAL_LAUNCH_SECRET ?? '';
+  if (!secret) {
+    return res.status(500).json({ error: 'SOCIAL_LAUNCH_SECRET not configured on server' });
+  }
 
   const authHeader = typeof req.headers.authorization === 'string' ? req.headers.authorization : '';
   const provided = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
 
-  const envMatch = secret ? secureCompare(provided, secret) : false;
-  const tempMatch = secureCompare(provided, TEMP_LAUNCH_KEY);
-
-  if (!envMatch && !tempMatch) {
+  if (!secureCompare(provided, secret)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
