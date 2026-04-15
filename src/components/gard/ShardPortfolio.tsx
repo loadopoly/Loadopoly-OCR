@@ -4,7 +4,7 @@
  * Displays user's shard holdings, portfolio value, and rewards.
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   Wallet,
   TrendingUp,
@@ -13,10 +13,14 @@ import {
   Gift,
   RefreshCw,
   AlertCircle,
-  Coins
+  Coins,
+  Sprout,
+  Users,
+  Star,
 } from 'lucide-react';
 import { useShardPortfolio } from '../../hooks/useShardPortfolio';
 import { GARD_CONFIG } from '../../types';
+import { getSeedImpact, type SeedImpactSummary } from '../../services/sharingRewardsService';
 
 interface ShardPortfolioProps {
   userId: string | null;
@@ -43,6 +47,16 @@ export default function ShardPortfolio({ userId }: ShardPortfolioProps) {
     claimRewards, 
     refresh 
   } = useShardPortfolio(userId);
+
+  const [seedImpact, setSeedImpact] = useState<SeedImpactSummary | null>(null);
+
+  useEffect(() => {
+    if (userId) {
+      getSeedImpact(userId).then(impact => {
+        if (impact.totalSeeds > 0) setSeedImpact(impact);
+      }).catch(() => { /* non-fatal */ });
+    }
+  }, [userId]);
 
   const handleClaimRewards = async () => {
     try {
@@ -127,6 +141,56 @@ export default function ShardPortfolio({ userId }: ShardPortfolioProps) {
           sublabel="DAO governance power"
         />
       </div>
+
+      {/* Sharing Impact Card */}
+      {seedImpact && seedImpact.totalSeeds > 0 && (
+        <div className="bg-gradient-to-r from-purple-900/20 to-purple-800/10 border border-purple-500/20 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Sprout className="text-purple-400" size={18} />
+            <h4 className="text-sm font-bold text-white">Sharing Impact</h4>
+            <span className="ml-auto text-[10px] text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-full">
+              Seed Creator
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-3 mb-3">
+            <div className="text-center">
+              <p className="text-lg font-bold text-white">{seedImpact.totalSeeds}</p>
+              <p className="text-[10px] text-slate-500">Seed datasets</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold text-purple-300">{seedImpact.totalAdoptions}</p>
+              <p className="text-[10px] text-slate-500">Users onboarded</p>
+            </div>
+            <div className="text-center">
+              <p className="text-lg font-bold text-amber-300">{seedImpact.totalGardPoints.toLocaleString()}</p>
+              <p className="text-[10px] text-slate-500">GARD points</p>
+            </div>
+          </div>
+          {seedImpact.badges.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {seedImpact.badges.map(badge => (
+                <span
+                  key={badge.id}
+                  title={badge.description}
+                  className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded-full border ${
+                    badge.tier === 'GOLD'   ? 'bg-amber-500/20 text-amber-300 border-amber-500/30' :
+                    badge.tier === 'SILVER' ? 'bg-slate-400/20 text-slate-300 border-slate-400/30' :
+                                              'bg-orange-700/20 text-orange-400 border-orange-500/30'
+                  }`}
+                >
+                  <Star size={9} />
+                  {badge.name}
+                </span>
+              ))}
+            </div>
+          )}
+          {seedImpact.estimatedUsdValue > 0 && (
+            <p className="text-[10px] text-slate-500 mt-2">
+              Estimated creator rewards: <span className="text-emerald-400 font-mono">{formatCurrency(seedImpact.estimatedUsdValue)}</span>
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Pending Rewards */}
       {pendingRewards > 0 && (

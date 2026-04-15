@@ -278,6 +278,55 @@ export class GARDRoyaltyEngine {
       timestamp: new Date().toISOString(),
     };
   }
+
+  // ============================================================
+  // Seed Dataset Royalty Calculations
+  // ============================================================
+
+  /**
+   * Calculate the GARD reward a seed-dataset creator earns per adoption.
+   *
+   * When a new user loads a seed dataset and starts using the app, the
+   * creator receives a small royalty modelled as a fraction of the
+   * standard genesis shard value:
+   *
+   *   reward = BASE_SHARD_VALUE × GENESIS_MULTIPLIER × ADOPTION_RATE
+   *
+   * @param adoptionCount  Total number of users who have adopted the seed
+   * @param baseShardValue Current shard price in USD (defaults to $0.01)
+   * @returns Total cumulative reward amount
+   */
+  calculateSeedRoyalties(
+    adoptionCount: number,
+    baseShardValue: number = 0.01,
+  ): number {
+    const ADOPTION_RATE = 0.05; // 5% of genesis shard value per adoption
+    const perAdoption = baseShardValue * this.config.GENESIS_MULTIPLIER * ADOPTION_RATE;
+    return adoptionCount * perAdoption;
+  }
+
+  /**
+   * Distribute seed adoption royalties among beneficiaries.
+   *
+   * Split:
+   *  - 60% to the seed creator (incentivises curation)
+   *  - 25% to the community fund (if the seed is community-owned)
+   *  - 15% to platform maintenance
+   *
+   * @param totalRoyalty  Total royalty amount to distribute
+   * @returns Object with { creatorShare, communityShare, maintenanceShare }
+   */
+  distributeSeedRoyalty(totalRoyalty: number): {
+    creatorShare: number;
+    communityShare: number;
+    maintenanceShare: number;
+  } {
+    return {
+      creatorShare:     totalRoyalty * 0.60,
+      communityShare:   totalRoyalty * 0.25,
+      maintenanceShare: totalRoyalty * 0.15,
+    };
+  }
 }
 
 // Singleton instance
