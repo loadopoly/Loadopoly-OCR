@@ -27,7 +27,7 @@ export default function StatusBar({
     onQueueClick 
 }: StatusBarProps) {
     return (
-        <div className="fixed bottom-0 left-0 right-0 bg-slate-950/80 backdrop-blur-md border-t border-slate-800 px-2 sm:px-4 py-1.5 flex items-center justify-between z-50 text-[10px] font-medium text-slate-500" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6px)', maxWidth: '100vw', overflowX: 'hidden' }}>
+        <div className="fixed bottom-0 left-0 right-0 bg-slate-950 border-t border-slate-800 px-2 sm:px-4 py-1.5 flex items-center justify-between z-50 text-[10px] font-medium text-slate-500" style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 6px)', maxWidth: '100vw', overflowX: 'hidden' }}>
             <div className="flex items-center gap-2 sm:gap-4 min-w-0">
                 <div className="flex items-center gap-1.5">
                     {isOnline ? (

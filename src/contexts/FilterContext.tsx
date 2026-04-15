@@ -1463,7 +1463,12 @@ export function FilterProvider({ children, initialAssets = [], initialGraphData 
   // Context Value
   // ============================================
 
-  const contextValue: FilterContextValue = {
+  // PERF FIX: Memoize the context value so that FilterContext consumers only
+  // re-render when the data they depend on actually changes — NOT on every
+  // parent App re-render (which happens on every tab switch).  Previously the
+  // value object was recreated inline, giving it a new reference every render
+  // and cascading re-renders to all 6+ context consumers.
+  const contextValue = useMemo<FilterContextValue>(() => ({
     state,
     analytics,
     filteredAssets,
@@ -1484,7 +1489,28 @@ export function FilterProvider({ children, initialAssets = [], initialGraphData 
     getActiveFilterCount,
     exportFilterState,
     importFilterState,
-  };
+  }), [
+    state,
+    analytics,
+    filteredAssets,
+    filteredGraphData,
+    setFilter,
+    setFilters,
+    clearFilter,
+    clearAllFilters,
+    toggleViewSync,
+    setViewOverride,
+    getFiltersForView,
+    getDependentDimensions,
+    getSuggestedValues,
+    getConstrainedValues,
+    bindAssets,
+    bindGraphData,
+    applyQuickFilter,
+    getActiveFilterCount,
+    exportFilterState,
+    importFilterState,
+  ]);
 
   return (
     <FilterContext.Provider value={contextValue}>
