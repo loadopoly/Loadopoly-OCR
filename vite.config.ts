@@ -8,8 +8,11 @@ const __dirname = dirname(__filename);
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  // Set base path for GitHub Pages deployment (e.g. loadopoly.github.io/Loadopoly-OCR/)
-  base: process.env.GITHUB_ACTIONS ? '/Loadopoly-OCR/' : '/',
+  // Set base path for GitHub Pages deployment.
+  // When a custom domain is configured, GitHub Pages serves from the root,
+  // so base must be '/'. Without a custom domain (e.g. loadopoly.github.io/Loadopoly-OCR/),
+  // set to '/Loadopoly-OCR/'. The marketing site (loadopoly-website/) owns www.loadopoly.com.
+  base: '/',
   plugins: [react()],
   // Workers must use ES module format to support dynamic import() for code-splitting.
   // Default 'iife' format cannot split chunks (needed for deduplicationServiceV2 in bundleWorker).
