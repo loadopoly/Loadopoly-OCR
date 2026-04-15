@@ -1,3 +1,10 @@
+## [v2.19.1] - 2026-04-15
+
+### Fixed
+- **Dashboard Routing**: Fixed auto-navigation bug that forced the app to Knowledge Graph tab on every load instead of staying on Dashboard. The first-OCR celebration redirect now correctly fires only once (persisted via UX preferences).
+- **Performance**: Reduced initial App bundle from 340KB to 148KB (57% smaller) by lazy-loading 17 heavy components (GraphVisualizer, ARScene, WorldRenderer, SocialApp, SettingsPanel, etc.) and deferring Gemini AI, image compression, and web3 service imports to call sites.
+- **Worker Pool**: Deferred worker thread creation to on-demand instead of eager spawn at mount.
+
 ## [v2.19.0] - 2026-04-15\n\n### Reverted\n- **Stability Degradation**: Reverted to stable commit `0acd35a` (from Monday morning) to address severe regressions in application load time and sidebar responsiveness.\n\n# Changelog
 
 All notable changes to this project will be documented in this file.
