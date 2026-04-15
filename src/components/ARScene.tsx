@@ -217,7 +217,9 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
     if (showSafetyWarning) return;
     if (!navigator.geolocation) return;
 
-    const watchId = navigator.geolocation.watchPosition(
+    let activeWatchId: number;
+
+    activeWatchId = navigator.geolocation.watchPosition(
       (pos) => {
         if (!unmountedRef.current) {
           setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
@@ -228,9 +230,10 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
     );
 
     // Upgrade to high accuracy after initial position acquired
-    let highAccuracyWatchId: number | null = null;
     const upgradeTimer = setTimeout(() => {
-      highAccuracyWatchId = navigator.geolocation.watchPosition(
+      // Clear the low-accuracy watcher before starting high-accuracy to avoid dual tracking
+      navigator.geolocation.clearWatch(activeWatchId);
+      activeWatchId = navigator.geolocation.watchPosition(
         (pos) => {
           if (!unmountedRef.current) {
             setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
@@ -242,9 +245,8 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
     }, 3000);
 
     return () => {
-      navigator.geolocation.clearWatch(watchId);
+      navigator.geolocation.clearWatch(activeWatchId);
       clearTimeout(upgradeTimer);
-      if (highAccuracyWatchId !== null) navigator.geolocation.clearWatch(highAccuracyWatchId);
     };
   }, [showSafetyWarning]);
 
