@@ -67,7 +67,9 @@ CREATE TABLE IF NOT EXISTS data_sharing_windows (
 
 -- Auto-update updated_at on every change
 CREATE OR REPLACE FUNCTION update_sharing_window_updated_at()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
+RETURNS TRIGGER LANGUAGE plpgsql
+SET search_path = ''
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
@@ -168,9 +170,11 @@ CREATE INDEX IF NOT EXISTS idx_seed_adoptions_user_id
 
 -- Trigger: increment adoption_count on seed_datasets when a new adoption is recorded
 CREATE OR REPLACE FUNCTION increment_seed_adoption_count()
-RETURNS TRIGGER LANGUAGE plpgsql AS $$
+RETURNS TRIGGER LANGUAGE plpgsql
+SET search_path = ''
+AS $$
 BEGIN
-  UPDATE seed_datasets
+  UPDATE public.seed_datasets
   SET adoption_count = adoption_count + 1
   WHERE id = NEW.seed_id;
   RETURN NEW;
@@ -267,15 +271,17 @@ CREATE OR REPLACE FUNCTION get_sharing_status_for_document(
   p_doc_date  TIMESTAMPTZ
 )
 RETURNS sharing_status
-LANGUAGE SQL STABLE AS $$
+LANGUAGE SQL STABLE
+SET search_path = ''
+AS $$
   SELECT
     CASE
-      WHEN bool_or(sharing_status = 'locked')    THEN 'locked'::sharing_status
-      WHEN bool_or(sharing_status = 'seed')      THEN 'seed'::sharing_status
-      WHEN bool_or(sharing_status = 'shareable') THEN 'shareable'::sharing_status
-      ELSE 'locked'::sharing_status
+      WHEN bool_or(sharing_status = 'locked')    THEN 'locked'::public.sharing_status
+      WHEN bool_or(sharing_status = 'seed')      THEN 'seed'::public.sharing_status
+      WHEN bool_or(sharing_status = 'shareable') THEN 'shareable'::public.sharing_status
+      ELSE 'locked'::public.sharing_status
     END
-  FROM data_sharing_windows
+  FROM public.data_sharing_windows
   WHERE user_id = p_user_id
     AND (start_date IS NULL OR start_date <= p_doc_date)
     AND (end_date   IS NULL OR end_date   >= p_doc_date);
