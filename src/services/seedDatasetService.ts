@@ -105,7 +105,7 @@ export async function createSeedFromWindow(windowId: string): Promise<SeedDatase
     const [nodesResult, edgesResult] = await Promise.all([
       supabase
         .from('graph_nodes')
-        .select('id, LABEL, NODE_TYPE, PHYSICAL_HEIGHT_M, PHYSICAL_WIDTH_M, IS_REFERENCE_OBJECT')
+        .select('id, LABEL, NODE_TYPE, PHYSICAL_HEIGHT_M, PHYSICAL_WIDTH_M, IS_REFERENCE_OBJECT, CANONICAL_ID')
         .in('CANONICAL_ID', documentIds)
         .limit(500),
       supabase
@@ -116,14 +116,14 @@ export async function createSeedFromWindow(windowId: string): Promise<SeedDatase
 
     const graphSnapshot: GraphData = {
       nodes: (nodesResult.data ?? []).map((n: any) => ({
-        id:        n.id,
-        label:     n.LABEL ?? '',
-        type:      (n.NODE_TYPE ?? 'CONCEPT') as GraphData['nodes'][number]['type'],
-        relevance: 1,
-        PHYSICAL_HEIGHT_M: n.PHYSICAL_HEIGHT_M,
+        id:                  n.id,
+        label:               n.LABEL ?? '',
+        type:                (n.NODE_TYPE ?? 'CONCEPT') as GraphData['nodes'][number]['type'],
+        relevance:           1,
+        PHYSICAL_HEIGHT_M:   n.PHYSICAL_HEIGHT_M,
         IS_REFERENCE_OBJECT: n.IS_REFERENCE_OBJECT,
-        CANONICAL_ID: n.CANONICAL_ID,
-        LABEL: n.LABEL,
+        CANONICAL_ID:        n.CANONICAL_ID,
+        LABEL:               n.LABEL,
       })),
       links: (edgesResult.data ?? []).map((e: any) => ({
         source:       e.source_id,

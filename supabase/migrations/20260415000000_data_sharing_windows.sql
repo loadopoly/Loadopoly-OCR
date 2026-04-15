@@ -284,3 +284,33 @@ $$;
 -- Grant execute to authenticated users so they can call it from the client
 GRANT EXECUTE ON FUNCTION get_sharing_status_for_document(UUID, TIMESTAMPTZ)
   TO authenticated;
+
+-- ============================================================
+-- COLUMN COMMENTS (schema self-documentation)
+-- ============================================================
+
+COMMENT ON COLUMN data_sharing_windows.start_date IS
+  'Inclusive lower bound of the document data period. NULL = "from the beginning of time".';
+COMMENT ON COLUMN data_sharing_windows.end_date IS
+  'Inclusive upper bound of the document data period. NULL = "up to and including now".';
+COMMENT ON COLUMN data_sharing_windows.sharing_status IS
+  'Policy applied to documents whose timestamp falls within [start_date, end_date]: '
+  '"locked" keeps data local-only, "shareable" allows cloud sync, '
+  '"seed" marks data as eligible for onboarding seed datasets.';
+COMMENT ON COLUMN data_sharing_windows.visibility IS
+  'Who can see this window definition itself (not the document content): '
+  '"private" = owner only, "community" = community members, "public" = anyone.';
+COMMENT ON COLUMN data_sharing_windows.license_override IS
+  'Optional license string (e.g. "CC0") that supersedes per-document DATA_LICENSE '
+  'when sharing_status is "shareable" or "seed". NULL = respect each document''s own license.';
+
+COMMENT ON COLUMN seed_datasets.is_active IS
+  'Only one seed dataset should be active (true) at a time. '
+  'The active seed is delivered to new users during onboarding.';
+COMMENT ON COLUMN seed_datasets.feature_highlights IS
+  'Array of feature areas this seed showcases, e.g. ARRAY[''ocr'',''graph'',''gis'',''gard'',''metaverse'']. '
+  'Used to guide the onboarding tour.';
+COMMENT ON COLUMN seed_datasets.adoption_count IS
+  'Automatically incremented by the trg_seed_adoption_count trigger. '
+  'Counts distinct users who have loaded this seed via seed_adoptions.';
+
