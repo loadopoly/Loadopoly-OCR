@@ -66,9 +66,10 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
     if (showSafetyWarning) return;
     unmountedRef.current = false;
 
-    // 1. Request camera + AR session
+    // 1. Request camera — start with relaxed constraints for faster init, then
+    //    upgrade to ideal resolution once stream is live.
     navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+      video: { facingMode: 'environment' }
     }).then(newStream => {
       // If component unmounted while we were awaiting permission, stop immediately
       if (unmountedRef.current) {
@@ -92,8 +93,15 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
 
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
-        videoRef.current.play();
+        // autoPlay attribute handles playback; explicit play() as fallback
+        videoRef.current.play().catch(() => {});
       }
+
+      // Upgrade to higher resolution in the background (non-blocking)
+      track.applyConstraints({
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      }).catch(() => {}); // best-effort upgrade
     }).catch(err => {
         if (unmountedRef.current) return;
         console.error("Camera access denied or failed:", err);
@@ -155,11 +163,11 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
           setStream(null);
         }
       } else if (document.visibilityState === 'visible') {
-        // Reinitialise camera on resume
+        // Reinitialise camera on resume — use relaxed constraints for fast restart
         if (unmountedRef.current) return;
         setCameraError(null);
         navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+          video: { facingMode: 'environment' },
           audio: false,
         }).then(newStream => {
           if (unmountedRef.current) { newStream.getTracks().forEach(t => t.stop()); return; }
@@ -174,8 +182,13 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
           }
           if (videoRef.current) {
             videoRef.current.srcObject = newStream;
-            videoRef.current.play();
+            videoRef.current.play().catch(() => {});
           }
+          // Upgrade to full resolution in background
+          track.applyConstraints({
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          }).catch(() => {});
         }).catch(err => {
           if (unmountedRef.current) return;
           setCameraError(`Camera could not restart: ${(err as Error).message || 'Unknown error'}`);
@@ -199,21 +212,42 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
   }, [zoom, stream, zoomSupported]);
 
   // --- GPS Tracking for field sessions ---
+  // Start with low accuracy for instant first fix, upgrade after
   useEffect(() => {
     if (showSafetyWarning) return;
     if (!navigator.geolocation) return;
 
-    const watchId = navigator.geolocation.watchPosition(
+    let activeWatchId: number;
+
+    activeWatchId = navigator.geolocation.watchPosition(
       (pos) => {
         if (!unmountedRef.current) {
           setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         }
       },
       () => {}, // Silently ignore GPS errors
-      { enableHighAccuracy: true, maximumAge: 5000 }
+      { enableHighAccuracy: false, maximumAge: 10000, timeout: 5000 }
     );
 
-    return () => navigator.geolocation.clearWatch(watchId);
+    // Upgrade to high accuracy after initial position acquired
+    const upgradeTimer = setTimeout(() => {
+      // Clear the low-accuracy watcher before starting high-accuracy to avoid dual tracking
+      navigator.geolocation.clearWatch(activeWatchId);
+      activeWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          if (!unmountedRef.current) {
+            setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          }
+        },
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 5000 }
+      );
+    }, 3000);
+
+    return () => {
+      navigator.geolocation.clearWatch(activeWatchId);
+      clearTimeout(upgradeTimer);
+    };
   }, [showSafetyWarning]);
 
   // --- BLE AR Glasses Connection ---
@@ -400,7 +434,7 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
     <div className="relative w-full h-full bg-black overflow-hidden">
       {showSafetyWarning && <ARSafetyWarning onAccept={() => setShowSafetyWarning(false)} />}
       
-      <video ref={videoRef} playsInline muted className="w-full h-full object-cover" />
+      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
 
       {/* Camera Error State */}
       {cameraError && (
