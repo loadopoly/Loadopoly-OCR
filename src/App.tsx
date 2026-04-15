@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy, startTransition } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Camera, 
   Map as MapIcon, 
@@ -67,9 +68,14 @@ import {
 // import { processImageWithGemini } from './services/geminiService';
 // import { redeemPhygitalCertificate } from './services/web3Service';
 // import { compressImage } from './lib/imageCompression';
-// PERF: creditService, bundleService, syncEngine, indexeddb, auth,
+// PERF: creditService, bundleService, syncEngine, auth,
 // supabaseService, processingQueueService, workerPool
 // all deferred — imported dynamically at call sites
+//
+// IndexedDB helpers are static — they're tiny (Dexie table wrappers) and
+// needed on the critical boot path. Dynamic-importing them added an extra
+// round-trip that delayed time-to-first-render by 200-400 ms.
+import { loadAssets, saveAsset, saveAssets } from './lib/indexeddb';
 // Keep lightweight / always-visible components as static imports
 import SmartUploadSelector from './components/SmartUploadSelector';
 import StatusBar from './components/StatusBar';
@@ -182,6 +188,110 @@ const StatCard = ({ label, value, icon: Icon, color, onClick }: any) => (
   </div>
 );
 
+// Self-contained MobileNavigation component — manages its own open/close state
+// via createPortal to document.body.  This prevents opening/closing the sidebar
+// from triggering a re-render of the entire 3000+ line App component (which was
+// the primary cause of the "sidebar freeze" regression).
+const MobileNavigation = React.memo(({ activeTab, switchTab, isGlobalView, setIsGlobalView, isTabVisible, isAdmin }: {
+  activeTab: string;
+  switchTab: (tab: string) => void;
+  isGlobalView: boolean;
+  setIsGlobalView: (v: boolean) => void;
+  isTabVisible: (tab: string) => boolean;
+  isAdmin: boolean;
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+
+  const handleClick = useCallback((tab: string) => {
+    setIsOpen(false);
+    startTransition(() => { switchTab(tab); });
+  }, [switchTab]);
+
+  // Portal overlay — rendered to document.body so it's never clipped by parent
+  const overlay = isOpen ? createPortal(
+    <div className="fixed inset-0 z-[9999] lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
+      {/* Scrim — no backdrop-blur (expensive on mobile GPUs) */}
+      <div
+        className="absolute inset-0 bg-black/60"
+        onClick={() => setIsOpen(false)}
+        style={{ touchAction: 'none' }}
+      />
+      {/* Sidebar panel */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 border-r border-slate-800 flex flex-col shadow-2xl"
+        style={{ animation: 'slideInLeft 200ms ease-out' }}
+      >
+        <div className="p-6 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2 text-primary-500">
+            <Database size={24} />
+            <h1 className="text-xl font-bold tracking-tight text-white">GeoGraph</h1>
+          </div>
+          <button
+            onClick={() => setIsOpen(false)}
+            className="p-2 -mr-2 text-slate-400 hover:text-white rounded-lg"
+            style={{ touchAction: 'manipulation' }}
+          >
+            <X size={20} />
+          </button>
+        </div>
+        <nav className="flex-1 px-2 space-y-1 overflow-y-auto">
+          <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleClick('dashboard')} />
+          <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => handleClick('batch')} />
+          {isTabVisible('ar') && <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => handleClick('ar')} />}
+          <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => handleClick('assets')} />
+          {isTabVisible('curator') && <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => handleClick('curator')} />}
+          <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => handleClick('graph')} />
+          {isTabVisible('world') && <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => handleClick('world')} />}
+          <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => handleClick('database')} />
+          {isTabVisible('social') && <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => handleClick('social')} />}
+          {isTabVisible('market') && <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => handleClick('market')} />}
+          {isAdmin && <SidebarItem icon={ShieldCheck} label="Review Queue" active={activeTab === 'review'} onClick={() => handleClick('review')} />}
+          <div className="pt-4 mt-4 border-t border-slate-800">
+            <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => handleClick('settings')} />
+          </div>
+        </nav>
+
+        <div className="p-4 border-t border-slate-800">
+            <div className={`p-3 rounded-xl border transition-all ${isGlobalView ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-900 border-slate-800'}`}>
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold uppercase text-slate-400">View Mode</span>
+                    <div className="flex items-center gap-1">
+                        {isGlobalView && <Globe size={12} className="text-indigo-400" />}
+                        {isGlobalView ? <span className="text-[10px] text-indigo-400 font-bold">GLOBAL</span> : <span className="text-[10px] text-slate-500">LOCAL</span>}
+                    </div>
+                </div>
+                <button
+                    onClick={() => { setIsGlobalView(!isGlobalView); setIsOpen(false); }}
+                    className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${
+                        isGlobalView
+                        ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50'
+                        : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
+                    }`}
+                >
+                    {isGlobalView ? <>Switch to Local <Lock size={12}/></> : <>Switch to Master <Globe size={12}/></>}
+                </button>
+            </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  ) : null;
+
+  return (
+    <>
+      <button
+        onClick={() => setIsOpen(true)}
+        className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 active:bg-slate-700 active:scale-90 transition-transform duration-75 rounded-lg"
+        style={{ touchAction: 'manipulation' }}
+        aria-label="Open navigation menu"
+      >
+        <List size={24} />
+      </button>
+      {overlay}
+    </>
+  );
+});
+
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [localAssets, setLocalAssets] = useState<DigitalAsset[]>([]);
@@ -220,6 +330,8 @@ export default function App() {
   const [showNewBatchPanel, setShowNewBatchPanel] = useState(false);
   const [showCreditGate, setShowCreditGate] = useState(false);
   const [pendingCreditFile, setPendingCreditFile] = useState<{ file: File; source: string } | null>(null);
+  // Non-blocking process-all confirmation (replaces window.confirm)
+  const [processConfirm, setProcessConfirm] = useState<{ message: string; assets: DigitalAsset[]; batchPending: number } | null>(null);
   
   // Batch processing concurrency control (legacy - kept for compatibility)
   const [activeBatchJobs, setActiveBatchJobs] = useState(0);
@@ -260,7 +372,6 @@ export default function App() {
       }
     }
   }, [selectedLLM]);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { isOpen: isShortcutsOpen, setIsOpen: setIsShortcutsOpen } = useKeyboardShortcutsHelp() as any;
   const isOnline = useOnlineStatus();
   const [syncOn, setSyncOn] = useState(false);
@@ -409,7 +520,7 @@ export default function App() {
           return prev;
         });
         // Also persist to local IndexedDB
-        import('./lib/indexeddb').then(({ saveAsset }) => saveAsset(updatedAsset)).catch(e => console.error('Failed to persist updated asset', e));
+        saveAsset(updatedAsset).catch(e => console.error('Failed to persist updated asset', e));
       },
       // On asset INSERT (e.g., new asset from edge function)
       (newAsset) => {
@@ -420,7 +531,7 @@ export default function App() {
           }
           return [newAsset, ...prev];
         });
-        import('./lib/indexeddb').then(({ saveAsset }) => saveAsset(newAsset)).catch(e => console.error('Failed to persist new asset', e));
+        saveAsset(newAsset).catch(e => console.error('Failed to persist new asset', e));
       }
     );
     });
@@ -479,6 +590,10 @@ export default function App() {
     const handleNewFile = (event: CustomEvent<File>) => ingestFile(event.detail, "Auto-Sync");
     window.addEventListener('geograph-new-file', handleNewFile as any);
 
+    // PERF: Start loading local assets from IndexedDB immediately — don't wait
+    // for auth.  loadAssets is now a static import so there's no extra round-trip.
+    const localAssetsPromise = loadAssets();
+
     import('./lib/auth').then(({ getCurrentUser }) => {
     getCurrentUser().then(async ({ data }) => { 
       if(data.user) { 
@@ -489,10 +604,8 @@ export default function App() {
         setIsAdmin(isSuperUser);
         setIsEnterprise(true); // Authenticated users are treated as enterprise-tier
         
-        const { loadAssets, saveAssets } = await import('./lib/indexeddb');
-        
-        // PERF: Load local assets FIRST so UI renders immediately
-        const local = await loadAssets();
+        // PERF: Local assets were already loading in parallel with auth — just await the result
+        const local = await localAssetsPromise;
         setLocalAssets(local);
         
         // Background: sync & merge without blocking the UI
@@ -544,8 +657,8 @@ export default function App() {
           // Local assets already set above — no fallback needed
         }
       } else {
-        // Unauthenticated: load from IndexedDB only
-        import('./lib/indexeddb').then(({ loadAssets }) => loadAssets().then(setLocalAssets));
+        // Unauthenticated: use assets already loading in parallel
+        localAssetsPromise.then(setLocalAssets);
         
         // Clear session data when page unloads for unauthenticated users
         const handleUnload = () => {
@@ -565,7 +678,7 @@ export default function App() {
       }
     }).catch(err => {
       console.error("Auth check failed (likely offline):", err);
-      import('./lib/indexeddb').then(({ loadAssets }) => loadAssets().then(setLocalAssets));
+      localAssetsPromise.then(setLocalAssets);
     });
     });
 
@@ -642,7 +755,6 @@ export default function App() {
       ).catch(err => console.error("Failed to update asset in Supabase", err));
     } else {
       // Unauthenticated users: save to IndexedDB only
-      const { saveAsset } = await import('./lib/indexeddb');
       await saveAsset(updatedAsset);
     }
   };
@@ -688,12 +800,6 @@ export default function App() {
       // User chose to stay on AR tab
       setPendingTabSwitch(null);
   }, []);
-
-  // Mobile sidebar: close overlay immediately, defer tab switch for responsiveness
-  const handleMobileSidebarClick = useCallback((tab: string) => {
-    setIsMobileMenuOpen(false);
-    startTransition(() => { switchTab(tab); });
-  }, [switchTab]);
 
   const createInitialAsset = async (file: File): Promise<DigitalAsset> => {
       const checksum = await calculateSHA256(file);
@@ -895,7 +1001,7 @@ export default function App() {
         const file = fileToProcess instanceof File ? fileToProcess : new File([fileToProcess], asset.sqlRecord?.DOCUMENT_TITLE || 'reprocess.jpg', { type: fileToProcess.type });
         const processedAsset = await processAssetPipeline(asset, file);
         setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
-        if (!user) { const { saveAsset } = await import('./lib/indexeddb'); await saveAsset(processedAsset); }
+        if (!user) { await saveAsset(processedAsset); }
     } catch (err) {
         console.error("Resuming processing failed:", err);
     } finally {
@@ -936,7 +1042,7 @@ export default function App() {
           
           const processedAsset = await processAssetPipeline(asset, file);
           setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
-          if (!user) { const { saveAsset } = await import('./lib/indexeddb'); await saveAsset(processedAsset); }
+          if (!user) { await saveAsset(processedAsset); }
         }
       } catch (e) {
         console.error(`[AutoRestart] Failed to process ${asset.id}:`, e);
@@ -1052,8 +1158,7 @@ export default function App() {
       setLocalAssets(prev => [newAsset, ...prev]);
       
       // Save locally as fallback
-      const { saveAsset: saveAssetLocal } = await import('./lib/indexeddb');
-      await saveAssetLocal(newAsset);
+      await saveAsset(newAsset);
 
       if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
       
@@ -1082,7 +1187,7 @@ export default function App() {
         // Fallback to legacy client-side pipeline if queue fails
         const processedAsset = await processAssetPipeline(newAsset, file);
         setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-        if (!user) { const { saveAsset: sa } = await import('./lib/indexeddb'); await sa(processedAsset); }
+        if (!user) { await saveAsset(processedAsset); }
       }
     } catch (err) {
       console.error("Ingestion failed:", err);
@@ -1130,7 +1235,6 @@ export default function App() {
       setLocalAssets(prev => [newAsset, ...prev]);
       
       // Save to IndexedDB to persist imageBlob for potential re-queueing
-      const { saveAsset } = await import('./lib/indexeddb');
       await saveAsset(newAsset);
       
       onProgress(15, 'Getting location...');
@@ -1332,13 +1436,15 @@ export default function App() {
       
       // If in global view and no global pending, but there are local pending, offer to process local
       if (isGlobalView && pendingAssets.length === 0 && pendingLocalCount > 0) {
-          if (window.confirm(`No pending global assets, but there are ${pendingLocalCount} pending local assets. Process them now?`)) {
-              pendingAssets = localAssets.filter(
-                  a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING
-              );
-          } else {
-              return;
-          }
+          const localPending = localAssets.filter(
+              a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING
+          );
+          setProcessConfirm({
+              message: `No pending global assets, but there are ${pendingLocalCount} pending local assets. Process them now?`,
+              assets: localPending,
+              batchPending: batchPendingCount
+          });
+          return;
       }
 
       if (pendingAssets.length === 0 && batchPendingCount === 0) {
@@ -1347,8 +1453,17 @@ export default function App() {
       }
       
       const totalToProcess = pendingAssets.length + batchPendingCount;
-      if (!window.confirm(`Process ${totalToProcess} pending asset${totalToProcess !== 1 ? 's' : ''}?`)) return;
-      
+      // Non-blocking: show confirmation modal instead of window.confirm()
+      setProcessConfirm({
+          message: `Process ${totalToProcess} pending asset${totalToProcess !== 1 ? 's' : ''}?`,
+          assets: pendingAssets,
+          batchPending: batchPendingCount
+      });
+  };
+
+  // Execute processing after user confirms via the non-blocking modal
+  const executeProcessAll = async (pendingAssets: DigitalAsset[], batchPendingCount: number) => {
+      setProcessConfirm(null);
       setIsProcessing(true);
       let processedCount = 0;
       let failedCount = 0;
@@ -1522,8 +1637,7 @@ export default function App() {
     }));
 
     // Save locally (bulk write — single IndexedDB transaction)
-    const { saveAssets: saveAssetsBulk } = await import('./lib/indexeddb');
-    await saveAssetsBulk(updatedAssets);
+    await saveAssets(updatedAssets);
     // Update state
     if (isGlobalView) {
       setGlobalAssets(prev => prev.map(a => {
@@ -1649,8 +1763,7 @@ export default function App() {
       setBatchQueue(q => q.map(i => i.id === item.id ? { ...i, progress: 30 } : i));
       
       setLocalAssets(prev => [newAsset, ...prev]);
-      const { saveAsset: saveAssetBatch } = await import('./lib/indexeddb');
-      await saveAssetBatch(newAsset);
+      await saveAsset(newAsset);
       
       debugLogger(`Saved asset for ${item.file.name}`);
       
@@ -1693,7 +1806,7 @@ export default function App() {
           try {
             const processedAsset = await Promise.race([processPromise, timeoutPromise]) as any;
             setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-            if (!user) { await saveAssetBatch(processedAsset); }
+            if (!user) { await saveAsset(processedAsset); }
             setBatchQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
             debugLogger(`Client processing completed for ${item.file.name}`);
           } catch (clientErr: any) {
@@ -1837,72 +1950,11 @@ export default function App() {
         </div>
       </div>
 
-      {/* Mobile Sidebar Overlay */}
-      {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-[60] lg:hidden">
-          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)} />
-          <div className="absolute left-0 top-0 bottom-0 w-64 bg-slate-900 border-r border-slate-800 flex flex-col animate-in slide-in-from-left duration-300">
-            <div className="p-6 flex items-center justify-between">
-              <div className="flex items-center gap-2 text-primary-500">
-                <Database size={24} />
-                <h1 className="text-xl font-bold tracking-tight text-white">GeoGraph</h1>
-              </div>
-              <button onClick={() => setIsMobileMenuOpen(false)} className="text-slate-400 hover:text-white">
-                <X size={20} />
-              </button>
-            </div>
-            <nav className="flex-1 px-2 space-y-1 overflow-y-auto custom-scrollbar">
-              <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleMobileSidebarClick('dashboard')} />
-              <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => handleMobileSidebarClick('batch')} />
-              {isTabVisible('ar') && <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => handleMobileSidebarClick('ar')} />}
-              <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => handleMobileSidebarClick('assets')} />
-              {isTabVisible('curator') && <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => handleMobileSidebarClick('curator')} />}
-              <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => handleMobileSidebarClick('graph')} />
-              {isTabVisible('world') && <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => handleMobileSidebarClick('world')} />}
-              <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => handleMobileSidebarClick('database')} />
-              {isTabVisible('social') && <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => handleMobileSidebarClick('social')} />}
-              {isTabVisible('market') && <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => handleMobileSidebarClick('market')} />}
-              <div className="pt-4 mt-4 border-t border-slate-800">
-                <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => handleMobileSidebarClick('settings')} />
-              </div>
-            </nav>
-
-            <div className="p-4 border-t border-slate-800">
-                <div className={`p-3 rounded-xl border transition-all ${isGlobalView ? 'bg-indigo-900/20 border-indigo-500/50' : 'bg-slate-900 border-slate-800'}`}>
-                    <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-bold uppercase text-slate-400">View Mode</span>
-                        <div className="flex items-center gap-1">
-                            {isGlobalView && <Globe size={12} className="text-indigo-400" />}
-                            {isGlobalView ? <span className="text-[10px] text-indigo-400 font-bold">GLOBAL</span> : <span className="text-[10px] text-slate-500">LOCAL</span>}
-                        </div>
-                    </div>
-                    
-                    <button 
-                        onClick={() => { setIsGlobalView(!isGlobalView); setIsMobileMenuOpen(false); }}
-                        className={`w-full py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition-colors ${
-                            isGlobalView 
-                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-900/50' 
-                            : 'bg-slate-800 hover:bg-slate-700 text-slate-400'
-                        }`}
-                    >
-                        {isGlobalView ? <>Switch to Local <Lock size={12}/></> : <>Switch to Master <Globe size={12}/></>}
-                    </button>
-                </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         <header className="h-16 border-b border-slate-800 flex items-center justify-between px-4 lg:px-8 bg-slate-950/80 backdrop-blur z-10">
             <div className="flex items-center gap-4">
-                <button 
-                  onClick={() => setIsMobileMenuOpen(true)}
-                  className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors"
-                >
-                  <List size={24} />
-                </button>
+                <MobileNavigation activeTab={activeTab} switchTab={switchTab} isGlobalView={isGlobalView} setIsGlobalView={setIsGlobalView} isTabVisible={isTabVisible} isAdmin={isAdmin} />
                 <h2 className="text-lg font-semibold text-white capitalize hidden sm:block">
                   {activeTab === 'database' ? (isGlobalView ? 'CLOUD DATAFRAMES' : 'LOCAL DATAFRAMES') : activeTab}
                 </h2>
@@ -2004,7 +2056,7 @@ export default function App() {
                 </div>
                 {user?.id ? (
                   <QueueMonitor userId={user.id} onRequeueComplete={() => {
-                    import('./lib/indexeddb').then(({ loadAssets }) => loadAssets()).then(loaded => setLocalAssets(loaded));
+                    loadAssets().then(loaded => setLocalAssets(loaded));
                   }} />
                 ) : (
                   <div className="text-center py-6 text-slate-400">
@@ -2278,7 +2330,7 @@ export default function App() {
                {user?.id && isGlobalView && (
                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
                    <QueueMonitor userId={user.id} onRequeueComplete={() => {
-                     import('./lib/indexeddb').then(({ loadAssets }) => loadAssets()).then(loaded => setLocalAssets(loaded));
+                     loadAssets().then(loaded => setLocalAssets(loaded));
                    }} />
                  </div>
                )}
@@ -2391,7 +2443,7 @@ export default function App() {
                 {user?.id && (
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4">
                     <QueueMonitor userId={user.id} onRequeueComplete={() => {
-                      import('./lib/indexeddb').then(({ loadAssets }) => loadAssets()).then(loaded => setLocalAssets(loaded));
+                      loadAssets().then(loaded => setLocalAssets(loaded));
                     }} />
                   </div>
                 )}
@@ -2511,7 +2563,7 @@ export default function App() {
                    <div className="mb-6">
                      <QueueMonitor userId={user.id} onRequeueComplete={() => {
                        // Refresh assets after requeue
-                       import('./lib/indexeddb').then(({ loadAssets }) => loadAssets()).then(loaded => setLocalAssets(loaded));
+                       loadAssets().then(loaded => setLocalAssets(loaded));
                      }} />
                    </div>
                  )}
@@ -2868,6 +2920,30 @@ export default function App() {
             </div>
         )}
 
+        {/* Non-blocking process-all confirmation (replaces window.confirm) */}
+        {processConfirm && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70" role="dialog" aria-modal="true" aria-labelledby="process-confirm-title">
+                <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-sm mx-4 shadow-2xl">
+                    <h3 id="process-confirm-title" className="text-white font-bold text-lg mb-2">Process Assets</h3>
+                    <p className="text-slate-400 text-sm mb-5">{processConfirm.message}</p>
+                    <div className="flex flex-col gap-2">
+                        <button
+                            onClick={() => executeProcessAll(processConfirm.assets, processConfirm.batchPending)}
+                            className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 text-white text-sm font-bold rounded-lg transition-colors"
+                        >
+                            Process Now
+                        </button>
+                        <button
+                            onClick={() => setProcessConfirm(null)}
+                            className="w-full py-2 text-slate-500 hover:text-slate-300 text-xs font-medium transition-colors"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+            </div>
+        )}
+
         {purchaseModalData && (
           <PurchaseModal 
             bundleTitle={purchaseModalData.title}
@@ -3062,7 +3138,7 @@ export default function App() {
                     {user?.id && (
                         <div className="mb-3 pb-3 border-b border-slate-800">
                             <QueueMonitor userId={user.id} onRequeueComplete={() => {
-                                import('./lib/indexeddb').then(({ loadAssets }) => loadAssets()).then(loaded => setLocalAssets(loaded));
+                                loadAssets().then(loaded => setLocalAssets(loaded));
                             }} />
                         </div>
                     )}
