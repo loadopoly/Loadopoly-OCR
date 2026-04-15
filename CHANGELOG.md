@@ -1,3 +1,10 @@
+## [v2.19.2] - 2026-04-15
+
+### Performance
+- **Deep Dynamic Import Deferral**: Converted 9 remaining static service imports (creditService, bundleService, syncEngine, indexeddb, auth, supabaseService, processingQueueService, workerPool, batchProcessorService) to dynamic `import()` at 38 call sites.
+- **Additional Lazy Components**: CameraCapture, PrivacyPolicyModal, CreditGate, and CreditBadge now lazy-loaded with Suspense boundaries.
+- **App Chunk Reduction**: 148KB → 118KB (20% smaller, 29KB gzipped). Vendor-supabase (169KB) and vendor-storage (96KB) fully deferred from initial load.
+
 ## [v2.19.1] - 2026-04-15
 
 ### Fixed

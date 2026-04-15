@@ -67,25 +67,18 @@ import {
 // import { processImageWithGemini } from './services/geminiService';
 // import { redeemPhygitalCertificate } from './services/web3Service';
 // import { compressImage } from './lib/imageCompression';
-import { canProcess, consumeCredit } from './services/creditService';
-import { createBundles, createUserBundle } from './services/bundleService';
-import { initSync, isSyncEnabled } from './lib/syncEngine';
-import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
-import { getCurrentUser } from './lib/auth';
-import { fetchGlobalCorpus, contributeAssetToGlobalCorpus, fetchUserAssets, subscribeToAssetUpdates } from './services/supabaseService';
-import { processingQueueService } from './services/processingQueueService';
-import { WorkerPool } from './lib/workerPool';
+// PERF: creditService, bundleService, syncEngine, indexeddb, auth,
+// supabaseService, processingQueueService, workerPool
+// all deferred — imported dynamically at call sites
 // Keep lightweight / always-visible components as static imports
-import CameraCapture from './components/CameraCapture';
 import SmartUploadSelector from './components/SmartUploadSelector';
-import PrivacyPolicyModal from './components/PrivacyPolicyModal';
 import StatusBar from './components/StatusBar';
 import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/KeyboardShortcuts';
 import { announce } from './lib/accessibility';
 import { useAvatar } from './hooks/useAvatar';
 import { FilterProvider, useFilterContext } from './contexts/FilterContext';
 import UnifiedFilterPanel, { InlineFilterBar, FilterBadge } from './components/UnifiedFilterPanel';
-import CreditGate, { CreditBadge } from './components/CreditGate';
+
 
 // PERF: Lazy-load heavy components not needed for initial Dashboard paint
 const GraphVisualizer = lazy(() => import('./components/GraphVisualizer'));
@@ -105,9 +98,13 @@ const ClusterSyncStatsPanel = lazy(() => import('./components/ClusterSyncStatsPa
 const ClusterSyncButton = lazy(() => import('./components/ClusterSyncStatsPanel').then(m => ({ default: m.ClusterSyncButton })));
 const QueueMonitor = lazy(() => import('./components/QueueMonitor').then(m => ({ default: m.QueueMonitor })));
 const BatchProcessingPanel = lazy(() => import('./components/BatchProcessingPanel'));
+const CreditGate = lazy(() => import('./components/CreditGate'));
+const CreditBadge = lazy(() => import('./components/CreditGate').then(m => ({ default: m.CreditBadge })));
+const CameraCapture = lazy(() => import('./components/CameraCapture'));
+const PrivacyPolicyModal = lazy(() => import('./components/PrivacyPolicyModal'));
 import { useUXPreferences, EXTENSION_TAB_MAP } from './hooks/useUXPreferences';
 import type { Persona } from './hooks/useUXPreferences';
-import { batchProcessor } from './services/batchProcessorService';
+
 
 // --- Custom Hooks ---
 function useOnlineStatus() {
@@ -283,9 +280,10 @@ export default function App() {
   const prevMintedCountRef = useRef(0);
 
   // Lazy-init Worker Pool — workers created on-demand when first task is queued
-  const workerPoolRef = useRef<WorkerPool | null>(null);
-  const workerPool = useMemo(() => {
+  const workerPoolRef = useRef<any>(null);
+  const getWorkerPool = useCallback(async () => {
     if (!workerPoolRef.current) {
+      const { WorkerPool } = await import('./lib/workerPool');
       workerPoolRef.current = new WorkerPool('../workers/parallelWorker.ts', { maxWorkers: 4 });
     }
     return workerPoolRef.current;
@@ -295,6 +293,7 @@ export default function App() {
   // The heavy lifting is done by the direct Realtime subscription below
   useEffect(() => {
     if (user?.id) {
+      import('./services/processingQueueService').then(({ processingQueueService }) => {
       processingQueueService.init(user.id);
       
       // Lightweight callbacks for progress updates only
@@ -336,6 +335,7 @@ export default function App() {
           ));
         }
       });
+      });
     }
   }, [user?.id]);
 
@@ -343,8 +343,10 @@ export default function App() {
   // This ensures we get updates even if the internal subscription fails
   useEffect(() => {
     if (!user?.id) return;
+    let subscription: { unsubscribe: () => void } | null = null;
 
-    const subscription = processingQueueService.subscribeToJobUpdates(
+    import('./services/processingQueueService').then(({ processingQueueService }) => {
+    subscription = processingQueueService.subscribeToJobUpdates(
       user.id,
       (job) => {
         console.log('📡 Queue Realtime update:', job.id, job.status, job.stage);
@@ -381,8 +383,9 @@ export default function App() {
         }
       }
     );
+    });
 
-    return () => subscription.unsubscribe();
+    return () => subscription?.unsubscribe();
   }, [user?.id]);
 
   // Direct Realtime subscription to historical_documents_global
@@ -390,8 +393,10 @@ export default function App() {
   // and we get the full asset data in one step without re-fetching
   useEffect(() => {
     if (!user?.id) return;
+    let unsubscribe: (() => void) | null = null;
 
-    const unsubscribe = subscribeToAssetUpdates(
+    import('./services/supabaseService').then(({ subscribeToAssetUpdates }) => {
+    unsubscribe = subscribeToAssetUpdates(
       user.id,
       // On asset UPDATE (e.g., edge processing completed)
       (updatedAsset) => {
@@ -403,7 +408,7 @@ export default function App() {
           return prev;
         });
         // Also persist to local IndexedDB
-        saveAsset(updatedAsset).catch(e => console.error('Failed to persist updated asset', e));
+        import('./lib/indexeddb').then(({ saveAsset }) => saveAsset(updatedAsset)).catch(e => console.error('Failed to persist updated asset', e));
       },
       // On asset INSERT (e.g., new asset from edge function)
       (newAsset) => {
@@ -414,11 +419,12 @@ export default function App() {
           }
           return [newAsset, ...prev];
         });
-        saveAsset(newAsset).catch(e => console.error('Failed to persist new asset', e));
+        import('./lib/indexeddb').then(({ saveAsset }) => saveAsset(newAsset)).catch(e => console.error('Failed to persist new asset', e));
       }
     );
+    });
 
-    return () => unsubscribe();
+    return () => unsubscribe?.();
   }, [user?.id]);
 
   // Avatar & Metaverse state
@@ -459,8 +465,10 @@ export default function App() {
   useEffect(() => {
     navigator.permissions.query({ name: 'geolocation' }).then((result) => setGeoPermission(result.state === 'granted'));
     
-    initSync();
-    isSyncEnabled().then(setSyncOn);
+    import('./lib/syncEngine').then(({ initSync, isSyncEnabled }) => {
+      initSync();
+      isSyncEnabled().then(setSyncOn);
+    });
     setWeb3Enabled(localStorage.getItem('geograph-web3-enabled') === 'true');
     setScannerConnected(!!localStorage.getItem('geograph-scanner-url'));
 
@@ -470,6 +478,7 @@ export default function App() {
     const handleNewFile = (event: CustomEvent<File>) => ingestFile(event.detail, "Auto-Sync");
     window.addEventListener('geograph-new-file', handleNewFile as any);
 
+    import('./lib/auth').then(({ getCurrentUser }) => {
     getCurrentUser().then(async ({ data }) => { 
       if(data.user) { 
         setUser(data.user); 
@@ -478,6 +487,9 @@ export default function App() {
         const isSuperUser = data.user.email === 'loadopoly@gmail.com';
         setIsAdmin(isSuperUser);
         setIsEnterprise(true); // Authenticated users are treated as enterprise-tier
+        
+        const { loadAssets, saveAsset } = await import('./lib/indexeddb');
+        const { contributeAssetToGlobalCorpus, fetchUserAssets } = await import('./services/supabaseService');
         
         // 1. Sync local assets to cloud if they aren't there yet
         const local = await loadAssets();
@@ -530,7 +542,7 @@ export default function App() {
         }
       } else {
         // Unauthenticated: load from IndexedDB only
-        loadAssets().then(setLocalAssets);
+        import('./lib/indexeddb').then(({ loadAssets }) => loadAssets().then(setLocalAssets));
         
         // Clear session data when page unloads for unauthenticated users
         const handleUnload = () => {
@@ -550,7 +562,8 @@ export default function App() {
       }
     }).catch(err => {
       console.error("Auth check failed (likely offline):", err);
-      loadAssets().then(setLocalAssets);
+      import('./lib/indexeddb').then(({ loadAssets }) => loadAssets().then(setLocalAssets));
+    });
     });
 
     return () => {
@@ -562,6 +575,7 @@ export default function App() {
     setIsProcessing(true);
     try {
       // If not admin, only fetch enterprise-ready assets
+      const { fetchGlobalCorpus } = await import('./services/supabaseService');
       const data = await fetchGlobalCorpus(!isAdmin);
       setGlobalAssets(data);
       announce(`Synced ${data.length} cloud assets.`);
@@ -580,7 +594,7 @@ export default function App() {
     if (assets.length > 0) {
         const processedAssets = assets.filter(a => !!a.sqlRecord);
         const processingAssets = assets.filter(a => !a.sqlRecord);
-        createBundles(processedAssets).then(bundles => {
+        import('./services/bundleService').then(({ createBundles }) => createBundles(processedAssets)).then(bundles => {
           setDisplayItems([...processingAssets, ...bundles]);
         });
     } else {
@@ -620,10 +634,12 @@ export default function App() {
     if (user?.id || isGlobalView) {
       // Authenticated users or global view: update in Supabase
       const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-      contributeAssetToGlobalCorpus(updatedAsset, user?.id, license as any, true)
-        .catch(err => console.error("Failed to update asset in Supabase", err));
+      import('./services/supabaseService').then(({ contributeAssetToGlobalCorpus }) =>
+        contributeAssetToGlobalCorpus(updatedAsset, user?.id, license as any, true)
+      ).catch(err => console.error("Failed to update asset in Supabase", err));
     } else {
       // Unauthenticated users: save to IndexedDB only
+      const { saveAsset } = await import('./lib/indexeddb');
       await saveAsset(updatedAsset);
     }
   };
@@ -809,7 +825,8 @@ export default function App() {
 
       // Auto-store to Supabase (Automatic Cloud Sync)
       const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
-      contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true).then(syncResult => {
+      import('./services/supabaseService').then(({ contributeAssetToGlobalCorpus }) =>
+      contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true)).then(syncResult => {
         if (syncResult.success && syncResult.publicUrl) {
           // Update state with the permanent cloud URL
           const updatedAsset = { ...resultAsset, imageUrl: syncResult.publicUrl || resultAsset.imageUrl };
@@ -849,7 +866,7 @@ export default function App() {
         const file = fileToProcess instanceof File ? fileToProcess : new File([fileToProcess], asset.sqlRecord?.DOCUMENT_TITLE || 'reprocess.jpg', { type: fileToProcess.type });
         const processedAsset = await processAssetPipeline(asset, file);
         setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
-        if (!user) await saveAsset(processedAsset);
+        if (!user) { const { saveAsset } = await import('./lib/indexeddb'); await saveAsset(processedAsset); }
     } catch (err) {
         console.error("Resuming processing failed:", err);
     } finally {
@@ -890,7 +907,7 @@ export default function App() {
           
           const processedAsset = await processAssetPipeline(asset, file);
           setLocalAssets(prev => prev.map(a => a.id === asset.id ? processedAsset : a));
-          if (!user) await saveAsset(processedAsset);
+          if (!user) { const { saveAsset } = await import('./lib/indexeddb'); await saveAsset(processedAsset); }
         }
       } catch (e) {
         console.error(`[AutoRestart] Failed to process ${asset.id}:`, e);
@@ -969,6 +986,7 @@ export default function App() {
 
   const ingestFile = async (file: File, source: string = "Upload") => {
     // Credit gate: check if user can process before proceeding
+    const { canProcess, consumeCredit } = await import('./services/creditService');
     const hasCredits = await canProcess(user?.id);
     if (!hasCredits) {
       setPendingCreditFile({ file, source });
@@ -976,7 +994,7 @@ export default function App() {
       return;
     }
     
-    // Consume one credit
+    // Consume one credit (consumeCredit imported above with canProcess)
     const consumed = await consumeCredit(user?.id);
     if (!consumed) {
       setPendingCreditFile({ file, source });
@@ -996,7 +1014,8 @@ export default function App() {
       setLocalAssets(prev => [newAsset, ...prev]);
       
       // Save locally as fallback
-      await saveAsset(newAsset);
+      const { saveAsset: saveAssetLocal } = await import('./lib/indexeddb');
+      await saveAssetLocal(newAsset);
 
       if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
       
@@ -1010,6 +1029,7 @@ export default function App() {
       try {
         const scanType = (file as any).scanType || selectedScanType || ScanType.DOCUMENT;
         
+        const { processingQueueService } = await import('./services/processingQueueService');
         await processingQueueService.queueFile(file, {
           scanType,
           metadata: {
@@ -1024,7 +1044,7 @@ export default function App() {
         // Fallback to legacy client-side pipeline if queue fails
         const processedAsset = await processAssetPipeline(newAsset, file);
         setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-        if (!user) await saveAsset(processedAsset);
+        if (!user) { const { saveAsset: sa } = await import('./lib/indexeddb'); await sa(processedAsset); }
       }
     } catch (err) {
       console.error("Ingestion failed:", err);
@@ -1072,6 +1092,7 @@ export default function App() {
       setLocalAssets(prev => [newAsset, ...prev]);
       
       // Save to IndexedDB to persist imageBlob for potential re-queueing
+      const { saveAsset } = await import('./lib/indexeddb');
       await saveAsset(newAsset);
       
       onProgress(15, 'Getting location...');
@@ -1089,6 +1110,7 @@ export default function App() {
       
       // Check if we should use server-side processing
       // Use server queue when online, logged in, and Supabase is configured
+      const { processingQueueService } = await import('./services/processingQueueService');
       const diag = processingQueueService.getDiagnostics();
       const useServerProcessing = diag.canProcessServer && isOnline;
       
@@ -1204,6 +1226,7 @@ export default function App() {
       // Auto-sync to cloud
       const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
       try {
+        const { contributeAssetToGlobalCorpus } = await import('./services/supabaseService');
         const syncResult = await contributeAssetToGlobalCorpus(resultAsset, user?.id, license as any, true);
         if (syncResult.success && syncResult.publicUrl) {
           setLocalAssets(prev => prev.map(a => 
@@ -1230,7 +1253,9 @@ export default function App() {
   // Legacy batch handler - now delegates to new system
   const handleBatchFiles = (files: File[]) => {
     // Add files to new batch processor
-    batchProcessor.addFiles(files, selectedScanType || ScanType.DOCUMENT);
+    import('./services/batchProcessorService').then(({ batchProcessor }) =>
+      batchProcessor.addFiles(files, selectedScanType || ScanType.DOCUMENT)
+    );
     
     // Show the new batch panel
     setShowNewBatchPanel(true);
@@ -1306,6 +1331,7 @@ export default function App() {
                   if (isOnline) {
                       // Use background queue
                       try {
+                          const { processingQueueService } = await import('./services/processingQueueService');
                           await processingQueueService.queueFile(file, {
                               scanType: (asset.sqlRecord?.SCAN_TYPE as ScanType) || ScanType.DOCUMENT,
                               metadata: {
@@ -1458,8 +1484,9 @@ export default function App() {
     }));
 
     // Save locally
+    const { saveAsset: saveAssetBundle } = await import('./lib/indexeddb');
     for (const asset of updatedAssets) {
-      await saveAsset(asset);
+      await saveAssetBundle(asset);
       // Update state
       if (isGlobalView) {
         setGlobalAssets(prev => prev.map(a => a.id === asset.id ? asset : a));
@@ -1470,8 +1497,9 @@ export default function App() {
 
     // Sync to Supabase
     const license = isPublicBroadcast ? 'CC0' : 'GEOGRAPH_CORPUS_1.0';
+    const { contributeAssetToGlobalCorpus: contributeBundleAsset } = await import('./services/supabaseService');
     for (const asset of updatedAssets) {
-      contributeAssetToGlobalCorpus(asset, user?.id, license as any, true).catch(e => console.error("Failed to sync manual bundle", e));
+      contributeBundleAsset(asset, user?.id, license as any, true).catch(e => console.error("Failed to sync manual bundle", e));
     }
 
     setSelectedAssetIds(new Set());
@@ -1579,7 +1607,8 @@ export default function App() {
       setBatchQueue(q => q.map(i => i.id === item.id ? { ...i, progress: 30 } : i));
       
       setLocalAssets(prev => [newAsset, ...prev]);
-      await saveAsset(newAsset);
+      const { saveAsset: saveAssetBatch } = await import('./lib/indexeddb');
+      await saveAssetBatch(newAsset);
       
       debugLogger(`Saved asset for ${item.file.name}`);
       
@@ -1598,7 +1627,8 @@ export default function App() {
         try {
           debugLogger(`Queueing ${item.file.name} for server processing`);
           
-          await processingQueueService.queueFile(item.file, {
+          const { processingQueueService: pqs } = await import('./services/processingQueueService');
+          await pqs.queueFile(item.file, {
             scanType: item.scanType || selectedScanType || ScanType.DOCUMENT,
             priority: 3, 
             metadata: {
@@ -1621,7 +1651,7 @@ export default function App() {
           try {
             const processedAsset = await Promise.race([processPromise, timeoutPromise]) as any;
             setLocalAssets(prev => prev.map(a => a.id === newAsset.id ? processedAsset : a));
-            if (!user) await saveAsset(processedAsset);
+            if (!user) { await saveAssetBatch(processedAsset); }
             setBatchQueue(q => q.map(i => i.id === item.id ? { ...i, status: 'COMPLETED', progress: 100, assetId: newAsset.id } : i));
             debugLogger(`Client processing completed for ${item.file.name}`);
           } catch (clientErr: any) {
@@ -1707,7 +1737,7 @@ export default function App() {
           <div className="flex items-center gap-2 text-primary-500 mb-1">
             <Database size={24} />
             <h1 className="text-xl font-bold tracking-tight text-white">GeoGraph<span className="text-slate-500">Node</span></h1>
-            <CreditBadge userId={user?.id} />
+            <Suspense fallback={null}><CreditBadge userId={user?.id} /></Suspense>
           </div>
           <p className="text-xs text-slate-500">OCR • GIS • Graph • NFT</p>
         </div>
@@ -1880,11 +1910,13 @@ export default function App() {
              </button>
              {activeTab !== 'batch' && activeTab !== 'ar' && (
                 <>
+                  <Suspense fallback={null}>
                   <CameraCapture 
                     onCapture={(file) => ingestFile(file, isGlobalView ? "Global Contribution" : "Mobile Camera")} 
                     isOnline={isOnline}
                     zoomEnabled={zoomEnabled}
                   />
+                  </Suspense>
                   <label className={`flex items-center gap-2 px-4 py-2 ${isGlobalView ? 'bg-indigo-900/40 border-indigo-500/50 hover:bg-indigo-900/60' : 'bg-slate-800 hover:bg-slate-700 border-slate-700'} border text-slate-200 text-sm font-medium rounded-lg cursor-pointer transition-all ${isProcessing ? 'opacity-50 pointer-events-none' : ''}`}>
                       {isProcessing ? <div className="animate-spin w-4 h-4 border-2 border-white/30 border-t-white rounded-full"></div> : <Upload size={18} />}
                       <span>{isGlobalView ? 'Contribute' : 'Upload'}</span>
@@ -1932,7 +1964,7 @@ export default function App() {
                 </div>
                 {user?.id ? (
                   <QueueMonitor userId={user.id} onRequeueComplete={() => {
-                    loadAssets().then(loaded => setLocalAssets(loaded));
+                    import('./lib/indexeddb').then(({ loadAssets }) => loadAssets()).then(loaded => setLocalAssets(loaded));
                   }} />
                 ) : (
                   <div className="text-center py-6 text-slate-400">
@@ -2206,7 +2238,7 @@ export default function App() {
                {user?.id && isGlobalView && (
                  <div className="bg-slate-900 border border-slate-800 rounded-xl p-4">
                    <QueueMonitor userId={user.id} onRequeueComplete={() => {
-                     loadAssets().then(loaded => setLocalAssets(loaded));
+                     import('./lib/indexeddb').then(({ loadAssets }) => loadAssets()).then(loaded => setLocalAssets(loaded));
                    }} />
                  </div>
                )}
@@ -2319,7 +2351,7 @@ export default function App() {
                 {user?.id && (
                   <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-4">
                     <QueueMonitor userId={user.id} onRequeueComplete={() => {
-                      loadAssets().then(loaded => setLocalAssets(loaded));
+                      import('./lib/indexeddb').then(({ loadAssets }) => loadAssets()).then(loaded => setLocalAssets(loaded));
                     }} />
                   </div>
                 )}
@@ -2439,7 +2471,7 @@ export default function App() {
                    <div className="mb-6">
                      <QueueMonitor userId={user.id} onRequeueComplete={() => {
                        // Refresh assets after requeue
-                       loadAssets().then(loaded => setLocalAssets(loaded));
+                       import('./lib/indexeddb').then(({ loadAssets }) => loadAssets()).then(loaded => setLocalAssets(loaded));
                      }} />
                    </div>
                  )}
@@ -2774,10 +2806,13 @@ export default function App() {
           />
         )}
 
+        <Suspense fallback={null}>
         {showPrivacyPolicy && (
           <PrivacyPolicyModal onClose={() => setShowPrivacyPolicy(false)} />
         )}
+        </Suspense>
 
+        <Suspense fallback={null}>
         {showCreditGate && (
           <CreditGate
             userId={user?.id}
@@ -2796,6 +2831,7 @@ export default function App() {
             }}
           />
         )}
+        </Suspense>
 
         <Suspense fallback={null}>
         <IntegrationsHub 
@@ -2954,7 +2990,7 @@ export default function App() {
                     {user?.id && (
                         <div className="mb-3 pb-3 border-b border-slate-800">
                             <QueueMonitor userId={user.id} onRequeueComplete={() => {
-                                loadAssets().then(loaded => setLocalAssets(loaded));
+                                import('./lib/indexeddb').then(({ loadAssets }) => loadAssets()).then(loaded => setLocalAssets(loaded));
                             }} />
                         </div>
                     )}
