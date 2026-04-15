@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
 import { 
   Camera, 
   Map as MapIcon, 
@@ -63,43 +63,48 @@ import {
   Community,
   CommunityAdmissionRequest
 } from './types';
-import { processImageWithGemini } from './services/geminiService';
+// PERF: Heavy services deferred — imported dynamically at call sites
+// import { processImageWithGemini } from './services/geminiService';
+// import { redeemPhygitalCertificate } from './services/web3Service';
+// import { compressImage } from './lib/imageCompression';
 import { canProcess, consumeCredit } from './services/creditService';
 import { createBundles, createUserBundle } from './services/bundleService';
 import { initSync, isSyncEnabled } from './lib/syncEngine';
 import { loadAssets, saveAsset, deleteAsset } from './lib/indexeddb';
-import { redeemPhygitalCertificate } from './services/web3Service';
 import { getCurrentUser } from './lib/auth';
 import { fetchGlobalCorpus, contributeAssetToGlobalCorpus, fetchUserAssets, subscribeToAssetUpdates } from './services/supabaseService';
 import { processingQueueService } from './services/processingQueueService';
-import { compressImage } from './lib/imageCompression';
 import { WorkerPool } from './lib/workerPool';
-import GraphVisualizer from './components/GraphVisualizer';
-import ContributeButton from './components/ContributeButton';
-import BundleCard from './components/BundleCard';
-import ARScene from './components/ARScene';
-import SemanticCanvas from './components/SemanticCanvas';
+// Keep lightweight / always-visible components as static imports
 import CameraCapture from './components/CameraCapture';
-import BatchImporter from './components/BatchImporter';
-import SettingsPanel from './components/SettingsPanel';
 import SmartUploadSelector from './components/SmartUploadSelector';
 import PrivacyPolicyModal from './components/PrivacyPolicyModal';
-import PurchaseModal from './components/PurchaseModal';
-import SmartSuggestions from './components/SmartSuggestions';
-import SocialApp from './components/SocialApp';
 import StatusBar from './components/StatusBar';
-import AnnotationEditor from './components/AnnotationEditor';
 import { KeyboardShortcutsHelp, useKeyboardShortcutsHelp } from './components/KeyboardShortcuts';
 import { announce } from './lib/accessibility';
-import { WorldRenderer } from './components/metaverse';
 import { useAvatar } from './hooks/useAvatar';
-import IntegrationsHub from './components/IntegrationsHub';
 import { FilterProvider, useFilterContext } from './contexts/FilterContext';
 import UnifiedFilterPanel, { InlineFilterBar, FilterBadge } from './components/UnifiedFilterPanel';
-import { ClusterSyncStatsPanel, ClusterSyncButton } from './components/ClusterSyncStatsPanel';
-import { QueueMonitor } from './components/QueueMonitor';
-import BatchProcessingPanel from './components/BatchProcessingPanel';
 import CreditGate, { CreditBadge } from './components/CreditGate';
+
+// PERF: Lazy-load heavy components not needed for initial Dashboard paint
+const GraphVisualizer = lazy(() => import('./components/GraphVisualizer'));
+const ContributeButton = lazy(() => import('./components/ContributeButton'));
+const BundleCard = lazy(() => import('./components/BundleCard'));
+const ARScene = lazy(() => import('./components/ARScene'));
+const SemanticCanvas = lazy(() => import('./components/SemanticCanvas'));
+const BatchImporter = lazy(() => import('./components/BatchImporter'));
+const SettingsPanel = lazy(() => import('./components/SettingsPanel'));
+const PurchaseModal = lazy(() => import('./components/PurchaseModal'));
+const SmartSuggestions = lazy(() => import('./components/SmartSuggestions'));
+const SocialApp = lazy(() => import('./components/SocialApp'));
+const AnnotationEditor = lazy(() => import('./components/AnnotationEditor'));
+const WorldRenderer = lazy(() => import('./components/metaverse').then(m => ({ default: m.WorldRenderer })));
+const IntegrationsHub = lazy(() => import('./components/IntegrationsHub'));
+const ClusterSyncStatsPanel = lazy(() => import('./components/ClusterSyncStatsPanel').then(m => ({ default: m.ClusterSyncStatsPanel })));
+const ClusterSyncButton = lazy(() => import('./components/ClusterSyncStatsPanel').then(m => ({ default: m.ClusterSyncButton })));
+const QueueMonitor = lazy(() => import('./components/QueueMonitor').then(m => ({ default: m.QueueMonitor })));
+const BatchProcessingPanel = lazy(() => import('./components/BatchProcessingPanel'));
 import { useUXPreferences, EXTENSION_TAB_MAP } from './hooks/useUXPreferences';
 import type { Persona } from './hooks/useUXPreferences';
 import { batchProcessor } from './services/batchProcessorService';
@@ -273,11 +278,18 @@ export default function App() {
   const isTabVisible = uxPrefs.isTabVisible;
 
   // Track first successful OCR for auto-navigation to graph
-  const firstOcrCompletedRef = useRef(false);
+  // Initialize from persisted UX prefs so returning users don't get re-navigated
+  const firstOcrCompletedRef = useRef(uxPrefs.hasProcessedFirstAsset);
   const prevMintedCountRef = useRef(0);
 
-  // Initialize Worker Pool for parallel processing
-  const workerPool = useMemo(() => new WorkerPool('../workers/parallelWorker.ts', { maxWorkers: 4 }), []);
+  // Lazy-init Worker Pool — workers created on-demand when first task is queued
+  const workerPoolRef = useRef<WorkerPool | null>(null);
+  const workerPool = useMemo(() => {
+    if (!workerPoolRef.current) {
+      workerPoolRef.current = new WorkerPool('../workers/parallelWorker.ts', { maxWorkers: 4 });
+    }
+    return workerPoolRef.current;
+  }, []);
 
   // Initialize Processing Queue Service with simplified callbacks
   // The heavy lifting is done by the direct Realtime subscription below
@@ -724,6 +736,7 @@ export default function App() {
       }
 
       const scanType = (asset.sqlRecord?.SCAN_TYPE as ScanType) || ScanType.DOCUMENT;
+      const { processImageWithGemini } = await import('./services/geminiService');
       const analysis = await processImageWithGemini(file, location, scanType, debugMode);
       
       const updatedSqlRecord: HistoricalDocumentMetadata = {
@@ -1031,6 +1044,7 @@ export default function App() {
       onProgress(5, 'Creating asset...');
       
       // Create local asset
+      const { compressImage } = await import('./lib/imageCompression');
       const compressionResult = await compressImage(file);
       const imageUrl = URL.createObjectURL(compressionResult.file);
       
@@ -1124,6 +1138,7 @@ export default function App() {
       onProgress(25, 'AI analysis...');
       
       // Process with Gemini (client-side fallback or when server not available)
+      const { processImageWithGemini } = await import('./services/geminiService');
       const analysis = await processImageWithGemini(file, location, scanType, debugMode);
       
       onProgress(70, 'Building metadata...');
@@ -1897,6 +1912,7 @@ export default function App() {
         </header>
 
         <div className="flex-1 overflow-auto p-8 relative">
+          <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div></div>}>
           
           {activeTab === 'dashboard' && (
             <div className="space-y-8 max-w-6xl mx-auto">
@@ -2738,6 +2754,7 @@ export default function App() {
               setSelectedLLM={setSelectedLLM}
             />
           )}
+        </Suspense>
         </div>
         
         {expandedImage && (
@@ -2780,6 +2797,7 @@ export default function App() {
           />
         )}
 
+        <Suspense fallback={null}>
         <IntegrationsHub 
           isOpen={showIntegrationsHub} 
           onClose={() => setShowIntegrationsHub(false)} 
@@ -2995,6 +3013,7 @@ export default function App() {
             </div>
           </div>
         )}
+        </Suspense>
 
         <StatusBar 
           user={user}
