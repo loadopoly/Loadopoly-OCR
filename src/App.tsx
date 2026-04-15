@@ -797,19 +797,20 @@ export default function App() {
       handleBatchFiles(arSessionQueue);
       setArSessionQueue([]);
       if (pendingTabSwitch) {
-          startTransition(() => { setActiveTab(pendingTabSwitch); });
+          // AR queue already cleared above, so switchTab's AR check will pass
+          switchTab(pendingTabSwitch);
           setPendingTabSwitch(null);
       }
-  }, [arSessionQueue, pendingTabSwitch]);
+  }, [arSessionQueue, pendingTabSwitch, switchTab]);
 
   const handleArSessionDismiss = useCallback(() => {
       // User chose to discard — switch tab without processing
       setArSessionQueue([]);
       if (pendingTabSwitch) {
-          startTransition(() => { setActiveTab(pendingTabSwitch); });
+          switchTab(pendingTabSwitch);
           setPendingTabSwitch(null);
       }
-  }, [pendingTabSwitch]);
+  }, [pendingTabSwitch, switchTab]);
 
   const handleArSessionCancel = useCallback(() => {
       // User chose to stay on AR tab
