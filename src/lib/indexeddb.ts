@@ -76,6 +76,11 @@ export const saveAsset = async (asset: DigitalAsset) => {
     await db.assets.put(asset);
 };
 
+/** Bulk-write multiple assets in a single IndexedDB transaction */
+export const saveAssets = async (assets: DigitalAsset[]) => {
+    await db.assets.bulkPut(assets);
+};
+
 export const loadAssets = async (): Promise<DigitalAsset[]> => {
     const assets = await db.assets.toArray();
     // Revive ObjectURLs from Blobs

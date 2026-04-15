@@ -488,26 +488,31 @@ export default function App() {
         setIsAdmin(isSuperUser);
         setIsEnterprise(true); // Authenticated users are treated as enterprise-tier
         
-        const { loadAssets, saveAsset } = await import('./lib/indexeddb');
+        const { loadAssets, saveAssets } = await import('./lib/indexeddb');
+        
+        // PERF: Load local assets FIRST so UI renders immediately
+        const local = await loadAssets();
+        setLocalAssets(local);
+        
+        // Background: sync & merge without blocking the UI
         const { contributeAssetToGlobalCorpus, fetchUserAssets } = await import('./services/supabaseService');
         
         // 1. Sync local assets to cloud if they aren't there yet
-        const local = await loadAssets();
-        const syncPromises = local.map(async (asset) => {
-          if (asset.status === AssetStatus.MINTED && !asset.sqlRecord?.USER_ID) {
-            try {
-              await contributeAssetToGlobalCorpus(asset, data.user.id, 'GEOGRAPH_CORPUS_1.0', true);
-              // Update local record to show it's synced (optional, but good for UI)
-              if (asset.sqlRecord) asset.sqlRecord.USER_ID = data.user.id;
-              await saveAsset(asset);
-            } catch (e) {
-              console.error("Failed to sync local asset to cloud:", e);
-            }
+        const unsyncedAssets = local.filter(a => a.status === AssetStatus.MINTED && !a.sqlRecord?.USER_ID);
+        const syncPromises = unsyncedAssets.map(async (asset) => {
+          try {
+            await contributeAssetToGlobalCorpus(asset, data.user.id, 'GEOGRAPH_CORPUS_1.0', true);
+            if (asset.sqlRecord) asset.sqlRecord.USER_ID = data.user.id;
+          } catch (e) {
+            console.error("Failed to sync local asset to cloud:", e);
           }
           return asset;
         });
         
-        await Promise.all(syncPromises);
+        if (unsyncedAssets.length > 0) {
+          const synced = await Promise.all(syncPromises);
+          await saveAssets(synced);
+        }
 
         // 2. Load user's assets from Supabase and MERGE with local
         try {
@@ -530,15 +535,12 @@ export default function App() {
 
           setLocalAssets(mergedAssets);
           
-          // Update IndexedDB with the merged state to ensure consistency
-          for (const asset of mergedAssets) {
-            await saveAsset(asset);
-          }
+          // PERF: Single bulk write instead of sequential per-asset transactions
+          await saveAssets(mergedAssets);
           
         } catch (err) {
           console.error('Failed to load user assets:', err);
-          // Fallback to just local assets if remote fetch fails
-          loadAssets().then(setLocalAssets);
+          // Local assets already set above — no fallback needed
         }
       } else {
         // Unauthenticated: load from IndexedDB only
@@ -1483,16 +1485,20 @@ export default function App() {
       }
     }));
 
-    // Save locally
-    const { saveAsset: saveAssetBundle } = await import('./lib/indexeddb');
-    for (const asset of updatedAssets) {
-      await saveAssetBundle(asset);
-      // Update state
-      if (isGlobalView) {
-        setGlobalAssets(prev => prev.map(a => a.id === asset.id ? asset : a));
-      } else {
-        setLocalAssets(prev => prev.map(a => a.id === asset.id ? asset : a));
-      }
+    // Save locally (bulk write — single IndexedDB transaction)
+    const { saveAssets: saveAssetsBulk } = await import('./lib/indexeddb');
+    await saveAssetsBulk(updatedAssets);
+    // Update state
+    if (isGlobalView) {
+      setGlobalAssets(prev => prev.map(a => {
+        const updated = updatedAssets.find(u => u.id === a.id);
+        return updated || a;
+      }));
+    } else {
+      setLocalAssets(prev => prev.map(a => {
+        const updated = updatedAssets.find(u => u.id === a.id);
+        return updated || a;
+      }));
     }
 
     // Sync to Supabase

@@ -1,3 +1,10 @@
+## [v2.19.3] - 2026-04-15
+
+### Fixed
+- **Sidebar Freeze**: Boot sequence blocked the main thread with sequential per-asset IndexedDB writes. Now uses `bulkPut` (single transaction) and renders local assets immediately before background sync.
+- **IndexedDB**: Added `saveAssets()` bulk write function to avoid O(n) individual transactions.
+- **Manual Bundle**: Fixed sequential save loop to use bulk write.
+
 ## [v2.19.2] - 2026-04-15
 
 ### Performance
