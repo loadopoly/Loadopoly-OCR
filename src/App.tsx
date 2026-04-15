@@ -204,7 +204,8 @@ const MobileNavigation = React.memo(({ activeTab, switchTab, isGlobalView, setIs
 
   const handleClick = useCallback((tab: string) => {
     setIsOpen(false);
-    startTransition(() => { switchTab(tab); });
+    // switchTab already wraps setActiveTab in startTransition internally
+    switchTab(tab);
   }, [switchTab]);
 
   // Portal overlay — rendered to document.body so it's never clipped by parent
@@ -325,6 +326,15 @@ export default function App() {
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [arSessionQueue, setArSessionQueue] = useState<File[]>([]);
   const [pendingTabSwitch, setPendingTabSwitch] = useState<string | null>(null);
+
+  // PERF FIX: Refs for switchTab so it can read fresh state without being
+  // recreated every time activeTab or arSessionQueue changes. Keeps switchTab
+  // referentially stable → MobileNavigation (React.memo) never re-renders
+  // just because the active tab changed.
+  const activeTabRef = useRef(activeTab);
+  activeTabRef.current = activeTab;
+  const arSessionQueueRef = useRef(arSessionQueue);
+  arSessionQueueRef.current = arSessionQueue;
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showProcessingPanel, setShowProcessingPanel] = useState(false);
   const [showNewBatchPanel, setShowNewBatchPanel] = useState(false);
@@ -555,17 +565,17 @@ export default function App() {
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
       
       switch(e.key.toLowerCase()) {
-        case '1': setActiveTab('dashboard'); break;
-        case '2': setActiveTab('batch'); break;
-        case '3': setActiveTab('ar'); break;
-        case '4': setActiveTab('assets'); break;
-        case '5': setActiveTab('graph'); break;
-        case '6': setActiveTab('database'); break;
-        case '7': if (isAdmin) setActiveTab('review'); break;
-        case 's': setActiveTab('settings'); break;
+        case '1': startTransition(() => setActiveTab('dashboard')); break;
+        case '2': startTransition(() => setActiveTab('batch')); break;
+        case '3': startTransition(() => setActiveTab('ar')); break;
+        case '4': startTransition(() => setActiveTab('assets')); break;
+        case '5': startTransition(() => setActiveTab('graph')); break;
+        case '6': startTransition(() => setActiveTab('database')); break;
+        case '7': if (isAdmin) startTransition(() => setActiveTab('review')); break;
+        case 's': startTransition(() => setActiveTab('settings')); break;
         case 'g': setIsGlobalView(prev => !prev); break;
         case 'r': if (isGlobalView) refreshGlobalData(); break;
-        case 'w': setActiveTab('world'); break;
+        case 'w': startTransition(() => setActiveTab('world')); break;
         case 'q': setShowProcessingPanel(prev => !prev); break; // Queue panel toggle
       }
     };
@@ -729,7 +739,7 @@ export default function App() {
       const firstMinted = localAssets.find(a => a.status === AssetStatus.MINTED && a.graphData?.nodes?.length);
       if (firstMinted) {
         setSelectedAssetId(firstMinted.id);
-        setActiveTab('graph');
+        startTransition(() => { setActiveTab('graph'); });
       }
     }
     prevMintedCountRef.current = mintedCount;
@@ -769,20 +779,25 @@ export default function App() {
   };
 
   const switchTab = useCallback((newTab: string) => {
+      // PERF FIX: Read from refs so this callback is stable (no deps on state).
       // Non-blocking: if leaving AR with queued items, show confirmation UI instead of blocking confirm()
-      if (activeTab === 'ar' && newTab !== 'ar' && arSessionQueue.length > 0) {
+      if (activeTabRef.current === 'ar' && newTab !== 'ar' && arSessionQueueRef.current.length > 0) {
           setPendingTabSwitch(newTab);
           return;
       }
-      setActiveTab(newTab);
-  }, [activeTab, arSessionQueue]);
+      // PERF FIX: Wrap in startTransition so React can break the heavy 3000+
+      // line App re-render into interruptible chunks.  Without this, the state
+      // update is "urgent" and blocks the main thread for the entire render —
+      // causing the 30+ second UI freeze on low-end devices.
+      startTransition(() => { setActiveTab(newTab); });
+  }, []);
 
   // Handlers for the non-blocking AR session confirmation dialog
   const handleArSessionConfirm = useCallback(() => {
       handleBatchFiles(arSessionQueue);
       setArSessionQueue([]);
       if (pendingTabSwitch) {
-          setActiveTab(pendingTabSwitch);
+          startTransition(() => { setActiveTab(pendingTabSwitch); });
           setPendingTabSwitch(null);
       }
   }, [arSessionQueue, pendingTabSwitch]);
@@ -791,7 +806,7 @@ export default function App() {
       // User chose to discard — switch tab without processing
       setArSessionQueue([]);
       if (pendingTabSwitch) {
-          setActiveTab(pendingTabSwitch);
+          startTransition(() => { setActiveTab(pendingTabSwitch); });
           setPendingTabSwitch(null);
       }
   }, [pendingTabSwitch]);
@@ -1160,7 +1175,7 @@ export default function App() {
       // Save locally as fallback
       await saveAsset(newAsset);
 
-      if (source !== "Batch Folder" && source !== "Auto-Sync") setActiveTab('assets');
+      if (source !== "Batch Folder" && source !== "Auto-Sync") startTransition(() => { setActiveTab('assets'); });
       
       if (!isOnline) {
         announce("Offline: Asset saved locally. Processing will resume when online.");
@@ -1401,7 +1416,7 @@ export default function App() {
     
     // Show the new batch panel
     setShowNewBatchPanel(true);
-    setActiveTab('batch');
+    startTransition(() => { setActiveTab('batch'); });
     
     // Announce for accessibility
     if (files.length > 50) {
@@ -1660,7 +1675,7 @@ export default function App() {
 
     setSelectedAssetIds(new Set());
     announce(`Created manual bundle: ${bundleTitle}`);
-    setActiveTab('assets');
+    startTransition(() => { setActiveTab('assets'); });
   };
 
   // Debug logs state for mobile debugging
@@ -1952,7 +1967,7 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-4 lg:px-8 bg-slate-950/80 backdrop-blur z-10">
+        <header className="h-16 border-b border-slate-800 flex items-center justify-between px-4 lg:px-8 bg-slate-950 z-10">
             <div className="flex items-center gap-4">
                 <MobileNavigation activeTab={activeTab} switchTab={switchTab} isGlobalView={isGlobalView} setIsGlobalView={setIsGlobalView} isTabVisible={isTabVisible} isAdmin={isAdmin} />
                 <h2 className="text-lg font-semibold text-white capitalize hidden sm:block">
@@ -2027,7 +2042,7 @@ export default function App() {
                  </button>
              )}
              <button 
-                onClick={() => setActiveTab('settings')}
+                onClick={() => switchTab('settings')}
                 className={`p-2 rounded-full border transition-all ${user ? 'bg-primary-900/20 border-primary-500/50 text-primary-400' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-white'}`}
              >
                 <User size={20} />
@@ -2066,7 +2081,7 @@ export default function App() {
                       {totalPendingCount > 0 && `${totalPendingCount} items waiting locally`}
                     </p>
                     <button 
-                      onClick={() => setActiveTab('settings')}
+                      onClick={() => switchTab('settings')}
                       className="mt-3 px-4 py-2 bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold rounded-lg"
                     >
                       Login / Sign Up
@@ -2076,10 +2091,10 @@ export default function App() {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <StatCard label="Total Assets" value={assets.length} icon={FileText} color="text-blue-500" onClick={() => setActiveTab('assets')} />
-                <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} icon={Network} color="text-purple-500" onClick={() => setActiveTab('graph')} />
-                <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" onClick={() => setActiveTab('database')} />
-                <StatCard label="Active Bundles" value={displayItems.filter(i => 'bundleId' in i).length} icon={Package} color="text-amber-500" onClick={() => setActiveTab('market')} />
+                <StatCard label="Total Assets" value={assets.length} icon={FileText} color="text-blue-500" onClick={() => switchTab('assets')} />
+                <StatCard label="Knowledge Nodes" value={assets.reduce((a,c) => a + (c.graphData?.nodes?.length || 0), 0)} icon={Network} color="text-purple-500" onClick={() => switchTab('graph')} />
+                <StatCard label="Training Tokens" value={totalTokens.toLocaleString()} icon={Cpu} color="text-emerald-500" onClick={() => switchTab('database')} />
+                <StatCard label="Active Bundles" value={displayItems.filter(i => 'bundleId' in i).length} icon={Package} color="text-amber-500" onClick={() => switchTab('market')} />
               </div>
 
               <SmartSuggestions 
@@ -2088,7 +2103,7 @@ export default function App() {
                 syncEnabled={syncOn}
                 web3Enabled={web3Enabled}
                 scannerConnected={scannerConnected}
-                onAction={(tab) => setActiveTab(tab)}
+                onAction={(tab) => switchTab(tab)}
                 pendingCount={totalPendingCount}
                 processingCount={batchQueue.filter(b => b.status === 'PROCESSING').length}
                 geminiConnected={true}
@@ -2601,7 +2616,7 @@ export default function App() {
                             <div className="p-4">
                                 <h4 className="font-bold text-white text-sm mb-1 truncate">{item.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
                                 <div className="flex gap-2 mt-4">
-                                    <button onClick={() => { setSelectedAssetId(item.id); setActiveTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700">View Graph</button>
+                                    <button onClick={() => { setSelectedAssetId(item.id); switchTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700">View Graph</button>
                                     <ContributeButton asset={item} onAssetUpdated={handleAssetUpdate} />
                                 </div>
                             </div>
@@ -2657,7 +2672,7 @@ export default function App() {
                      <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
                        <Network size={48} className="opacity-20" />
                        <p>Select an asset from the Assets tab to view its specific graph.</p>
-                       <button onClick={() => setActiveTab('assets')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Go to Assets</button>
+                       <button onClick={() => switchTab('assets')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Go to Assets</button>
                      </div>
                    )}
                  </div>
@@ -2966,7 +2981,7 @@ export default function App() {
             userId={user?.id}
             onBypassWithKey={() => {
               setShowCreditGate(false);
-              setActiveTab('settings');
+              switchTab('settings');
             }}
             onContinue={() => {
               setShowCreditGate(false);
@@ -3206,7 +3221,7 @@ export default function App() {
           localCount={localAssets.length}
           isGlobalView={isGlobalView}
           setIsGlobalView={setIsGlobalView}
-          onTabChange={(tab) => setActiveTab(tab)}
+          onTabChange={switchTab}
           pendingCount={totalPendingCount}
           stuckCount={stuckAssetsCount}
           onQueueClick={() => setShowProcessingPanel(prev => !prev)}
