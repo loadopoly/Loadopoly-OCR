@@ -24,8 +24,12 @@ import {
   Code,
   FileText,
   Upload,
+  Database,
+  RefreshCw,
 } from 'lucide-react';
 import type { Persona } from '../hooks/useUXPreferences';
+import { getActiveSeed, hydrateSeed } from '../services/seedDatasetService';
+import type { SeedDataset } from '../types';
 
 // ============================================
 // Types
@@ -91,6 +95,11 @@ export function EnhancedOnboarding({ onComplete, onPersonaSelected, forceShow = 
   const [currentStep, setCurrentStep] = useState(0);
   const [selectedPersona, setSelectedPersona] = useState<Persona>('researcher');
 
+  // Seed dataset hydration state
+  const [activeSeed, setActiveSeed] = useState<SeedDataset | null>(null);
+  const [isHydrating, setIsHydrating] = useState(false);
+  const [seedLoadedCount, setSeedLoadedCount] = useState(0);
+
   useEffect(() => {
     if (forceShow) {
       setIsVisible(true);
@@ -100,10 +109,14 @@ export function EnhancedOnboarding({ onComplete, onPersonaSelected, forceShow = 
     const hasCompleted = localStorage.getItem(STORAGE_KEY);
     if (!hasCompleted) {
       setIsVisible(true);
+      // Proactively fetch the active seed so we can show it in Step 2
+      getActiveSeed().then(seed => {
+        if (seed) setActiveSeed(seed);
+      }).catch(() => { /* non-fatal */ });
     }
   }, [forceShow]);
 
-  const handleComplete = useCallback(() => {
+  const handleComplete = useCallback(async () => {
     const personaToLevel: Record<Persona, 'beginner' | 'intermediate' | 'advanced'> = {
       researcher: 'intermediate',
       archivist: 'intermediate',
@@ -117,6 +130,20 @@ export function EnhancedOnboarding({ onComplete, onPersonaSelected, forceShow = 
       showAdvancedGIS: selectedPersona !== 'explorer',
       enableDemoMode: false,
     };
+
+    // Hydrate the active seed dataset into local IndexedDB so the user
+    // immediately has example documents to explore after onboarding.
+    if (activeSeed) {
+      setIsHydrating(true);
+      try {
+        const count = await hydrateSeed(activeSeed.id);
+        setSeedLoadedCount(count);
+      } catch {
+        // Non-fatal — the user can still use the app without seed data
+      } finally {
+        setIsHydrating(false);
+      }
+    }
     
     localStorage.setItem(STORAGE_KEY, 'true');
     localStorage.setItem(PREFS_KEY, JSON.stringify(preferences));
@@ -124,7 +151,7 @@ export function EnhancedOnboarding({ onComplete, onPersonaSelected, forceShow = 
     onPersonaSelected?.(selectedPersona);
     setIsVisible(false);
     onComplete(preferences);
-  }, [selectedPersona, onComplete, onPersonaSelected]);
+  }, [selectedPersona, onComplete, onPersonaSelected, activeSeed]);
 
   const handleSkipAll = useCallback(() => {
     const preferences: UserPreferences = {
@@ -270,6 +297,36 @@ export function EnhancedOnboarding({ onComplete, onPersonaSelected, forceShow = 
                       <p className="text-xs text-slate-400 mt-1">See people, places, dates, and connections extracted from your document.</p>
                     </div>
                   </div>
+
+                  {/* Active seed dataset banner */}
+                  {activeSeed && (
+                    <div className="flex items-start gap-4 p-4 bg-purple-500/10 rounded-xl border border-purple-500/30">
+                      <div className="p-2 rounded-lg bg-purple-500/20 text-purple-400 flex-shrink-0">
+                        {isHydrating
+                          ? <RefreshCw size={20} className="animate-spin" />
+                          : <Database size={20} />}
+                      </div>
+                      <div>
+                        <h4 className="text-purple-300 font-medium text-sm">
+                          {isHydrating ? 'Loading demo data…' : 'Demo dataset included'}
+                        </h4>
+                        <p className="text-xs text-slate-400 mt-1">
+                          <span className="text-purple-300 font-medium">{activeSeed.title}</span>
+                          {' '}— {activeSeed.documentIds.length} curated documents will be pre-loaded so you can explore the app right away.
+                          {seedLoadedCount > 0 && (
+                            <span className="text-emerald-400 ml-1">✓ {seedLoadedCount} loaded.</span>
+                          )}
+                        </p>
+                        {activeSeed.featureHighlights.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {activeSeed.featureHighlights.map(f => (
+                              <span key={f} className="px-1.5 py-0.5 bg-purple-500/20 text-purple-300 text-[10px] rounded capitalize">{f}</span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </>
             )}
@@ -289,10 +346,12 @@ export function EnhancedOnboarding({ onComplete, onPersonaSelected, forceShow = 
 
               <button
                 onClick={currentStep === 0 ? () => setCurrentStep(1) : handleComplete}
-                className="flex items-center gap-1 px-6 py-2 bg-primary-600 hover:bg-primary-500 text-white rounded-lg font-medium transition-colors"
+                disabled={isHydrating}
+                className="flex items-center gap-1 px-6 py-2 bg-primary-600 hover:bg-primary-500 disabled:opacity-60 text-white rounded-lg font-medium transition-colors"
               >
-                {currentStep === 0 ? 'Next' : 'Start Scanning'}
-                <ChevronRight size={18} />
+                {isHydrating && <RefreshCw size={16} className="animate-spin mr-1" />}
+                {currentStep === 0 ? 'Next' : isHydrating ? 'Loading demo…' : 'Start Scanning'}
+                {!isHydrating && <ChevronRight size={18} />}
               </button>
             </div>
           </div>

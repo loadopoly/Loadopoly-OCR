@@ -1118,6 +1118,117 @@ export interface Database {
           LONGITUDE?: number | null
         }
       }
+      // ── Data Sharing Windows ─────────────────────────────────────────────
+      data_sharing_windows: {
+        Row: {
+          id: string
+          user_id: string
+          label: string
+          start_date: string | null
+          end_date: string | null
+          sharing_status: 'shareable' | 'locked' | 'seed'
+          visibility: 'private' | 'community' | 'public'
+          community_id: string | null
+          license_override: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          label: string
+          start_date?: string | null
+          end_date?: string | null
+          sharing_status?: 'shareable' | 'locked' | 'seed'
+          visibility?: 'private' | 'community' | 'public'
+          community_id?: string | null
+          license_override?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          label?: string
+          start_date?: string | null
+          end_date?: string | null
+          sharing_status?: 'shareable' | 'locked' | 'seed'
+          visibility?: 'private' | 'community' | 'public'
+          community_id?: string | null
+          license_override?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      // ── Seed Datasets ────────────────────────────────────────────────────
+      seed_datasets: {
+        Row: {
+          id: string
+          creator_id: string
+          title: string
+          description: string | null
+          sharing_window_id: string | null
+          document_ids: string[]
+          graph_snapshot: Json | null
+          cluster_snapshot: Json | null
+          gis_bounds: Json | null
+          is_active: boolean
+          feature_highlights: string[]
+          adoption_count: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          creator_id: string
+          title: string
+          description?: string | null
+          sharing_window_id?: string | null
+          document_ids?: string[]
+          graph_snapshot?: Json | null
+          cluster_snapshot?: Json | null
+          gis_bounds?: Json | null
+          is_active?: boolean
+          feature_highlights?: string[]
+          adoption_count?: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          creator_id?: string
+          title?: string
+          description?: string | null
+          sharing_window_id?: string | null
+          document_ids?: string[]
+          graph_snapshot?: Json | null
+          cluster_snapshot?: Json | null
+          gis_bounds?: Json | null
+          is_active?: boolean
+          feature_highlights?: string[]
+          adoption_count?: number
+          created_at?: string
+        }
+      }
+      // ── Seed Adoptions ───────────────────────────────────────────────────
+      seed_adoptions: {
+        Row: {
+          id: string
+          seed_id: string
+          user_id: string
+          adopted_at: string
+        }
+        Insert: {
+          id?: string
+          seed_id: string
+          user_id: string
+          adopted_at?: string
+        }
+        Update: {
+          id?: string
+          seed_id?: string
+          user_id?: string
+          adopted_at?: string
+        }
+      }
     }
     Views: {
       queue_stats: {
@@ -1296,3 +1407,19 @@ export type WorldSectorUpdate = Database['public']['Tables']['world_sectors']['U
 export type ArchivePartnershipRow = Database['public']['Tables']['archive_partnerships']['Row']
 export type ArchivePartnershipInsert = Database['public']['Tables']['archive_partnerships']['Insert']
 export type ArchivePartnershipUpdate = Database['public']['Tables']['archive_partnerships']['Update']
+
+// Data Sharing Windows Helper Types
+export type SharingWindowRow = Database['public']['Tables']['data_sharing_windows']['Row']
+export type SharingWindowInsert = Database['public']['Tables']['data_sharing_windows']['Insert']
+export type SharingWindowUpdate = Database['public']['Tables']['data_sharing_windows']['Update']
+
+// Seed Dataset Helper Types
+export type SeedDatasetRow = Database['public']['Tables']['seed_datasets']['Row']
+export type SeedDatasetInsert = Database['public']['Tables']['seed_datasets']['Insert']
+export type SeedDatasetUpdate = Database['public']['Tables']['seed_datasets']['Update']
+
+// Seed Adoption Helper Types
+export type SeedAdoptionRow = Database['public']['Tables']['seed_adoptions']['Row']
+export type SeedAdoptionInsert = Database['public']['Tables']['seed_adoptions']['Insert']
+export type SeedAdoptionUpdate = Database['public']['Tables']['seed_adoptions']['Update']
+
