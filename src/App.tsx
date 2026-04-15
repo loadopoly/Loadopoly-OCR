@@ -209,7 +209,7 @@ const MobileNavigation = React.memo(({ activeTab, switchTab, isGlobalView, setIs
 
   // Portal overlay — rendered to document.body so it's never clipped by parent
   const overlay = isOpen ? createPortal(
-    <div className="fixed inset-0 z-[9999] lg:hidden" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-[9999] lg:hidden" role="dialog" aria-modal="true" aria-label="Navigation menu">
       {/* Scrim — no backdrop-blur (expensive on mobile GPUs) */}
       <div
         className="absolute inset-0 bg-black/60"
@@ -2922,9 +2922,9 @@ export default function App() {
 
         {/* Non-blocking process-all confirmation (replaces window.confirm) */}
         {processConfirm && (
-            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70">
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70" role="dialog" aria-modal="true" aria-labelledby="process-confirm-title">
                 <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-sm mx-4 shadow-2xl">
-                    <h3 className="text-white font-bold text-lg mb-2">Process Assets</h3>
+                    <h3 id="process-confirm-title" className="text-white font-bold text-lg mb-2">Process Assets</h3>
                     <p className="text-slate-400 text-sm mb-5">{processConfirm.message}</p>
                     <div className="flex flex-col gap-2">
                         <button
