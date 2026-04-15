@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense, lazy, startTransition } from 'react';
 import { 
   Camera, 
   Map as MapIcon, 
@@ -153,7 +153,7 @@ async function calculateSHA256(file: File): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
+const SidebarItem = React.memo(({ icon: Icon, label, active, onClick }: any) => (
   <button
     onClick={onClick}
     className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors ${
@@ -165,7 +165,7 @@ const SidebarItem = ({ icon: Icon, label, active, onClick }: any) => (
     <Icon size={18} />
     {label}
   </button>
-);
+));
 
 const StatCard = ({ label, value, icon: Icon, color, onClick }: any) => (
   <div 
@@ -430,13 +430,13 @@ export default function App() {
   // Avatar & Metaverse state
   const { avatar, nearbyUsers, currentSector, updatePosition } = useAvatar(user?.id || null);
 
-  const totalTokens = assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0);
-  const pendingLocalCount = localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
-  const pendingGlobalCount = globalAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length;
+  const totalTokens = useMemo(() => assets.reduce((acc, curr) => acc + (curr.tokenization?.tokenCount || 0), 0), [assets]);
+  const pendingLocalCount = useMemo(() => localAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length, [localAssets]);
+  const pendingGlobalCount = useMemo(() => globalAssets.filter(a => a.status === AssetStatus.PENDING || a.status === AssetStatus.PROCESSING).length, [globalAssets]);
   const totalPendingCount = pendingLocalCount + pendingGlobalCount;
   
   // Count stuck assets (PROCESSING but likely from prior session)
-  const stuckAssetsCount = localAssets.filter(a => a.status === AssetStatus.PROCESSING).length;
+  const stuckAssetsCount = useMemo(() => localAssets.filter(a => a.status === AssetStatus.PROCESSING).length, [localAssets]);
 
   useEffect(() => {
     const handleShortcuts = (e: KeyboardEvent) => {
@@ -655,7 +655,7 @@ export default function App() {
       alert(`Successfully added ${purchasedItems.length} assets to your node.`);
   };
 
-  const switchTab = async (newTab: string) => {
+  const switchTab = useCallback(async (newTab: string) => {
       if (activeTab === 'ar' && newTab !== 'ar' && arSessionQueue.length > 0) {
           if (window.confirm(`Process ${arSessionQueue.length} items from your AR Session?`)) {
               handleBatchFiles(arSessionQueue);
@@ -666,7 +666,8 @@ export default function App() {
           }
       }
       setActiveTab(newTab);
-  };
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, arSessionQueue]);
 
   const createInitialAsset = async (file: File): Promise<DigitalAsset> => {
       const checksum = await calculateSHA256(file);
@@ -1677,21 +1678,19 @@ export default function App() {
     
   }, [isOnline, selectedScanType, user, debugLogger]);
 
-  const getAggregatedGroups = () => {
+  const aggregatedGroups = useMemo(() => {
     const groups: Record<string, DigitalAsset[]> = {};
     assets.forEach(asset => {
         let key = 'Unknown';
         if (groupBy === 'SOURCE') key = asset.sqlRecord?.SOURCE_COLLECTION || 'Unknown';
-        if (groupBy === 'ZONE') key = asset.sqlRecord?.LOCAL_GIS_ZONE || 'Unknown';
-        if (groupBy === 'CATEGORY') key = asset.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized';
-        if (groupBy === 'RIGHTS') key = asset.sqlRecord?.RIGHTS_STATEMENT || 'Unknown';
+        else if (groupBy === 'ZONE') key = asset.sqlRecord?.LOCAL_GIS_ZONE || 'Unknown';
+        else if (groupBy === 'CATEGORY') key = asset.sqlRecord?.NLP_NODE_CATEGORIZATION || 'Uncategorized';
+        else if (groupBy === 'RIGHTS') key = asset.sqlRecord?.RIGHTS_STATEMENT || 'Unknown';
         if (!groups[key]) groups[key] = [];
         groups[key].push(asset);
     });
     return groups;
-  };
-
-  const aggregatedGroups = getAggregatedGroups();
+  }, [assets, groupBy]);
   const drillDownAssets = selectedGroupKey ? (aggregatedGroups[selectedGroupKey] || []) : assets;
   const paginatedAssets = drillDownAssets.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
@@ -1818,18 +1817,18 @@ export default function App() {
               </button>
             </div>
             <nav className="flex-1 px-2 space-y-1 overflow-y-auto custom-scrollbar">
-              <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { switchTab('dashboard'); setIsMobileMenuOpen(false); }} />
-              <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => { switchTab('batch'); setIsMobileMenuOpen(false); }} />
-              {isTabVisible('ar') && <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => { switchTab('ar'); setIsMobileMenuOpen(false); }} />}
-              <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => { switchTab('assets'); setIsMobileMenuOpen(false); }} />
-              {isTabVisible('curator') && <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => { switchTab('curator'); setIsMobileMenuOpen(false); }} />}
-              <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => { switchTab('graph'); setIsMobileMenuOpen(false); }} />
-              {isTabVisible('world') && <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => { switchTab('world'); setIsMobileMenuOpen(false); }} />}
-              <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { switchTab('database'); setIsMobileMenuOpen(false); }} />
-              {isTabVisible('social') && <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => { switchTab('social'); setIsMobileMenuOpen(false); }} />}
-              {isTabVisible('market') && <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { switchTab('market'); setIsMobileMenuOpen(false); }} />}
+              <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('dashboard'); }); }} />
+              <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('batch'); }); }} />
+              {isTabVisible('ar') && <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('ar'); }); }} />}
+              <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('assets'); }); }} />
+              {isTabVisible('curator') && <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('curator'); }); }} />}
+              <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('graph'); }); }} />
+              {isTabVisible('world') && <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('world'); }); }} />}
+              <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('database'); }); }} />
+              {isTabVisible('social') && <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('social'); }); }} />}
+              {isTabVisible('market') && <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('market'); }); }} />}
               <div className="pt-4 mt-4 border-t border-slate-800">
-                <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { switchTab('settings'); setIsMobileMenuOpen(false); }} />
+                <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('settings'); }); }} />
               </div>
             </nav>
 
