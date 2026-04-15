@@ -1,4 +1,4 @@
-# Changelog
+## [v2.19.0] - 2026-04-15\n\n### Reverted\n- **Stability Degradation**: Reverted to stable commit `0acd35a` (from Monday morning) to address severe regressions in application load time and sidebar responsiveness.\n\n# Changelog
 
 All notable changes to this project will be documented in this file.
 See [RELEASE_NOTES.md](RELEASE_NOTES.md) for a high-level summary of recent major updates.
