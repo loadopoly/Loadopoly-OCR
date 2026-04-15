@@ -618,6 +618,78 @@ export interface ArchivePartnership {
   websiteUrl?: string;
 }
 
+// ============================================
+// Data Sharing Windows & Seed Datasets
+// ============================================
+
+/** Determines how documents within a time window are treated for sharing. */
+export type SharingStatus = 'shareable' | 'locked' | 'seed';
+
+/** Who can see the sharing window definition itself. */
+export type WindowVisibility = 'private' | 'community' | 'public';
+
+/**
+ * A named time range that a power user attaches a sharing policy to.
+ * Documents whose timestamp falls within [start_date, end_date] inherit
+ * the window's sharing_status.
+ */
+export interface SharingWindow {
+  id: string;
+  userId: string;
+  label: string;
+  startDate: string | null;   // ISO 8601 timestamptz
+  endDate: string | null;     // ISO 8601 timestamptz
+  sharingStatus: SharingStatus;
+  visibility: WindowVisibility;
+  communityId?: string;
+  licenseOverride?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Spatial bounding box for the GIS data included in a seed dataset. */
+export interface GISBounds {
+  minLat: number;
+  maxLat: number;
+  minLng: number;
+  maxLng: number;
+}
+
+/**
+ * Feature areas showcased by a seed dataset.
+ * Used to guide the onboarding tour towards the features the seed contains.
+ */
+export type SeedFeatureHighlight = 'ocr' | 'graph' | 'gis' | 'gard' | 'metaverse';
+
+/**
+ * A frozen, curated snapshot of shareable documents that is delivered to
+ * new users during onboarding so they immediately experience the app's
+ * integrative features.
+ */
+export interface SeedDataset {
+  id: string;
+  creatorId: string;
+  title: string;
+  description?: string;
+  sharingWindowId?: string;
+  documentIds: string[];
+  graphSnapshot?: GraphData;
+  clusterSnapshot?: Record<string, unknown>;
+  gisBounds?: GISBounds;
+  isActive: boolean;
+  featureHighlights: SeedFeatureHighlight[];
+  adoptionCount: number;
+  createdAt: string;
+}
+
+/** Lightweight record stored in Dexie to flag local data that came from a seed. */
+export interface SeedAssetMeta {
+  assetId: string;
+  seedId: string;
+  isReadOnly: boolean;
+  loadedAt: number; // epoch ms
+}
+
 // Metaverse Configuration
 export const METAVERSE_CONFIG = {
   // Spatial settings

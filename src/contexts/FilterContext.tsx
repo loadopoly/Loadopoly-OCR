@@ -58,6 +58,9 @@ export type FilterDimension =
   // === CLASSIFICATION STATUS ===
   | 'classificationStatus' // Structured vs unstructured classification state
 
+  // === SHARING & ACCESS CONTROL ===
+  | 'sharingStatus'    // Shareable / locked / seed (from data_sharing_windows)
+
 export type ViewMode = 'graph' | 'world' | 'database' | 'curator';
 
 export interface FilterValue {
@@ -794,6 +797,11 @@ function extractDimensionValues(assets: DigitalAsset[], dimension: FilterDimensi
       case 'classificationStatus':
         values.add(getClassificationStatus(record));
         break;
+
+      // === SHARING & ACCESS CONTROL ===
+      case 'sharingStatus':
+        values.add((record as any)?.sharingStatus ?? 'locked');
+        break;
     }
   });
   
@@ -833,6 +841,8 @@ const DIMENSION_LABELS: Record<FilterDimension, { label: string; description: st
   researchPotential: { label: 'Research Potential', description: 'Value for scholarly investigation', dataType: 'string' },
   // === CLASSIFICATION STATUS ===
   classificationStatus: { label: 'Classification', description: 'Structured classification status: structured, partial, or unstructured', dataType: 'string' },
+  // === SHARING & ACCESS CONTROL ===
+  sharingStatus: { label: 'Sharing Status', description: 'Data sharing policy: shareable, locked, or seed dataset', dataType: 'string' },
 };
 
 // Module-level metadata builder — uses precomputed lookup maps, no component deps
@@ -1030,6 +1040,14 @@ function applyFilterToAsset(asset: DigitalAsset, filter: FilterValue, allAssets:
     // === CLASSIFICATION STATUS ===
     case 'classificationStatus':
       actualValue = getClassificationStatus(record);
+      break;
+
+    // === SHARING & ACCESS CONTROL ===
+    // sharingStatus is resolved server-side via sharing windows; local assets
+    // without explicit metadata default to 'locked' so they are never
+    // inadvertently included in public-facing filter results.
+    case 'sharingStatus':
+      actualValue = (record as any)?.sharingStatus ?? 'locked';
       break;
       
     default:
