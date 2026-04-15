@@ -214,6 +214,7 @@ export default function App() {
   const [isPublicBroadcast, setIsPublicBroadcast] = useState(false);
   const [expandedImage, setExpandedImage] = useState<string | null>(null);
   const [arSessionQueue, setArSessionQueue] = useState<File[]>([]);
+  const [pendingTabSwitch, setPendingTabSwitch] = useState<string | null>(null);
   const [showPrivacyPolicy, setShowPrivacyPolicy] = useState(false);
   const [showProcessingPanel, setShowProcessingPanel] = useState(false);
   const [showNewBatchPanel, setShowNewBatchPanel] = useState(false);
@@ -655,19 +656,38 @@ export default function App() {
       alert(`Successfully added ${purchasedItems.length} assets to your node.`);
   };
 
-  const switchTab = useCallback(async (newTab: string) => {
+  const switchTab = useCallback((newTab: string) => {
+      // Non-blocking: if leaving AR with queued items, show confirmation UI instead of blocking confirm()
       if (activeTab === 'ar' && newTab !== 'ar' && arSessionQueue.length > 0) {
-          if (window.confirm(`Process ${arSessionQueue.length} items from your AR Session?`)) {
-              handleBatchFiles(arSessionQueue);
-              setArSessionQueue([]);
-          } else {
-              // If user cancels, stay on AR tab and keep the queue
-              return;
-          }
+          setPendingTabSwitch(newTab);
+          return;
       }
       setActiveTab(newTab);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, arSessionQueue]);
+
+  // Handlers for the non-blocking AR session confirmation dialog
+  const handleArSessionConfirm = useCallback(() => {
+      handleBatchFiles(arSessionQueue);
+      setArSessionQueue([]);
+      if (pendingTabSwitch) {
+          setActiveTab(pendingTabSwitch);
+          setPendingTabSwitch(null);
+      }
+  }, [arSessionQueue, pendingTabSwitch]);
+
+  const handleArSessionDismiss = useCallback(() => {
+      // User chose to discard — switch tab without processing
+      setArSessionQueue([]);
+      if (pendingTabSwitch) {
+          setActiveTab(pendingTabSwitch);
+          setPendingTabSwitch(null);
+      }
+  }, [pendingTabSwitch]);
+
+  const handleArSessionCancel = useCallback(() => {
+      // User chose to stay on AR tab
+      setPendingTabSwitch(null);
+  }, []);
 
   // Mobile sidebar: close overlay immediately, defer tab switch for responsiveness
   const handleMobileSidebarClick = useCallback((tab: string) => {
@@ -975,22 +995,31 @@ export default function App() {
             announce(`Recovered ${count} items from prior session.`);
           }
         });
-      }, 1500);
+      }, 3000);
     }
   }, [localAssets, restartStuckAssets]);
 
+  // Auto-resume pending assets once after initial load (not on every length change)
+  const hasAutoResumedRef = useRef(false);
   useEffect(() => {
-    if (isOnline && localAssets.length > 0) {
-      const pendingAssets = localAssets.filter(a => a.status === AssetStatus.PENDING);
-      if (pendingAssets.length > 0) {
-        const processSequentially = async () => {
-          for (const asset of pendingAssets) {
-            await resumeAsset(asset);
-          }
-        };
-        processSequentially();
-      }
-    }
+    if (hasAutoResumedRef.current) return;
+    if (!isOnline || localAssets.length === 0) return;
+
+    const pendingAssets = localAssets.filter(a => a.status === AssetStatus.PENDING);
+    if (pendingAssets.length === 0) return;
+
+    hasAutoResumedRef.current = true;
+    // Defer to avoid blocking the main thread on app open
+    const timeoutId = setTimeout(() => {
+      const processSequentially = async () => {
+        for (const asset of pendingAssets) {
+          await resumeAsset(asset);
+        }
+      };
+      processSequentially();
+    }, 2000);
+
+    return () => clearTimeout(timeoutId);
   }, [isOnline, localAssets.length]);
 
   const ingestFile = async (file: File, source: string = "Upload") => {
@@ -2804,6 +2833,38 @@ export default function App() {
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-sm" onClick={() => setExpandedImage(null)}>
                 <button className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white"><X size={24} /></button>
                 <img src={expandedImage} className="max-w-full max-h-full p-4 object-contain select-none" alt="Expanded Asset" />
+            </div>
+        )}
+
+        {/* Non-blocking AR session confirmation (replaces window.confirm) */}
+        {pendingTabSwitch && (
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+                <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 max-w-sm mx-4 shadow-2xl">
+                    <h3 className="text-white font-bold text-lg mb-2">AR Session Queue</h3>
+                    <p className="text-slate-400 text-sm mb-5">
+                        You have <span className="text-primary-400 font-bold">{arSessionQueue.length}</span> item{arSessionQueue.length !== 1 ? 's' : ''} captured. Process them before leaving?
+                    </p>
+                    <div className="flex flex-col gap-2">
+                        <button
+                            onClick={handleArSessionConfirm}
+                            className="w-full py-2.5 bg-primary-600 hover:bg-primary-500 text-white text-sm font-bold rounded-lg transition-colors"
+                        >
+                            Process &amp; Continue
+                        </button>
+                        <button
+                            onClick={handleArSessionDismiss}
+                            className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium rounded-lg transition-colors"
+                        >
+                            Discard &amp; Continue
+                        </button>
+                        <button
+                            onClick={handleArSessionCancel}
+                            className="w-full py-2 text-slate-500 hover:text-slate-300 text-xs font-medium transition-colors"
+                        >
+                            Stay on AR Scanner
+                        </button>
+                    </div>
+                </div>
             </div>
         )}
 
