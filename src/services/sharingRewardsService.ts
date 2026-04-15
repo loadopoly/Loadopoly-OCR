@@ -132,8 +132,10 @@ export async function onSeedAdopted(seedId: string): Promise<SeedCreatorReward |
     }
 
     // 5. Return the summary for the caller
+    // Use crypto.randomUUID (available in all modern browsers and Node 15+).
+    // The returned object is an in-memory summary; the canonical ID lives in the DB row.
     return {
-      id:               crypto.randomUUID ? crypto.randomUUID() : `sr-${Date.now()}`,
+      id:               crypto.randomUUID(),
       creatorId,
       seedId,
       gardPoints,
