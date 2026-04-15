@@ -38,9 +38,9 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
           setStream(null);
         }
       } else if (document.visibilityState === 'visible' && videoRef.current) {
-        // Restart camera when app resumes
+        // Restart camera when app resumes — relaxed constraints for fast restart
         navigator.mediaDevices.getUserMedia({
-          video: { facingMode, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          video: { facingMode },
           audio: false,
         }).then(newStream => {
           const track = newStream.getVideoTracks()[0];
@@ -55,8 +55,13 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
           setStream(newStream);
           if (videoRef.current) {
             videoRef.current.srcObject = newStream;
-            videoRef.current.play();
+            videoRef.current.play().catch(() => {});
           }
+          // Upgrade to full resolution in background
+          track.applyConstraints({
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
+          }).catch(() => {});
         }).catch(err => {
           console.error('Camera restart failed:', err);
           alert('Camera could not restart. Please close and reopen.');
@@ -86,12 +91,9 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
       if (stream) {
         stream.getTracks().forEach(track => track.stop());
       }
+      // Start with relaxed constraints for fast init
       const newStream = await navigator.mediaDevices.getUserMedia({
-        video: { 
-            facingMode: facingMode,
-            width: { ideal: 1920 },
-            height: { ideal: 1080 }
-        },
+        video: { facingMode: facingMode },
         audio: false
       });
       
@@ -114,8 +116,13 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
       setStream(newStream);
       if (videoRef.current) {
         videoRef.current.srcObject = newStream;
-        videoRef.current.play();
+        videoRef.current.play().catch(() => {});
       }
+      // Upgrade to full resolution in background
+      videoTrack.applyConstraints({
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+      }).catch(() => {});
     } catch (err) {
       console.error("Camera failed", err);
       alert("Could not access camera. Please allow permissions.");
