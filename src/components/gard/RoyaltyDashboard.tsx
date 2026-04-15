@@ -5,7 +5,7 @@
  * and recent transaction history.
  */
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
   TrendingUp, 
   Landmark, 
@@ -16,10 +16,13 @@ import {
   ArrowDownRight,
   RefreshCw,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Sprout,
+  Users,
 } from 'lucide-react';
 import { useGARDRoyalties } from '../../hooks/useGARDRoyalties';
 import { GARD_CONFIG } from '../../types';
+import { getSeedImpact, type SeedImpactSummary } from '../../services/sharingRewardsService';
 
 interface RoyaltyDashboardProps {
   userId?: string;
@@ -42,8 +45,17 @@ const formatPercentage = (value: number): string => {
 
 export default function RoyaltyDashboard({ userId, onClaimRewards }: RoyaltyDashboardProps) {
   const { stats, recentTransactions, communityFund, isLoading, error, refresh } = useGARDRoyalties(userId);
+  const [seedImpact, setSeedImpact] = useState<SeedImpactSummary | null>(null);
 
   const isSelfSustaining = stats.selfSustainabilityRatio >= 100;
+
+  useEffect(() => {
+    if (userId) {
+      getSeedImpact(userId).then(impact => {
+        if (impact.totalSeeds > 0) setSeedImpact(impact);
+      }).catch(() => { /* non-fatal */ });
+    }
+  }, [userId]);
 
   return (
     <div className="space-y-6">
@@ -71,6 +83,37 @@ export default function RoyaltyDashboard({ userId, onClaimRewards }: RoyaltyDash
         <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 flex items-center gap-3">
           <AlertCircle className="text-red-500" size={20} />
           <span className="text-red-400 text-sm">{error}</span>
+        </div>
+      )}
+
+      {/* Seed Dataset Impact (shown only when creator has seeds) */}
+      {seedImpact && (
+        <div className="bg-gradient-to-r from-purple-900/20 to-purple-800/10 border border-purple-500/20 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Sprout className="text-purple-400" size={16} />
+            <h4 className="text-sm font-bold text-white">Seed Dataset Contributions</h4>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <p className="text-lg font-bold text-white">{seedImpact.totalSeeds}</p>
+              <p className="text-[10px] text-slate-500">Seeds created</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-purple-300 flex items-center gap-1">
+                <Users size={14} />
+                {seedImpact.totalAdoptions}
+              </p>
+              <p className="text-[10px] text-slate-500">Users onboarded</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-amber-300">{seedImpact.totalGardPoints.toLocaleString()}</p>
+              <p className="text-[10px] text-slate-500">GARD points earned</p>
+            </div>
+            <div>
+              <p className="text-lg font-bold text-emerald-300">{formatCurrency(seedImpact.estimatedUsdValue)}</p>
+              <p className="text-[10px] text-slate-500">Est. creator rewards</p>
+            </div>
+          </div>
         </div>
       )}
 

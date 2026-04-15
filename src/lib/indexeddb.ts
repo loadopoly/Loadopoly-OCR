@@ -1,5 +1,5 @@
 import Dexie, { Table } from 'dexie';
-import { DigitalAsset } from '../types';
+import { DigitalAsset, SeedAssetMeta } from '../types';
 
 export interface SyncHandle {
   id: number;
@@ -35,6 +35,12 @@ class GeoGraphDB extends Dexie {
   assets!: Table<DigitalAsset, string>;
   batchFiles!: Table<BatchFileEntry, string>;
   arQueue!: Table<ArQueueEntry, string>;
+  /**
+   * Lightweight metadata for assets that came from a seed dataset.
+   * Keyed by assetId, indexed by seedId so we can quickly find all
+   * demo assets or clear them when the user dismisses the tour.
+   */
+  seedAssetMeta!: Table<SeedAssetMeta, string>;
 
   constructor() {
     super('GeoGraphSync');
@@ -58,6 +64,16 @@ class GeoGraphDB extends Dexie {
       assets: 'id, timestamp, status',
       batchFiles: 'id, createdAt',
       arQueue: 'id, createdAt',
+    });
+
+    // Add seedAssetMeta table in version 4
+    (this as any).version(4).stores({
+      handles: 'id',
+      files: 'name,lastModified',
+      assets: 'id, timestamp, status',
+      batchFiles: 'id, createdAt',
+      arQueue: 'id, createdAt',
+      seedAssetMeta: 'assetId, seedId, loadedAt',
     });
   }
 }
@@ -223,4 +239,40 @@ export const clearArQueue = async (): Promise<void> => {
 
 export const getArQueueCount = async (): Promise<number> => {
     return await db.arQueue.count();
+};
+
+// ============================================
+// Seed Asset Metadata
+// ============================================
+
+/** Record that a set of assets was loaded from a given seed dataset. */
+export const markAssetsAsSeed = async (
+    assetIds: string[],
+    seedId: string,
+): Promise<void> => {
+    const now = Date.now();
+    const records: SeedAssetMeta[] = assetIds.map(assetId => ({
+        assetId,
+        seedId,
+        isReadOnly: true,
+        loadedAt: now,
+    }));
+    await db.seedAssetMeta.bulkPut(records);
+};
+
+/** Returns true if the given asset was loaded from a seed (read-only demo data). */
+export const isSeedAsset = async (assetId: string): Promise<boolean> => {
+    const meta = await db.seedAssetMeta.get(assetId);
+    return meta?.isReadOnly === true;
+};
+
+/** Get all asset IDs that came from a specific seed dataset. */
+export const getSeedAssetIds = async (seedId: string): Promise<string[]> => {
+    const records = await db.seedAssetMeta.where('seedId').equals(seedId).toArray();
+    return records.map(r => r.assetId);
+};
+
+/** Remove all seed asset metadata (e.g. when the user dismisses the onboarding tour). */
+export const clearSeedAssetMeta = async (): Promise<void> => {
+    await db.seedAssetMeta.clear();
 };

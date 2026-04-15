@@ -9,6 +9,9 @@
  *  2. The user-DB write proceeds independently — its failure is non-fatal.
  *  3. When the user *hasn't* overridden the DB, both clients are the same
  *     instance and only one write occurs (no duplication).
+ *  4. Before any cloud write, the sharing window policy is consulted for
+ *     historical-document records. Documents whose date falls within a
+ *     'locked' window are held back from cloud storage.
  *
  * @module dualWriteService
  */
@@ -20,6 +23,7 @@ import {
   isDualWriteRequired,
 } from '../lib/supabaseClient';
 import { logger } from '../lib/logger';
+import { isDocumentShareable } from './sharingWindowService';
 
 // ============================================
 // Types
@@ -32,6 +36,11 @@ export interface DualWriteResult {
   user: boolean | null;
   /** Error details keyed by target */
   errors: Record<string, string>;
+  /**
+   * When true the write was intentionally suppressed because the document's
+   * date falls within a 'locked' sharing window. The data remains local-only.
+   */
+  blockedByLock?: boolean;
 }
 
 // ============================================
@@ -98,6 +107,10 @@ async function writeWithRetry(
  * - If `isDualWriteRequired()` is false the two clients are identical and
  *   only one physical write occurs.
  * - Master failure is CRITICAL; user-DB failure is non-fatal.
+ * - For `historical_documents_global` records, the sharing window policy is
+ *   consulted: documents whose date falls in a 'locked' window are held
+ *   back from the cloud. The caller receives `blockedByLock: true` instead
+ *   of attempting the write.
  *
  * @param table  - Target Supabase table name.
  * @param record - Row data; must include ASSET_ID for conflict resolution.
@@ -112,6 +125,36 @@ export async function dualWriteUpsert(
     user: null,
     errors: {},
   };
+
+  // --- 0. Sharing-window gate for historical documents ---
+  // Only applied to the historical_documents_global table to avoid over-blocking
+  // other tables like processing_queue or GARD tables.
+  if (table === 'historical_documents_global') {
+    const ownerId = record['USER_ID'] as string | undefined;
+    const docDate = (record['INGEST_DATE'] ?? record['LOCAL_TIMESTAMP']) as string | undefined;
+
+    if (ownerId && docDate) {
+      try {
+        const shareable = await isDocumentShareable(ownerId, docDate);
+        if (!shareable) {
+          logger.info(
+            `[DualWrite] Skipping cloud write for ASSET_ID=${record.ASSET_ID}: ` +
+            'document date falls within a locked sharing window.',
+            { module: 'dualWrite' },
+          );
+          result.blockedByLock = true;
+          // Return early — both master and user writes are suppressed.
+          return result;
+        }
+      } catch (gateErr: any) {
+        // If the sharing-window check itself fails, log but don't block the write.
+        logger.warn(
+          `[DualWrite] Sharing-window gate check failed: ${gateErr?.message}. Proceeding with write.`,
+          { module: 'dualWrite' },
+        );
+      }
+    }
+  }
 
   // --- 1. Master (Loadopoly) write — mandatory ---
   if (!masterSupabase) {
