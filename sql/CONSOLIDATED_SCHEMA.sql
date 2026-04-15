@@ -1370,15 +1370,15 @@ USING ((select auth.uid()) = "USER_ID");
 -- Spatial Anchors Policies
 DROP POLICY IF EXISTS "spatial_anchors_select_own" ON spatial_anchors;
 CREATE POLICY "spatial_anchors_select_own" ON spatial_anchors FOR SELECT TO authenticated
-USING (auth.uid() = "USER_ID");
+USING ((SELECT auth.uid()) = "USER_ID");
 
 DROP POLICY IF EXISTS "spatial_anchors_insert_own" ON spatial_anchors;
 CREATE POLICY "spatial_anchors_insert_own" ON spatial_anchors FOR INSERT TO authenticated
-WITH CHECK (auth.uid() = "USER_ID");
+WITH CHECK ((SELECT auth.uid()) = "USER_ID");
 
 DROP POLICY IF EXISTS "spatial_anchors_update_own" ON spatial_anchors;
 CREATE POLICY "spatial_anchors_update_own" ON spatial_anchors FOR UPDATE TO authenticated
-USING (auth.uid() = "USER_ID");
+USING ((SELECT auth.uid()) = "USER_ID");
 
 DROP POLICY IF EXISTS "spatial_anchors_service_role" ON spatial_anchors;
 CREATE POLICY "spatial_anchors_service_role" ON spatial_anchors FOR ALL TO service_role
@@ -1396,11 +1396,11 @@ DROP POLICY IF EXISTS "graph_nodes_service" ON graph_nodes;
 DROP POLICY IF EXISTS "graph_nodes_read_owner_or_master" ON graph_nodes;
 CREATE POLICY "graph_nodes_read_owner_or_master" ON graph_nodes FOR SELECT TO authenticated
 USING (
-  "USER_ID" = auth.uid()
+  "USER_ID" = (SELECT auth.uid())
   OR EXISTS (
     SELECT 1
     FROM public.master_user_access mua
-    WHERE mua."USER_ID" = auth.uid()
+    WHERE mua."USER_ID" = (SELECT auth.uid())
       AND mua."CAN_ACCESS_CORPUS" = true
   )
 );
@@ -1418,11 +1418,11 @@ USING (
     FROM public.graph_nodes gn
     WHERE (gn."ID" = graph_edges."FROM_NODE_ID" OR gn."ID" = graph_edges."TO_NODE_ID")
       AND (
-        gn."USER_ID" = auth.uid()
+        gn."USER_ID" = (SELECT auth.uid())
         OR EXISTS (
           SELECT 1
           FROM public.master_user_access mua
-          WHERE mua."USER_ID" = auth.uid()
+          WHERE mua."USER_ID" = (SELECT auth.uid())
             AND mua."CAN_ACCESS_CORPUS" = true
         )
       )
@@ -1442,11 +1442,11 @@ USING (
     FROM public.historical_documents_global h
     WHERE h."ASSET_ID"::text = asset_graph_nodes."ASSET_ID"::text
       AND (
-        h."USER_ID" = auth.uid()
+        h."USER_ID" = (SELECT auth.uid())
         OR EXISTS (
           SELECT 1
           FROM public.master_user_access mua
-          WHERE mua."USER_ID" = auth.uid()
+          WHERE mua."USER_ID" = (SELECT auth.uid())
             AND mua."CAN_ACCESS_CORPUS" = true
         )
       )
@@ -1723,7 +1723,7 @@ ON storage.objects FOR INSERT
 TO authenticated
 WITH CHECK (
   bucket_id = 'processing-uploads'
-  AND (storage.foldername(name))[1] = auth.uid()::text
+  AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
 );
 
 -- Authenticated users: SELECT own uploads
@@ -1732,7 +1732,7 @@ ON storage.objects FOR SELECT
 TO authenticated
 USING (
   bucket_id = 'processing-uploads'
-  AND (storage.foldername(name))[1] = auth.uid()::text
+  AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
 );
 
 -- Authenticated users: UPDATE own uploads
@@ -1741,7 +1741,7 @@ ON storage.objects FOR UPDATE
 TO authenticated
 USING (
   bucket_id = 'processing-uploads'
-  AND (storage.foldername(name))[1] = auth.uid()::text
+  AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
 );
 
 -- Authenticated users: DELETE own uploads
@@ -1750,7 +1750,7 @@ ON storage.objects FOR DELETE
 TO authenticated
 USING (
   bucket_id = 'processing-uploads'
-  AND (storage.foldername(name))[1] = auth.uid()::text
+  AND (storage.foldername(name))[1] = (SELECT auth.uid())::text
 );
 
 -- Service role: full access (Edge Functions use service_role key for OCR)
