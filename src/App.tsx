@@ -669,6 +669,12 @@ export default function App() {
       // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, arSessionQueue]);
 
+  // Mobile sidebar: close overlay immediately, defer tab switch for responsiveness
+  const handleMobileSidebarClick = useCallback((tab: string) => {
+    setIsMobileMenuOpen(false);
+    startTransition(() => { switchTab(tab); });
+  }, [switchTab]);
+
   const createInitialAsset = async (file: File): Promise<DigitalAsset> => {
       const checksum = await calculateSHA256(file);
       const ingestDate = new Date().toISOString();
@@ -1817,18 +1823,18 @@ export default function App() {
               </button>
             </div>
             <nav className="flex-1 px-2 space-y-1 overflow-y-auto custom-scrollbar">
-              <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('dashboard'); }); }} />
-              <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('batch'); }); }} />
-              {isTabVisible('ar') && <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('ar'); }); }} />}
-              <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('assets'); }); }} />
-              {isTabVisible('curator') && <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('curator'); }); }} />}
-              <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('graph'); }); }} />
-              {isTabVisible('world') && <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('world'); }); }} />}
-              <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('database'); }); }} />
-              {isTabVisible('social') && <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('social'); }); }} />}
-              {isTabVisible('market') && <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('market'); }); }} />}
+              <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleMobileSidebarClick('dashboard')} />
+              <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => handleMobileSidebarClick('batch')} />
+              {isTabVisible('ar') && <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => handleMobileSidebarClick('ar')} />}
+              <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => handleMobileSidebarClick('assets')} />
+              {isTabVisible('curator') && <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => handleMobileSidebarClick('curator')} />}
+              <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => handleMobileSidebarClick('graph')} />
+              {isTabVisible('world') && <SidebarItem icon={Globe} label="3D World" active={activeTab === 'world'} onClick={() => handleMobileSidebarClick('world')} />}
+              <SidebarItem icon={TableIcon} label="Structured DB" active={activeTab === 'database'} onClick={() => handleMobileSidebarClick('database')} />
+              {isTabVisible('social') && <SidebarItem icon={Users} label="Social Hub" active={activeTab === 'social'} onClick={() => handleMobileSidebarClick('social')} />}
+              {isTabVisible('market') && <SidebarItem icon={ShoppingBag} label="Marketplace" active={activeTab === 'market'} onClick={() => handleMobileSidebarClick('market')} />}
               <div className="pt-4 mt-4 border-t border-slate-800">
-                <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => { setIsMobileMenuOpen(false); startTransition(() => { switchTab('settings'); }); }} />
+                <SidebarItem icon={Settings} label="Settings" active={activeTab === 'settings'} onClick={() => handleMobileSidebarClick('settings')} />
               </div>
             </nav>
 
