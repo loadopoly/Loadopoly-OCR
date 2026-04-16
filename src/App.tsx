@@ -2604,7 +2604,8 @@ export default function App() {
                      {displayItems.map(item => ('bundleId' in item) ? <BundleCard key={item.bundleId} bundle={item as ImageBundle} onAssetUpdated={handleAssetUpdate} onClick={() => {
                        // Select all assets in this bundle so the user can view/graph/export them
                        const bundle = item as ImageBundle;
-                       const bundleAssetIds = bundle.assetIds || assets.filter(a => bundle.imageUrls.includes(a.imageUrl)).map(a => a.id);
+                       const imageUrlSet = new Set(bundle.imageUrls);
+                       const bundleAssetIds = bundle.assetIds || assets.filter(a => imageUrlSet.has(a.imageUrl)).map(a => a.id);
                        setSelectedAssetIds(prev => {
                          const next = new Set(prev);
                          const allSelected = bundleAssetIds.every(id => next.has(id));
