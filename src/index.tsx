@@ -69,7 +69,7 @@ function requestIdle(callback: () => void, timeout = 1500) {
     (window as any).requestIdleCallback(callback, { timeout });
     return;
   }
-  window.setTimeout(callback, 0);
+  globalThis.setTimeout(callback, 0);
 }
 
 let nonCriticalStartupScheduled = false;
