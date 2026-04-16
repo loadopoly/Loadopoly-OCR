@@ -240,26 +240,29 @@ CREATE TABLE IF NOT EXISTS digital_asset_bundles (
 
 -- 2.5 Credit System (Stripe integration)
 -- Tracks per-user OCR credit balances (freemium + paid packs)
+-- NOTE: These tables use lowercase columns to match the deployed migration.
 CREATE TABLE IF NOT EXISTS user_credits (
-    "USER_ID" UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-    "CREDITS_REMAINING" INTEGER NOT NULL DEFAULT 0,
-    "TOTAL_PURCHASED" INTEGER NOT NULL DEFAULT 0,
-    "FREE_CREDITS_USED" INTEGER NOT NULL DEFAULT 0,
-    "LAST_PURCHASE_AT" TIMESTAMPTZ,
-    "CREATED_AT" TIMESTAMPTZ DEFAULT NOW(),
-    "UPDATED_AT" TIMESTAMPTZ DEFAULT NOW()
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    credits_remaining INTEGER NOT NULL DEFAULT 5,
+    total_purchased INTEGER NOT NULL DEFAULT 0,
+    free_credits_used INTEGER NOT NULL DEFAULT 0,
+    last_purchase_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(user_id)
 );
 
 -- 2.6 Credit Transactions
 -- Audit log for every credit purchase / usage event
 CREATE TABLE IF NOT EXISTS credit_transactions (
-    "ID" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    "USER_ID" UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    "AMOUNT" INTEGER NOT NULL,
-    "TYPE" TEXT NOT NULL CHECK ("TYPE" IN ('purchase', 'usage', 'refund', 'bonus')),
-    "PACK_ID" TEXT,
-    "STRIPE_SESSION_ID" TEXT,
-    "CREATED_AT" TIMESTAMPTZ DEFAULT NOW()
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    amount INTEGER NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('purchase', 'consumption', 'refund', 'grant', 'usage', 'bonus')),
+    pack_id TEXT,
+    stripe_session_id TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- ============================================
@@ -1345,20 +1348,32 @@ WITH CHECK (
   OR "USER_ID" = (select auth.uid())
 );
 
--- Credit System Policies
+-- Credit System Policies (lowercase columns — matches deployed migration)
+DROP POLICY IF EXISTS "Users can view own credits" ON user_credits;
+DROP POLICY IF EXISTS "Users can update own credits" ON user_credits;
+DROP POLICY IF EXISTS "Users can insert own credits" ON user_credits;
+DROP POLICY IF EXISTS "Service role full access credits" ON user_credits;
 DROP POLICY IF EXISTS "Users view own credits" ON user_credits;
 DROP POLICY IF EXISTS "Service role manage credits" ON user_credits;
-CREATE POLICY "Users view own credits" ON user_credits FOR SELECT
-USING ((select auth.uid()) = "USER_ID" OR (select auth.role()) = 'service_role');
-CREATE POLICY "Service role manage credits" ON user_credits FOR ALL TO service_role
-USING (true) WITH CHECK (true);
 
+CREATE POLICY "Users can view own credits" ON user_credits FOR SELECT
+USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can update own credits" ON user_credits FOR UPDATE
+USING ((select auth.uid()) = user_id);
+CREATE POLICY "Users can insert own credits" ON user_credits FOR INSERT
+WITH CHECK ((select auth.uid()) = user_id);
+CREATE POLICY "Service role full access credits" ON user_credits FOR ALL
+USING ((select auth.role()) = 'service_role');
+
+DROP POLICY IF EXISTS "Users can view own transactions" ON credit_transactions;
+DROP POLICY IF EXISTS "Service role full access transactions" ON credit_transactions;
 DROP POLICY IF EXISTS "Users view own transactions" ON credit_transactions;
 DROP POLICY IF EXISTS "Service role manage transactions" ON credit_transactions;
-CREATE POLICY "Users view own transactions" ON credit_transactions FOR SELECT
-USING ((select auth.uid()) = "USER_ID" OR (select auth.role()) = 'service_role');
-CREATE POLICY "Service role manage transactions" ON credit_transactions FOR ALL TO service_role
-USING (true) WITH CHECK (true);
+
+CREATE POLICY "Users can view own transactions" ON credit_transactions FOR SELECT
+USING ((select auth.uid()) = user_id);
+CREATE POLICY "Service role full access transactions" ON credit_transactions FOR ALL
+USING ((select auth.role()) = 'service_role');
 
 -- Processing Queue Policies
 DROP POLICY IF EXISTS "Users view own queue items" ON processing_queue;
@@ -1733,9 +1748,9 @@ CREATE INDEX IF NOT EXISTS idx_documents_lat_lng     ON historical_documents_glo
   WHERE "LATITUDE" IS NOT NULL AND "LONGITUDE" IS NOT NULL;
 
 -- Credit system indexes
-CREATE INDEX IF NOT EXISTS idx_credit_transactions_user ON credit_transactions("USER_ID");
-CREATE INDEX IF NOT EXISTS idx_credit_transactions_type ON credit_transactions("TYPE");
-CREATE INDEX IF NOT EXISTS idx_credit_transactions_date ON credit_transactions("CREATED_AT" DESC);
+CREATE INDEX IF NOT EXISTS idx_user_credits_user_id ON user_credits(user_id);
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_user_id ON credit_transactions(user_id);
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_created ON credit_transactions(created_at DESC);
 
 -- ============================================
 -- 13. MONITORING VIEWS

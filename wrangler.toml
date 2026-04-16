@@ -1,0 +1,11 @@
+# Cloudflare Workers configuration for the GeoGraph OCR application.
+# The Vite build output in ./dist is served as static assets.
+# Custom domain (www.loadopoly.com) is configured via Cloudflare dashboard routes.
+
+name = "geograph"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# Serve the Vite production build as static assets
+[assets]
+directory = "./dist"
