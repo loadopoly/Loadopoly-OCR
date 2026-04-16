@@ -1,4 +1,5 @@
 const { spawn } = require('child_process');
+const { once } = require('events');
 const { chromium } = require('playwright');
 
 const HOST = process.env.UI_BENCHMARK_HOST || '127.0.0.1';
@@ -21,10 +22,19 @@ async function waitForServer(url, timeoutMs = 30000) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
+async function canReach(url) {
+  try {
+    const response = await fetch(url);
+    return response.ok;
+  } catch {
+    return false;
+  }
+}
+
 function startPreviewServer() {
   const server = spawn(
     'npm',
-    ['run', 'preview', '--', '--host', HOST, '--port', String(PORT)],
+    ['run', 'preview', '--', '--host', HOST, '--port', String(PORT), '--strictPort'],
     {
       cwd: __dirname,
       env: process.env,
@@ -157,7 +167,9 @@ async function collectAppScenario(browser) {
 }
 
 async function main() {
-  const server = process.env.UI_BENCHMARK_URL ? null : startPreviewServer();
+  const shouldStartServer =
+    !process.env.UI_BENCHMARK_URL && !(await canReach(BASE_URL));
+  const server = shouldStartServer ? startPreviewServer() : null;
 
   try {
     await waitForServer(BASE_URL);
@@ -185,6 +197,7 @@ async function main() {
   } finally {
     if (server && !server.killed) {
       server.kill('SIGTERM');
+      await once(server, 'close').catch(() => {});
     }
   }
 }
