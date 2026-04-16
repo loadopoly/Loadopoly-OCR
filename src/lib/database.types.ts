@@ -67,6 +67,7 @@ export interface Database {
           CREATED_AT?: string
           UPDATED_AT?: string
         }
+        Relationships: []
       }
       dataset_shares: {
         Row: {
@@ -90,6 +91,7 @@ export interface Database {
           SHARED_AT?: string
           PERMISSIONS?: string
         }
+        Relationships: []
       }
       historical_documents_global: {
         Row: {
@@ -153,6 +155,8 @@ export interface Database {
           TAXONOMY: Json | null
           ITEM_ATTRIBUTES: Json | null
           SCENERY_ATTRIBUTES: Json | null
+          LATITUDE: number | null
+          LONGITUDE: number | null
         }
         Insert: {
           ID?: string
@@ -215,6 +219,8 @@ export interface Database {
           TAXONOMY?: Json | null
           ITEM_ATTRIBUTES?: Json | null
           SCENERY_ATTRIBUTES?: Json | null
+          LATITUDE?: number | null
+          LONGITUDE?: number | null
         }
         Update: {
           ID?: string
@@ -277,7 +283,10 @@ export interface Database {
           TAXONOMY?: Json | null
           ITEM_ATTRIBUTES?: Json | null
           SCENERY_ATTRIBUTES?: Json | null
+          LATITUDE?: number | null
+          LONGITUDE?: number | null
         }
+        Relationships: []
       }
       object_attributes: {
         Row: {
@@ -361,6 +370,7 @@ export interface Database {
           CREATED_AT?: string
           UPDATED_AT?: string
         }
+        Relationships: []
       }
       package_assets: {
         Row: {
@@ -381,6 +391,7 @@ export interface Database {
           ASSET_ID?: string | null
           ADDED_AT?: string
         }
+        Relationships: []
       }
       packages: {
         Row: {
@@ -425,6 +436,7 @@ export interface Database {
           CREATED_AT?: string
           UPDATED_AT?: string
         }
+        Relationships: []
       }
       taxonomy: {
         Row: {
@@ -457,6 +469,7 @@ export interface Database {
           WIKIDATA_QID?: string | null
           CREATED_AT?: string
         }
+        Relationships: []
       }
       user_asset_access: {
         Row: {
@@ -480,6 +493,7 @@ export interface Database {
           SOURCE_PURCHASE_ID?: string | null
           GRANTED_AT?: string
         }
+        Relationships: []
       }
       user_profiles: {
         Row: {
@@ -506,6 +520,7 @@ export interface Database {
           CREATED_AT?: string
           UPDATED_AT?: string
         }
+        Relationships: []
       }
       user_purchases: {
         Row: {
@@ -547,6 +562,7 @@ export interface Database {
           PURCHASED_AT?: string
           METADATA?: Json | null
         }
+        Relationships: []
       }
       web3_transactions: {
         Row: {
@@ -573,6 +589,7 @@ export interface Database {
           DETAILS?: string | null
           CREATED_AT?: string
         }
+        Relationships: []
       }
       // GARD Tokenomics Tables
       royalty_transactions: {
@@ -627,6 +644,7 @@ export interface Database {
           CHAIN_ID?: number
           CREATED_AT?: string
         }
+        Relationships: []
       }
       shard_holdings: {
         Row: {
@@ -662,6 +680,7 @@ export interface Database {
           CURRENT_VALUE?: string | null
           UNREALIZED_GAIN?: string | null
         }
+        Relationships: []
       }
       community_fund: {
         Row: {
@@ -694,6 +713,7 @@ export interface Database {
           LAST_WITHDRAWAL_AT?: string | null
           CREATED_AT?: string
         }
+        Relationships: []
       }
       social_return_projects: {
         Row: {
@@ -744,6 +764,7 @@ export interface Database {
           FUNDED_AT?: string | null
           COMPLETED_AT?: string | null
         }
+        Relationships: []
       }
       governance_votes: {
         Row: {
@@ -770,6 +791,7 @@ export interface Database {
           VOTE_DIRECTION?: boolean
           VOTED_AT?: string
         }
+        Relationships: []
       }
       gard_tokenized_assets: {
         Row: {
@@ -817,6 +839,7 @@ export interface Database {
           TOKENIZED_AT?: string
           LAST_TRADED_AT?: string | null
         }
+        Relationships: []
       }
       pending_rewards: {
         Row: {
@@ -843,6 +866,7 @@ export interface Database {
           TOTAL_CLAIMED?: string
           CREATED_AT?: string
         }
+        Relationships: []
       }
       // Metaverse Tables
       user_avatars: {
@@ -900,6 +924,7 @@ export interface Database {
           CREATED_AT?: string
           UPDATED_AT?: string
         }
+        Relationships: []
       }
       presence_sessions: {
         Row: {
@@ -932,6 +957,7 @@ export interface Database {
           HEARTBEAT_AT?: string
           CONNECTED_AT?: string
         }
+        Relationships: []
       }
       realtime_events: {
         Row: {
@@ -961,6 +987,7 @@ export interface Database {
           CREATED_AT?: string
           PROCESSED_AT?: string | null
         }
+        Relationships: []
       }
       world_sectors: {
         Row: {
@@ -1002,6 +1029,7 @@ export interface Database {
           ASSET_COUNT?: number
           CREATED_AT?: string
         }
+        Relationships: []
       }
       archive_partnerships: {
         Row: {
@@ -1037,6 +1065,72 @@ export interface Database {
           STATUS?: string
           JOINED_AT?: string
         }
+        Relationships: []
+      }
+      // ── Credit System (Stripe) ──────────────────────────────────────────
+      // NOTE: These tables use lowercase columns (matches deployed migration)
+      user_credits: {
+        Row: {
+          id: string
+          user_id: string
+          credits_remaining: number
+          total_purchased: number
+          free_credits_used: number
+          last_purchase_at: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          credits_remaining?: number
+          total_purchased?: number
+          free_credits_used?: number
+          last_purchase_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          credits_remaining?: number
+          total_purchased?: number
+          free_credits_used?: number
+          last_purchase_at?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      credit_transactions: {
+        Row: {
+          id: string
+          user_id: string
+          amount: number
+          type: string
+          pack_id: string | null
+          stripe_session_id: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          amount: number
+          type: string
+          pack_id?: string | null
+          stripe_session_id?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          amount?: number
+          type?: string
+          pack_id?: string | null
+          stripe_session_id?: string | null
+          created_at?: string
+        }
+        Relationships: []
       }
       processing_queue: {
         Row: {
@@ -1117,6 +1211,114 @@ export interface Database {
           LATITUDE?: number | null
           LONGITUDE?: number | null
         }
+        Relationships: []
+      }
+      // ── Knowledge Graph ──────────────────────────────────────────────────
+      graph_nodes: {
+        Row: {
+          ID: string
+          CREATED_AT: string
+          UPDATED_AT: string
+          LABEL: string
+          CANONICAL_ID: string | null
+          NODE_TYPE: string
+          LAT: number | null
+          LNG: number | null
+          ALT_M: number | null
+          ASSET_COUNT: number
+          ANCHOR_COUNT: number
+          FIRST_SEEN_AT: string
+          LAST_SEEN_AT: string
+          DESCRIPTION: string | null
+          ALIASES: string[] | null
+          WIKIPEDIA_URL: string | null
+          WIKIDATA_QID: string | null
+          GRAPH_PROCESSED: boolean
+          USER_ID: string | null
+          // optional extension columns
+          PHYSICAL_HEIGHT_M?: number | null
+          PHYSICAL_WIDTH_M?: number | null
+          IS_REFERENCE_OBJECT?: boolean | null
+        }
+        Insert: {
+          ID?: string
+          CREATED_AT?: string
+          UPDATED_AT?: string
+          LABEL: string
+          CANONICAL_ID?: string | null
+          NODE_TYPE?: string
+          LAT?: number | null
+          LNG?: number | null
+          ALT_M?: number | null
+          ASSET_COUNT?: number
+          ANCHOR_COUNT?: number
+          FIRST_SEEN_AT?: string
+          LAST_SEEN_AT?: string
+          DESCRIPTION?: string | null
+          ALIASES?: string[] | null
+          WIKIPEDIA_URL?: string | null
+          WIKIDATA_QID?: string | null
+          GRAPH_PROCESSED?: boolean
+          USER_ID?: string | null
+        }
+        Update: {
+          ID?: string
+          CREATED_AT?: string
+          UPDATED_AT?: string
+          LABEL?: string
+          CANONICAL_ID?: string | null
+          NODE_TYPE?: string
+          LAT?: number | null
+          LNG?: number | null
+          ALT_M?: number | null
+          ASSET_COUNT?: number
+          ANCHOR_COUNT?: number
+          FIRST_SEEN_AT?: string
+          LAST_SEEN_AT?: string
+          DESCRIPTION?: string | null
+          ALIASES?: string[] | null
+          WIKIPEDIA_URL?: string | null
+          WIKIDATA_QID?: string | null
+          GRAPH_PROCESSED?: boolean
+          USER_ID?: string | null
+        }
+        Relationships: []
+      }
+      graph_edges: {
+        Row: {
+          ID: string
+          CREATED_AT: string
+          FROM_NODE_ID: string
+          TO_NODE_ID: string
+          RELATIONSHIP: string
+          WEIGHT: number | null
+          CONFIDENCE: number | null
+          IS_SPATIAL: boolean | null
+          ASSET_IDS: string[] | null
+        }
+        Insert: {
+          ID?: string
+          CREATED_AT?: string
+          FROM_NODE_ID: string
+          TO_NODE_ID: string
+          RELATIONSHIP: string
+          WEIGHT?: number | null
+          CONFIDENCE?: number | null
+          IS_SPATIAL?: boolean | null
+          ASSET_IDS?: string[] | null
+        }
+        Update: {
+          ID?: string
+          CREATED_AT?: string
+          FROM_NODE_ID?: string
+          TO_NODE_ID?: string
+          RELATIONSHIP?: string
+          WEIGHT?: number | null
+          CONFIDENCE?: number | null
+          IS_SPATIAL?: boolean | null
+          ASSET_IDS?: string[] | null
+        }
+        Relationships: []
       }
       // ── Data Sharing Windows ─────────────────────────────────────────────
       data_sharing_windows: {
@@ -1135,7 +1337,7 @@ export interface Database {
         }
         Insert: {
           id?: string
-          user_id: string
+          user_id?: string
           label: string
           start_date?: string | null
           end_date?: string | null
@@ -1159,6 +1361,7 @@ export interface Database {
           created_at?: string
           updated_at?: string
         }
+        Relationships: []
       }
       // ── Seed Datasets ────────────────────────────────────────────────────
       seed_datasets: {
@@ -1207,6 +1410,7 @@ export interface Database {
           adoption_count?: number
           created_at?: string
         }
+        Relationships: []
       }
       // ── Seed Adoptions ───────────────────────────────────────────────────
       seed_adoptions: {
@@ -1219,7 +1423,7 @@ export interface Database {
         Insert: {
           id?: string
           seed_id: string
-          user_id: string
+          user_id?: string
           adopted_at?: string
         }
         Update: {
@@ -1228,6 +1432,7 @@ export interface Database {
           user_id?: string
           adopted_at?: string
         }
+        Relationships: []
       }
     }
     Views: {
@@ -1240,6 +1445,7 @@ export interface Database {
           newest_job: string | null
           retry_attempts: number | null
         }
+        Relationships: []
       }
     }
     Functions: {
