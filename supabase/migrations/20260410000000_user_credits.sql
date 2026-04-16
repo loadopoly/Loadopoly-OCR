@@ -42,32 +42,32 @@ ALTER TABLE credit_transactions ENABLE ROW LEVEL SECURITY;
 -- Users can read their own credits
 CREATE POLICY "Users can view own credits"
     ON user_credits FOR SELECT
-    USING (auth.uid() = user_id);
+    USING ((SELECT auth.uid()) = user_id);
 
 -- Users can update their own credits (for free tier consumption)
 CREATE POLICY "Users can update own credits"
     ON user_credits FOR UPDATE
-    USING (auth.uid() = user_id);
+    USING ((SELECT auth.uid()) = user_id);
 
 -- Users can insert their own credits row
 CREATE POLICY "Users can insert own credits"
     ON user_credits FOR INSERT
-    WITH CHECK (auth.uid() = user_id);
+    WITH CHECK ((SELECT auth.uid()) = user_id);
 
 -- Service role can do everything (for webhook fulfillment)
 CREATE POLICY "Service role full access credits"
     ON user_credits FOR ALL
-    USING (auth.role() = 'service_role');
+    USING ((SELECT auth.role()) = 'service_role');
 
 -- Transaction audit log: users can read their own
 CREATE POLICY "Users can view own transactions"
     ON credit_transactions FOR SELECT
-    USING (auth.uid() = user_id);
+    USING ((SELECT auth.uid()) = user_id);
 
 -- Service role can insert transactions (webhook)
 CREATE POLICY "Service role full access transactions"
     ON credit_transactions FOR ALL
-    USING (auth.role() = 'service_role');
+    USING ((SELECT auth.role()) = 'service_role');
 
 -- ============================================
 -- Indexes

@@ -16,8 +16,8 @@ For comprehensive database documentation, see the `docs/` directory:
 
 All database migration and fix scripts are located in the `sql/` directory.
 
-### Primary Schema (v3.0.0+)
-- **`sql/CONSOLIDATED_SCHEMA.sql`**: ⭐ **Single source of truth** - Complete idempotent schema setup
+### Primary Schema (v3.3.0)
+- **`sql/CONSOLIDATED_SCHEMA.sql`**: ⭐ **Single source of truth** - Complete idempotent schema setup (26 tables, 54 indexes, 61 RLS policies, 19 functions)
 
 ### Legacy Scripts (for reference)
 - `sql/COMPLETE_SCHEMA_SETUP_V2.8.1.sql`: Complete idempotent schema setup for v2.9+ (includes backward compatibility)

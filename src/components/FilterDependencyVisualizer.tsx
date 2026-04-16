@@ -95,6 +95,9 @@ const DIMENSION_POSITIONS: Record<FilterDimension, NodePosition> = {
   
   // === CLASSIFICATION STATUS (bottom-right) ===
   classificationStatus: { x: 80, y: 80 },
+
+  // === SHARING STATUS (bottom-far-right) ===
+  sharingStatus: { x: 90, y: 80 },
 };
 
 // ============================================

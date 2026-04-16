@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Loadopoly — AI-Powered Document Intelligence &amp; Knowledge Graph Platform</title>
+  <meta name="description" content="GeoGraph OCR turns physical records, scans, and documents into structured knowledge graphs with AI extraction, GIS metadata, and semantic search — reducing research from 40 hours to 5 minutes." />
+  <meta name="keywords" content="OCR, document intelligence, knowledge graph, AI, GIS metadata, historical records, archival digitization, semantic search, Loadopoly, GeoGraph" />
+  <meta name="author" content="Loadopoly LLC" />
+  <meta name="robots" content="index, follow" />
+  <link rel="canonical" href="https://www.loadopoly.com/" />
+  <link rel="icon" type="image/svg+xml" href="./icon.svg" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="Loadopoly" />
+  <meta property="og:title" content="Loadopoly — Turn Documents Into Structured Intelligence" />
+  <meta property="og:description" content="GeoGraph OCR extracts entities, builds knowledge graphs, and enriches documents with GIS metadata — slashing research time from 40 hours to under 5 minutes." />
+  <meta property="og:url" content="https://www.loadopoly.com/" />
+  <meta property="og:image" content="https://www.loadopoly.com/icon.svg" />
+  <meta property="og:locale" content="en_US" />
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Loadopoly — Turn Documents Into Structured Intelligence" />
+  <meta name="twitter:description" content="GeoGraph OCR: AI-powered entity extraction, knowledge graphs, and GIS metadata for archival collections." />
+  <meta name="twitter:image" content="https://www.loadopoly.com/icon.svg" />
+
+  <!-- JSON-LD -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "name": "Loadopoly LLC",
+        "url": "https://www.loadopoly.com",
+        "logo": "https://www.loadopoly.com/icon.svg",
+        "sameAs": ["https://github.com/loadopoly/Loadopoly-OCR"],
+        "contactPoint": { "@type": "ContactPoint", "email": "contact@loadopoly.com" }
+      },
+      {
+        "@type": "SoftwareApplication",
+        "name": "GeoGraph OCR Node",
+        "applicationCategory": "BusinessApplication",
+        "operatingSystem": "Web, iOS, Android",
+        "url": "https://geographocrnode.vercel.app",
+        "description": "Advanced OCR-to-Graph platform with AI entity extraction, GIS metadata, semantic NLP, and 3D metaverse navigation.",
+        "offers": [
+          { "@type": "Offer", "price": "0",   "priceCurrency": "USD", "name": "Free" },
+          { "@type": "Offer", "price": "29",  "priceCurrency": "USD", "name": "Pro" },
+          { "@type": "Offer", "price": "199", "priceCurrency": "USD", "name": "Enterprise" }
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #020617;
+      --bg2:       #0f172a;
+      --bg3:       #1e293b;
+      --bg4:       #0c1424;
+      --accent:    #3b82f6;
+      --accent2:   #6366f1;
+      --accent3:   #8b5cf6;
+      --green:     #22c55e;
+      --amber:     #f59e0b;
+      --red:       #ef4444;
+      --text:      #f8fafc;
+      --muted:     #94a3b8;
+      --muted2:    #64748b;
+      --border:    rgba(255,255,255,0.07);
+      --border2:   rgba(59,130,246,0.28);
+      --radius:    12px;
+      --radius-lg: 20px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { color: #60a5fa; }
+    img { max-width: 100%; height: auto; display: block; }
+    strong { color: var(--text); }
+
+    /* ── SCROLL PROGRESS ── */
+    #progress-bar {
+      position: fixed; top: 0; left: 0; height: 2px;
+      background: linear-gradient(90deg, var(--accent), var(--accent3));
+      z-index: 1000; width: 0%; transition: width 0.08s linear;
+      pointer-events: none;
+    }
+
+    /* ── NAV ── */
+    nav {
+      position: sticky; top: 0; z-index: 99; height: 64px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 clamp(1rem,5vw,3rem);
+      background: rgba(2,6,23,0.82);
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 800; font-size: 1.15rem; color: var(--text);
+      letter-spacing: -0.02em; flex-shrink: 0;
+    }
+
+    .nav-links {
+      display: flex; gap: 0.15rem; list-style: none; align-items: center;
+    }
+    .nav-links a {
+      color: var(--muted); font-size: 0.875rem;
+      padding: 0.4rem 0.7rem; border-radius: 8px;
+      transition: color 0.2s, background 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.06); }
+    .nav-cta {
+      background: var(--accent) !important; color: #fff !important;
+      font-weight: 700 !important; padding: 0.42rem 1.1rem !important;
+      border-radius: 8px !important; transition: background 0.2s, transform 0.15s !important;
+    }
+    .nav-cta:hover { background: #2563eb !important; transform: translateY(-1px); }
+
+    .hamburger {
+      display: none; flex-direction: column; gap: 5px;
+      cursor: pointer; padding: 8px; background: none; border: none; z-index: 101;
+    }
+    .hamburger span {
+      display: block; width: 24px; height: 2px;
+      background: var(--text); border-radius: 2px; transition: transform 0.3s, opacity 0.3s;
+    }
+    .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+
+    .mobile-menu {
+      display: none; position: fixed; inset: 0; top: 64px;
+      background: var(--bg); z-index: 98; padding: 1.5rem;
+      flex-direction: column; gap: 0.35rem;
+      border-top: 1px solid var(--border);
+    }
+    .mobile-menu.open { display: flex; }
+    .mobile-menu a {
+      color: var(--text); font-size: 1.05rem;
+      padding: 0.75rem 1rem; border-radius: var(--radius);
+      transition: background 0.2s;
+    }
+    .mobile-menu a:hover { background: var(--bg3); }
+
+    @media (max-width: 820px) {
+      .nav-links { display: none; }
+      .hamburger { display: flex; }
+    }
+
+    /* ── HERO ── */
+    .hero {
+      position: relative; min-height: 94vh;
+      display: flex; align-items: center; justify-content: center;
+      text-align: center; overflow: hidden;
+      padding: clamp(5rem,12vw,9rem) clamp(1rem,5vw,3rem) clamp(4rem,10vw,7rem);
+    }
+
+    #hero-canvas {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%; pointer-events: none;
+    }
+
+    .hero-glow {
+      position: absolute; inset: 0; pointer-events: none;
+      background:
+        radial-gradient(ellipse 80% 55% at 50% -5%, rgba(59,130,246,0.16) 0%, transparent 65%),
+        radial-gradient(ellipse 50% 40% at 75% 65%, rgba(99,102,241,0.09) 0%, transparent 55%);
+    }
+
+    .hero-content { position: relative; z-index: 2; max-width: 860px; }
+
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.28);
+      color: #93c5fd; border-radius: 999px;
+      padding: 0.35rem 1rem; font-size: 0.78rem; font-weight: 700;
+      letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 1.75rem;
+    }
+    .badge-dot {
+      width: 6px; height: 6px; background: var(--accent);
+      border-radius: 50%; animation: blink 2s infinite;
+    }
+    @keyframes blink { 0%,100% { opacity:1; } 50% { opacity:0.25; } }
+
+    h1.hero-title {
+      font-size: clamp(2.6rem, 7.5vw, 5.2rem);
+      font-weight: 900; line-height: 1.04; letter-spacing: -0.04em;
+      margin-bottom: 0.9rem;
+    }
+
+    .gradient-text {
+      background: linear-gradient(135deg, #60a5fa 0%, #818cf8 45%, #a78bfa 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .hero-typewriter-line {
+      font-size: clamp(1rem, 2.5vw, 1.3rem); color: var(--muted);
+      margin-bottom: 0.6rem; min-height: 1.7em;
+    }
+    .tw-word {
+      color: #93c5fd; font-weight: 700;
+      border-right: 2px solid var(--accent);
+      animation: cur 1s step-end infinite;
+    }
+    @keyframes cur { 0%,100% { border-color: var(--accent); } 50% { border-color: transparent; } }
+
+    .hero-sub {
+      font-size: clamp(0.95rem, 2vw, 1.1rem); color: var(--muted);
+      max-width: 640px; margin: 0 auto 2.5rem; line-height: 1.72;
+    }
+
+    .hero-actions {
+      display: flex; gap: 1rem; justify-content: center;
+      flex-wrap: wrap; margin-bottom: 2.5rem;
+    }
+
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff; padding: 0.82rem 2rem; border-radius: var(--radius);
+      font-weight: 700; font-size: 1rem;
+      transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 28px rgba(59,130,246,0.38);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 10px 44px rgba(59,130,246,0.52); color: #fff; }
+
+    .btn-ghost {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,0.05); color: var(--text);
+      padding: 0.82rem 2rem; border-radius: var(--radius);
+      font-weight: 600; font-size: 1rem;
+      border: 1px solid var(--border);
+      transition: border-color 0.2s, background 0.2s, transform 0.2s;
+    }
+    .btn-ghost:hover { border-color: rgba(59,130,246,0.4); background: rgba(59,130,246,0.07); transform: translateY(-1px); color: var(--text); }
+
+    .hero-trust {
+      display: flex; align-items: center; justify-content: center;
+      gap: 1.5rem; flex-wrap: wrap; color: var(--muted2); font-size: 0.8rem;
+    }
+    .trust-item { display: flex; align-items: center; gap: 5px; }
+    .trust-item svg { color: var(--green); flex-shrink: 0; }
+
+    /* ── STATS STRIP ── */
+    .stats-strip {
+      background: var(--bg2);
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+      padding: clamp(2rem,5vw,3.5rem) clamp(1rem,5vw,3rem);
+    }
+    .stats-inner {
+      max-width: 1100px; margin: 0 auto;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
+      gap: 2rem; text-align: center;
+    }
+    .stat-num {
+      font-size: clamp(2rem,4.5vw,2.8rem); font-weight: 900;
+      letter-spacing: -0.04em; line-height: 1; margin-bottom: 0.4rem;
+      background: linear-gradient(135deg, #60a5fa, #818cf8);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .stat-label { color: var(--muted); font-size: 0.85rem; line-height: 1.4; }
+
+    /* ── LAYOUT HELPERS ── */
+    .section {
+      padding: clamp(4rem,9vw,7rem) clamp(1rem,5vw,3rem);
+      max-width: 1120px; margin: 0 auto;
+    }
+    .section-full { padding: clamp(4rem,9vw,7rem) clamp(1rem,5vw,3rem); }
+    .section-inner { max-width: 1120px; margin: 0 auto; }
+    .section-label {
+      font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em;
+      text-transform: uppercase; color: var(--accent); margin-bottom: 0.75rem;
+    }
+    .section-title {
+      font-size: clamp(1.8rem, 4.5vw, 3.1rem); font-weight: 900;
+      letter-spacing: -0.03em; line-height: 1.14; margin-bottom: 1rem;
+    }
+    .section-sub {
+      color: var(--muted); font-size: clamp(0.95rem, 2vw, 1.1rem);
+      max-width: 600px; line-height: 1.72; margin-bottom: 3rem;
+    }
+    .divider { height: 1px; background: var(--border); }
+
+    /* ── PROBLEM / SOLUTION ── */
+    .ps-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+    }
+    @media (max-width: 740px) { .ps-grid { grid-template-columns: 1fr; } }
+
+    .ps-box {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 2rem;
+    }
+    .ps-box.problem { border-color: rgba(239,68,68,0.2); }
+    .ps-box.solution { border-color: rgba(34,197,94,0.25); background: rgba(34,197,94,0.025); }
+    .ps-box-hdr {
+      display: flex; align-items: center; gap: 10px;
+      font-size: 1.05rem; font-weight: 800; margin-bottom: 1.25rem;
+    }
+    .ps-box ul { list-style: none; display: flex; flex-direction: column; gap: 0.7rem; }
+    .ps-box li { display: flex; gap: 10px; font-size: 0.9rem; color: var(--muted); line-height: 1.5; }
+    .ps-box li .bul { flex-shrink: 0; margin-top: 2px; font-weight: 700; }
+    .problem li .bul { color: var(--red); }
+    .solution li .bul { color: var(--green); }
+
+    /* ── FEATURE CARDS ── */
+    .features-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 1.25rem;
+    }
+    .feature-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 1.75rem;
+      transition: border-color 0.25s, transform 0.2s, box-shadow 0.25s;
+    }
+    .feature-card:hover {
+      border-color: rgba(59,130,246,0.35);
+      transform: translateY(-4px); box-shadow: 0 12px 40px rgba(59,130,246,0.1);
+    }
+    .feat-icon {
+      width: 48px; height: 48px; background: rgba(59,130,246,0.1);
+      border-radius: 12px; display: flex; align-items: center; justify-content: center;
+      margin-bottom: 1rem; color: var(--accent); transition: background 0.2s;
+    }
+    .feature-card:hover .feat-icon { background: rgba(59,130,246,0.18); }
+    .feature-card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .feature-card p { color: var(--muted); font-size: 0.875rem; line-height: 1.62; }
+
+    /* ── HOW IT WORKS ── */
+    .steps-grid {
+      display: grid; grid-template-columns: 1fr auto 1fr auto 1fr;
+      align-items: start; gap: 1rem;
+    }
+    @media (max-width: 740px) {
+      .steps-grid { grid-template-columns: 1fr; gap: 1.5rem; }
+      .step-arrow { display: none; }
+    }
+    .step-arrow { padding-top: 2.5rem; color: var(--muted2); font-size: 1.5rem; }
+    .step {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 2rem 1.5rem; text-align: center;
+    }
+    .step-num {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 1.1rem; margin: 0 auto 1rem;
+    }
+    .step h3 { font-size: 1.1rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .step p { color: var(--muted); font-size: 0.875rem; line-height: 1.62; }
+
+    /* ── SCREENSHOT SHOWCASE ── */
+    .tab-row { display: flex; gap: 0.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .tab-btn {
+      padding: 0.45rem 1.25rem; border-radius: 8px; font-size: 0.875rem;
+      font-weight: 600; cursor: pointer; background: var(--bg3);
+      color: var(--muted); border: 1px solid var(--border); transition: all 0.2s;
+    }
+    .tab-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .browser-frame {
+      background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    }
+    .browser-bar {
+      background: var(--bg2); border-bottom: 1px solid var(--border);
+      padding: 0.6rem 1rem; display: flex; align-items: center; gap: 0.5rem;
+    }
+    .bdot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+    .bdot:nth-child(1) { background: #ef4444; }
+    .bdot:nth-child(2) { background: #f59e0b; }
+    .bdot:nth-child(3) { background: #22c55e; }
+    .burl {
+      flex: 1; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; padding: 0.25rem 0.75rem;
+      font-size: 0.75rem; color: var(--muted); margin-left: 0.5rem;
+    }
+    .ss-grid {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; padding: 1rem;
+    }
+    .ss-grid img { border-radius: 8px; width: 100%; }
+    @media (max-width: 600px) { .ss-grid { grid-template-columns: 1fr; } }
+
+    .phone-row {
+      display: flex; gap: 2.5rem; justify-content: center;
+      flex-wrap: wrap; padding: 2rem;
+    }
+    .phone-frame {
+      background: var(--bg3); border: 2px solid var(--border);
+      border-radius: 32px; overflow: hidden; width: 210px;
+      box-shadow: 0 24px 64px rgba(0,0,0,0.55);
+    }
+    .phone-frame img { width: 100%; display: block; }
+
+    .ss-placeholder {
+      padding: 4rem; text-align: center; color: var(--muted);
+    }
+
+    /* ── COMPARISON ── */
+    .cmp-wrap { overflow-x: auto; border-radius: var(--radius-lg); }
+    .cmp-table { width: 100%; border-collapse: collapse; min-width: 580px; }
+    .cmp-table th, .cmp-table td {
+      padding: 0.95rem 1.2rem; text-align: left;
+      border-bottom: 1px solid var(--border); font-size: 0.875rem;
+    }
+    .cmp-table th {
+      background: var(--bg3); font-weight: 700; font-size: 0.78rem;
+      text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted);
+    }
+    .cmp-table td:first-child { font-weight: 600; }
+    .cmp-table td:not(:first-child) { color: var(--muted); }
+    .cmp-table tr:hover td { background: rgba(255,255,255,0.015); }
+    .cmp-table tr:last-child td { border-bottom: none; }
+    .cy { color: var(--green); font-weight: 700; }
+    .cp { color: var(--amber); font-weight: 600; }
+    .cn { color: var(--muted2); }
+    .cus { color: var(--accent) !important; font-weight: 700 !important; }
+
+    /* ── PERSONAS ── */
+    .personas-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(230px,1fr)); gap: 1.25rem;
+    }
+    .persona-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 2rem; text-align: center;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .persona-card:hover { border-color: var(--border2); transform: translateY(-3px); }
+    .persona-emoji { font-size: 2.6rem; display: block; margin-bottom: 1rem; }
+    .persona-card h3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 0.5rem; }
+    .persona-card p { color: var(--muted); font-size: 0.875rem; line-height: 1.5; }
+    .persona-tag {
+      display: inline-block; margin-top: 0.8rem;
+      font-size: 0.72rem; font-weight: 700; color: var(--accent);
+      background: rgba(59,130,246,0.1); padding: 0.2rem 0.65rem; border-radius: 999px;
+    }
+
+    /* ── PRICING ── */
+    .pricing-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(260px,1fr));
+      gap: 1.25rem; align-items: start;
+    }
+    .pricing-card {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 2rem;
+      display: flex; flex-direction: column; gap: 1rem; position: relative;
+    }
+    .pricing-card.featured {
+      border-color: var(--accent); background: rgba(59,130,246,0.025);
+      box-shadow: 0 0 0 1px rgba(59,130,246,0.18), 0 8px 48px rgba(59,130,246,0.14);
+    }
+    .feat-pill {
+      position: absolute; top: -13px; left: 50%; transform: translateX(-50%);
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      color: #fff; font-size: 0.68rem; font-weight: 800; letter-spacing: 0.09em;
+      padding: 0.22rem 1rem; border-radius: 999px; text-transform: uppercase; white-space: nowrap;
+    }
+    .price-tier { font-size: 0.76rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+    .price-amount { font-size: 2.8rem; font-weight: 900; letter-spacing: -0.04em; line-height: 1; }
+    .price-period { font-size: 0.88rem; color: var(--muted); }
+    .price-desc { color: var(--muted); font-size: 0.875rem; line-height: 1.5; }
+    .price-features { list-style: none; display: flex; flex-direction: column; gap: 0.5rem; flex: 1; }
+    .price-features li { display: flex; gap: 8px; font-size: 0.875rem; color: var(--muted); align-items: flex-start; }
+    .price-features li::before { content: '✓'; color: var(--green); font-weight: 800; flex-shrink: 0; }
+    .btn-plan-primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff;
+      padding: 0.7rem 1rem; border-radius: 10px; font-weight: 700; font-size: 0.9rem;
+      text-align: center; transition: transform 0.2s, box-shadow 0.2s;
+      box-shadow: 0 4px 18px rgba(59,130,246,0.3);
+    }
+    .btn-plan-primary:hover { transform: translateY(-1px); box-shadow: 0 8px 28px rgba(59,130,246,0.42); color: #fff; }
+    .btn-plan-outline {
+      background: transparent; color: var(--text); padding: 0.7rem 1rem;
+      border-radius: 10px; font-weight: 600; font-size: 0.9rem;
+      border: 1px solid var(--border); text-align: center;
+      transition: border-color 0.2s, background 0.2s;
+    }
+    .btn-plan-outline:hover { border-color: var(--accent); background: rgba(59,130,246,0.06); color: var(--text); }
+
+    /* ── WEB3 / FLYWHEEL ── */
+    .web3-section {
+      background: var(--bg4);
+      border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+    }
+    .flywheel {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px,1fr));
+      border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden;
+    }
+    .fw-step {
+      padding: 2rem 1.5rem; border-right: 1px solid var(--border);
+      text-align: center; background: rgba(255,255,255,0.01);
+      transition: background 0.2s;
+    }
+    .fw-step:hover { background: rgba(59,130,246,0.04); }
+    .fw-step:last-child { border-right: none; }
+    @media (max-width: 640px) {
+      .flywheel { grid-template-columns: 1fr; }
+      .fw-step { border-right: none; border-bottom: 1px solid var(--border); }
+      .fw-step:last-child { border-bottom: none; }
+    }
+    .fw-num { font-size: 0.68rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 0.7rem; }
+    .fw-emoji { font-size: 2rem; display: block; margin-bottom: 0.75rem; }
+    .fw-step h4 { font-size: 0.95rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .fw-step p { color: var(--muted); font-size: 0.82rem; line-height: 1.55; }
+
+    .tech-pills {
+      display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 2.5rem; justify-content: center;
+    }
+    .tech-pill {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      border-radius: 999px; padding: 0.28rem 0.75rem;
+      font-size: 0.76rem; font-weight: 600; color: var(--muted);
+    }
+
+    /* ── INVESTOR ── */
+    .investor-box {
+      background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.07));
+      border: 1px solid rgba(99,102,241,0.28); border-radius: var(--radius-lg);
+      padding: clamp(2.5rem,5vw,4rem);
+      display: flex; flex-wrap: wrap; gap: 2rem;
+      align-items: center; justify-content: space-between;
+    }
+    .investor-box h2 { font-size: clamp(1.5rem,3.5vw,2.3rem); font-weight: 900; letter-spacing: -0.025em; margin-bottom: 0.75rem; }
+    .investor-box p { color: var(--muted); font-size: 0.95rem; max-width: 480px; line-height: 1.65; }
+
+    .proof-tags { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1.2rem; }
+    .proof-tag {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: rgba(34,197,94,0.1); border: 1px solid rgba(34,197,94,0.22);
+      color: #4ade80; border-radius: 999px; padding: 0.2rem 0.65rem;
+      font-size: 0.73rem; font-weight: 700;
+    }
+
+    /* ── FAQ ── */
+    .faq-list { display: flex; flex-direction: column; gap: 0.75rem; max-width: 720px; }
+    .faq-item {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+    }
+    .faq-q {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 1.2rem 1.5rem; cursor: pointer; font-weight: 600; font-size: 0.95rem;
+      user-select: none; gap: 1rem; transition: background 0.2s;
+    }
+    .faq-q:hover { background: rgba(255,255,255,0.025); }
+    .faq-chevron { width: 20px; height: 20px; flex-shrink: 0; transition: transform 0.3s; color: var(--muted); }
+    .faq-item.open .faq-chevron { transform: rotate(180deg); }
+    .faq-a { max-height: 0; overflow: hidden; transition: max-height 0.35s ease; padding: 0 1.5rem; }
+    .faq-item.open .faq-a { max-height: 260px; padding: 0 1.5rem 1.2rem; }
+    .faq-a p { color: var(--muted); font-size: 0.9rem; line-height: 1.72; }
+
+    /* ── FINAL CTA ── */
+    .final-cta {
+      text-align: center;
+      padding: clamp(5rem,10vw,8rem) clamp(1rem,5vw,3rem);
+      background: radial-gradient(ellipse 80% 60% at 50% 0%, rgba(59,130,246,0.13), transparent 70%);
+    }
+    .final-cta h2 { font-size: clamp(2.2rem, 6vw, 4rem); font-weight: 900; letter-spacing: -0.04em; margin-bottom: 1rem; }
+    .final-cta p { color: var(--muted); font-size: clamp(1rem,2vw,1.15rem); max-width: 520px; margin: 0 auto 2.5rem; line-height: 1.65; }
+
+    /* ── FOOTER ── */
+    footer { border-top: 1px solid var(--border); padding: 3.5rem clamp(1rem,5vw,3rem) 2rem; }
+    .footer-grid {
+      max-width: 1120px; margin: 0 auto;
+      display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 2.5rem;
+    }
+    @media (max-width: 820px) { .footer-grid { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 480px) { .footer-grid { grid-template-columns: 1fr; } }
+    .footer-brand p { color: var(--muted); font-size: 0.875rem; line-height: 1.65; margin-top: 0.75rem; max-width: 280px; }
+    .footer-logo { display: flex; align-items: center; gap: 8px; font-weight: 700; color: var(--text); }
+    .footer-socials { display: flex; gap: 0.7rem; margin-top: 1rem; }
+    .footer-socials a { color: var(--muted2); transition: color 0.2s; }
+    .footer-socials a:hover { color: var(--text); }
+    .footer-col h4 {
+      font-size: 0.72rem; font-weight: 800; letter-spacing: 0.12em;
+      text-transform: uppercase; color: var(--muted2); margin-bottom: 1rem;
+    }
+    .footer-col ul { list-style: none; display: flex; flex-direction: column; gap: 0.6rem; }
+    .footer-col ul li a { color: var(--muted); font-size: 0.875rem; transition: color 0.2s; }
+    .footer-col ul li a:hover { color: var(--text); }
+    .footer-bottom {
+      max-width: 1120px; margin: 2rem auto 0;
+      padding-top: 1.5rem; border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 1rem;
+    }
+    .footer-bottom p { color: var(--muted2); font-size: 0.8rem; }
+
+    /* ── SCROLL REVEAL ── */
+    .reveal { opacity: 0; transform: translateY(22px); transition: opacity 0.65s ease, transform 0.65s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+    .d1 { transition-delay: 0.1s; }
+    .d2 { transition-delay: 0.2s; }
+    .d3 { transition-delay: 0.3s; }
+    .d4 { transition-delay: 0.4s; }
+  </style>
+</head>
+<body>
+
+<div id="progress-bar"></div>
+
+<!-- ── NAV ── -->
+<nav>
+  <a class="nav-logo" href="#">
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+      <ellipse cx="12" cy="5" rx="9" ry="3"/>
+      <path d="M3 5v14a9 3 0 0 0 18 0V5"/>
+      <path d="M3 12a9 3 0 0 0 18 0"/>
+    </svg>
+    Loadopoly
+  </a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#how-it-works">How it works</a></li>
+    <li><a href="#pricing">Pricing</a></li>
+    <li><a href="#faq">FAQ</a></li>
+    <li><a href="#investors">Investors</a></li>
+    <li><a class="nav-cta" href="https://geographocrnode.vercel.app">Launch App →</a></li>
+  </ul>
+  <button class="hamburger" id="ham" aria-label="Open menu">
+    <span></span><span></span><span></span>
+  </button>
+</nav>
+
+<div class="mobile-menu" id="mob-menu">
+  <a href="#features">Features</a>
+  <a href="#how-it-works">How it works</a>
+  <a href="#pricing">Pricing</a>
+  <a href="#faq">FAQ</a>
+  <a href="#investors">Investors</a>
+  <a href="https://geographocrnode.vercel.app" style="color:var(--accent);font-weight:700;">Launch App →</a>
+</div>
+
+<!-- ── HERO ── -->
+<header class="hero">
+  <canvas id="hero-canvas"></canvas>
+  <div class="hero-glow"></div>
+  <div class="hero-content">
+    <div class="hero-badge"><span class="badge-dot"></span>v2.16 · Public Beta</div>
+    <h1 class="hero-title">
+      Turn any document into<br>
+      <span class="gradient-text">structured intelligence</span>
+    </h1>
+    <p class="hero-typewriter-line">
+      Built for <span class="tw-word" id="tw"></span>
+    </p>
+    <p class="hero-sub">
+      GeoGraph OCR uses Google Gemini AI to extract entities, build knowledge graphs, and enrich every scan with GPS metadata — slashing research time from <strong>40 hours to under 5 minutes</strong>. Your data, your ownership.
+    </p>
+    <div class="hero-actions">
+      <a class="btn-primary" href="https://geographocrnode.vercel.app">
+        Try GeoGraph Free
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      </a>
+      <a class="btn-ghost" href="https://github.com/loadopoly/Loadopoly-OCR">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        View on GitHub
+      </a>
+    </div>
+    <div class="hero-trust">
+      <div class="trust-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Free to start</div>
+      <div class="trust-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Offline-first PWA</div>
+      <div class="trust-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>You own your data</div>
+      <div class="trust-item"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Open source (MIT)</div>
+    </div>
+  </div>
+</header>
+
+<!-- ── STATS ── -->
+<div class="stats-strip">
+  <div class="stats-inner">
+    <div class="reveal">
+      <div class="stat-num" data-count="99" data-suffix="%">0%</div>
+      <div class="stat-label">Time savings for researchers</div>
+    </div>
+    <div class="reveal d1">
+      <div class="stat-num" data-special>500B+</div>
+      <div class="stat-label">Pre-2010 docs not yet digitized</div>
+    </div>
+    <div class="reveal d2">
+      <div class="stat-num" data-special>$1.2B</div>
+      <div class="stat-label">AI training data market opportunity</div>
+    </div>
+    <div class="reveal d3">
+      <div class="stat-num" data-special>40 hrs → 5 min</div>
+      <div class="stat-label">Research time per collection</div>
+    </div>
+  </div>
+</div>
+
+<!-- ── PROBLEM / SOLUTION ── -->
+<section class="section" id="problem">
+  <div class="section-label reveal">The problem</div>
+  <h2 class="section-title reveal">80–90% of historical data is<br>invisible to AI</h2>
+  <p class="section-sub reveal">Institutions have spent decades digitizing records, but the data stays locked in flat files — no relationships, no GPS, no structure AI can use. The "data wall" is arriving 2026–27.</p>
+  <div class="ps-grid reveal">
+    <div class="ps-box problem">
+      <div class="ps-box-hdr">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        Today's reality
+      </div>
+      <ul>
+        <li><span class="bul">✗</span>Millions of digitized items stored as flat JSON — no relationships</li>
+        <li><span class="bul">✗</span>35+ inconsistent schemas across archives — impossible to join</li>
+        <li><span class="bul">✗</span>No entity extraction, no GPS metadata, no semantic search</li>
+        <li><span class="bul">✗</span>Researchers spend 40+ hours per collection on manual curation</li>
+        <li><span class="bul">✗</span>LLMs trained on post-2010 web data — historical knowledge is dark</li>
+        <li><span class="bul">✗</span>Google / AWS OCR: vendor lock-in, no graph, you don't own the rows</li>
+      </ul>
+    </div>
+    <div class="ps-box solution">
+      <div class="ps-box-hdr">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="9 12 11 14 15 10"/></svg>
+        GeoGraph OCR solves this
+      </div>
+      <ul>
+        <li><span class="bul">✓</span>Automatic entity extraction from any photo — people, places, dates, orgs</li>
+        <li><span class="bul">✓</span>Knowledge graph auto-built with semantic cross-document links</li>
+        <li><span class="bul">✓</span>GPS + GIS metadata on every document, normalized to WGS84</li>
+        <li><span class="bul">✓</span>Reduce curation from 40 hours to under 5 minutes per collection</li>
+        <li><span class="bul">✓</span>Structured AI training datasets ready to license</li>
+        <li><span class="bul">✓</span>User-owned Supabase rows with Row-Level Security — not vendor-locked</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── FEATURES ── -->
+<section class="section-full" id="features" style="background:var(--bg2);">
+  <div class="section-inner">
+    <div class="section-label reveal">Capabilities</div>
+    <h2 class="section-title reveal">Everything you need to <span class="gradient-text">unlock dark data</span></h2>
+    <p class="section-sub reveal">Built on Google Gemini 2.5 Flash with a privacy-first, offline-capable architecture — 50,000+ lines of production TypeScript.</p>
+    <div class="features-grid">
+
+      <div class="feature-card reveal">
+        <div class="feat-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/><circle cx="12" cy="13" r="3"/></svg>
+        </div>
+        <h3>AI-Powered OCR</h3>
+        <p>Extract text from historical documents, artifacts, signs, and scenery. Multi-language detection built in. Configurable: Gemini, OpenAI, or local models.</p>
+      </div>
+
+      <div class="feature-card reveal d1">
+        <div class="feat-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/><line x1="7" y1="5" x2="17" y2="5"/><line x1="5" y1="7" x2="5" y2="17"/><line x1="19" y1="7" x2="19" y2="17"/><line x1="7" y1="19" x2="17" y2="19"/></svg>
+        </div>
+        <h3>Knowledge Graph</h3>
+        <p>Automatically links entities across documents. Interactive force-directed D3.js visualization. Export to JSON, CSV, or GraphML.</p>
+      </div>
+
+      <div class="feature-card reveal d2">
+        <div class="feat-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+        </div>
+        <h3>GIS Metadata</h3>
+        <p>Enrich every scan with GPS coordinates, zone classification, and historical location correlation. Coordinates normalized to WGS84.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feat-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        </div>
+        <h3>3D Metaverse Explore</h3>
+        <p>Navigate your entire document corpus in an immersive 3D spatial environment powered by Three.js. Semantic clustering groups related records visually.</p>
+      </div>
+
+      <div class="feature-card reveal d1">
+        <div class="feat-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/></svg>
+        </div>
+        <h3>Smart Deduplication</h3>
+        <p>Semantic NLP detects and merges duplicate entities across thousands of documents automatically. No manual cleanup required.</p>
+      </div>
+
+      <div class="feature-card reveal d2">
+        <div class="feat-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+        </div>
+        <h3>Batch Processing</h3>
+        <p>Process hundreds or thousands of documents in parallel. Server-side queue with pause/resume/cancel controls and real-time progress tracking.</p>
+      </div>
+
+      <div class="feature-card reveal">
+        <div class="feat-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <h3>Privacy-First Storage</h3>
+        <p>All data stored locally in IndexedDB by default. Cloud sync with Supabase is fully opt-in. End-to-end encryption. You control what gets shared.</p>
+      </div>
+
+      <div class="feature-card reveal d1">
+        <div class="feat-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        </div>
+        <h3>AI Training Marketplace</h3>
+        <p>License your structured datasets to AI companies. Earn passive income as a fractional owner when your data is licensed via the Web3 marketplace.</p>
+      </div>
+
+      <div class="feature-card reveal d2">
+        <div class="feat-icon">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+        </div>
+        <h3>Mobile PWA</h3>
+        <p>Installable progressive web app with full offline capability. Point your phone at any document and capture it on the spot — museum, estate sale, or archive.</p>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── HOW IT WORKS ── -->
+<section class="section" id="how-it-works">
+  <div class="section-label reveal">How it works</div>
+  <h2 class="section-title reveal">Three steps from photo<br>to structured knowledge</h2>
+  <p class="section-sub reveal">No complex setup. No vendor lock-in. Point, capture, explore.</p>
+  <div class="steps-grid reveal">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h3>📸 Capture</h3>
+      <p>Point your camera at any document, artifact, sign, or page. GeoGraph captures the image and automatically tags the GPS location.</p>
+    </div>
+    <div class="step-arrow">→</div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h3>🧠 Extract</h3>
+      <p>Gemini 2.5 Flash extracts raw text, then identifies entities (people, places, dates, orgs), temporal era, and semantic relationships.</p>
+    </div>
+    <div class="step-arrow">→</div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h3>🔗 Connect</h3>
+      <p>Entities are linked across your entire corpus in an interactive knowledge graph. Search, query, visualize in 3D, export, or license to AI companies.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── APP SHOWCASE ── -->
+<section class="section-full" style="background:var(--bg2);" id="showcase">
+  <div class="section-inner">
+    <div class="section-label reveal">The app</div>
+    <h2 class="section-title reveal">See GeoGraph OCR in action</h2>
+    <p class="section-sub reveal">A full-featured web app that works on desktop and mobile, online and offline.</p>
+
+    <div class="tab-row reveal">
+      <button class="tab-btn active" data-tab="desktop">🖥 Desktop</button>
+      <button class="tab-btn" data-tab="mobile">📱 Mobile</button>
+    </div>
+
+    <div class="tab-panel active" id="tab-desktop">
+      <div class="browser-frame">
+        <div class="browser-bar">
+          <div class="bdot"></div><div class="bdot"></div><div class="bdot"></div>
+          <div class="burl">geographocrnode.vercel.app</div>
+        </div>
+        <div class="ss-grid" id="ss-desktop-grid">
+          <img src="./screenshot-desktop-1.png" alt="GeoGraph OCR main interface" loading="lazy"
+            onerror="this.closest('.ss-grid').innerHTML='<div class=ss-placeholder>📸 Live app screenshots — <a href=https://geographocrnode.vercel.app>try it now →</a></div>'" />
+          <img src="./screenshot-desktop-2.png" alt="Knowledge graph visualization" loading="lazy"
+            onerror="this.style.display=\'none\'" />
+        </div>
+      </div>
+    </div>
+
+    <div class="tab-panel" id="tab-mobile">
+      <div class="phone-row">
+        <div class="phone-frame">
+          <img src="./screenshot-mobile-1.png" alt="GeoGraph OCR mobile" loading="lazy"
+            onerror="this.closest('.phone-frame').innerHTML='<div style=padding:3rem\ 1rem;text-align:center;color:var(--muted);font-size:0.8rem>📱 Mobile</div>'" />
+        </div>
+        <div class="phone-frame">
+          <img src="./screenshot-mobile-2.png" alt="GeoGraph OCR mobile graph" loading="lazy"
+            onerror="this.closest('.phone-frame').innerHTML='<div style=padding:3rem\ 1rem;text-align:center;color:var(--muted);font-size:0.8rem>📱 Mobile</div>'" />
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── COMPARISON ── -->
+<section class="section">
+  <div class="section-label reveal">Competitive comparison</div>
+  <h2 class="section-title reveal">Built for what the others missed</h2>
+  <p class="section-sub reveal">Existing tools give you OCR. GeoGraph gives you a structured, user-owned, monetizable knowledge base.</p>
+  <div class="cmp-wrap reveal">
+    <table class="cmp-table">
+      <thead>
+        <tr>
+          <th>Capability</th>
+          <th>Google Vision</th>
+          <th>AWS Textract</th>
+          <th>Smithsonian JSON</th>
+          <th class="cus">GeoGraph OCR ✦</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Text extraction (OCR)</td><td class="cy">✓</td><td class="cy">✓</td><td class="cp">Partial</td><td class="cus cy">✓</td></tr>
+        <tr><td>Entity extraction (NLP)</td><td class="cp">Limited</td><td class="cp">Limited</td><td class="cn">✗</td><td class="cus cy">✓ Full</td></tr>
+        <tr><td>Knowledge graph auto-build</td><td class="cn">✗</td><td class="cn">✗</td><td class="cn">✗</td><td class="cus cy">✓</td></tr>
+        <tr><td>GPS / GIS metadata</td><td class="cn">✗</td><td class="cn">✗</td><td class="cn">✗</td><td class="cus cy">✓</td></tr>
+        <tr><td>User-owned DB rows (RLS)</td><td class="cn">✗ Vendor lock</td><td class="cn">✗ Vendor lock</td><td class="cn">✗</td><td class="cus cy">✓ Supabase RLS</td></tr>
+        <tr><td>Offline-first PWA</td><td class="cn">✗</td><td class="cn">✗</td><td class="cn">✗</td><td class="cus cy">✓</td></tr>
+        <tr><td>AI training data monetization</td><td class="cn">✗</td><td class="cn">✗</td><td class="cn">✗</td><td class="cus cy">✓ Marketplace</td></tr>
+        <tr><td>3D spatial visualization</td><td class="cn">✗</td><td class="cn">✗</td><td class="cn">✗</td><td class="cus cy">✓ Three.js</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ── WHO IT'S FOR ── -->
+<section class="section-full" style="background:var(--bg2);">
+  <div class="section-inner">
+    <div class="section-label reveal">Built for</div>
+    <h2 class="section-title reveal">Who uses GeoGraph OCR</h2>
+    <p class="section-sub reveal">From solo researchers to enterprise institutions — if you work with documents, this is for you.</p>
+    <div class="personas-grid">
+      <div class="persona-card reveal">
+        <span class="persona-emoji">🏛️</span>
+        <h3>Archivists &amp; Museums</h3>
+        <p>Process entire collections in hours. Auto-extract entities, build provenance graphs, and make holdings searchable by anyone.</p>
+        <span class="persona-tag">~50K institutions globally</span>
+      </div>
+      <div class="persona-card reveal d1">
+        <span class="persona-emoji">📚</span>
+        <h3>Researchers &amp; Historians</h3>
+        <p>Stop spending 40 hours manually cataloging each collection. Let AI extract the knowledge so you can focus on the insights.</p>
+        <span class="persona-tag">10M+ knowledge workers</span>
+      </div>
+      <div class="persona-card reveal d2">
+        <span class="persona-emoji">⚖️</span>
+        <h3>Legal Firms</h3>
+        <p>Automate discovery. Extract key entities from thousands of documents in minutes. Full confidentiality with offline-first storage.</p>
+        <span class="persona-tag">~1.3M firms globally</span>
+      </div>
+      <div class="persona-card reveal d3">
+        <span class="persona-emoji">🤖</span>
+        <h3>AI Companies</h3>
+        <p>Buy structured, verified, historically rich training datasets from the marketplace — the kind of data that pushes models past the data wall.</p>
+        <span class="persona-tag">$1.2B market opportunity</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ── PRICING ── -->
+<section class="section" id="pricing">
+  <div class="section-label reveal">Pricing</div>
+  <h2 class="section-title reveal">Simple, transparent pricing</h2>
+  <p class="section-sub reveal">Start for free with your own API keys. Scale as your corpus grows. Cancel anytime.</p>
+  <div class="pricing-grid">
+
+    <div class="pricing-card reveal">
+      <div class="price-tier">Free</div>
+      <div><span class="price-amount">$0</span><span class="price-period"> / month</span></div>
+      <p class="price-desc">For individuals and hobbyists starting their first collections.</p>
+      <ul class="price-features">
+        <li>100 OCR scans / month</li>
+        <li>Local IndexedDB storage</li>
+        <li>Basic knowledge graph</li>
+        <li>GIS metadata capture</li>
+        <li>Bring your own API keys</li>
+        <li>Community support</li>
+      </ul>
+      <a class="btn-plan-outline" href="https://geographocrnode.vercel.app">Get started free</a>
+    </div>
+
+    <div class="pricing-card featured reveal d1">
+      <span class="feat-pill">Most popular</span>
+      <div class="price-tier">Pro</div>
+      <div><span class="price-amount">$29</span><span class="price-period"> / month</span></div>
+      <p class="price-desc">For researchers, journalists, and small archives needing cloud sync and advanced NLP.</p>
+      <ul class="price-features">
+        <li>Unlimited OCR scans</li>
+        <li>Cloud sync across devices</li>
+        <li>Advanced semantic NLP</li>
+        <li>3D metaverse navigation</li>
+        <li>Export to JSON / CSV / GraphML</li>
+        <li>Batch processing (1000s of docs)</li>
+        <li>Priority support</li>
+      </ul>
+      <a class="btn-plan-primary" href="https://geographocrnode.vercel.app">Start Pro trial</a>
+    </div>
+
+    <div class="pricing-card reveal d2">
+      <div class="price-tier">Enterprise</div>
+      <div><span class="price-amount">$199</span><span class="price-period"> / month</span></div>
+      <p class="price-desc">For institutions, museums, and enterprise archival teams needing white-glove service.</p>
+      <ul class="price-features">
+        <li>Everything in Pro</li>
+        <li>Multi-user workspaces</li>
+        <li>AI training data licensing</li>
+        <li>Custom integrations &amp; REST API</li>
+        <li>Dedicated onboarding &amp; SLA</li>
+        <li>Compliance support</li>
+        <li>White-label option available</li>
+      </ul>
+      <a class="btn-plan-outline" href="mailto:contact@loadopoly.com">Contact sales</a>
+    </div>
+
+  </div>
+  <p style="text-align:center;color:var(--muted2);font-size:0.8rem;margin-top:1.5rem;">
+    Processing credits included on paid plans. Free plan requires your own Gemini / OpenAI API key.
+  </p>
+</section>
+
+<!-- ── WEB3 / DATA OWNERSHIP ── -->
+<section class="section-full web3-section" id="web3">
+  <div class="section-inner">
+    <div class="section-label reveal">Web3 + Data Ownership</div>
+    <h2 class="section-title reveal">Get paid to live life.<br><span class="gradient-text">Capture history. Earn income.</span></h2>
+    <p class="section-sub reveal">
+      GeoGraph is the only OCR platform that gives you <strong>fractional ownership</strong> of the data you create.
+      When AI companies license the corpus, revenue flows back to contributors — proportional to what you captured.
+    </p>
+    <div class="flywheel reveal">
+      <div class="fw-step">
+        <div class="fw-num">Step 1</div>
+        <span class="fw-emoji">📸</span>
+        <h4>Capture documents</h4>
+        <p>Photograph records at museums, archives, estate sales, workplaces. Every scan is structured and recorded in your account.</p>
+      </div>
+      <div class="fw-step">
+        <div class="fw-num">Step 2</div>
+        <span class="fw-emoji">🧩</span>
+        <h4>Own a data shard</h4>
+        <p>Your structured records are minted as GARD Data Shards — ERC-1155 tokens on-chain. You hold fractional ownership of the corpus.</p>
+      </div>
+      <div class="fw-step">
+        <div class="fw-num">Step 3</div>
+        <span class="fw-emoji">💰</span>
+        <h4>AI companies license</h4>
+        <p>OpenAI, Anthropic, and others buy structured historical datasets from the marketplace. Revenue splits proportionally to shard holders.</p>
+      </div>
+      <div class="fw-step">
+        <div class="fw-num">Step 4</div>
+        <span class="fw-emoji">🔄</span>
+        <h4>Earn more, capture more</h4>
+        <p>To grow your share, capture more records. Visit museums. Explore archives. Build a data portfolio while living your life.</p>
+      </div>
+    </div>
+    <div class="tech-pills reveal">
+      <span class="tech-pill">ERC-1155 Shards</span>
+      <span class="tech-pill">Supabase RLS</span>
+      <span class="tech-pill">Ethers.js 6</span>
+      <span class="tech-pill">On-chain provenance</span>
+      <span class="tech-pill">Fractionalized ownership</span>
+    </div>
+  </div>
+</section>
+
+<!-- ── INVESTORS ── -->
+<section class="section" id="investors">
+  <div class="investor-box reveal">
+    <div>
+      <div class="section-label" style="margin-bottom:0.5rem;">For Investors</div>
+      <h2>Seeking $150K for a<br><span class="gradient-text">$1.2B opportunity</span></h2>
+      <p>
+        Pre-seed round — 8–10% equity to structure the first 100 archival collections and prove the AI licensing model.
+        The AI training data crisis is real, and the window to own this market is closing.
+      </p>
+      <div class="proof-tags">
+        <span class="proof-tag">✓ 50K+ lines TypeScript</span>
+        <span class="proof-tag">✓ Production on Vercel + Supabase</span>
+        <span class="proof-tag">✓ Security audited</span>
+        <span class="proof-tag">✓ v2.16 — bi-weekly releases</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:0.75rem;flex-shrink:0;">
+      <a class="btn-primary" href="mailto:invest@loadopoly.com">Talk to us →</a>
+      <a class="btn-ghost" href="https://github.com/loadopoly/Loadopoly-OCR/blob/main/docs/investment/EXECUTIVE_SUMMARY_ONE_PAGER.md" style="text-align:center;">Read pitch deck</a>
+    </div>
+  </div>
+</section>
+
+<!-- ── FAQ ── -->
+<section class="section-full" id="faq" style="background:var(--bg2);">
+  <div class="section-inner">
+    <div class="section-label reveal">Questions</div>
+    <h2 class="section-title reveal">Frequently asked</h2>
+    <div class="faq-list reveal">
+
+      <div class="faq-item">
+        <div class="faq-q">What types of documents can GeoGraph OCR process?<svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></div>
+        <div class="faq-a"><p>Any photo or scan — handwritten letters, printed records, historical maps, newspaper clippings, legal documents, safety posters, artifacts, and museum placards. Multi-language detection covers Latin scripts, CJK characters, and more.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Does it work offline?<svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></div>
+        <div class="faq-a"><p>Yes. GeoGraph OCR is an offline-first PWA. All data is stored in IndexedDB on your device. Cloud sync with Supabase is fully opt-in — your data never has to leave your device unless you choose to enable it.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">How is my data kept private?<svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></div>
+        <div class="faq-a"><p>By default everything stays on your device. When you enable cloud sync, data is stored in your own Supabase instance with Row-Level Security — even we cannot read your rows. OCR API calls go directly from your browser to your AI provider using your own key.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">What is the Web3 / data ownership model?<svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></div>
+        <div class="faq-a"><p>When you capture and structure documents, you can opt-in to mint them as GARD Data Shards — ERC-1155 NFTs representing fractional ownership of the corpus. When AI companies license datasets, revenue is distributed proportionally to shard holders. Think royalties for the data you help create.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Can I export the knowledge graph?<svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></div>
+        <div class="faq-a"><p>Yes. Export your entire graph as JSON, CSV, or GraphML. Pro users also get structured AI-training dataset exports compatible with Hugging Face and OpenAI fine-tuning formats.</p></div>
+      </div>
+
+      <div class="faq-item">
+        <div class="faq-q">Do I need a Google Gemini API key?<svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"/></svg></div>
+        <div class="faq-a"><p>On the Free plan, yes — bring your own Gemini or OpenAI key (Gemini 2.5 Flash has a generous free tier). On paid plans, processing credits are included. Local model support via Ollama and LM Studio is also available.</p></div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ── FINAL CTA ── -->
+<div class="final-cta">
+  <h2>Ready to unlock your<br><span class="gradient-text">dark data?</span></h2>
+  <p>Join researchers, archivists, and enterprises transforming their collections with GeoGraph OCR.</p>
+  <div class="hero-actions" style="margin-bottom:0;">
+    <a class="btn-primary" href="https://geographocrnode.vercel.app">
+      Start for free
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </a>
+    <a class="btn-ghost" href="mailto:contact@loadopoly.com">Talk to us</a>
+  </div>
+</div>
+
+<!-- ── FOOTER ── -->
+<footer>
+  <div class="footer-grid">
+    <div class="footer-brand">
+      <div class="footer-logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5" rx="9" ry="3"/>
+          <path d="M3 5v14a9 3 0 0 0 18 0V5"/>
+          <path d="M3 12a9 3 0 0 0 18 0"/>
+        </svg>
+        Loadopoly
+      </div>
+      <p>AI-powered document intelligence and knowledge graph platform. Turn any photo into structured, searchable, owned data.</p>
+      <div class="footer-socials">
+        <a href="https://github.com/loadopoly/Loadopoly-OCR" title="GitHub">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+        </a>
+        <a href="https://twitter.com/loadopoly" title="Twitter / X">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+        </a>
+      </div>
+    </div>
+    <div class="footer-col">
+      <h4>Product</h4>
+      <ul>
+        <li><a href="#features">Features</a></li>
+        <li><a href="#how-it-works">How it works</a></li>
+        <li><a href="#pricing">Pricing</a></li>
+        <li><a href="https://geographocrnode.vercel.app">Launch App</a></li>
+        <li><a href="https://github.com/loadopoly/Loadopoly-OCR/blob/main/CHANGELOG.md">Changelog</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Resources</h4>
+      <ul>
+        <li><a href="https://github.com/loadopoly/Loadopoly-OCR">GitHub</a></li>
+        <li><a href="https://github.com/loadopoly/Loadopoly-OCR/blob/main/README.md">Documentation</a></li>
+        <li><a href="https://github.com/loadopoly/Loadopoly-OCR/blob/main/docs/technical/WEB3_ARCHITECTURE.md">Web3 Docs</a></li>
+        <li><a href="https://github.com/loadopoly/Loadopoly-OCR/blob/main/docs/investment/EXECUTIVE_SUMMARY_ONE_PAGER.md">Investor Pitch</a></li>
+      </ul>
+    </div>
+    <div class="footer-col">
+      <h4>Legal</h4>
+      <ul>
+        <li><a href="https://geographocrnode.vercel.app/privacy-policy.html">Privacy Policy</a></li>
+        <li><a href="https://github.com/loadopoly/Loadopoly-OCR/blob/main/docs/legal/TERMS.md">Terms of Service</a></li>
+        <li><a href="https://github.com/loadopoly/Loadopoly-OCR/blob/main/docs/legal/COMMERCIAL-LICENSE.md">Commercial License</a></li>
+        <li><a href="mailto:contact@loadopoly.com">Contact</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>© 2026 Loadopoly LLC. All rights reserved.</p>
+    <p>Built with ❤️ · React 19 · TypeScript · Google Gemini</p>
+  </div>
+</footer>
+
+<script>
+/* ── PROGRESS BAR ── */
+const pb = document.getElementById('progress-bar');
+window.addEventListener('scroll', () => {
+  const pct = window.scrollY / (document.body.scrollHeight - window.innerHeight) * 100;
+  pb.style.width = pct + '%';
+}, { passive: true });
+
+/* ── HAMBURGER ── */
+const ham = document.getElementById('ham');
+const mob = document.getElementById('mob-menu');
+ham.addEventListener('click', () => {
+  ham.classList.toggle('open');
+  mob.classList.toggle('open');
+});
+mob.querySelectorAll('a').forEach(a => a.addEventListener('click', () => {
+  ham.classList.remove('open');
+  mob.classList.remove('open');
+}));
+
+/* ── TYPEWRITER ── */
+const words = ['researchers','archivists','historians','legal teams','AI engineers','museum curators'];
+let wi = 0, ci = 0, del = false;
+const tw = document.getElementById('tw');
+function tick() {
+  const w = words[wi];
+  tw.textContent = del ? w.slice(0, --ci) : w.slice(0, ++ci);
+  if (!del && ci === w.length) { del = true; setTimeout(tick, 2000); return; }
+  if (del && ci === 0) { del = false; wi = (wi + 1) % words.length; }
+  setTimeout(tick, del ? 48 : 88);
+}
+tick();
+
+/* ── CANVAS KNOWLEDGE GRAPH ANIMATION ── */
+const cvs = document.getElementById('hero-canvas');
+const ctx = cvs.getContext('2d');
+let W, H, pts = [];
+
+function resize() {
+  W = cvs.width = cvs.offsetWidth;
+  H = cvs.height = cvs.offsetHeight;
+}
+resize();
+window.addEventListener('resize', resize, { passive: true });
+
+const N = Math.min(60, Math.floor(window.innerWidth / 18));
+for (let i = 0; i < N; i++) {
+  pts.push({ x: Math.random() * W, y: Math.random() * H,
+    vx: (Math.random() - 0.5) * 0.38, vy: (Math.random() - 0.5) * 0.38,
+    r: Math.random() * 2.2 + 1.4, o: Math.random() * 0.45 + 0.25 });
+}
+
+const DIST = 150;
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  /* edges */
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      const dx = pts[i].x - pts[j].x, dy = pts[i].y - pts[j].y;
+      const d = Math.sqrt(dx * dx + dy * dy);
+      if (d < DIST) {
+        ctx.strokeStyle = `rgba(99,102,241,${(1 - d / DIST) * 0.16})`;
+        ctx.lineWidth = 0.75;
+        ctx.beginPath(); ctx.moveTo(pts[i].x, pts[i].y); ctx.lineTo(pts[j].x, pts[j].y); ctx.stroke();
+      }
+    }
+  }
+  /* nodes */
+  pts.forEach(p => {
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(59,130,246,${p.o})`; ctx.fill();
+    p.x += p.vx; p.y += p.vy;
+    if (p.x < 0 || p.x > W) p.vx *= -1;
+    if (p.y < 0 || p.y > H) p.vy *= -1;
+  });
+  requestAnimationFrame(draw);
+}
+draw();
+
+/* ── SCROLL REVEAL ── */
+const revs = document.querySelectorAll('.reveal');
+const ro = new IntersectionObserver(entries => {
+  entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); ro.unobserve(e.target); } });
+}, { threshold: 0.1, rootMargin: '0px 0px -36px 0px' });
+revs.forEach(el => ro.observe(el));
+
+/* ── COUNTER ANIMATION ── */
+document.querySelectorAll('[data-count]').forEach(el => {
+  const co = new IntersectionObserver(([e]) => {
+    if (!e.isIntersecting) return;
+    const target = +el.dataset.count, suf = el.dataset.suffix || '';
+    const start = performance.now(), dur = 1800;
+    (function step(now) {
+      const t = Math.min((now - start) / dur, 1);
+      const v = Math.round((1 - Math.pow(1 - t, 3)) * target);
+      el.textContent = v + suf;
+      if (t < 1) requestAnimationFrame(step);
+    })(start);
+    co.disconnect();
+  }, { threshold: 0.5 });
+  co.observe(el);
+});
+
+/* ── TABS ── */
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* ── FAQ ACCORDION ── */
+document.querySelectorAll('.faq-q').forEach(q => {
+  q.addEventListener('click', () => {
+    const item = q.closest('.faq-item');
+    const open = item.classList.contains('open');
+    document.querySelectorAll('.faq-item.open').forEach(i => i.classList.remove('open'));
+    if (!open) item.classList.add('open');
+  });
+});
+</script>
+</body>
+</html>

@@ -24,7 +24,7 @@ import {
   markAssetsAsSeed,
   isSeedAsset,
 } from '../lib/indexeddb';
-import type { SeedDataset, SeedFeatureHighlight, GraphData, DigitalAsset } from '../types';
+import type { SeedDataset, SeedFeatureHighlight, GraphData, GraphNode, DigitalAsset } from '../types';
 import type { SeedDatasetInsert } from '../lib/database.types';
 import { getShareableDocumentsForPeriod } from './sharingWindowService';
 
@@ -105,40 +105,38 @@ export async function createSeedFromWindow(windowId: string): Promise<SeedDatase
     const [nodesResult, edgesResult] = await Promise.all([
       supabase
         .from('graph_nodes')
-        .select('id, LABEL, NODE_TYPE, PHYSICAL_HEIGHT_M, PHYSICAL_WIDTH_M, IS_REFERENCE_OBJECT, CANONICAL_ID')
+        .select('ID, LABEL, NODE_TYPE, CANONICAL_ID')
         .in('CANONICAL_ID', documentIds)
         .limit(500),
       supabase
         .from('graph_edges')
-        .select('source_id, target_id, relationship')
+        .select('FROM_NODE_ID, TO_NODE_ID, RELATIONSHIP')
         .limit(1000),
     ]);
 
     const graphSnapshot: GraphData = {
-      nodes: (nodesResult.data ?? []).map((n: any) => ({
-        id:                  n.id,
-        label:               n.LABEL ?? '',
-        type:                (n.NODE_TYPE ?? 'CONCEPT') as GraphData['nodes'][number]['type'],
-        relevance:           1,
-        PHYSICAL_HEIGHT_M:   n.PHYSICAL_HEIGHT_M,
-        IS_REFERENCE_OBJECT: n.IS_REFERENCE_OBJECT,
-        CANONICAL_ID:        n.CANONICAL_ID,
-        LABEL:               n.LABEL,
+      nodes: (nodesResult.data ?? []).map((n): GraphNode => ({
+        id:           n.ID,
+        label:        n.LABEL ?? '',
+        type:         (n.NODE_TYPE ?? 'CONCEPT') as GraphNode['type'],
+        relevance:    1,
+        CANONICAL_ID: n.CANONICAL_ID ?? undefined,
+        LABEL:        n.LABEL,
       })),
-      links: (edgesResult.data ?? []).map((e: any) => ({
-        source:       e.source_id,
-        target:       e.target_id,
-        relationship: e.relationship ?? '',
+      links: (edgesResult.data ?? []).map((e) => ({
+        source:       e.FROM_NODE_ID,
+        target:       e.TO_NODE_ID,
+        relationship: e.RELATIONSHIP ?? '',
       })),
     };
 
     // 4. Load document lat/lng to compute GIS bounds
     const { data: geoRows } = await supabase
       .from('historical_documents_global')
-      .select('"LATITUDE", "LONGITUDE"')
-      .in('"ID"', documentIds)
-      .not('"LATITUDE"', 'is', null)
-      .not('"LONGITUDE"', 'is', null);
+      .select('LATITUDE, LONGITUDE')
+      .in('ID', documentIds)
+      .not('LATITUDE', 'is', null)
+      .not('LONGITUDE', 'is', null);
 
     const gisRows = (geoRows ?? []) as Array<{ LATITUDE: number; LONGITUDE: number }>;
 

@@ -16,8 +16,7 @@ import { supabase } from './supabaseService';
 const FREE_TIER_LIMIT = 5;
 const LOCAL_CREDITS_KEY = 'geograph-free-credits-used';
 
-// Supabase doesn't have generated types for user_credits yet
-// Use type assertion for .from() calls
+// user_credits is now defined in database.types.ts (lowercase columns — matches deployed migration)
 const creditsTable = () => (supabase as any)?.from('user_credits');
 
 export interface CreditBalance {

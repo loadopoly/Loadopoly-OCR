@@ -136,6 +136,46 @@ Blockchain transaction records (encrypted).
 **Used in:**
 - [src/services/supabaseService.ts](src/services/supabaseService.ts) - `recordWeb3Transaction()`
 
+#### 12. `user_credits` (v2.20.0+)
+Tracks OCR processing credits for the freemium model.
+
+**Key Features:**
+- Credits remaining, total purchased, and free credits used
+- Links to `auth.users` via `user_id`
+- Automatic row creation on first free-tier usage
+- Lowercase columns (matches deployed Supabase migration)
+
+**RLS Policies:**
+- Users can read/update/insert their own credits
+- Service role has full access (for Stripe webhook fulfillment)
+
+**Used in:**
+- [src/services/creditService.ts](src/services/creditService.ts) - `getCreditBalance()`, `consumeCredit()`
+- [api/stripe-webhook.ts](api/stripe-webhook.ts) - `checkout.session.completed` fulfillment
+
+#### 13. `credit_transactions` (v2.20.0+)
+Audit log for credit purchases, consumption, refunds, and grants.
+
+**Key Features:**
+- Transaction types: `purchase`, `consumption`, `refund`, `grant`
+- Stripe session ID for payment traceability
+- Pack ID for linking to credit pack definitions
+
+**RLS Policies:**
+- Users can read their own transactions
+- Service role has full access
+
+**Used in:**
+- [api/stripe-webhook.ts](api/stripe-webhook.ts) - logs credit fulfillment
+
+### GIS / Location Columns (v2.20.0+)
+
+The following tables include `LATITUDE` and `LONGITUDE` columns for the relational GIS model:
+- **`historical_documents_global`** — `"LATITUDE" DOUBLE PRECISION`, `"LONGITUDE" DOUBLE PRECISION`
+- **`processing_queue`** — `"LATITUDE" DOUBLE PRECISION`, `"LONGITUDE" DOUBLE PRECISION`
+
+A composite index `idx_documents_lat_lng` supports geospatial queries on documents with coordinates.
+
 ## Type Definitions
 
 All database types are defined in [src/lib/database.types.ts](src/lib/database.types.ts).
