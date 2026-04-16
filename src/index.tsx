@@ -88,7 +88,7 @@ window.addEventListener('pageshow', (event) => {
         <div style="display:flex;flex-direction:column;height:100vh;background:#020617;color:#f8fafc;font-family:system-ui,-apple-system,sans-serif;">
           <div style="display:flex;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid #1e293b;">
             <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#3b82f6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
-            <span style="font-size:18px;font-weight:700;letter-spacing:-0.025em;">GeoGraph</span>
+            <span style="font-size:18px;font-weight:700;letter-spacing:-0.025em;">GeoGraph<span style="color:#64748b;">OCR</span></span>
           </div>
           <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;">
             <div style="width:48px;height:48px;border:3px solid #334155;border-top-color:#3b82f6;border-radius:50%;animation:spin 0.8s linear infinite;"></div>

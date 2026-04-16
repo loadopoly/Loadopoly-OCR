@@ -1892,13 +1892,14 @@ export default function App() {
   // { nodes: [], links: [] } on every render when no asset is selected.
   const EMPTY_GRAPH: GraphData = useMemo(() => ({ nodes: [], links: [] }), []);
   const worldGraphData = useMemo(() => {
+    if (graphViewMode === 'GLOBAL') return globalGraphData;
     // If an asset is selected and has graph data, show it
     const selectedAssetGraph = assets.find(a => a.id === selectedAssetId)?.graphData;
     if (selectedAssetGraph && selectedAssetGraph.nodes.length > 0) return selectedAssetGraph;
-    // Otherwise, always show the global corpus in the 3D world
+    // Fallback to global corpus so the 3D world isn't empty when no asset is selected
     if (globalGraphData.nodes.length > 0) return globalGraphData;
     return EMPTY_GRAPH;
-  }, [globalGraphData, assets, selectedAssetId, EMPTY_GRAPH]);
+  }, [graphViewMode, globalGraphData, assets, selectedAssetId, EMPTY_GRAPH]);
 
   return (
     <FilterProvider initialAssets={assets} initialGraphData={globalGraphData}>
@@ -2630,7 +2631,7 @@ export default function App() {
                             <div className="p-4">
                                 <h4 className="font-bold text-white text-sm mb-1 truncate">{item.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
                                 <div className="flex gap-2 mt-4">
-                                    <button onClick={() => { setSelectedAssetId(item.id); switchTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 flex items-center justify-center gap-1"><Network size={12} /> Graph</button>
+                                    <button onClick={() => { setSelectedAssetId(item.id); switchTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 flex items-center justify-center gap-1"><Network size={12} /> View Graph</button>
                                     {isTabVisible('world') && (
                                       <button onClick={() => { setSelectedAssetId(item.id); switchTab('world'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 flex items-center justify-center gap-1"><Globe size={12} /> 3D World</button>
                                     )}
