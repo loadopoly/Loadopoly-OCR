@@ -125,7 +125,7 @@ const mapRowToAsset = async (row: any, userId?: string): Promise<DigitalAsset> =
 
 export class SupabaseStorage extends BaseStorage {
   name = 'supabase';
-  private tableName = 'historical_documents_global';
+  private readonly tableName = 'historical_documents_global';
   private bucketName = 'corpus-images';
   private currentUserId?: string;
 

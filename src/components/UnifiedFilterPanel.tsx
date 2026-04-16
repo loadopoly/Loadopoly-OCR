@@ -40,6 +40,7 @@ import {
   Users,
   Building,
   BookOpen,
+  Share2,
 } from 'lucide-react';
 import {
   useFilterContext,
@@ -117,6 +118,9 @@ const DIMENSION_ICONS: Record<FilterDimension, React.ReactNode> = {
   
   // === CLASSIFICATION STATUS ===
   classificationStatus: <Building size={14} />,
+
+  // === SHARING STATUS ===
+  sharingStatus: <Share2 size={14} />,
 };
 
 const VIEW_ICONS: Record<ViewMode, React.ReactNode> = {

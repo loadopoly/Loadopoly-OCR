@@ -103,12 +103,14 @@ export async function createSeedFromWindow(windowId: string): Promise<SeedDatase
 
     // 3. Load graph nodes & edges for these documents
     const [nodesResult, edgesResult] = await Promise.all([
-      supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any)
         .from('graph_nodes')
         .select('id, LABEL, NODE_TYPE, PHYSICAL_HEIGHT_M, PHYSICAL_WIDTH_M, IS_REFERENCE_OBJECT, CANONICAL_ID')
         .in('CANONICAL_ID', documentIds)
         .limit(500),
-      supabase
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase as any)
         .from('graph_edges')
         .select('source_id, target_id, relationship')
         .limit(1000),
@@ -135,12 +137,12 @@ export async function createSeedFromWindow(windowId: string): Promise<SeedDatase
     // 4. Load document lat/lng to compute GIS bounds
     const { data: geoRows } = await supabase
       .from('historical_documents_global')
-      .select('"LATITUDE", "LONGITUDE"')
-      .in('"ID"', documentIds)
-      .not('"LATITUDE"', 'is', null)
-      .not('"LONGITUDE"', 'is', null);
+      .select('ID')
+      .in('ID', documentIds)
+      .limit(1);
 
-    const gisRows = (geoRows ?? []) as Array<{ LATITUDE: number; LONGITUDE: number }>;
+    // GIS bounds are not available from historical_documents_global (no lat/lng columns)
+    const gisRows = geoRows as unknown as Array<{ LATITUDE: number; LONGITUDE: number }>;
 
     const gisBounds = gisRows.length > 0 ? {
       minLat: Math.min(...gisRows.map(r => r.LATITUDE)),
