@@ -16,9 +16,8 @@ import { supabase } from './supabaseService';
 const FREE_TIER_LIMIT = 5;
 const LOCAL_CREDITS_KEY = 'geograph-free-credits-used';
 
-// Supabase doesn't have generated types for user_credits yet
-// Use type assertion for .from() calls
-const creditsTable = () => (supabase as any)?.from('user_credits');
+// user_credits is now defined in database.types.ts
+const creditsTable = () => supabase?.from('user_credits');
 
 export interface CreditBalance {
   creditsRemaining: number;
@@ -80,9 +79,9 @@ export async function getCreditBalance(userId?: string): Promise<CreditBalance> 
   // Authenticated user: check Supabase
   if (userId && supabase) {
     try {
-      const { data, error } = await creditsTable()
-        .select('credits_remaining, total_purchased, free_credits_used')
-        .eq('user_id', userId)
+      const { data, error } = await creditsTable()!
+        .select('CREDITS_REMAINING, TOTAL_PURCHASED, FREE_CREDITS_USED')
+        .eq('USER_ID', userId)
         .single();
       
       if (error && error.code !== 'PGRST116') {
@@ -91,10 +90,10 @@ export async function getCreditBalance(userId?: string): Promise<CreditBalance> 
       
       if (data) {
         return {
-          creditsRemaining: data.credits_remaining,
-          totalPurchased: data.total_purchased,
-          freeCreditsUsed: data.free_credits_used,
-          isFreeTier: data.total_purchased === 0,
+          creditsRemaining: data.CREDITS_REMAINING,
+          totalPurchased: data.TOTAL_PURCHASED,
+          freeCreditsUsed: data.FREE_CREDITS_USED,
+          isFreeTier: data.TOTAL_PURCHASED === 0,
           hasByok: false,
         };
       }
@@ -143,41 +142,41 @@ export async function consumeCredit(userId?: string): Promise<boolean> {
   // Authenticated user: decrement in Supabase
   if (userId && supabase) {
     try {
-      const { data: existing } = await creditsTable()
-        .select('credits_remaining, free_credits_used, total_purchased')
-        .eq('user_id', userId)
+      const { data: existing } = await creditsTable()!
+        .select('CREDITS_REMAINING, FREE_CREDITS_USED, TOTAL_PURCHASED')
+        .eq('USER_ID', userId)
         .single();
       
-      if (existing && existing.credits_remaining > 0) {
+      if (existing && existing.CREDITS_REMAINING > 0) {
         // Paid credits
-        await creditsTable()
+        await creditsTable()!
           .update({
-            credits_remaining: existing.credits_remaining - 1,
-            updated_at: new Date().toISOString(),
+            CREDITS_REMAINING: existing.CREDITS_REMAINING - 1,
+            UPDATED_AT: new Date().toISOString(),
           })
-          .eq('user_id', userId);
+          .eq('USER_ID', userId);
         return true;
       }
       
-      if (!existing || existing.total_purchased === 0) {
+      if (!existing || existing.TOTAL_PURCHASED === 0) {
         // Free tier — check if under limit
-        const freeUsed = existing?.free_credits_used ?? 0;
+        const freeUsed = existing?.FREE_CREDITS_USED ?? 0;
         if (freeUsed < FREE_TIER_LIMIT) {
           if (existing) {
-            await creditsTable()
+            await creditsTable()!
               .update({
-                free_credits_used: freeUsed + 1,
-                credits_remaining: Math.max(0, FREE_TIER_LIMIT - freeUsed - 1),
-                updated_at: new Date().toISOString(),
+                FREE_CREDITS_USED: freeUsed + 1,
+                CREDITS_REMAINING: Math.max(0, FREE_TIER_LIMIT - freeUsed - 1),
+                UPDATED_AT: new Date().toISOString(),
               })
-              .eq('user_id', userId);
+              .eq('USER_ID', userId);
           } else {
-            await creditsTable()
+            await creditsTable()!
               .insert({
-                user_id: userId,
-                credits_remaining: FREE_TIER_LIMIT - 1,
-                total_purchased: 0,
-                free_credits_used: 1,
+                USER_ID: userId,
+                CREDITS_REMAINING: FREE_TIER_LIMIT - 1,
+                TOTAL_PURCHASED: 0,
+                FREE_CREDITS_USED: 1,
               });
           }
           return true;

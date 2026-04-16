@@ -1067,6 +1067,67 @@ export interface Database {
         }
         Relationships: []
       }
+      // ── Credit System (Stripe) ──────────────────────────────────────────
+      user_credits: {
+        Row: {
+          USER_ID: string
+          CREDITS_REMAINING: number
+          TOTAL_PURCHASED: number
+          FREE_CREDITS_USED: number
+          LAST_PURCHASE_AT: string | null
+          CREATED_AT: string
+          UPDATED_AT: string
+        }
+        Insert: {
+          USER_ID: string
+          CREDITS_REMAINING?: number
+          TOTAL_PURCHASED?: number
+          FREE_CREDITS_USED?: number
+          LAST_PURCHASE_AT?: string | null
+          CREATED_AT?: string
+          UPDATED_AT?: string
+        }
+        Update: {
+          USER_ID?: string
+          CREDITS_REMAINING?: number
+          TOTAL_PURCHASED?: number
+          FREE_CREDITS_USED?: number
+          LAST_PURCHASE_AT?: string | null
+          CREATED_AT?: string
+          UPDATED_AT?: string
+        }
+        Relationships: []
+      }
+      credit_transactions: {
+        Row: {
+          ID: string
+          USER_ID: string
+          AMOUNT: number
+          TYPE: string
+          PACK_ID: string | null
+          STRIPE_SESSION_ID: string | null
+          CREATED_AT: string
+        }
+        Insert: {
+          ID?: string
+          USER_ID: string
+          AMOUNT: number
+          TYPE: string
+          PACK_ID?: string | null
+          STRIPE_SESSION_ID?: string | null
+          CREATED_AT?: string
+        }
+        Update: {
+          ID?: string
+          USER_ID?: string
+          AMOUNT?: number
+          TYPE?: string
+          PACK_ID?: string | null
+          STRIPE_SESSION_ID?: string | null
+          CREATED_AT?: string
+        }
+        Relationships: []
+      }
       processing_queue: {
         Row: {
           ID: string
