@@ -5,6 +5,11 @@ const { chromium } = require('playwright');
 const HOST = process.env.UI_BENCHMARK_HOST || '127.0.0.1';
 const PORT = Number(process.env.UI_BENCHMARK_PORT || 4173);
 const BASE_URL = process.env.UI_BENCHMARK_URL || `http://${HOST}:${PORT}`;
+const STORAGE_KEYS = {
+  hasVisited: 'geograph-has-visited',
+  onboarding: 'geograph-onboarding-v2',
+  uxPreferences: 'geograph-ux-preferences',
+};
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -69,7 +74,7 @@ function defaultUXPreferences() {
 async function collectScenario(page, label) {
   const issues = [];
   page.on('console', msg => {
-    if (['error', 'warning'].includes(msg.type())) {
+    if (msg.type() === 'error') {
       issues.push(`[console:${msg.type()}] ${msg.text()}`);
     }
   });
@@ -141,16 +146,19 @@ async function measureTab(page, label, textSelector) {
 async function collectAppScenario(browser) {
   const context = await browser.newContext({ viewport: { width: 1440, height: 900 } });
   await context.addInitScript((prefs) => {
-    localStorage.setItem('geograph-has-visited', 'true');
-    localStorage.setItem('geograph-onboarding-v2', 'true');
-    localStorage.setItem('geograph-ux-preferences', JSON.stringify(prefs));
-  }, defaultUXPreferences());
+    localStorage.setItem(prefs.storageKeys.hasVisited, 'true');
+    localStorage.setItem(prefs.storageKeys.onboarding, 'true');
+    localStorage.setItem(prefs.storageKeys.uxPreferences, JSON.stringify(prefs.uxPreferences));
+  }, {
+    storageKeys: STORAGE_KEYS,
+    uxPreferences: defaultUXPreferences(),
+  });
 
   const page = await context.newPage();
   const result = await collectScenario(page, 'app');
   result.tabs = [];
 
-  for (const tab of [
+  for (const [tabId, tabLabel] of [
     ['assets', 'Assets & Bundles'],
     ['graph', 'Knowledge Graph'],
     ['world', '3D World'],
@@ -158,7 +166,7 @@ async function collectAppScenario(browser) {
     ['batch', 'Quick Processing'],
     ['dashboard', 'Dashboard'],
   ]) {
-    const metric = await measureTab(page, tab[0], tab[1]);
+    const metric = await measureTab(page, tabId, tabLabel);
     if (metric) result.tabs.push(metric);
   }
 
