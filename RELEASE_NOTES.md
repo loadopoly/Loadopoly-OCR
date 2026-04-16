@@ -1,4 +1,15 @@
-# 🚀 GeoGraph Node: v2.18.0 Release Notes
+# 🚀 GeoGraph Node: v2.20.0 Release Notes
+
+## 🏗️ v2.20.0 — Consolidated Schema, Stripe Credits, Cloudflare Workers & Benchmarks (2026-04-16)
+
+- **`historical_documents_global` CREATE TABLE**: Added full CREATE TABLE DDL to `CONSOLIDATED_SCHEMA.sql` with all 50+ columns including `LATITUDE`/`LONGITUDE`. Eliminates reliance on external table creation; schema is now fully self-contained.
+- **Credit System Tables**: Added `user_credits` and `credit_transactions` tables to consolidated schema (lowercase columns matching deployed migration). Full RLS policies and performance indexes included.
+- **`creditService.ts` Column Fix**: Fixed column casing in credit service to match deployed migration (lowercase: `credits_remaining`, `user_id`, etc.).
+- **`database.types.ts`**: Added TypeScript types for `user_credits` and `credit_transactions` tables.
+- **Cloudflare Workers**: Added `wrangler.toml` configuring `geograph` Workers service with static asset serving from `./dist` for `www.loadopoly.com`.
+- **Supabase Migration**: New `20260416000000_historical_documents_global.sql` — safe for both fresh and existing databases (uses `CREATE TABLE IF NOT EXISTS` + `ADD COLUMN IF NOT EXISTS`).
+- **Benchmarks Document**: Created comprehensive `docs/technical/BENCHMARKS.md` covering build metrics, schema stats, LATITUDE/LONGITUDE verification, relational sizing, Stripe flow, power user controls, and test coverage.
+- **Schema Version**: `CONSOLIDATED_SCHEMA.sql` bumped to v3.3.0 with 26 tables, 54 indexes, 61 RLS policies, and 19 functions.
 
 ## 📏 v2.18.0 — Relational Sizing Dynamic & Physical Dimension Tracking (2026-04-12)
 

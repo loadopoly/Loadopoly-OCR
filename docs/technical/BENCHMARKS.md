@@ -1,6 +1,6 @@
 # Loadopoly-OCR Benchmark Report
 
-**Version:** 3.3.0  
+**Version:** 2.20.0  
 **Date:** 2026-04-16  
 **Schema:** `sql/CONSOLIDATED_SCHEMA.sql` v3.3.0
 

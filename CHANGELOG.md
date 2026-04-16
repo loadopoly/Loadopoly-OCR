@@ -1,3 +1,21 @@
+## [v2.20.0] - 2026-04-16
+
+### Added
+- **`historical_documents_global` CREATE TABLE**: Full DDL with all 50+ columns including `LATITUDE`/`LONGITUDE` added to `CONSOLIDATED_SCHEMA.sql`. Schema is now fully self-contained.
+- **Credit System Tables**: `user_credits` and `credit_transactions` added to consolidated schema with RLS policies and indexes.
+- **Cloudflare Workers**: `wrangler.toml` for `geograph` service serving `www.loadopoly.com` via static assets from `./dist`.
+- **Supabase Migration**: `20260416000000_historical_documents_global.sql` — safe for fresh and existing databases.
+- **Benchmarks Document**: `docs/technical/BENCHMARKS.md` covering build, schema, sizing, Stripe, admin controls, and testing.
+- **TypeScript Types**: `user_credits` and `credit_transactions` added to `database.types.ts`.
+
+### Fixed
+- **`creditService.ts`**: Column casing corrected to match deployed migration (lowercase: `credits_remaining`, `user_id`, etc.).
+- **Schema Simplification**: Removed conditional `DO $$ ... END $$` blocks for `historical_documents_global` — table now always created directly.
+
+### Changed
+- **Schema Version**: `CONSOLIDATED_SCHEMA.sql` bumped to v3.3.0 (26 tables, 54 indexes, 61 RLS policies, 19 functions).
+- **Composite Index**: Added `idx_documents_lat_lng` for geospatial queries on LATITUDE/LONGITUDE.
+
 ## [v2.19.3] - 2026-04-15
 
 ### Fixed
