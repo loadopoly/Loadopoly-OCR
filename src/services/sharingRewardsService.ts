@@ -83,7 +83,7 @@ export async function onSeedAdopted(seedId: string): Promise<SeedCreatorReward |
     // 1. Load seed to get creator and current adoption count
     const { data: seedRow, error: seedErr } = await supabase
       .from('seed_datasets')
-      .select('id, creator_id, adoption_count, community_id')
+      .select('id, creator_id, adoption_count')
       .eq('id', seedId)
       .maybeSingle();
 
@@ -228,13 +228,13 @@ async function awardSeedBadges(creatorId: string, totalAdoptions: number): Promi
   // Read current avatar badges
   const { data: avatarRow } = await supabase
     .from('user_avatars')
-    .select('id, badges')
-    .eq('user_id', creatorId)
+    .select('ID, BADGES')
+    .eq('USER_ID', creatorId)
     .maybeSingle();
 
   if (!avatarRow) return;
 
-  const existing = ((avatarRow as any).badges ?? []) as Array<{ id: string }>;
+  const existing = ((avatarRow as any).BADGES ?? []) as Array<{ id: string }>;
   const existingIds = new Set(existing.map((b) => b.id));
 
   const newBadges = badges
@@ -252,6 +252,6 @@ async function awardSeedBadges(creatorId: string, totalAdoptions: number): Promi
 
   await supabase
     .from('user_avatars')
-    .update({ badges: [...existing, ...newBadges] })
-    .eq('id', (avatarRow as any).id);
+    .update({ BADGES: [...existing, ...newBadges] })
+    .eq('ID', (avatarRow as any).ID);
 }
