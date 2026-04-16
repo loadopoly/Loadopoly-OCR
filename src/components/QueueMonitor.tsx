@@ -65,7 +65,11 @@ interface ConnectionTestResult {
   queueSelect: { success: boolean; error?: string };
 }
 
-export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueComplete, compact = false, uploadProgress }) => {
+// PERF FIX: React.memo prevents re-renders when the parent tab (Dashboard, Assets,
+// Batch, Database, Processing Panel) re-renders due to unrelated state changes.
+// QueueMonitor is mounted up to 5 times — each re-render triggers useMemo chains
+// and can cascade into fetchStats/fetchJobs if the effect deps change.
+export const QueueMonitor: React.FC<QueueMonitorProps> = React.memo(({ userId, onRequeueComplete, compact = false, uploadProgress }) => {
   const truncateText = useCallback((value: unknown, length: number) => {
     if (typeof value !== 'string') return '';
     return value.slice(0, length);
@@ -386,8 +390,12 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
     fetchStats();
     fetchJobs();
     
-    // Refresh stats every 30 seconds
+    // PERF FIX: Only poll when the browser tab is visible.
+    // Without this guard every QueueMonitor instance (up to 5 mounted across
+    // tabs) fires a 30-second interval even when the user has tabbed away,
+    // wasting battery and bandwidth on mobile devices.
     const interval = setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
       fetchStats();
       if (showJobList) fetchJobs();
     }, 30000);
@@ -1119,4 +1127,4 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = ({ userId, onRequeueCom
       )}
     </div>
   );
-};
+});
