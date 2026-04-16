@@ -1068,63 +1068,67 @@ export interface Database {
         Relationships: []
       }
       // ── Credit System (Stripe) ──────────────────────────────────────────
+      // NOTE: These tables use lowercase columns (matches deployed migration)
       user_credits: {
         Row: {
-          USER_ID: string
-          CREDITS_REMAINING: number
-          TOTAL_PURCHASED: number
-          FREE_CREDITS_USED: number
-          LAST_PURCHASE_AT: string | null
-          CREATED_AT: string
-          UPDATED_AT: string
+          id: string
+          user_id: string
+          credits_remaining: number
+          total_purchased: number
+          free_credits_used: number
+          last_purchase_at: string | null
+          created_at: string
+          updated_at: string
         }
         Insert: {
-          USER_ID: string
-          CREDITS_REMAINING?: number
-          TOTAL_PURCHASED?: number
-          FREE_CREDITS_USED?: number
-          LAST_PURCHASE_AT?: string | null
-          CREATED_AT?: string
-          UPDATED_AT?: string
+          id?: string
+          user_id: string
+          credits_remaining?: number
+          total_purchased?: number
+          free_credits_used?: number
+          last_purchase_at?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Update: {
-          USER_ID?: string
-          CREDITS_REMAINING?: number
-          TOTAL_PURCHASED?: number
-          FREE_CREDITS_USED?: number
-          LAST_PURCHASE_AT?: string | null
-          CREATED_AT?: string
-          UPDATED_AT?: string
+          id?: string
+          user_id?: string
+          credits_remaining?: number
+          total_purchased?: number
+          free_credits_used?: number
+          last_purchase_at?: string | null
+          created_at?: string
+          updated_at?: string
         }
         Relationships: []
       }
       credit_transactions: {
         Row: {
-          ID: string
-          USER_ID: string
-          AMOUNT: number
-          TYPE: string
-          PACK_ID: string | null
-          STRIPE_SESSION_ID: string | null
-          CREATED_AT: string
+          id: string
+          user_id: string
+          amount: number
+          type: string
+          pack_id: string | null
+          stripe_session_id: string | null
+          created_at: string
         }
         Insert: {
-          ID?: string
-          USER_ID: string
-          AMOUNT: number
-          TYPE: string
-          PACK_ID?: string | null
-          STRIPE_SESSION_ID?: string | null
-          CREATED_AT?: string
+          id?: string
+          user_id: string
+          amount: number
+          type: string
+          pack_id?: string | null
+          stripe_session_id?: string | null
+          created_at?: string
         }
         Update: {
-          ID?: string
-          USER_ID?: string
-          AMOUNT?: number
-          TYPE?: string
-          PACK_ID?: string | null
-          STRIPE_SESSION_ID?: string | null
-          CREATED_AT?: string
+          id?: string
+          user_id?: string
+          amount?: number
+          type?: string
+          pack_id?: string | null
+          stripe_session_id?: string | null
+          created_at?: string
         }
         Relationships: []
       }
