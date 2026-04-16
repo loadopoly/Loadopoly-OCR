@@ -128,6 +128,11 @@ async function measureTab(page, label, textSelector) {
   const locator = page.locator(`text=${textSelector}`).first();
   if (!(await locator.count())) return null;
 
+  // On narrow viewports (mobile) the sidebar is hidden behind a hamburger menu.
+  // Check if the element is actually visible before attempting to click it.
+  const isVisible = await locator.isVisible().catch(() => false);
+  if (!isVisible) return null;
+
   const startedAt = Date.now();
   await locator.click();
   // PERF FIX: Reduced from 600ms to 250ms. The original 600ms wait inflated
@@ -163,15 +168,32 @@ async function collectAppScenario(browser, viewportLabel, viewport) {
   const result = await collectScenario(page, viewportLabel);
   result.tabs = [];
 
-  for (const [tabId, tabLabel] of [
-    ['assets', 'Assets & Bundles'],
-    ['graph', 'Knowledge Graph'],
-    ['world', '3D World'],
-    ['database', 'Structured DB'],
-    ['batch', 'Quick Processing'],
-    ['dashboard', 'Dashboard'],
-  ]) {
-    const metric = await measureTab(page, tabId, tabLabel);
+  // Tab navigation: [tabId, sidebarLabel, keyboardShortcut]
+  // On mobile viewports the sidebar is hidden — fall back to keyboard shortcuts
+  const tabDefs = [
+    ['assets', 'Assets & Bundles', '4'],
+    ['graph', 'Knowledge Graph', '5'],
+    ['world', '3D World', 'w'],
+    ['database', 'Structured DB', '6'],
+    ['batch', 'Quick Processing', '2'],
+    ['dashboard', 'Dashboard', '1'],
+  ];
+
+  for (const [tabId, tabLabel, shortcutKey] of tabDefs) {
+    // First try clicking the sidebar label (desktop)
+    let metric = await measureTab(page, tabId, tabLabel);
+    if (!metric && shortcutKey) {
+      // Fallback for mobile: use keyboard shortcut
+      const startedAt = Date.now();
+      await page.keyboard.press(shortcutKey);
+      await page.waitForTimeout(250);
+      const snapshot = await page.evaluate(() => ({
+        hasErrorUi: document.body.innerText.includes('Something went wrong'),
+        loadingSpinners: document.querySelectorAll('.animate-spin').length,
+        bodySnippet: document.body.innerText.slice(0, 220),
+      }));
+      metric = { label: tabId, elapsedMs: Date.now() - startedAt, ...snapshot };
+    }
     if (metric) result.tabs.push(metric);
   }
 
