@@ -84,26 +84,28 @@ import { announce } from './lib/accessibility';
 import { useAvatar } from './hooks/useAvatar';
 import { FilterProvider, useFilterContext } from './contexts/FilterContext';
 import UnifiedFilterPanel, { InlineFilterBar, FilterBadge } from './components/UnifiedFilterPanel';
+import {
+  ARSceneLazy as ARScene,
+  BatchImporterLazy as BatchImporter,
+  BatchProcessingPanelLazy as BatchProcessingPanel,
+  GraphVisualizerLazy as GraphVisualizer,
+  IntegrationsHubLazy as IntegrationsHub,
+  QueueMonitorLazy as QueueMonitor,
+  SemanticCanvasLazy as SemanticCanvas,
+  SmartSuggestionsLazy as SmartSuggestions,
+  SocialAppLazy as SocialApp,
+  WorldRendererLazy as WorldRenderer,
+  AnnotationEditorLazy as AnnotationEditor,
+} from './lib/lazyComponents';
 
 
 // PERF: Lazy-load heavy components not needed for initial Dashboard paint
-const GraphVisualizer = lazy(() => import('./components/GraphVisualizer'));
 const ContributeButton = lazy(() => import('./components/ContributeButton'));
 const BundleCard = lazy(() => import('./components/BundleCard'));
-const ARScene = lazy(() => import('./components/ARScene'));
-const SemanticCanvas = lazy(() => import('./components/SemanticCanvas'));
-const BatchImporter = lazy(() => import('./components/BatchImporter'));
 const SettingsPanel = lazy(() => import('./components/SettingsPanel'));
 const PurchaseModal = lazy(() => import('./components/PurchaseModal'));
-const SmartSuggestions = lazy(() => import('./components/SmartSuggestions'));
-const SocialApp = lazy(() => import('./components/SocialApp'));
-const AnnotationEditor = lazy(() => import('./components/AnnotationEditor'));
-const WorldRenderer = lazy(() => import('./components/metaverse').then(m => ({ default: m.WorldRenderer })));
-const IntegrationsHub = lazy(() => import('./components/IntegrationsHub'));
 const ClusterSyncStatsPanel = lazy(() => import('./components/ClusterSyncStatsPanel').then(m => ({ default: m.ClusterSyncStatsPanel })));
 const ClusterSyncButton = lazy(() => import('./components/ClusterSyncStatsPanel').then(m => ({ default: m.ClusterSyncButton })));
-const QueueMonitor = lazy(() => import('./components/QueueMonitor').then(m => ({ default: m.QueueMonitor })));
-const BatchProcessingPanel = lazy(() => import('./components/BatchProcessingPanel'));
 const CreditGate = lazy(() => import('./components/CreditGate'));
 const CreditBadge = lazy(() => import('./components/CreditGate').then(m => ({ default: m.CreditBadge })));
 const CameraCapture = lazy(() => import('./components/CameraCapture'));

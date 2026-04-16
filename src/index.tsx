@@ -1,7 +1,7 @@
 // PERF FIX: Polyfills (Buffer/process) are now deferred to web3 chunk.
 // Only the global polyfill remains in index.html's inline script.
 import './index.css';
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider, ConnectionStatus } from './components/Toast';
@@ -64,14 +64,36 @@ if ('serviceWorker' in navigator) {
   });
 }
 
-// PERF FIX: pwaUtils and performanceMonitor are now dynamic imports.
-// They depend on `./lib/logger` which Rollup places in chunk-cluster-sync
-// (the chunk's heaviest consumer). A static import of logger forces the entry
-// to statically import chunk-cluster-sync (138KB) → vendor-supabase (169KB) →
-// vendor-ai (253KB), adding ~600KB of parse-blocking JS to the entry.
-// By making them dynamic, the entry only needs vendor-react + vendor-icons.
-import('./lib/performanceMonitor').then(m => m.initPerformanceMonitoring());
-import('./lib/pwaUtils').then(m => m.initPWA());
+function requestIdle(callback: () => void, timeout = 1500) {
+  if ('requestIdleCallback' in window) {
+    (window as any).requestIdleCallback(callback, { timeout });
+    return;
+  }
+  window.setTimeout(callback, 0);
+}
+
+let nonCriticalStartupScheduled = false;
+function scheduleNonCriticalStartup() {
+  if (nonCriticalStartupScheduled) return;
+  nonCriticalStartupScheduled = true;
+
+  const start = () => {
+    import('./lib/performanceMonitor').then(m => m.initPerformanceMonitoring());
+    import('./lib/pwaUtils').then(m => m.initPWA());
+    import('./bootstrap').then(({ bootstrapModuleSystem }) => {
+      bootstrapModuleSystem().catch((err: unknown) => {
+        console.error('[GeoGraph] Module bootstrap failed:', err);
+      });
+    });
+  };
+
+  if (document.readyState === 'complete') {
+    requestIdle(start);
+    return;
+  }
+
+  window.addEventListener('load', () => requestIdle(start), { once: true });
+}
 
 // iOS Safari standalone PWA: when the OS evicts the page from bfcache and
 // restores it, the page can appear blank (stale render, dead JS context).
@@ -102,15 +124,6 @@ window.addEventListener('pageshow', (event) => {
   }
 });
 
-// PERF FIX: Start module bootstrap in background via dynamic import.
-// This breaks the static import chain that was pulling ~600KB of vendor libs
-// (supabase, google-genai, cluster-sync) into the entry chunk.
-import('./bootstrap').then(({ bootstrapModuleSystem }) => {
-  bootstrapModuleSystem().catch((err: unknown) => {
-    console.error('[GeoGraph] Module bootstrap failed:', err);
-  });
-});
-
 // Mount React immediately — no waiting on bootstrap or module system.
 // The HTML app shell is already visible; React replaces it on mount.
 if (!rootElement) {
@@ -126,17 +139,22 @@ const root = ReactDOM.createRoot(rootElement);
 // Now: React mounts instantly with Suspense, the HTML app shell stays visible while
 // heavy chunks download in parallel. On a Pixel 10, this reduces perceived load
 // from ~33s to ~2-4s (entry + React + Suspense fallback).
-// PERF FIX: Start downloading App + ModuleContext IMMEDIATELY at module evaluation time.
-// Previously these downloads only started when React.lazy triggered during Suspense mount,
-// wasting 50-200ms between entry parse completion and lazy fetch start.
-const _appP = import('./App');
-const _moduleP = import('./contexts/ModuleContext');
+let appShellPromise:
+  | Promise<[typeof import('./App'), typeof import('./contexts/ModuleContext')]>
+  | null = null;
+
+function preloadAppShell() {
+  if (!appShellPromise) {
+    appShellPromise = Promise.all([
+      import('./App'),
+      import('./contexts/ModuleContext'),
+    ]);
+  }
+  return appShellPromise;
+}
 
 const LazyAppShell = lazy(() =>
-  Promise.all([
-    _appP,
-    _moduleP,
-  ]).then(([appModule, { ModuleProvider }]) => ({
+  preloadAppShell().then(([appModule, { ModuleProvider }]) => ({
     default: () => (
       <ModuleProvider>
         <ToastProvider>
@@ -175,15 +193,23 @@ const isReturningUser = !!hasVisited;
 function AppEntry() {
   const [showApp, setShowApp] = React.useState(isReturningUser);
 
+  useEffect(() => {
+    if (!showApp) return;
+    preloadAppShell();
+    scheduleNonCriticalStartup();
+  }, [showApp]);
+
   if (!showApp) {
     return (
       <Suspense fallback={<AppShellFallback />}>
         <LazyLandingPage
           onGetStarted={() => {
+            preloadAppShell();
             localStorage.setItem('geograph-has-visited', 'true');
             setShowApp(true);
           }}
           onSignIn={() => {
+            preloadAppShell();
             localStorage.setItem('geograph-has-visited', 'true');
             setShowApp(true);
           }}
