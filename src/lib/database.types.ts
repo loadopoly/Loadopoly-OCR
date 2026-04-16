@@ -155,6 +155,8 @@ export interface Database {
           TAXONOMY: Json | null
           ITEM_ATTRIBUTES: Json | null
           SCENERY_ATTRIBUTES: Json | null
+          LATITUDE: number | null
+          LONGITUDE: number | null
         }
         Insert: {
           ID?: string
@@ -217,6 +219,8 @@ export interface Database {
           TAXONOMY?: Json | null
           ITEM_ATTRIBUTES?: Json | null
           SCENERY_ATTRIBUTES?: Json | null
+          LATITUDE?: number | null
+          LONGITUDE?: number | null
         }
         Update: {
           ID?: string
@@ -279,6 +283,8 @@ export interface Database {
           TAXONOMY?: Json | null
           ITEM_ATTRIBUTES?: Json | null
           SCENERY_ATTRIBUTES?: Json | null
+          LATITUDE?: number | null
+          LONGITUDE?: number | null
         }
         Relationships: []
       }
