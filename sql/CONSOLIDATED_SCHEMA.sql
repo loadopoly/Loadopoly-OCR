@@ -1,8 +1,8 @@
 -- =============================================
 -- LOADOPOLY-OCR CONSOLIDATED DATABASE SCHEMA
 -- =============================================
--- Version: 3.2.0
--- Last Updated: 2026-04-09
+-- Version: 3.3.0
+-- Last Updated: 2026-04-16
 --
 -- This is the SINGLE SOURCE OF TRUTH for the Loadopoly-OCR database schema.
 -- Run this script to set up a fresh Supabase project or verify existing schema.
@@ -11,7 +11,8 @@
 --
 -- MODULES:
 --   1.  Extensions (vector, PostGIS, pg_net, pg_cron)
---   2.  Core Tables (historical_documents_global, processing_queue)
+--   2.  Core Tables (historical_documents_global, processing_queue, bundles,
+--                    master_user_access, user_credits, credit_transactions)
 --   3.  Classification System (structured_clusters, mappings)
 --   4.  Avatar & Presence (user_avatars, presence_sessions, world_sectors)
 --   5.  GARD Tokenization (royalty_transactions, shard_holdings, etc.)
@@ -115,7 +116,104 @@ CREATE TABLE IF NOT EXISTS processing_queue (
     "METADATA" JSONB DEFAULT '{}'::jsonb
 );
 
--- 2.2 Digital Asset Bundles
+-- 2.2 Historical Documents Global
+-- Core document table — the primary OCR asset store and relational backbone.
+-- LATITUDE/LONGITUDE are required columns; they underpin the GIS/relational model.
+CREATE TABLE IF NOT EXISTS historical_documents_global (
+    "ID" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "CREATED_AT" TIMESTAMPTZ DEFAULT NOW(),
+
+    -- Contributor / provenance
+    "CONTRIBUTOR_ID" TEXT,
+    "CONTRIBUTED_AT" TIMESTAMPTZ,
+    "DATA_LICENSE" TEXT DEFAULT 'GEOGRAPH_CORPUS_1.0',
+    "CONTRIBUTOR_NFT_MINTED" BOOLEAN DEFAULT false,
+
+    -- Image / file
+    "ORIGINAL_IMAGE_URL" TEXT,
+    "ASSET_ID" TEXT UNIQUE,
+    "FILE_FORMAT" TEXT,
+    "FILE_SIZE_BYTES" BIGINT DEFAULT 0,
+    "RESOLUTION_DPI" INTEGER DEFAULT 300,
+    "COLOR_MODE" TEXT DEFAULT 'RGB',
+
+    -- Document metadata
+    "DOCUMENT_TITLE" TEXT,
+    "DOCUMENT_DESCRIPTION" TEXT,
+    "RAW_OCR_TRANSCRIPTION" TEXT,
+    "PREPROCESS_OCR_TRANSCRIPTION" TEXT,
+
+    -- Ownership
+    "USER_ID" UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+
+    -- Accessibility
+    "ALT_TEXT_SHORT" TEXT,
+    "ALT_TEXT_LONG" TEXT,
+    "AUDIO_DESCRIPTION" TEXT,
+    "TACTILE_DESCRIPTION" TEXT,
+    "READING_ORDER" JSONB,
+    "ACCESSIBILITY_SCORE" NUMERIC(4,3) DEFAULT 0,
+
+    -- Scan / classification
+    "SCAN_TYPE" TEXT DEFAULT 'DOCUMENT',
+    "SOURCE_COLLECTION" TEXT,
+    "NLP_NODE_CATEGORIZATION" TEXT,
+    "CREATOR_AGENT" TEXT,
+    "RIGHTS_STATEMENT" TEXT,
+    "LANGUAGE_CODE" TEXT DEFAULT 'en',
+    "FIXITY_CHECKSUM" TEXT,
+
+    -- GARD / tokenization
+    "SHARD_TOKEN_ID" INTEGER,
+    "NFT_TOKEN_ID" INTEGER,
+    "REDEMPTION_STATUS" TEXT DEFAULT 'NONE',
+    "WALLET_ADDRESS" TEXT,
+    "REDEMPTION_DATE" TIMESTAMPTZ,
+    "REDEMPTION_TX_HASH" TEXT,
+    "SHARDS_COLLECTED" INTEGER DEFAULT 0,
+    "SHARDS_REQUIRED" INTEGER DEFAULT 5,
+    "SHIPPING_STATUS" TEXT,
+    "TRACKING_NUMBER" TEXT,
+
+    -- Timestamps
+    "LOCAL_TIMESTAMP" TIMESTAMPTZ DEFAULT NOW(),
+    "OCR_DERIVED_TIMESTAMP" TIMESTAMPTZ,
+    "NLP_DERIVED_TIMESTAMP" TIMESTAMPTZ,
+    "INGEST_DATE" TIMESTAMPTZ DEFAULT NOW(),
+    "LAST_MODIFIED" TIMESTAMPTZ DEFAULT NOW(),
+
+    -- GIS / Location — REQUIRED for relational database model
+    "LOCAL_GIS_ZONE" TEXT,
+    "OCR_DERIVED_GIS_ZONE" TEXT,
+    "NLP_DERIVED_GIS_ZONE" TEXT,
+    "LATITUDE" DOUBLE PRECISION,
+    "LONGITUDE" DOUBLE PRECISION,
+
+    -- Counts
+    "NODE_COUNT" INTEGER DEFAULT 0,
+    "TOKEN_COUNT" INTEGER DEFAULT 0,
+
+    -- Processing
+    "PROCESSING_STATUS" TEXT DEFAULT 'PENDING',
+    "CONFIDENCE_SCORE" NUMERIC(4,3) DEFAULT 0,
+
+    -- JSONB arrays
+    "ENTITIES_EXTRACTED" JSONB DEFAULT '[]'::jsonb,
+    "RELATED_ASSETS" JSONB DEFAULT '[]'::jsonb,
+    "PRESERVATION_EVENTS" JSONB DEFAULT '[]'::jsonb,
+    "KEYWORDS_TAGS" JSONB DEFAULT '[]'::jsonb,
+
+    -- Access
+    "ACCESS_RESTRICTIONS" BOOLEAN DEFAULT false,
+    "IS_ENTERPRISE" BOOLEAN DEFAULT false,
+
+    -- Structured classification (populated by LLM)
+    "TAXONOMY" JSONB,
+    "ITEM_ATTRIBUTES" JSONB,
+    "SCENERY_ATTRIBUTES" JSONB
+);
+
+-- 2.3 Digital Asset Bundles
 -- Consolidated metadata for deduplicated assets
 CREATE TABLE IF NOT EXISTS digital_asset_bundles (
     "ID" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -130,7 +228,7 @@ CREATE TABLE IF NOT EXISTS digital_asset_bundles (
     "UPDATED_AT" TIMESTAMPTZ DEFAULT NOW()
 );
 
-  -- 2.3 Master User Access Control
+  -- 2.4 Master User Access Control
   -- Users listed here can access the shared/master corpus and graph datasets.
   CREATE TABLE IF NOT EXISTS master_user_access (
     "USER_ID" UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -139,6 +237,30 @@ CREATE TABLE IF NOT EXISTS digital_asset_bundles (
     "CREATED_AT" TIMESTAMPTZ DEFAULT NOW(),
     "UPDATED_AT" TIMESTAMPTZ DEFAULT NOW()
   );
+
+-- 2.5 Credit System (Stripe integration)
+-- Tracks per-user OCR credit balances (freemium + paid packs)
+CREATE TABLE IF NOT EXISTS user_credits (
+    "USER_ID" UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    "CREDITS_REMAINING" INTEGER NOT NULL DEFAULT 0,
+    "TOTAL_PURCHASED" INTEGER NOT NULL DEFAULT 0,
+    "FREE_CREDITS_USED" INTEGER NOT NULL DEFAULT 0,
+    "LAST_PURCHASE_AT" TIMESTAMPTZ,
+    "CREATED_AT" TIMESTAMPTZ DEFAULT NOW(),
+    "UPDATED_AT" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 2.6 Credit Transactions
+-- Audit log for every credit purchase / usage event
+CREATE TABLE IF NOT EXISTS credit_transactions (
+    "ID" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    "USER_ID" UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    "AMOUNT" INTEGER NOT NULL,
+    "TYPE" TEXT NOT NULL CHECK ("TYPE" IN ('purchase', 'usage', 'refund', 'bonus')),
+    "PACK_ID" TEXT,
+    "STRIPE_SESSION_ID" TEXT,
+    "CREATED_AT" TIMESTAMPTZ DEFAULT NOW()
+);
 
 -- ============================================
 -- 3. CLASSIFICATION SYSTEM
@@ -576,7 +698,8 @@ COMMENT ON TABLE asset_graph_nodes IS
 -- ============================================
 -- 8. EXTEND HISTORICAL_DOCUMENTS_GLOBAL
 -- ============================================
--- Add columns if the table exists (created externally)
+-- Add embedding, structured classification, and bundle columns.
+-- These are ADD COLUMN IF NOT EXISTS so they are safe on re-run.
 
 DO $$ 
 BEGIN
@@ -601,9 +724,6 @@ BEGIN
     
     -- Bundle Support
     ALTER TABLE historical_documents_global ADD COLUMN IF NOT EXISTS "BUNDLE_ID" UUID REFERENCES digital_asset_bundles("ID") ON DELETE SET NULL;
-    
-EXCEPTION WHEN undefined_table THEN
-    RAISE NOTICE 'historical_documents_global table does not exist yet - will add columns when table is created';
 END $$;
 
 -- ============================================
@@ -1151,7 +1271,10 @@ CREATE TRIGGER trg_invoke_processing_worker
 
 -- Enable RLS on all tables
 ALTER TABLE processing_queue ENABLE ROW LEVEL SECURITY;
+ALTER TABLE historical_documents_global ENABLE ROW LEVEL SECURITY;
 ALTER TABLE digital_asset_bundles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_credits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE credit_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE structured_clusters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE structured_classification_mappings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE classification_audit_log ENABLE ROW LEVEL SECURITY;
@@ -1174,17 +1297,6 @@ ALTER TABLE graph_edges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE asset_graph_nodes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE master_user_access ENABLE ROW LEVEL SECURITY;
 
--- historical_documents_global may be created externally in some deployments.
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM information_schema.tables
-    WHERE table_schema = 'public' AND table_name = 'historical_documents_global'
-  ) THEN
-    EXECUTE 'ALTER TABLE historical_documents_global ENABLE ROW LEVEL SECURITY';
-  END IF;
-END $$;
 
 -- Master access control table policies
 DROP POLICY IF EXISTS "master_access_self_or_service_read" ON master_user_access;
@@ -1195,58 +1307,58 @@ CREATE POLICY "master_access_service_manage" ON master_user_access FOR ALL TO se
 USING (true) WITH CHECK (true);
 
 -- historical_documents_global policies (owner or master-granted access)
-DO $$
-BEGIN
-  IF EXISTS (
+DROP POLICY IF EXISTS "docs_read_owner_or_master" ON historical_documents_global;
+DROP POLICY IF EXISTS "docs_insert_owner_or_service" ON historical_documents_global;
+DROP POLICY IF EXISTS "docs_update_owner_or_service" ON historical_documents_global;
+DROP POLICY IF EXISTS "Users view own documents" ON historical_documents_global;
+DROP POLICY IF EXISTS "Authenticated insert own" ON historical_documents_global;
+DROP POLICY IF EXISTS "Users update own documents" ON historical_documents_global;
+
+CREATE POLICY "docs_read_owner_or_master"
+ON historical_documents_global FOR SELECT
+USING (
+  (select auth.role()) = 'service_role'
+  OR "USER_ID" = (select auth.uid())
+  OR EXISTS (
     SELECT 1
-    FROM information_schema.tables
-    WHERE table_schema = 'public' AND table_name = 'historical_documents_global'
-  ) THEN
-    EXECUTE 'DROP POLICY IF EXISTS "docs_read_owner_or_master" ON historical_documents_global';
-    EXECUTE 'DROP POLICY IF EXISTS "docs_insert_owner_or_service" ON historical_documents_global';
-    EXECUTE 'DROP POLICY IF EXISTS "docs_update_owner_or_service" ON historical_documents_global';
-    EXECUTE 'DROP POLICY IF EXISTS "Users view own documents" ON historical_documents_global';
-    EXECUTE 'DROP POLICY IF EXISTS "Authenticated insert own" ON historical_documents_global';
-    EXECUTE 'DROP POLICY IF EXISTS "Users update own documents" ON historical_documents_global';
+    FROM public.master_user_access mua
+    WHERE mua."USER_ID" = (select auth.uid())
+      AND mua."CAN_ACCESS_CORPUS" = true
+  )
+);
 
-    EXECUTE '
-      CREATE POLICY "docs_read_owner_or_master"
-      ON historical_documents_global FOR SELECT
-      USING (
-        (select auth.role()) = ''service_role''
-        OR "USER_ID" = (select auth.uid())
-        OR EXISTS (
-          SELECT 1
-          FROM public.master_user_access mua
-          WHERE mua."USER_ID" = (select auth.uid())
-            AND mua."CAN_ACCESS_CORPUS" = true
-        )
-      )
-    ';
+CREATE POLICY "docs_insert_owner_or_service"
+ON historical_documents_global FOR INSERT
+WITH CHECK (
+  (select auth.role()) = 'service_role'
+  OR "USER_ID" = (select auth.uid())
+);
 
-    EXECUTE '
-      CREATE POLICY "docs_insert_owner_or_service"
-      ON historical_documents_global FOR INSERT
-      WITH CHECK (
-        (select auth.role()) = ''service_role''
-        OR "USER_ID" = (select auth.uid())
-      )
-    ';
+CREATE POLICY "docs_update_owner_or_service"
+ON historical_documents_global FOR UPDATE
+USING (
+  (select auth.role()) = 'service_role'
+  OR "USER_ID" = (select auth.uid())
+)
+WITH CHECK (
+  (select auth.role()) = 'service_role'
+  OR "USER_ID" = (select auth.uid())
+);
 
-    EXECUTE '
-      CREATE POLICY "docs_update_owner_or_service"
-      ON historical_documents_global FOR UPDATE
-      USING (
-        (select auth.role()) = ''service_role''
-        OR "USER_ID" = (select auth.uid())
-      )
-      WITH CHECK (
-        (select auth.role()) = ''service_role''
-        OR "USER_ID" = (select auth.uid())
-      )
-    ';
-  END IF;
-END $$;
+-- Credit System Policies
+DROP POLICY IF EXISTS "Users view own credits" ON user_credits;
+DROP POLICY IF EXISTS "Service role manage credits" ON user_credits;
+CREATE POLICY "Users view own credits" ON user_credits FOR SELECT
+USING ((select auth.uid()) = "USER_ID" OR (select auth.role()) = 'service_role');
+CREATE POLICY "Service role manage credits" ON user_credits FOR ALL TO service_role
+USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Users view own transactions" ON credit_transactions;
+DROP POLICY IF EXISTS "Service role manage transactions" ON credit_transactions;
+CREATE POLICY "Users view own transactions" ON credit_transactions FOR SELECT
+USING ((select auth.uid()) = "USER_ID" OR (select auth.role()) = 'service_role');
+CREATE POLICY "Service role manage transactions" ON credit_transactions FOR ALL TO service_role
+USING (true) WITH CHECK (true);
 
 -- Processing Queue Policies
 DROP POLICY IF EXISTS "Users view own queue items" ON processing_queue;
@@ -1599,23 +1711,31 @@ CREATE INDEX IF NOT EXISTS idx_graph_edges_spatial     ON graph_edges("IS_SPATIA
 CREATE INDEX IF NOT EXISTS idx_asset_graph_nodes_asset ON asset_graph_nodes("ASSET_ID");
 CREATE INDEX IF NOT EXISTS idx_asset_graph_nodes_node  ON asset_graph_nodes("NODE_ID");
 
--- Add BRIN indexes for time-series data (if historical_documents_global exists)
-DO $$
-BEGIN
-    IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'historical_documents_global') THEN
-        CREATE INDEX IF NOT EXISTS idx_documents_created_at_brin 
-        ON historical_documents_global USING BRIN ("CREATED_AT")
-        WITH (pages_per_range = 128);
-        
-        -- GIN indexes for JSONB columns
-        CREATE INDEX IF NOT EXISTS idx_structured_temporal_gin 
-        ON historical_documents_global USING GIN ("STRUCTURED_TEMPORAL");
-        CREATE INDEX IF NOT EXISTS idx_structured_spatial_gin 
-        ON historical_documents_global USING GIN ("STRUCTURED_SPATIAL");
-        CREATE INDEX IF NOT EXISTS idx_structured_content_gin 
-        ON historical_documents_global USING GIN ("STRUCTURED_CONTENT");
-    END IF;
-END $$;
+-- BRIN indexes for time-series data on historical_documents_global
+CREATE INDEX IF NOT EXISTS idx_documents_created_at_brin 
+ON historical_documents_global USING BRIN ("CREATED_AT")
+WITH (pages_per_range = 128);
+
+-- GIN indexes for JSONB columns
+CREATE INDEX IF NOT EXISTS idx_structured_temporal_gin 
+ON historical_documents_global USING GIN ("STRUCTURED_TEMPORAL");
+CREATE INDEX IF NOT EXISTS idx_structured_spatial_gin 
+ON historical_documents_global USING GIN ("STRUCTURED_SPATIAL");
+CREATE INDEX IF NOT EXISTS idx_structured_content_gin 
+ON historical_documents_global USING GIN ("STRUCTURED_CONTENT");
+
+-- B-tree indexes for common queries
+CREATE INDEX IF NOT EXISTS idx_documents_user        ON historical_documents_global("USER_ID") WHERE "USER_ID" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_documents_asset       ON historical_documents_global("ASSET_ID") WHERE "ASSET_ID" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_documents_status      ON historical_documents_global("PROCESSING_STATUS");
+CREATE INDEX IF NOT EXISTS idx_documents_scan_type   ON historical_documents_global("SCAN_TYPE");
+CREATE INDEX IF NOT EXISTS idx_documents_lat_lng     ON historical_documents_global("LATITUDE", "LONGITUDE")
+  WHERE "LATITUDE" IS NOT NULL AND "LONGITUDE" IS NOT NULL;
+
+-- Credit system indexes
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_user ON credit_transactions("USER_ID");
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_type ON credit_transactions("TYPE");
+CREATE INDEX IF NOT EXISTS idx_credit_transactions_date ON credit_transactions("CREATED_AT" DESC);
 
 -- ============================================
 -- 13. MONITORING VIEWS
