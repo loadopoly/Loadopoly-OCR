@@ -783,7 +783,9 @@ export default function UnifiedFilterPanel({
 // Compact Inline Filter Bar
 // ============================================
 
-export function InlineFilterBar({ activeView }: { activeView?: ViewMode }) {
+// PERF FIX: React.memo prevents InlineFilterBar from re-rendering when the parent
+// tab re-renders due to unrelated state changes (e.g. asset list updates).
+export const InlineFilterBar = React.memo(function InlineFilterBar({ activeView }: { activeView?: ViewMode }) {
   const context = useFilterContext();
   const { state, setFilter, clearFilter, getConstrainedValues } = context;
   const activeFilterCount = context.getActiveFilterCount();
@@ -839,7 +841,7 @@ export function InlineFilterBar({ activeView }: { activeView?: ViewMode }) {
       )}
     </div>
   );
-}
+});
 
 // ============================================
 // Filter Badge (for showing active filters)
