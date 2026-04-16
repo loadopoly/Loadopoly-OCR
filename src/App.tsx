@@ -2633,9 +2633,9 @@ export default function App() {
                             <div className="p-4">
                                 <h4 className="font-bold text-white text-sm mb-1 truncate">{item.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
                                 <div className="flex gap-2 mt-4">
-                                    <button onClick={() => { setSelectedAssetId(item.id); switchTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 flex items-center justify-center gap-1"><Network size={12} /> View Graph</button>
+                                    <button onClick={() => { setSelectedAssetId(item.id); switchTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 flex items-center justify-center gap-1"><Network size={12} aria-hidden="true" /> View Graph</button>
                                     {isTabVisible('world') && (
-                                      <button onClick={() => { setSelectedAssetId(item.id); switchTab('world'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 flex items-center justify-center gap-1"><Globe size={12} /> 3D World</button>
+                                      <button onClick={() => { setSelectedAssetId(item.id); switchTab('world'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 flex items-center justify-center gap-1"><Globe size={12} aria-hidden="true" /> 3D World</button>
                                     )}
                                     <ContributeButton asset={item} onAssetUpdated={handleAssetUpdate} />
                                 </div>
