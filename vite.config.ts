@@ -75,6 +75,54 @@ export default defineConfig({
           if (id.includes('vite/preload-helper')) {
             return 'vendor-preload';
           }
+          // PERF FIX: Route shared context modules to a dedicated tiny chunk.
+          // FilterContext is imported statically by App.tsx **and** by several
+          // lazy-loaded components (ClusterSynchronizer, UnifiedFilterPanel,
+          // SmartSuggestions, FilterDependencyVisualizer). Without this rule
+          // Rollup placed the shared module inside chunk-cluster-sync, which
+          // forced the App entry to statically import that chunk — dragging
+          // the 120 KB (33 KB gz) ClusterSynchronizer onto every first page
+          // load even for users who never open the cluster panel.
+          //
+          // ModuleContext has the same problem: it is dynamically imported
+          // by `src/index.tsx` via `preloadAppShell()`. Previously Rollup
+          // merged ModuleContext into chunk-cluster-sync as well, so fetching
+          // the module-system caused the full cluster-sync bundle to be
+          // downloaded on every initial page load.
+          if (
+            id.includes('/contexts/FilterContext') ||
+            id.includes('/contexts/ModuleContext') ||
+            id.includes('/contexts/index') ||
+            id.includes('/lib/dimensionExtraction')
+          ) {
+            return 'vendor-contexts';
+          }
+          // PERF FIX: Keep the module system + bootstrap in their own chunk.
+          // ModuleContext (in vendor-contexts) transitively depends on the
+          // whole `src/modules/*` tree. Without isolation, Rollup merged
+          // this tree back into chunk-cluster-sync (forcing cluster-sync
+          // onto the critical path). A dedicated chunk lets ModuleContext
+          // pull just its own dependencies without co-locating unrelated
+          // feature chunks.
+          if (
+            id.includes('/src/modules/') ||
+            id.includes('\\src\\modules\\') || // Windows path separator
+            id.includes('/src/bootstrap')
+          ) {
+            return 'vendor-modules';
+          }
+          // PERF FIX: Isolate the shared logger singleton. `src/lib/logger.ts`
+          // is imported by almost every module in the app (performanceMonitor,
+          // pwaUtils, creditService, avatarService, bundleService, workerPool,
+          // every chunk-* etc.). When Rollup placed it inside
+          // chunk-cluster-sync, the App entry and every other chunk that used
+          // the logger were forced to statically import chunk-cluster-sync,
+          // which fetched the full 120 KB ClusterSynchronizer on initial page
+          // load. A dedicated chunk keeps the logger cheap and lets the
+          // cluster-sync chunk stay off the critical path.
+          if (id.includes('/lib/logger')) {
+            return 'vendor-logger';
+          }
           // React core - smallest possible
           if (id.includes('node_modules/react/') || id.includes('node_modules/react-dom/')) {
             return 'vendor-react';

@@ -105,7 +105,10 @@ const BundleCard = lazy(() => import('./components/BundleCard'));
 const SettingsPanel = lazy(() => import('./components/SettingsPanel'));
 const PurchaseModal = lazy(() => import('./components/PurchaseModal'));
 const ClusterSyncStatsPanel = lazy(() => import('./components/ClusterSyncStatsPanel').then(m => ({ default: m.ClusterSyncStatsPanel })));
-const ClusterSyncButton = lazy(() => import('./components/ClusterSyncStatsPanel').then(m => ({ default: m.ClusterSyncButton })));
+// PERF FIX: import ClusterSyncButton from its own tiny module so the Dashboard
+// no longer drags the 120 KB ClusterSynchronizer chunk onto the critical path.
+// The button is still wrapped in React.lazy so it stays off the entry bundle.
+const ClusterSyncButton = lazy(() => import('./components/ClusterSyncButton').then(m => ({ default: m.ClusterSyncButton })));
 const CreditGate = lazy(() => import('./components/CreditGate'));
 const CreditBadge = lazy(() => import('./components/CreditGate').then(m => ({ default: m.CreditBadge })));
 const CameraCapture = lazy(() => import('./components/CameraCapture'));
