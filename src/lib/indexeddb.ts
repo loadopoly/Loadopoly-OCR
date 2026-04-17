@@ -120,6 +120,42 @@ export const loadAssets = async (): Promise<DigitalAsset[]> => {
     }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 };
 
+/**
+ * Lightweight pending-asset counter used by the QueueMonitor.
+ *
+ * PERF: `loadAssets()` is expensive — it materializes every Blob into a fresh
+ * `URL.createObjectURL(...)` and sorts the full array. QueueMonitor only needs
+ * the count of pending/processing assets split by whether they already have a
+ * server jobId. On every tab switch that remounts QueueMonitor (Dashboard,
+ * Assets, Batch, Database, Processing) the old code paid the full `loadAssets`
+ * cost just to compute three integers. This helper uses the `status` index and
+ * skips blob materialization entirely.
+ */
+export const countPendingLocalAssets = async (): Promise<{
+    pending: number;
+    needsUpload: number;
+    onServer: number;
+}> => {
+    // The `status` column is indexed (see Dexie schema above) so this is
+    // an indexed range scan rather than a full table scan.
+    const pendingRows = await db.assets
+        .where('status')
+        .anyOf(['PENDING', 'PROCESSING'])
+        .toArray();
+
+    let needsUpload = 0;
+    let onServer = 0;
+    for (const asset of pendingRows) {
+        if (asset.serverJobId) onServer++;
+        else needsUpload++;
+    }
+    return {
+        pending: pendingRows.length,
+        needsUpload,
+        onServer,
+    };
+};
+
 export const deleteAsset = async (id: string) => {
     await db.assets.delete(id);
 };

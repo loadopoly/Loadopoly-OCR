@@ -35,7 +35,7 @@ import {
   X
 } from 'lucide-react';
 import { processingQueueService, QueueStats, QueueJob, JobStatus } from '../services/processingQueueService';
-import { loadAssets, resetStuckAssets } from '../lib/indexeddb';
+import { loadAssets, resetStuckAssets, countPendingLocalAssets } from '../lib/indexeddb';
 import { AssetStatus, ScanType } from '../types';
 
 // ============================================
@@ -65,6 +65,82 @@ interface ConnectionTestResult {
   queueSelect: { success: boolean; error?: string };
 }
 
+// ============================================
+// Module-scoped stats cache + pub/sub
+// ============================================
+//
+// PERF FIX: QueueMonitor is rendered inside several tabs (Dashboard, Assets,
+// Batch, Database, Processing Panel). Because the tabs use `activeTab === '…'`
+// conditional rendering, switching tabs *unmounts* the current QueueMonitor
+// and mounts a fresh one — each mount previously kicked off a Supabase
+// `getStats` network round-trip AND a full IndexedDB scan with ObjectURL
+// creation. Rapid tab switching turned into repeated 500–1500 ms stalls.
+//
+// This module-scoped cache lets a newly-mounted QueueMonitor paint instantly
+// with the last-known stats while a background refresh runs only if the cache
+// is older than CACHE_TTL_MS. All live instances also subscribe so a single
+// refresh updates every mounted QueueMonitor in lockstep.
+
+interface CachedSnapshot {
+  stats: QueueStats;
+  localPending: number;
+  localNeedsUpload: number;
+  localOnServer: number;
+  fetchedAt: number; // Date.now()
+}
+
+const CACHE_TTL_MS = 5_000;
+
+type Subscriber = (snapshot: CachedSnapshot) => void;
+
+let cachedSnapshot: CachedSnapshot | null = null;
+let inflightRefresh: Promise<CachedSnapshot | null> | null = null;
+const subscribers = new Set<Subscriber>();
+
+function publishSnapshot(snapshot: CachedSnapshot) {
+  cachedSnapshot = snapshot;
+  subscribers.forEach(cb => {
+    try { cb(snapshot); } catch { /* ignore subscriber errors */ }
+  });
+}
+
+/**
+ * Fetch fresh queue stats + local asset counts. Coalesces concurrent callers
+ * so rapid tab switches cause at most one network + IDB round-trip.
+ */
+async function refreshQueueSnapshot(force: boolean): Promise<CachedSnapshot | null> {
+  const now = Date.now();
+  if (!force && cachedSnapshot && now - cachedSnapshot.fetchedAt < CACHE_TTL_MS) {
+    return cachedSnapshot;
+  }
+  if (inflightRefresh) return inflightRefresh;
+
+  inflightRefresh = (async () => {
+    try {
+      const [stats, counts] = await Promise.all([
+        processingQueueService.getStats(),
+        countPendingLocalAssets(),
+      ]);
+      const snapshot: CachedSnapshot = {
+        stats,
+        localPending: counts.pending,
+        localNeedsUpload: counts.needsUpload,
+        localOnServer: counts.onServer,
+        fetchedAt: Date.now(),
+      };
+      publishSnapshot(snapshot);
+      return snapshot;
+    } catch (err) {
+      console.error('Failed to fetch queue stats', err);
+      return null;
+    } finally {
+      inflightRefresh = null;
+    }
+  })();
+
+  return inflightRefresh;
+}
+
 // PERF FIX: React.memo prevents re-renders when the parent tab (Dashboard, Assets,
 // Batch, Database, Processing Panel) re-renders due to unrelated state changes.
 // QueueMonitor is mounted up to 5 times — each re-render triggers useMemo chains
@@ -75,10 +151,15 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = React.memo(({ userId, o
     return value.slice(0, length);
   }, []);
 
-  const [stats, setStats] = useState<QueueStats | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-  const [localPendingCount, setLocalPendingCount] = useState(0);
+  // PERF FIX: lazy initializers paint from the shared cache on the very first
+  // render — no loading spinner flash when the user switches to another tab
+  // that contains a QueueMonitor.
+  const [stats, setStats] = useState<QueueStats | null>(() => cachedSnapshot?.stats ?? null);
+  const [loading, setLoading] = useState(() => !cachedSnapshot);
+  const [lastUpdate, setLastUpdate] = useState<Date>(() =>
+    cachedSnapshot ? new Date(cachedSnapshot.fetchedAt) : new Date()
+  );
+  const [localPendingCount, setLocalPendingCount] = useState(() => cachedSnapshot?.localPending ?? 0);
   const [isRequeuing, setIsRequeuing] = useState(false);
   const [requeueProgress, setRequeueProgress] = useState({ done: 0, total: 0 });
   const [lastRequeueResult, setLastRequeueResult] = useState<{ queued: number; failed: number; time: Date } | null>(null);
@@ -88,8 +169,8 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = React.memo(({ userId, o
   const [isTesting, setIsTesting] = useState(false);
   const [isTriggering, setIsTriggering] = useState(false);
   const [triggerResult, setTriggerResult] = useState<{ processed: number; succeeded: number; failed: number } | null>(null);
-  const [localNeedsUploadCount, setLocalNeedsUploadCount] = useState(0);
-  const [localOnServerCount, setLocalOnServerCount] = useState(0);
+  const [localNeedsUploadCount, setLocalNeedsUploadCount] = useState(() => cachedSnapshot?.localNeedsUpload ?? 0);
+  const [localOnServerCount, setLocalOnServerCount] = useState(() => cachedSnapshot?.localOnServer ?? 0);
   const [isReconciling, setIsReconciling] = useState(false);
   const [reconcileResult, setReconcileResult] = useState<{ recovered: number; failed: number; orphaned: number; stillActive: number } | null>(null);
   
@@ -136,33 +217,24 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = React.memo(({ userId, o
     }
   }, [userId]);
 
-  const fetchStats = async () => {
+  const fetchStats = async (force: boolean = false) => {
     try {
-      const newStats = await processingQueueService.getStats();
-      setStats(newStats);
-      setLastUpdate(new Date());
-      
-      // Get service diagnostics
+      // PERF FIX: go through the shared cache so rapid tab switches coalesce
+      // into a single Supabase round-trip + IndexedDB scan. Job-completion
+      // callbacks and explicit user refresh actions pass force=true.
+      const snapshot = await refreshQueueSnapshot(force);
+      if (!snapshot) return;
+
+      setStats(snapshot.stats);
+      setLastUpdate(new Date(snapshot.fetchedAt));
+
+      // Get service diagnostics (cheap — in-memory on the singleton service)
       const diag = processingQueueService.getDiagnostics();
       setDiagnostics(diag);
-      
-      // Count local unprocessed assets - split into needs-upload vs on-server-queue
-      const localAssets = await loadAssets();
-      const unprocessed = localAssets.filter(a => 
-        a.status === AssetStatus.PENDING ||
-        a.status === AssetStatus.PROCESSING
-      );
-      
-      // Split: assets with serverJobId are tracked on server
-      // Assets without serverJobId need to be uploaded
-      const needsUpload = unprocessed.filter(a => !a.serverJobId);
-      const onServerQueue = unprocessed.filter(a => !!a.serverJobId);
-      
-      setLocalNeedsUploadCount(needsUpload.length);
-      setLocalOnServerCount(onServerQueue.length);
-      setLocalPendingCount(unprocessed.length);
-    } catch (err) {
-      console.error('Failed to fetch queue stats', err);
+
+      setLocalNeedsUploadCount(snapshot.localNeedsUpload);
+      setLocalOnServerCount(snapshot.localOnServer);
+      setLocalPendingCount(snapshot.localPending);
     } finally {
       setLoading(false);
     }
@@ -255,7 +327,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = React.memo(({ userId, o
       }
       
       // Refresh stats and jobs immediately to show the new queue items
-      await fetchStats();
+      await fetchStats(true);
       await fetchJobs();
       onRequeueComplete?.();
     } catch (err) {
@@ -317,7 +389,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = React.memo(({ userId, o
         alert('Edge Function returned no response. It may not be deployed.');
       }
       // Refresh stats after processing
-      await fetchStats();
+      await fetchStats(true);
       await fetchJobs();
     } catch (err: any) {
       console.error('Trigger processing failed:', err);
@@ -350,7 +422,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = React.memo(({ userId, o
       const resetCount = await resetStuckAssets();
       if (resetCount > 0) {
         alert(`Reset ${resetCount} stuck items back to pending.\n\nClick "Upload to Server" to process them.`);
-        await fetchStats();
+        await fetchStats(true);
         onRequeueComplete?.();
       } else {
         alert('No stuck local items to reset.');
@@ -373,7 +445,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = React.memo(({ userId, o
       
       if (released > 0) {
         alert(`✅ Released ${released} stale locks.\n\nThese jobs are now available for processing.`);
-        await fetchStats();
+        await fetchStats(true);
         await fetchJobs();
       } else {
         alert('No stale locks found.');
@@ -387,9 +459,33 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = React.memo(({ userId, o
   };
 
   useEffect(() => {
+    // PERF FIX: paint instantly from the shared cache when available so that
+    // switching tabs — which remounts QueueMonitor from scratch — does not
+    // block on a fresh Supabase round-trip.
+    if (cachedSnapshot) {
+      setStats(cachedSnapshot.stats);
+      setLastUpdate(new Date(cachedSnapshot.fetchedAt));
+      setLocalNeedsUploadCount(cachedSnapshot.localNeedsUpload);
+      setLocalOnServerCount(cachedSnapshot.localOnServer);
+      setLocalPendingCount(cachedSnapshot.localPending);
+      setLoading(false);
+    }
+
+    // Subscribe so refreshes triggered by *other* mounted instances (or the
+    // shared polling interval) propagate to this instance for free.
+    const onSnapshot: Subscriber = (snapshot) => {
+      setStats(snapshot.stats);
+      setLastUpdate(new Date(snapshot.fetchedAt));
+      setLocalNeedsUploadCount(snapshot.localNeedsUpload);
+      setLocalOnServerCount(snapshot.localOnServer);
+      setLocalPendingCount(snapshot.localPending);
+      setLoading(false);
+    };
+    subscribers.add(onSnapshot);
+
     fetchStats();
     fetchJobs();
-    
+
     // PERF FIX: Only poll when the browser tab is visible.
     // Without this guard every QueueMonitor instance (up to 5 mounted across
     // tabs) fires a 30-second interval even when the user has tabbed away,
@@ -402,13 +498,16 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = React.memo(({ userId, o
     
     // Also listen for job completion to refresh
     processingQueueService.setCallbacks({
-       onJobCompleted: () => { fetchStats(); fetchJobs(); },
-       onJobFailed: () => { fetchStats(); fetchJobs(); },
+       onJobCompleted: () => { fetchStats(true); fetchJobs(); },
+       onJobFailed: () => { fetchStats(true); fetchJobs(); },
        onJobStarted: () => { if (showJobList) fetchJobs(); },
        onJobProgress: () => { if (showJobList) fetchJobs(); }
     });
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      subscribers.delete(onSnapshot);
+    };
   }, [userId, showJobList, fetchJobs]);
 
   // Helper to get total queued count
@@ -476,7 +575,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = React.memo(({ userId, o
               {showJobList ? 'Hide' : 'Show'} <span className="hidden sm:inline">Jobs</span>
             </button>
             <span className="text-[8px] text-slate-600 hidden sm:inline">Updated {lastUpdate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-            <button onClick={() => { fetchStats(); fetchJobs(); }} className="text-slate-500 hover:text-white transition-colors p-1">
+            <button onClick={() => { fetchStats(true); fetchJobs(); }} className="text-slate-500 hover:text-white transition-colors p-1">
                 <RefreshCw size={10} className={loading ? 'animate-spin' : ''} />
             </button>
         </div>
@@ -1076,7 +1175,7 @@ export const QueueMonitor: React.FC<QueueMonitorProps> = React.memo(({ userId, o
                     if (result.stillActive > 0) lines.push(`⏳ ${result.stillActive} still processing on server`);
                     if (result.orphaned > 0) lines.push(`⚠ ${result.orphaned} orphaned (reset to pending)`);
                     alert(lines.join('\n'));
-                    await fetchStats();
+                    await fetchStats(true);
                     onRequeueComplete?.();
                   } else {
                     alert('No changes — all local items already match server state.');
