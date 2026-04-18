@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
     Sparkles, 
     ArrowRight, 
@@ -391,7 +391,11 @@ function ConnectionStatusIndicator({
     );
 }
 
-export default function SmartSuggestions({ 
+// PERF FIX: React.memo prevents SmartSuggestions from re-rendering on every
+// Dashboard state update. This component generates suggestion lists and proactive
+// hints with multiple useMemo chains — skipping the re-render entirely when
+// props haven't changed saves significant work on low-end mobile devices.
+const SmartSuggestions = React.memo(function SmartSuggestions({ 
     user, 
     localAssetCount, 
     syncEnabled, 
@@ -679,7 +683,9 @@ export default function SmartSuggestions({
             )}
         </div>
     );
-}
+});
+
+export default SmartSuggestions;
 
 // CSS animation for slide down (add to your global CSS or index.css)
 // @keyframes slideDown {

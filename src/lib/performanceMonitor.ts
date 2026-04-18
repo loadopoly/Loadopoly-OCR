@@ -468,23 +468,29 @@ export function initPerformanceMonitoring(): void {
   if (typeof window === 'undefined') return;
   
   initWebVitalsTracking();
-  
-  // Start FPS monitoring only when document is visible
-  document.addEventListener('visibilitychange', () => {
+
+  const shouldTrackFPS =
+    import.meta.env.DEV ||
+    localStorage.getItem('geograph-debug-mode') === 'true';
+
+  if (shouldTrackFPS) {
+    // Start FPS monitoring only when document is visible
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        startFPSMonitoring();
+      } else {
+        stopFPSMonitoring();
+      }
+    });
+    
+    // Start if already visible
     if (document.visibilityState === 'visible') {
       startFPSMonitoring();
-    } else {
-      stopFPSMonitoring();
     }
-  });
-  
-  // Start if already visible
-  if (document.visibilityState === 'visible') {
-    startFPSMonitoring();
   }
   
   // Log performance report periodically in development
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.DEV) {
     setInterval(() => {
       const report = getPerformanceReport();
       logger.debug(`Performance report - FPS: ${report.fps}, LCP: ${report.lcp}ms`);
