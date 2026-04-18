@@ -745,38 +745,15 @@ export function ClusterSyncStatsPanel({ assets, onClose, onClassificationUpdate 
 // ============================================
 // Trigger Button Component
 // ============================================
-
-export function ClusterSyncButton({ 
-  onClick, 
-  stats 
-}: { 
-  onClick: () => void;
-  stats?: { structured: number; total: number };
-}) {
-  const percentage = stats && stats.total > 0 
-    ? Math.round((stats.structured / stats.total) * 100) 
-    : 0;
-  
-  return (
-    <button
-      onClick={onClick}
-      className="group flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-600/20 to-violet-600/20 hover:from-primary-600/30 hover:to-violet-600/30 border border-primary-500/30 hover:border-primary-500/50 rounded-lg transition-all duration-200"
-      title="Open Corpus Classification Overview"
-    >
-      <GitMerge size={18} className="text-primary-400 group-hover:scale-110 transition-transform" />
-      <span className="text-sm font-medium text-white">Sync Clusters</span>
-      {stats && stats.total > 0 && (
-        <span className={`
-          px-1.5 py-0.5 rounded text-[10px] font-bold
-          ${percentage >= 80 ? 'bg-emerald-500/20 text-emerald-400' :
-            percentage >= 50 ? 'bg-amber-500/20 text-amber-400' :
-            'bg-slate-700/50 text-slate-400'}
-        `}>
-          {percentage}%
-        </span>
-      )}
-    </button>
-  );
-}
+//
+// PERF: The `ClusterSyncButton` previously lived here, but because this
+// module statically imports `ClusterSynchronizer` (~120 KB / 33 KB gz),
+// the Dashboard — which only needs the tiny button — was forcing the
+// whole cluster-sync chunk onto the initial critical path.
+// The button has been moved to `./ClusterSyncButton.tsx`; this file
+// re-exports it for backwards compatibility with existing importers.
+// New code should import it directly from `./ClusterSyncButton`.
+export { ClusterSyncButton } from './ClusterSyncButton';
+export type { ClusterSyncButtonProps } from './ClusterSyncButton';
 
 export default ClusterSyncStatsPanel;

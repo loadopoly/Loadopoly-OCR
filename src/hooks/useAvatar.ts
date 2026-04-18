@@ -97,6 +97,12 @@ export function useAvatar(userId: string | null): UseAvatarReturn {
         unsubscribeRef.current();
         unsubscribeRef.current = null;
       }
+      // PERF FIX: Clear debounced position update on unmount to prevent
+      // the timeout from firing after the hook is torn down.
+      if (positionUpdateTimeoutRef.current) {
+        clearTimeout(positionUpdateTimeoutRef.current);
+        positionUpdateTimeoutRef.current = null;
+      }
     };
   }, [userId]);
 

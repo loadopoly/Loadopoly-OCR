@@ -14,7 +14,10 @@ interface StatusBarProps {
     onQueueClick?: () => void;
 }
 
-export default function StatusBar({ 
+// PERF FIX: React.memo prevents StatusBar from re-rendering on every App state
+// change. StatusBar is always mounted and only depends on a small set of props —
+// without memo it re-renders ~30+ times per second during batch processing.
+const StatusBar = React.memo(function StatusBar({ 
     user, 
     syncOn, 
     isOnline, 
@@ -125,4 +128,6 @@ export default function StatusBar({
             </div>
         </div>
     );
-}
+});
+
+export default StatusBar;

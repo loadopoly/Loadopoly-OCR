@@ -84,26 +84,31 @@ import { announce } from './lib/accessibility';
 import { useAvatar } from './hooks/useAvatar';
 import { FilterProvider, useFilterContext } from './contexts/FilterContext';
 import UnifiedFilterPanel, { InlineFilterBar, FilterBadge } from './components/UnifiedFilterPanel';
+import {
+  ARSceneLazy as ARScene,
+  BatchImporterLazy as BatchImporter,
+  BatchProcessingPanelLazy as BatchProcessingPanel,
+  GraphVisualizerLazy as GraphVisualizer,
+  IntegrationsHubLazy as IntegrationsHub,
+  QueueMonitorLazy as QueueMonitor,
+  SemanticCanvasLazy as SemanticCanvas,
+  SmartSuggestionsLazy as SmartSuggestions,
+  SocialAppLazy as SocialApp,
+  WorldRendererLazy as WorldRenderer,
+  AnnotationEditorLazy as AnnotationEditor,
+} from './lib/lazyComponents';
 
 
 // PERF: Lazy-load heavy components not needed for initial Dashboard paint
-const GraphVisualizer = lazy(() => import('./components/GraphVisualizer'));
 const ContributeButton = lazy(() => import('./components/ContributeButton'));
 const BundleCard = lazy(() => import('./components/BundleCard'));
-const ARScene = lazy(() => import('./components/ARScene'));
-const SemanticCanvas = lazy(() => import('./components/SemanticCanvas'));
-const BatchImporter = lazy(() => import('./components/BatchImporter'));
 const SettingsPanel = lazy(() => import('./components/SettingsPanel'));
 const PurchaseModal = lazy(() => import('./components/PurchaseModal'));
-const SmartSuggestions = lazy(() => import('./components/SmartSuggestions'));
-const SocialApp = lazy(() => import('./components/SocialApp'));
-const AnnotationEditor = lazy(() => import('./components/AnnotationEditor'));
-const WorldRenderer = lazy(() => import('./components/metaverse').then(m => ({ default: m.WorldRenderer })));
-const IntegrationsHub = lazy(() => import('./components/IntegrationsHub'));
 const ClusterSyncStatsPanel = lazy(() => import('./components/ClusterSyncStatsPanel').then(m => ({ default: m.ClusterSyncStatsPanel })));
-const ClusterSyncButton = lazy(() => import('./components/ClusterSyncStatsPanel').then(m => ({ default: m.ClusterSyncButton })));
-const QueueMonitor = lazy(() => import('./components/QueueMonitor').then(m => ({ default: m.QueueMonitor })));
-const BatchProcessingPanel = lazy(() => import('./components/BatchProcessingPanel'));
+// PERF FIX: import ClusterSyncButton from its own tiny module so the Dashboard
+// no longer drags the 120 KB ClusterSynchronizer chunk onto the critical path.
+// The button is still wrapped in React.lazy so it stays off the entry bundle.
+const ClusterSyncButton = lazy(() => import('./components/ClusterSyncButton').then(m => ({ default: m.ClusterSyncButton })));
 const CreditGate = lazy(() => import('./components/CreditGate'));
 const CreditBadge = lazy(() => import('./components/CreditGate').then(m => ({ default: m.CreditBadge })));
 const CameraCapture = lazy(() => import('./components/CameraCapture'));
@@ -1893,7 +1898,12 @@ export default function App() {
   const EMPTY_GRAPH: GraphData = useMemo(() => ({ nodes: [], links: [] }), []);
   const worldGraphData = useMemo(() => {
     if (graphViewMode === 'GLOBAL') return globalGraphData;
-    return assets.find(a => a.id === selectedAssetId)?.graphData || EMPTY_GRAPH;
+    // If an asset is selected and has graph data, show it
+    const selectedAssetGraph = assets.find(a => a.id === selectedAssetId)?.graphData;
+    if (selectedAssetGraph && selectedAssetGraph.nodes.length > 0) return selectedAssetGraph;
+    // Fallback to global corpus so the 3D world isn't empty when no asset is selected
+    if (globalGraphData.nodes.length > 0) return globalGraphData;
+    return EMPTY_GRAPH;
   }, [graphViewMode, globalGraphData, assets, selectedAssetId, EMPTY_GRAPH]);
 
   return (
@@ -2052,7 +2062,16 @@ export default function App() {
         </header>
 
         <div className="flex-1 overflow-auto p-8 relative">
-          <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500"></div></div>}>
+          <Suspense fallback={
+            <div className="flex flex-col items-center justify-center h-full gap-4">
+              <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-700 border-t-primary-500"></div>
+              <p className="text-sm text-slate-400 animate-pulse">Loading content…</p>
+              <div className="w-full max-w-2xl space-y-4 mt-4">
+                <div className="h-8 bg-slate-800/50 rounded-lg animate-pulse w-1/3"></div>
+                <div className="h-64 bg-slate-800/30 rounded-xl animate-pulse"></div>
+              </div>
+            </div>
+          }>
           
           {activeTab === 'dashboard' && (
             <div className="space-y-8 max-w-6xl mx-auto">
@@ -2585,7 +2604,24 @@ export default function App() {
                  )}
                  
                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
-                     {displayItems.map(item => ('bundleId' in item) ? <BundleCard key={item.bundleId} bundle={item as ImageBundle} onAssetUpdated={handleAssetUpdate} /> : (
+                     {displayItems.map(item => ('bundleId' in item) ? <BundleCard key={item.bundleId} bundle={item as ImageBundle} onAssetUpdated={handleAssetUpdate} onClick={() => {
+                       // Select all assets in this bundle so the user can view/graph/export them
+                       const bundle = item as ImageBundle;
+                       const imageUrlSet = new Set(bundle.imageUrls);
+                       const bundleAssetIds = bundle.assetIds || assets.filter(a => imageUrlSet.has(a.imageUrl)).map(a => a.id);
+                       setSelectedAssetIds(prev => {
+                         const next = new Set(prev);
+                         const allSelected = bundleAssetIds.every(id => next.has(id));
+                         if (allSelected) {
+                           // Toggle off — deselect all bundle assets
+                           bundleAssetIds.forEach(id => next.delete(id));
+                         } else {
+                           // Select all bundle assets
+                           bundleAssetIds.forEach(id => next.add(id));
+                         }
+                         return next;
+                       });
+                     }} /> : (
                         <div 
                             key={item.id} 
                             className={`bg-slate-900 border rounded-xl overflow-hidden hover:shadow-lg transition-all group relative ${selectedAssetIds.has(item.id) ? 'border-primary-500 ring-2 ring-primary-500/20' : 'border-slate-800'}`}
@@ -2617,7 +2653,10 @@ export default function App() {
                             <div className="p-4">
                                 <h4 className="font-bold text-white text-sm mb-1 truncate">{item.sqlRecord?.DOCUMENT_TITLE || 'Processing...'}</h4>
                                 <div className="flex gap-2 mt-4">
-                                    <button onClick={() => { setSelectedAssetId(item.id); switchTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700">View Graph</button>
+                                    <button onClick={() => { setSelectedAssetId(item.id); switchTab('graph'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 flex items-center justify-center gap-1"><Network size={12} aria-hidden="true" /> View Graph</button>
+                                    {isTabVisible('world') && (
+                                      <button onClick={() => { setSelectedAssetId(item.id); switchTab('world'); }} className="flex-1 py-1.5 bg-slate-800 hover:bg-slate-700 text-xs text-white rounded border border-slate-700 flex items-center justify-center gap-1"><Globe size={12} aria-hidden="true" /> 3D World</button>
+                                    )}
                                     <ContributeButton asset={item} onAssetUpdated={handleAssetUpdate} />
                                 </div>
                             </div>
@@ -2655,21 +2694,41 @@ export default function App() {
                
                {graphViewMode === 'SINGLE' && (
                  <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
-                   {selectedAssetId ? (
-                     <>
-                       <div className="flex justify-between items-center mb-4">
-                         <h4 className="text-sm font-bold text-slate-400 uppercase">Asset: {assets.find(a => a.id === selectedAssetId)?.sqlRecord?.DOCUMENT_TITLE || selectedAssetId}</h4>
-                         <button onClick={() => setSelectedAssetId(null)} className="text-xs text-primary-500 hover:underline">Clear Selection</button>
-                       </div>
-                       <div className="flex-1 relative">
-                         <GraphVisualizer 
-                           data={assets.find(a => a.id === selectedAssetId)?.graphData || { nodes: [], links: [] }} 
-                           width={1000} 
-                           height={600} 
-                         />
-                       </div>
-                     </>
-                   ) : (
+                   {selectedAssetId ? (() => {
+                     const selectedAsset = assets.find(a => a.id === selectedAssetId);
+                     const graphData = selectedAsset?.graphData || { nodes: [], links: [] };
+                     const isStillProcessing = selectedAsset && !selectedAsset.sqlRecord;
+                     const hasGraphData = graphData.nodes.length > 0;
+                     return (
+                      <>
+                        <div className="flex justify-between items-center mb-4">
+                          <h4 className="text-sm font-bold text-slate-400 uppercase">Asset: {selectedAsset?.sqlRecord?.DOCUMENT_TITLE || selectedAssetId}</h4>
+                          <button onClick={() => setSelectedAssetId(null)} className="text-xs text-primary-500 hover:underline">Clear Selection</button>
+                        </div>
+                        {isStillProcessing ? (
+                          <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
+                            <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-700 border-t-primary-500"></div>
+                            <p className="text-sm text-slate-400">Processing asset — graph will appear when extraction completes…</p>
+                            <button onClick={() => switchTab('assets')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Back to Assets</button>
+                          </div>
+                        ) : !hasGraphData ? (
+                          <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
+                            <Network size={48} className="opacity-20" />
+                            <p className="text-sm text-slate-400">No graph data extracted for this asset yet.</p>
+                            <button onClick={() => switchTab('assets')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Back to Assets</button>
+                          </div>
+                        ) : (
+                          <div className="flex-1 relative">
+                            <GraphVisualizer 
+                              data={graphData} 
+                              width={1000} 
+                              height={600} 
+                            />
+                          </div>
+                        )}
+                      </>
+                     );
+                   })() : (
                      <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
                        <Network size={48} className="opacity-20" />
                        <p>Select an asset from the Assets tab to view its specific graph.</p>
@@ -2681,7 +2740,16 @@ export default function App() {
 
                {graphViewMode === 'GLOBAL' && (
                   <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 p-4 flex flex-col">
+                    {globalGraphData.nodes.length > 0 ? (
                       <div className="flex-1 relative"><GraphVisualizer data={globalGraphData} width={1000} height={600} /></div>
+                    ) : (
+                      <div className="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4">
+                        <Network size={48} className="opacity-20" />
+                        <p className="text-sm text-slate-400">No global corpus data available yet.</p>
+                        <p className="text-xs text-slate-500">Process some assets to build the global knowledge graph.</p>
+                        <button onClick={() => switchTab('batch')} className="px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded text-white text-sm">Process Assets</button>
+                      </div>
+                    )}
                   </div>
                )}
             </div>
@@ -2714,6 +2782,17 @@ export default function App() {
               </div>
               <InlineFilterBar activeView="world" />
               <div className="flex-1">
+                <Suspense fallback={
+                  <div className="flex flex-col items-center justify-center h-full gap-4 bg-slate-950">
+                    <div className="relative">
+                      <Globe size={48} className="text-slate-700 animate-pulse" />
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin"></div>
+                      </div>
+                    </div>
+                    <p className="text-sm text-slate-400">Loading 3D World…</p>
+                  </div>
+                }>
                 {worldViewMode === '3d' ? (
                   <WorldRenderer
                     graphData={worldGraphData}
@@ -2734,6 +2813,7 @@ export default function App() {
                 ) : (
                   <SemanticCanvas assets={assets} />
                 )}
+                </Suspense>
               </div>
             </div>
           )}

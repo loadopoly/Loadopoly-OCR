@@ -5,7 +5,7 @@
  * Provides hooks for feature flags, storage, LLM providers, etc.
  */
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import {
   moduleRegistry,
   featureFlags,
@@ -119,7 +119,10 @@ export function ModuleProvider({ children }: ModuleProviderProps) {
   }, []);
 
   // Refresh state from registry
-  const refreshState = () => {
+  // PERF FIX: useCallback so refreshState is stable across renders. Previously
+  // this was an inline function that was recreated every render and couldn't be
+  // used as an effect dependency.
+  const refreshState = useCallback(() => {
     setRenderers(moduleRegistry.getAllRenderers());
     setLLMProviders(moduleRegistry.getAllLLMProviders());
     setStorageAdapters(moduleRegistry.getAllStorageAdapters());
@@ -127,7 +130,7 @@ export function ModuleProvider({ children }: ModuleProviderProps) {
     setActiveLLMState(moduleRegistry.getActiveLLMProvider());
     setFlags(featureFlags.getAllFlags());
     setStats(moduleRegistry.getStats());
-  };
+  }, []);
 
   // Subscribe to registry changes
   useEffect(() => {
@@ -146,38 +149,42 @@ export function ModuleProvider({ children }: ModuleProviderProps) {
     };
   }, [isInitialized]);
 
-  // Actions
-  const setActiveStorage = (name: string) => {
+  // Actions — PERF FIX: useCallback to keep stable references for context consumers
+  const setActiveStorage = useCallback((name: string) => {
     try {
       moduleRegistry.setActiveStorageAdapter(name);
       setActiveStorageState(moduleRegistry.getActiveStorageAdapter());
     } catch (error) {
       console.error('Failed to set active storage:', error);
     }
-  };
+  }, []);
 
-  const setActiveLLM = (name: string) => {
+  const setActiveLLM = useCallback((name: string) => {
     try {
       moduleRegistry.setActiveLLMProvider(name);
       setActiveLLMState(moduleRegistry.getActiveLLMProvider());
     } catch (error) {
       console.error('Failed to set active LLM:', error);
     }
-  };
+  }, []);
 
-  const toggleFeatureFlag = (name: string, enabled: boolean) => {
+  const toggleFeatureFlag = useCallback((name: string, enabled: boolean) => {
     const provider = featureFlags.getProvider();
     if (provider && 'setFlag' in provider) {
       (provider as any).setFlag(name, enabled);
       setFlags(featureFlags.getAllFlags());
     }
-  };
+  }, []);
 
-  const isFeatureEnabled = (name: string) => {
+  const isFeatureEnabled = useCallback((name: string) => {
     return featureFlags.isEnabled(name);
-  };
+  }, []);
 
-  const value: ModuleContextValue = {
+  // PERF FIX: useMemo prevents every child of ModuleProvider from re-rendering
+  // whenever any unrelated parent state changes. Previously this object literal
+  // was recreated on every render, forcing React to treat the context value as
+  // "changed" and re-render the entire app tree.
+  const value: ModuleContextValue = useMemo(() => ({
     isInitialized,
     isLoading,
     renderers,
@@ -191,7 +198,11 @@ export function ModuleProvider({ children }: ModuleProviderProps) {
     setActiveStorage,
     setActiveLLM,
     toggleFeatureFlag,
-  };
+  }), [
+    isInitialized, isLoading, renderers, llmProviders, storageAdapters,
+    activeStorage, activeLLM, flags, isFeatureEnabled, stats,
+    setActiveStorage, setActiveLLM, toggleFeatureFlag,
+  ]);
 
   return (
     <ModuleContext.Provider value={value}>
