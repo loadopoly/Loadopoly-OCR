@@ -11,6 +11,37 @@ If you skip a step here, your "optimization" is probably theater.
 > The companion file [`BENCHMARKS.md`](./BENCHMARKS.md) records the **results**
 > of a benchmarking pass. This file documents the **process** that produces
 > those results. They should be updated together.
+>
+> The runnable implementation lives in `ui-benchmark.cjs` at the repo root and
+> is composed from small modules under [`../../scripts/perf/`](../../scripts/perf/).
+> See [`scripts/perf/README.md`](../../scripts/perf/README.md) for the module
+> map.
+
+### Implementation status (truth in advertising)
+
+This playbook is the **target standard**. The current `ui-benchmark.cjs`
+implements a subset of it. Treat the gap below as the perf-tooling backlog —
+do not pretend an item is implemented when it is not.
+
+| Section | Status in `ui-benchmark.cjs` |
+|---|---|
+| §2 Profiles — desktop 1440×900 viewport | ✅ implemented |
+| §2 Profiles — mobile 390×844 viewport | ✅ implemented |
+| §2 Profiles — **4× CPU throttle via CDP** | ❌ **not yet implemented** (viewport only) |
+| §3 Pre-warmed `localStorage` seed | ✅ implemented (`scripts/perf/state.cjs`) |
+| §4.1 JS resource collection (top 15 by transfer size) | ✅ implemented |
+| §4.2 Paint + nav timing (FP, FCP, DCL, load) | ✅ implemented |
+| §4.2 LCP via `PerformanceObserver` | ❌ not yet implemented |
+| §4.3 Long Tasks via buffered observer (TBT) | ❌ not yet implemented |
+| §4.4 Per-tab settle time (`elapsedMs`) | ✅ implemented |
+| §4.4 `mainThreadBusyMs` / `longTasksTriggered` per interaction | ❌ not yet implemented |
+| §4.5 Static-import-graph walker over `dist/` | ❌ not yet implemented (manual `grep` recipe only) |
+| §5 Scenarios (landing, app-shell warm × {desktop, mobile}, tab rotation) | ✅ implemented |
+| §5.5 Interaction probes (BundleCard / image health / QueueMonitor / image grid) | ✅ implemented |
+| §7 Procedure (baseline → after → diff) | ✅ supported (script outputs JSON; diff is manual) |
+
+The unchecked items above are the highest-value next additions. When you
+implement one, move the row from ❌ to ✅ in this table in the same PR.
 
 ---
 
