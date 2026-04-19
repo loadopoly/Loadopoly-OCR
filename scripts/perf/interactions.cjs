@@ -250,7 +250,11 @@ async function measureColdStartSidebar(page) {
       // MobileNavigation hamburger button. App.tsx line 288–295.
       // aria-label="Open navigation menu", rendered only on < lg viewports.
       const hamburger = page.locator('[aria-label="Open navigation menu"]').first();
-      if (!(await hamburger.count())) {
+      const hamburgerVisible = await hamburger
+        .waitFor({ state: 'visible', timeout: 10000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!hamburgerVisible) {
         return { label: 'cold-start-sidebar', skipped: true, reason: 'hamburger button not found', isMobile: true };
       }
       const startedAt = Date.now();
@@ -265,7 +269,11 @@ async function measureColdStartSidebar(page) {
       // Desktop sidebar (class="hidden lg:flex"). SidebarItem renders a <button>
       // with text "AR Scanner". App.tsx line 1927.
       const arButton = page.locator('nav button').filter({ hasText: 'AR Scanner' }).first();
-      if (!(await arButton.count())) {
+      const arButtonVisible = await arButton
+        .waitFor({ state: 'visible', timeout: 10000 })
+        .then(() => true)
+        .catch(() => false);
+      if (!arButtonVisible) {
         return { label: 'cold-start-sidebar', skipped: true, reason: 'AR Scanner sidebar item not found', isMobile: false };
       }
       const startedAt = Date.now();
@@ -347,7 +355,11 @@ async function measureArScannerCameraReady(page) {
   try {
     // ARSafetyWarning.tsx: <button>I Understand & Agree</button>
     const acceptBtn = page.locator('button').filter({ hasText: 'I Understand & Agree' }).first();
-    if (!(await acceptBtn.count())) {
+    const acceptVisible = await acceptBtn
+      .waitFor({ state: 'visible', timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!acceptVisible) {
       return { label: 'ar-scanner-camera-ready', skipped: true, reason: 'Accept button not found' };
     }
 
@@ -365,12 +377,17 @@ async function measureArScannerCameraReady(page) {
         text.includes('Camera permission was denied') ||
         text.includes('camera access') ||
         text.includes('Camera error') ||
-        text.includes('Unable to access')
+        text.includes('Unable to access') ||
+        text.includes('Camera Unavailable') ||
+        text.includes('Camera could not be started') ||
+        text.includes('Camera could not restart') ||
+        text.includes('No camera found') ||
+        text.includes('Camera is in use')
       ) {
         return 'camera-error';
       }
       return null;
-    }, { timeout: 5000 }).then(h => h.jsonValue()).catch(() => null);
+    }, undefined, { timeout: 5000 }).then(h => h.jsonValue()).catch(() => null);
 
     const elapsedMs = Date.now() - startedAt;
 
