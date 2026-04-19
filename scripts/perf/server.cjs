@@ -8,6 +8,7 @@
  * See `docs/technical/PERFORMANCE_BENCHMARKING.md` for the methodology.
  */
 
+const { once } = require('events');
 const { spawn } = require('child_process');
 const path = require('path');
 
@@ -64,6 +65,7 @@ function startPreviewServer({ host, port, cwd } = {}) {
       cwd: repoRoot,
       env: process.env,
       stdio: 'pipe',
+      detached: process.platform !== 'win32',
       shell: process.platform === 'win32',
     }
   );
@@ -73,9 +75,40 @@ function startPreviewServer({ host, port, cwd } = {}) {
   return server;
 }
 
+async function stopPreviewServer(server) {
+  if (!server || server.exitCode !== null || server.signalCode !== null) return;
+
+  const killProcessTree = (signal) => {
+    if (process.platform === 'win32') {
+      server.kill(signal);
+      return;
+    }
+
+    try {
+      process.kill(-server.pid, signal);
+    } catch {
+      server.kill(signal);
+    }
+  };
+
+  killProcessTree('SIGTERM');
+
+  await Promise.race([
+    once(server, 'close').catch(() => {}),
+    (async () => {
+      await sleep(5000);
+      if (server.exitCode === null && server.signalCode === null) {
+        killProcessTree('SIGKILL');
+      }
+      await once(server, 'close').catch(() => {});
+    })(),
+  ]);
+}
+
 module.exports = {
   sleep,
   waitForServer,
   canReach,
   startPreviewServer,
+  stopPreviewServer,
 };

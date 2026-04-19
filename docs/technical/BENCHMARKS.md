@@ -1,7 +1,7 @@
 # Loadopoly-OCR Benchmark Report
 
-**Version:** 2.20.0  
-**Date:** 2026-04-16  
+**Version:** 2.20.1  
+**Date:** 2026-04-19  
 **Schema:** `sql/CONSOLIDATED_SCHEMA.sql` v3.3.0
 
 ---
@@ -297,9 +297,11 @@ unless noted.
   - **Step 3 (AR Scanner route load)** → `appDesktop.arScannerRouteLoad` /
     `appMobile.arScannerRouteLoad`.
   - **Step 4 (camera ready)** → `appDesktop.arScannerCameraReady` /
-    `coldStartDesktop.cameraReady`. Uses `--use-fake-device-for-media-stream`
-    so the full bring-up path is exercised headlessly. The `hudOnBlack: true`
-    result is a release-blocking failure (exits 1).
+    `appMobile.arScannerCameraReady` and `coldStartDesktop.cameraReady` /
+    `coldStartMobile.cameraReady`. The benchmark runs against the full
+    Chromium channel with `--use-fake-device-for-media-stream` so the camera
+    bring-up path is exercised headlessly. The `hudOnBlack: true` result is a
+    release-blocking failure (exits 1).
 - Step 4 still requires a **real device** to validate actual camera-frame
   quality; the headless probe confirms the code path completes without
   a black-screen-with-HUD state.
