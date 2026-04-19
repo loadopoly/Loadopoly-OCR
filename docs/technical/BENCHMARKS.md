@@ -289,11 +289,20 @@ unless noted.
 
 ### 10.4 Notes
 
-- This walkthrough is currently **manual**. The §0 / §1 of
-  [`PERFORMANCE_BENCHMARKING.md`](./PERFORMANCE_BENCHMARKING.md) tracks
-  automation gaps; adding a Puppeteer scenario that drives steps 1–3 is a
-  candidate next addition (step 4 requires a real camera and cannot be fully
-  automated headlessly).
+- Steps 1–3 of this walkthrough are now **partially automated** by
+  `ui-benchmark.cjs`. The automated probes added in the cold-start and
+  settled-app scenarios correspond directly to the manual steps:
+  - **Step 2 (sidebar tap)** → `coldStartDesktop.sidebar` /
+    `coldStartMobile.sidebar` in the JSON output.
+  - **Step 3 (AR Scanner route load)** → `appDesktop.arScannerRouteLoad` /
+    `appMobile.arScannerRouteLoad`.
+  - **Step 4 (camera ready)** → `appDesktop.arScannerCameraReady` /
+    `coldStartDesktop.cameraReady`. Uses `--use-fake-device-for-media-stream`
+    so the full bring-up path is exercised headlessly. The `hudOnBlack: true`
+    result is a release-blocking failure (exits 1).
+- Step 4 still requires a **real device** to validate actual camera-frame
+  quality; the headless probe confirms the code path completes without
+  a black-screen-with-HUD state.
 - Run this walkthrough whenever any of the following changes:
   `src/App.tsx` sidebar / tab-switch code, `src/components/ARScene.tsx`,
   AR permission / warning screen code, or the `chunk-metaverse` bundle
