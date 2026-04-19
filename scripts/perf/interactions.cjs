@@ -387,7 +387,7 @@ async function measureArScannerCameraReady(page) {
         return 'camera-error';
       }
       return null;
-    }, undefined, { timeout: 5000 }).then(h => h.jsonValue()).catch(() => null);
+    }, null, { timeout: 5000 }).then(h => h.jsonValue()).catch(() => null);
 
     const elapsedMs = Date.now() - startedAt;
 
