@@ -163,6 +163,8 @@ function summarizeBlockingIssues(landing, appDesktop, appMobile, coldStartDeskto
     hasTabError(appMobile) ||
     appDesktop.bundleCardClick?.hasErrorUi ||
     appMobile.bundleCardClick?.hasErrorUi ||
+    appDesktop.arScannerCameraReady?.hudOnBlack ||
+    appMobile.arScannerCameraReady?.hudOnBlack ||
     hasColdStartBlockingIssue(coldStartDesktop) ||
     hasColdStartBlockingIssue(coldStartMobile)
   );
