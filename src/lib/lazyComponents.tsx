@@ -109,7 +109,7 @@ class LazyErrorBoundary extends React.Component<
 function lazyWithRetry<T extends ComponentType<any>>(
   importFn: () => Promise<{ default: T }>,
   retries = 3,
-  delay = 1000
+  delay = 200
 ): React.LazyExoticComponent<T> {
   return lazy(async () => {
     for (let i = 0; i < retries; i++) {
