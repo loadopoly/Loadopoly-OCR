@@ -96,6 +96,7 @@ import {
   SocialAppLazy as SocialApp,
   WorldRendererLazy as WorldRenderer,
   AnnotationEditorLazy as AnnotationEditor,
+  preloadARScene,
 } from './lib/lazyComponents';
 
 
@@ -164,9 +165,10 @@ async function calculateSHA256(file: File): Promise<string> {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-const SidebarItem = React.memo(({ icon: Icon, label, active, onClick }: any) => (
+const SidebarItem = React.memo(({ icon: Icon, label, active, onClick, onPointerEnter }: any) => (
   <button
     onClick={onClick}
+    onPointerEnter={onPointerEnter}
     className={`w-full flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors ${
       active 
         ? 'bg-primary-600/10 text-primary-500 border-r-2 border-primary-500' 
@@ -212,6 +214,14 @@ const MobileNavigation = React.memo(({ activeTab, switchTab, isGlobalView, setIs
     // switchTab already wraps setActiveTab in startTransition internally
     switchTab(tab);
   }, [switchTab]);
+
+  const handleOpen = useCallback(() => {
+    // Immediate haptic so the user knows the tap registered before the render completes
+    if ('vibrate' in navigator) navigator.vibrate(10);
+    // Warm up the AR chunk while the user reads the menu (saves ~4 s on first open)
+    preloadARScene();
+    setIsOpen(true);
+  }, []);
 
   // Portal overlay — rendered to document.body so it's never clipped by parent
   const overlay = isOpen ? createPortal(
@@ -286,7 +296,7 @@ const MobileNavigation = React.memo(({ activeTab, switchTab, isGlobalView, setIs
   return (
     <>
       <button
-        onClick={() => setIsOpen(true)}
+        onClick={handleOpen}
         className="lg:hidden p-2 text-slate-400 hover:text-white hover:bg-slate-800 active:bg-slate-700 active:scale-90 transition-transform duration-75 rounded-lg"
         style={{ touchAction: 'manipulation' }}
         aria-label="Open navigation menu"
@@ -1924,7 +1934,7 @@ export default function App() {
         <nav className="flex-1 space-y-1 overflow-y-auto custom-scrollbar">
           <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => switchTab('dashboard')} />
           <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => switchTab('batch')} />
-          {isTabVisible('ar') && <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => switchTab('ar')} />}
+          {isTabVisible('ar') && <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => switchTab('ar')} onPointerEnter={preloadARScene} />}
           <SidebarItem icon={ImageIcon} label="Assets & Bundles" active={activeTab === 'assets'} onClick={() => switchTab('assets')} />
           {isTabVisible('curator') && <SidebarItem icon={ShieldCheck} label="Curator Mode" active={activeTab === 'curator'} onClick={() => switchTab('curator')} />}
           <SidebarItem icon={Network} label="Knowledge Graph" active={activeTab === 'graph'} onClick={() => switchTab('graph')} />
