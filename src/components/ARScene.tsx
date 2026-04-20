@@ -66,6 +66,33 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
     if (showSafetyWarning) return;
     unmountedRef.current = false;
 
+    // Helper: attach a stream to the video element and start playback.
+    // Calling video.load() forces the element to (re-)initialize with the new
+    // srcObject, which is required on some mobile browsers (notably older iOS
+    // Safari) where simply setting srcObject does not trigger autoplay.
+    function attachStream(stream: MediaStream) {
+      const video = videoRef.current;
+      if (!video) return;
+      video.srcObject = stream;
+      video.load();
+      video.play().catch(err => {
+        // NotAllowedError means autoplay was blocked — surface it so the user
+        // knows to interact with the page (rare with muted+playsInline).
+        if (!unmountedRef.current) {
+          console.error('Camera video play() failed:', err);
+          setCameraError(`Could not start camera preview: ${(err as Error).message || err}`);
+        }
+      });
+    }
+
+    // Guard: camera access requires a secure context (HTTPS or localhost).
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setCameraError(
+        'Camera is not available. Make sure the app is opened over HTTPS and your browser supports camera access.'
+      );
+      return;
+    }
+
     // 1. Request camera — start with relaxed constraints for faster init, then
     //    upgrade to ideal resolution once stream is live.
     navigator.mediaDevices.getUserMedia({
@@ -91,11 +118,7 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
           setZoom(caps.zoom.min);
       }
 
-      if (videoRef.current) {
-        videoRef.current.srcObject = newStream;
-        // autoPlay attribute handles playback; explicit play() as fallback
-        videoRef.current.play().catch(() => {});
-      }
+      attachStream(newStream);
 
       // Upgrade to higher resolution in the background (non-blocking)
       track.applyConstraints({
@@ -165,6 +188,7 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
       } else if (document.visibilityState === 'visible') {
         // Reinitialise camera on resume — use relaxed constraints for fast restart
         if (unmountedRef.current) return;
+        if (!navigator.mediaDevices?.getUserMedia) return;
         setCameraError(null);
         navigator.mediaDevices.getUserMedia({
           video: { facingMode: 'environment' },
@@ -182,7 +206,13 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
           }
           if (videoRef.current) {
             videoRef.current.srcObject = newStream;
-            videoRef.current.play().catch(() => {});
+            videoRef.current.load();
+            videoRef.current.play().catch(err => {
+              if (!unmountedRef.current) {
+                console.error('Camera video play() failed on resume:', err);
+                setCameraError(`Could not resume camera preview: ${(err as Error).message || err}`);
+              }
+            });
           }
           // Upgrade to full resolution in background
           track.applyConstraints({
