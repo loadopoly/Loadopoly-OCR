@@ -216,7 +216,7 @@ async function benchBatchCloseout(page, bench) {
     await page.waitForTimeout(300);
 
     // Click "Open Large Batch Manager" button (shown in the processing panel slide-out
-    // OR the batch tab — look for it in either location)
+    // or the batch tab — look for it in either location).
     const openBatchBtn = page.locator('button:has-text("Open Large Batch Manager")').first();
     await openBatchBtn.waitFor({ timeout: 8000 });
     await openBatchBtn.click();
@@ -235,22 +235,26 @@ async function benchBatchCloseout(page, bench) {
     await panelARBtn.waitFor({ timeout: 5000 });
     bench.record('05c_batch_panel_ar_btn', Date.now() - start);
 
-    // Close the panel via the × button and verify it navigates to Assets
+    // Close the panel via the × button inside the gradient header
+    // The close button lives inside the "from-blue-600 to-purple-600" header div
     const closeStart = Date.now();
-    const closeBtn = page.locator('button[aria-label="Close Batch Panel"], button.p-1\\.5').first();
-    // Fallback: click the backdrop outside the panel
     try {
-      await page.locator('[class*="bg-gradient-to-r from-blue-600"] button.p-1\\.5').first().click({ timeout: 3000 });
+      await page
+        .locator('div.bg-gradient-to-r button')
+        .filter({ has: page.locator('svg') })
+        .last()
+        .click({ timeout: 3000 });
     } catch {
-      // Click backdrop as fallback
-      await page.mouse.click(10, 10);
+      // Fallback: press Escape (panel listens for Escape key)
+      await page.keyboard.press('Escape');
     }
     await page.waitForTimeout(600);
 
-    // After close, should be on Assets tab (or at least batch panel gone)
+    // After close the panel overlay element should no longer be in the DOM.
+    // We detect this by checking that the specific drop-zone text is gone.
     const panelGone = await page.evaluate(() =>
-      !document.body.textContent?.includes('Drop files here or click Add Files') ||
-      document.body.textContent?.includes('Exploratory Analysis')
+      document.querySelector('[class*="z-50"]') === null ||
+      !document.body.textContent?.includes('Drop files here or click Add Files')
     );
     if (panelGone) {
       bench.record('05c_batch_panel_closeout', Date.now() - closeStart);

@@ -314,11 +314,9 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
       cameraStreamRef.current = stream;
       setIsCameraOpen(true);
-      setTimeout(() => {
-        if (videoRef.current) videoRef.current.srcObject = stream;
-      }, 100);
+      // srcObject is attached in a useEffect below that fires once isCameraOpen becomes true
     } catch {
-      alert('Camera access denied or unavailable');
+      alert('Unable to access camera. Please check your browser permissions and ensure no other application is using the camera.');
     }
   }, []);
 
@@ -328,6 +326,13 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
     if (videoRef.current) videoRef.current.srcObject = null;
     setIsCameraOpen(false);
   }, []);
+
+  // Attach the camera stream to the video element once the modal renders
+  useEffect(() => {
+    if (isCameraOpen && videoRef.current && cameraStreamRef.current) {
+      videoRef.current.srcObject = cameraStreamRef.current;
+    }
+  }, [isCameraOpen]);
 
   const capturePhoto = useCallback(() => {
     if (!videoRef.current) return;
