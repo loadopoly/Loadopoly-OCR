@@ -24,13 +24,13 @@
  *   UI_BENCHMARK_URL=http://127.0.0.1:4173 node ui-benchmark.cjs
  */
 
-const { once } = require('events');
 const { chromium } = require('playwright');
 
 const {
   waitForServer,
   canReach,
   startPreviewServer,
+  stopPreviewServer,
 } = require('./scripts/perf/server.cjs');
 const {
   seedReturningUserState,
@@ -60,6 +60,12 @@ const BASE_URL = process.env.UI_BENCHMARK_URL || `http://${HOST}:${PORT}`;
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
+async function createBenchmarkContext(browser, viewport) {
+  const context = await browser.newContext({ viewport });
+  await context.grantPermissions(['camera', 'geolocation'], { origin: BASE_URL });
+  return context;
+}
+
 /**
  * Run a full app-shell scenario for a given viewport: pre-warm
  * localStorage, navigate, collect paint/nav metrics, walk all top-level
@@ -67,7 +73,7 @@ const MOBILE_VIEWPORT = { width: 390, height: 844 };
  * probes.
  */
 async function collectAppScenario(browser, viewportLabel, viewport) {
-  const context = await browser.newContext({ viewport });
+  const context = await createBenchmarkContext(browser, viewport);
   await seedReturningUserState(context);
 
   const page = await context.newPage();
@@ -108,7 +114,7 @@ async function collectAppScenario(browser, viewportLabel, viewport) {
  *   - HUD-on-black-frame: AR overlay paints before getUserMedia produces a frame.
  */
 async function collectColdStartScenario(browser, viewportLabel, viewport) {
-  const context = await browser.newContext({ viewport });
+  const context = await createBenchmarkContext(browser, viewport);
   await seedReturningUserState(context);
 
   const page = await context.newPage();
@@ -157,6 +163,8 @@ function summarizeBlockingIssues(landing, appDesktop, appMobile, coldStartDeskto
     hasTabError(appMobile) ||
     appDesktop.bundleCardClick?.hasErrorUi ||
     appMobile.bundleCardClick?.hasErrorUi ||
+    appDesktop.arScannerCameraReady?.hudOnBlack ||
+    appMobile.arScannerCameraReady?.hudOnBlack ||
     hasColdStartBlockingIssue(coldStartDesktop) ||
     hasColdStartBlockingIssue(coldStartMobile)
   );
@@ -171,10 +179,10 @@ async function main() {
 
   try {
     await waitForServer(BASE_URL);
-    // --use-fake-device-for-media-stream and --use-fake-ui-for-media-capture
-    // provide a synthetic camera in headless mode so the AR Scanner bring-up
-    // path (§10 step 4) can be exercised end-to-end without a real device.
+    // Use the full Chromium channel (not headless_shell) so synthetic
+    // getUserMedia works in headless mode during the AR Scanner probe.
     const browser = await chromium.launch({
+      channel: 'chromium',
       headless: true,
       args: [
         '--use-fake-device-for-media-stream',
@@ -204,9 +212,8 @@ async function main() {
 
     process.exitCode = summarizeBlockingIssues(landing, appDesktop, appMobile, coldStartDesktop, coldStartMobile) ? 1 : 0;
   } finally {
-    if (server && !server.killed) {
-      server.kill('SIGTERM');
-      await once(server, 'close').catch(() => {});
+    if (server) {
+      await stopPreviewServer(server);
     }
   }
 }
