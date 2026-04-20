@@ -1,0 +1,2 @@
+# Keep baseline but ignore per-run results
+results/run-*.json

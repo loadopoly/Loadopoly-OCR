@@ -1,0 +1,29 @@
+{
+  "timestamp": "2026-04-15T20:48:57.337Z",
+  "url": "http://localhost:3000",
+  "results": {
+    "01_dom_content_loaded": 374,
+    "02_landing_rendered": 784,
+    "02_onboarding_wizard": 608,
+    "03_app_shell_ready": 399,
+    "03_sidebar_visible": 406,
+    "04_dashboard_content": 14,
+    "05_batch_content": 415,
+    "06_assets_content": 244,
+    "07_graph_content": 249,
+    "08_database_content": 250,
+    "09_dashboard_return_content": 252,
+    "10_ar_click": 44,
+    "10_ar_safety_warning": 841,
+    "10_ar_post_accept": 141,
+    "11_world_content": 247,
+    "12_social_content": 254,
+    "13_market_content": 246,
+    "14_settings_content": 47,
+    "16_dynamic_filters": 1149,
+    "mem_js_heap_used_kb": 18538,
+    "mem_js_heap_total_kb": 32972,
+    "total_benchmark_time": 6775
+  },
+  "errors": []
+}
