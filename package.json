@@ -11,7 +11,10 @@
     "zip:extension": "cd dist && zip -r ../geograph-ocr-extension.zip . -x '*.map'",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts,.tsx"
+    "lint": "eslint src --ext .ts,.tsx",
+    "bench": "node benchmarks/ui-benchmark.cjs --save",
+    "bench:compare": "node benchmarks/ui-benchmark.cjs --compare",
+    "bench:ci": "node benchmarks/ui-benchmark.cjs"
   },
   "dependencies": {
     "@google/genai": "^1.0.0",

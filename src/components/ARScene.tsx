@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, memo } from 'react';
 import { Camera, Zap, ScanLine, MapPin, ArrowRight, Layers, WifiOff, ZoomIn, ZoomOut, CameraOff, Bluetooth, Timer, Glasses, Volume2, VolumeX, Eye } from 'lucide-react';
 import ARSafetyWarning from './ARSafetyWarning';
 
@@ -23,7 +23,7 @@ interface ARSceneProps {
 const AR_GLASSES_SERVICE_UUID = '000018f0-0000-1000-8000-00805f9b34fb';
 const AR_GLASSES_CHAR_UUID = '00002af1-0000-1000-8000-00805f9b34fb';
 
-export default function ARScene({ onCapture, onFinishSession, sessionCount, isOnline = true, zoomEnabled = true }: ARSceneProps) {
+function ARScene({ onCapture, onFinishSession, sessionCount, isOnline = true, zoomEnabled = true }: ARSceneProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [flash, setFlash] = useState(false);
   const [scanning, setScanning] = useState(true);
@@ -656,3 +656,5 @@ export default function ARScene({ onCapture, onFinishSession, sessionCount, isOn
     </div>
   );
 }
+
+export default memo(ARScene);

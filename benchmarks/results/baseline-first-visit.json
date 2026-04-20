@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-04-15T21:42:39.376Z",
+  "url": "http://localhost:3000",
+  "scenario": "first-visit",
+  "results": {
+    "01_dom_content_loaded": 262,
+    "02_landing_rendered": 634,
+    "02_onboarding_wizard": 532,
+    "03_app_shell_ready": 240,
+    "03_sidebar_visible": 246,
+    "04_dashboard_content": 7,
+    "total_benchmark_time": 1419
+  },
+  "errors": []
+}

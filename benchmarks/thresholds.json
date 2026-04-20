@@ -1,0 +1,140 @@
+{
+  "01_dom_content_loaded": {
+    "target": 1000,
+    "max": 3000,
+    "unit": "ms",
+    "description": "Time to DOMContentLoaded event"
+  },
+  "02_landing_rendered": {
+    "target": 2000,
+    "max": 5000,
+    "unit": "ms",
+    "description": "Time until landing page renders with Try Free button"
+  },
+  "02_onboarding_wizard": {
+    "target": 500,
+    "max": 2000,
+    "unit": "ms",
+    "description": "Time from Try Free click to onboarding wizard"
+  },
+  "03_app_shell_ready": {
+    "target": 1500,
+    "max": 4000,
+    "unit": "ms",
+    "description": "Time from Skip click to app shell render"
+  },
+  "03_sidebar_visible": {
+    "target": 2000,
+    "max": 5000,
+    "unit": "ms",
+    "description": "Time until sidebar navigation buttons are visible"
+  },
+  "04_dashboard_content": {
+    "target": 3000,
+    "max": 8000,
+    "unit": "ms",
+    "description": "Time until dashboard main content renders"
+  },
+  "05_batch_content": {
+    "target": 1500,
+    "max": 4000,
+    "unit": "ms",
+    "description": "Time to render Quick Processing tab after click"
+  },
+  "06_assets_content": {
+    "target": 1500,
+    "max": 4000,
+    "unit": "ms",
+    "description": "Time to render Assets & Bundles tab after click"
+  },
+  "07_graph_content": {
+    "target": 2000,
+    "max": 5000,
+    "unit": "ms",
+    "description": "Time to render Knowledge Graph tab after click"
+  },
+  "08_database_content": {
+    "target": 1500,
+    "max": 4000,
+    "unit": "ms",
+    "description": "Time to render Structured DB tab after click"
+  },
+  "09_dashboard_return_content": {
+    "target": 500,
+    "max": 2000,
+    "unit": "ms",
+    "description": "Time to return to Dashboard (should be cached)"
+  },
+  "10_ar_click": {
+    "target": 200,
+    "max": 1000,
+    "unit": "ms",
+    "description": "Time to respond to AR Scanner tab click"
+  },
+  "10_ar_safety_warning": {
+    "target": 2000,
+    "max": 5000,
+    "unit": "ms",
+    "description": "Time from AR Scanner click to safety warning display"
+  },
+  "10_ar_post_accept": {
+    "target": 3000,
+    "max": 8000,
+    "unit": "ms",
+    "description": "Time from accepting safety warning to camera/error view"
+  },
+  "11_world_content": {
+    "target": 2000,
+    "max": 6000,
+    "unit": "ms",
+    "description": "Time to render 3D World tab (conditional)"
+  },
+  "12_social_content": {
+    "target": 1500,
+    "max": 4000,
+    "unit": "ms",
+    "description": "Time to render Social Hub tab (conditional)"
+  },
+  "13_market_content": {
+    "target": 1500,
+    "max": 4000,
+    "unit": "ms",
+    "description": "Time to render Marketplace tab (conditional)"
+  },
+  "14_settings_content": {
+    "target": 1000,
+    "max": 3000,
+    "unit": "ms",
+    "description": "Time to render Settings panel content after click"
+  },
+  "16_dynamic_filters": {
+    "target": 1000,
+    "max": 3000,
+    "unit": "ms",
+    "description": "Time to open Dynamic Filters tab"
+  },
+  "mem_js_heap_used_kb": {
+    "target": 30000,
+    "max": 60000,
+    "unit": "KB",
+    "description": "JS heap usage after full navigation"
+  },
+  "total_benchmark_time": {
+    "target": 30000,
+    "max": 60000,
+    "unit": "ms",
+    "description": "Total time for the entire benchmark run"
+  },
+  "18_recovery_to_dashboard": {
+    "target": 1000,
+    "max": 3000,
+    "unit": "ms",
+    "description": "Time to recover back to dashboard after full navigation"
+  },
+  "19_no_error_screen": {
+    "target": 1,
+    "max": 1,
+    "unit": "flag",
+    "description": "1 means no ErrorBoundary crash screen appeared"
+  }
+}
