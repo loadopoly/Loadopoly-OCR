@@ -4,6 +4,7 @@
 - **UI benchmark camera probe**: Switched the harness to the full Chromium channel, granted benchmark permissions, and corrected the Playwright timeout call so headless AR camera checks complete reliably.
 - **Cold-start benchmark probe**: Waits for the first actionable sidebar control instead of skipping before the app shell mounts, restoring desktop and mobile cold-start coverage.
 - **AR camera error detection**: Recognizes the current in-app camera failure states so camera initialization failures are reported distinctly from `hudOnBlack`.
+- **hudOnBlack blocking check**: `summarizeBlockingIssues` now exits 1 on `hudOnBlack: true` from warm-app `arScannerCameraReady` probes, not just cold-start paths, closing the §10.3 regression gate for settled-app runs.
 - **Preview server cleanup**: Terminates the spawned preview process tree so `node ui-benchmark.cjs` exits cleanly after printing its JSON summary.
 
 ## [v2.20.0] - 2026-04-16
