@@ -161,8 +161,118 @@ async function benchTabSwitch(page, bench, tabLabel, resultKey, contentText, tim
 }
 
 // ---------------------------------------------------------------------------
-// Phase 4: AR Scanner Full Flow
+// Phase 3.5: Batch Screen — AR Scanner button + photo upload actions
 // ---------------------------------------------------------------------------
+
+async function benchBatchScreenActions(page, bench) {
+  const start = Date.now();
+  try {
+    await clickSidebarTab(page, 'Quick Processing');
+    await page.waitForTimeout(300);
+
+    // Verify the AR Scanner shortcut button exists on the batch screen
+    const arBtn = page.locator('button:has-text("Open AR Scanner")').first();
+    await arBtn.waitFor({ timeout: 8000 });
+    bench.record('05b_batch_ar_button_visible', Date.now() - start);
+
+    // Verify photo upload (camera) button exists (in BatchImporter)
+    const cameraBtn = page.locator('button:has-text("Take Photo with Camera")').first();
+    await cameraBtn.waitFor({ timeout: 5000 });
+    bench.record('05b_batch_camera_button_visible', Date.now() - start);
+
+    // Click the AR Scanner button — should navigate to AR tab
+    const navStart = Date.now();
+    await arBtn.click();
+    await page.waitForTimeout(500);
+    // The AR tab should now be active (Safety Warning appears, or AR content visible)
+    const arVisible = await page.evaluate(() =>
+      document.body.textContent?.includes('AR Safety Warning') ||
+      document.body.textContent?.includes('AR Scanner')
+    );
+    if (arVisible) {
+      bench.record('05b_batch_ar_navigates', Date.now() - navStart);
+    } else {
+      bench.error('05b_batch_ar_navigates', 'AR tab did not activate after clicking AR Scanner button');
+    }
+
+    // Navigate back to batch for subsequent tests
+    await clickSidebarTab(page, 'Quick Processing');
+    await page.waitForTimeout(300);
+
+  } catch (e) {
+    bench.error('05b_batch_ar_button_visible', `Batch screen actions: ${e.message?.substring(0, 100)}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 3.6: Batch Processing Panel close-out flow
+// ---------------------------------------------------------------------------
+
+async function benchBatchCloseout(page, bench) {
+  const start = Date.now();
+  try {
+    // Open the large batch manager overlay
+    await clickSidebarTab(page, 'Quick Processing');
+    await page.waitForTimeout(300);
+
+    // Click "Open Large Batch Manager" button (shown in the processing panel slide-out
+    // or the batch tab — look for it in either location).
+    const openBatchBtn = page.locator('button:has-text("Open Large Batch Manager")').first();
+    await openBatchBtn.waitFor({ timeout: 8000 });
+    await openBatchBtn.click();
+    bench.record('05c_batch_panel_open', Date.now() - start);
+
+    // The overlay should appear: "Batch Processing" heading
+    await page.waitForSelector('text=Batch Processing', { timeout: 8000 });
+    bench.record('05c_batch_panel_visible', Date.now() - start);
+
+    // Verify the Camera and AR Scanner buttons are present inside the panel
+    const panelCameraBtn = page.locator('button[title="Take a photo with your camera"]').first();
+    await panelCameraBtn.waitFor({ timeout: 5000 });
+    bench.record('05c_batch_panel_camera_btn', Date.now() - start);
+
+    const panelARBtn = page.locator('button[title="Open the full AR scanner"]').first();
+    await panelARBtn.waitFor({ timeout: 5000 });
+    bench.record('05c_batch_panel_ar_btn', Date.now() - start);
+
+    // Close the panel via the × button inside the gradient header
+    // The close button lives inside the "from-blue-600 to-purple-600" header div
+    const closeStart = Date.now();
+    try {
+      await page
+        .locator('div.bg-gradient-to-r button')
+        .filter({ has: page.locator('svg') })
+        .last()
+        .click({ timeout: 3000 });
+    } catch {
+      // Fallback: press Escape (panel listens for Escape key)
+      await page.keyboard.press('Escape');
+    }
+    await page.waitForTimeout(600);
+
+    // After close the panel overlay element should no longer be in the DOM.
+    // We detect this by checking that the specific drop-zone text is gone.
+    const panelGone = await page.evaluate(() =>
+      document.querySelector('[class*="z-50"]') === null ||
+      !document.body.textContent?.includes('Drop files here or click Add Files')
+    );
+    if (panelGone) {
+      bench.record('05c_batch_panel_closeout', Date.now() - closeStart);
+    } else {
+      bench.error('05c_batch_panel_closeout', 'Batch panel did not close / screen locked after close');
+    }
+
+    // Verify the UI is responsive after close (click another tab successfully)
+    const responseStart = Date.now();
+    await clickSidebarTab(page, 'Dashboard');
+    await page.waitForSelector('text=Total Assets', { timeout: 5000 });
+    bench.record('05c_post_closeout_responsive', Date.now() - responseStart);
+
+  } catch (e) {
+    bench.error('05c_batch_panel_closeout', `Batch closeout: ${e.message?.substring(0, 100)}`);
+  }
+}
+
 
 async function benchARScanner(page, bench) {
   const start = Date.now();
@@ -332,6 +442,14 @@ async function main() {
     await benchTabSwitch(pageA, benchA, 'Knowledge Graph', '07_graph_content', 'Knowledge Graph');
     await benchTabSwitch(pageA, benchA, 'Structured DB', '08_database_content', 'Structured');
     await benchTabSwitch(pageA, benchA, 'Dashboard', '09_dashboard_return_content', 'Total Assets');
+
+    // Phase 3.5: Batch Screen — AR Scanner button + photo upload actions
+    console.log('▸ Phase 3.5: Batch Screen Actions (AR + Photo Upload)');
+    await benchBatchScreenActions(pageA, benchA);
+
+    // Phase 3.6: Batch Processing Panel close-out (screen-lock regression test)
+    console.log('▸ Phase 3.6: Batch Processing Panel Close-out');
+    await benchBatchCloseout(pageA, benchA);
 
     // Phase 4: AR Scanner Full Flow
     console.log('▸ Phase 4: AR Scanner Flow');
