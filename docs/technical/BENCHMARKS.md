@@ -230,3 +230,71 @@ Power users can:
 - [x] `database.types.ts` matches SQL schema for all table Row/Insert/Update types
 - [x] Stripe webhook uses correct column names for `user_credits` upsert
 - [x] Edge function (`process-ocr`) writes LATITUDE/LONGITUDE from job to asset
+
+---
+
+## 10. Cold Start & AR Scanner Walkthrough
+
+This section captures a manual, end-user-perceived walkthrough of the app from
+a fully cold start through opening the AR Scanner and getting a live camera
+feed. Unlike the automated probes in `ui-benchmark.cjs`, these numbers come
+from a human stopwatch on a real device and exist to catch perceptible
+regressions (sidebar lock-ups, warning-screen stalls, black-camera frames)
+that synthetic tab-rotation tests miss.
+
+### 10.1 Procedure
+
+Run on both a desktop profile (1440×900) and a mobile profile (390×844 / real
+mid-range Android). Record three trials per step and report the median.
+
+| # | Step | What to measure |
+|---|------|-----------------|
+| 1 | **Cold start.** Force-quit the app (or hard-reload with cache disabled), then launch. | Time from launch tap → first interactive paint of the app shell. |
+| 2 | **Immediate sidebar tap.** As soon as the shell appears, tap the sidebar toggle without waiting for any background work to finish. Then immediately attempt to scroll the main view. | (a) Does the sidebar open? (b) Does the main view scroll, or is the app locked / unresponsive? Record time-to-sidebar-open and a pass/fail for scroll responsiveness. |
+| 3 | **Open AR Scanner.** With the sidebar open, tap **AR Scanner** (`SidebarItem` → `activeTab = 'ar'`). | Time from tap → AR Scanner warning/permission screen fully rendered. |
+| 4 | **Accept warning.** On the warning screen, tap **Accept** / **I understand**. | Time from tap → first non-black camera frame painted (i.e. real video pixels visible, not just the AR overlay chrome on a black background). |
+
+For step 4, "rendered information from the camera" means the live `<video>`
+texture from `getUserMedia` is actually drawn — *not* the AR Scanner chrome
+(`ScanLine` indicator, HUD, surrounding visuals) on top of a black surface.
+A black frame with HUD does **not** count as rendered.
+
+### 10.2 Results template
+
+Fill in per device/run. Leave `—` if not measured. All times in milliseconds
+unless noted.
+
+| Metric | Desktop (1440×900) | Mobile (390×844) | Pass/Fail criteria |
+|---|---|---|---|
+| 1. Cold-start → interactive shell | — | — | < 3,000 ms desktop / < 5,000 ms mobile |
+| 2a. Immediate sidebar tap → sidebar open | — | — | < 250 ms; sidebar must open on the first tap |
+| 2b. Scroll responsiveness during cold-start work | pass / **fail** | pass / **fail** | Main view must scroll; no input lock-up |
+| 3. Sidebar AR Scanner tap → warning screen rendered | — | — | < 1,000 ms |
+| 4. Accept warning → first real camera frame | — | — | < 2,000 ms; **no** sustained black-screen-with-HUD state |
+
+### 10.3 What counts as a regression
+
+- **Step 2 fail** — the most user-hostile failure mode. If the sidebar tap is
+  swallowed, or the main view refuses to scroll while cold-start work is still
+  running, the app is effectively locked from the user's perspective. This is
+  a P0 regression even if every other number is green.
+- **Step 3 > 1,000 ms** — the AR Scanner route is code-split
+  (`chunk-metaverse` / AR scene bundle). A regression here usually means the
+  chunk grew or a new top-level import was added to `ARScene.tsx`. Cross-check
+  against §1 bundle sizes.
+- **Step 4 black-screen-with-HUD** — the HUD (`ScanLine`, "AR Scanner Active"
+  banner) renders before the `<video>` element has its first frame. A
+  perceptible gap (> ~500 ms) between HUD-visible and first-camera-frame is a
+  regression in the camera bring-up path, not in the AR overlay code.
+
+### 10.4 Notes
+
+- This walkthrough is currently **manual**. The §0 / §1 of
+  [`PERFORMANCE_BENCHMARKING.md`](./PERFORMANCE_BENCHMARKING.md) tracks
+  automation gaps; adding a Puppeteer scenario that drives steps 1–3 is a
+  candidate next addition (step 4 requires a real camera and cannot be fully
+  automated headlessly).
+- Run this walkthrough whenever any of the following changes:
+  `src/App.tsx` sidebar / tab-switch code, `src/components/ARScene.tsx`,
+  AR permission / warning screen code, or the `chunk-metaverse` bundle
+  composition.
