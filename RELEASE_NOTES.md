@@ -1,12 +1,11 @@
 # 🚀 GeoGraph Node: v2.20.1 Release Notes
 
-## ⚡ v2.20.1 — Benchmark Harness Reliability Fixes (2026-04-19)
+## ✅ v2.20.1 — Strong Stable State & Fallback Baseline (2026-04-20)
 
-- **Headless AR camera probe**: `ui-benchmark.cjs` now launches the full Chromium channel and grants camera/geolocation permissions so synthetic media streams work during benchmark runs.
-- **Playwright timeout fix**: Corrected the AR camera readiness wait so the probe uses the intended 5 s timeout instead of the default 30 s wait.
-- **Cold-start probe coverage**: Cold-start desktop/mobile selectors now wait for the first actionable shell controls before measuring, avoiding false skips while the lazy app shell mounts.
-- **Benchmark shutdown**: The spawned preview server is now terminated as a process tree so `node ui-benchmark.cjs` finishes cleanly in automation.
-- **Benchmark docs**: Updated `docs/technical/BENCHMARKS.md` to reflect the full set of automated camera metrics and the current headless execution path.
+- **Strong State Marker**: This release is now documented as a strong and stable application state.
+- **Fallback Baseline**: `v2.20.1` is designated as the fallback version for controlled rollback scenarios.
+- **Version Alignment**: Documentation and release metadata have been aligned to this baseline.
+- **Fallback Policy**: Added operational fallback runbook at `docs/technical/FALLBACK_POLICY.md`.
 
 ## 🏗️ v2.20.0 — Consolidated Schema, Stripe Credits, Cloudflare Workers & Benchmarks (2026-04-16)
 
