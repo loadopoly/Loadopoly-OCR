@@ -19,6 +19,22 @@ import {
 } from '../services/batchProcessorService';
 import { ScanType } from '../types';
 
+// Inline camera/AR capture icon helpers (avoids adding a new dependency)
+const CameraIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+  </svg>
+);
+
+const ScanIcon = () => (
+  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+      d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+  </svg>
+);
+
 // ============================================
 // Types
 // ============================================
@@ -26,6 +42,10 @@ import { ScanType } from '../types';
 interface BatchProcessingPanelProps {
   onProcessItem: (file: File, itemId: string, scanType: ScanType, onProgress: (progress: number, stage: string) => void) => Promise<string | null>;
   onClose?: () => void;
+  /** Called when all queued items finish processing (success or error) */
+  onBatchCompleted?: () => void;
+  /** Called to open the full AR scanner tab */
+  onOpenARScanner?: () => void;
   maxConcurrent?: number;
   defaultScanType?: ScanType;
   serverRetry?: (jobId: string) => Promise<boolean>;
@@ -188,6 +208,8 @@ const StatsPanel: React.FC<{ stats: BatchStats; state: BatchProcessorState }> = 
 export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
   onProcessItem,
   onClose,
+  onBatchCompleted,
+  onOpenARScanner,
   maxConcurrent = 3,
   defaultScanType = ScanType.DOCUMENT,
   serverRetry,
@@ -201,6 +223,11 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
   const [scanType, setScanType] = useState<ScanType>(defaultScanType);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+
+  // Inline camera capture state
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const cameraStreamRef = useRef<MediaStream | null>(null);
   
   // Stable refs for callback props to avoid useEffect re-fires
   const onProcessItemRef = useRef(onProcessItem);
@@ -223,7 +250,11 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
       onItemProgress: () => updateUI(),
       onItemCompleted: () => updateUI(),
       onItemFailed: () => updateUI(),
-      onBatchCompleted: () => updateUI(),
+      onBatchCompleted: () => {
+        updateUI();
+        // Notify parent that all items finished so it can navigate away
+        onBatchCompleted?.();
+      },
       onStateChange: (state) => {
         setProcessorState(state);
         updateUI();
@@ -243,9 +274,14 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
     }
     
     return () => {
+      // Stop camera stream on unmount
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach(t => t.stop());
+        cameraStreamRef.current = null;
+      }
       batchProcessor.setCallbacks({});
     };
-  }, [maxConcurrent]);
+  }, [maxConcurrent, onBatchCompleted]);
   
   // Prevent accidental data loss when closing page during processing
   useEffect(() => {
@@ -271,6 +307,47 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
     setStats(batchProcessor.getStats());
     setProcessorState(batchProcessor.getState());
   }, []);
+
+  // Inline camera capture helpers
+  const startCamera = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+      cameraStreamRef.current = stream;
+      setIsCameraOpen(true);
+      // srcObject is attached in a useEffect below that fires once isCameraOpen becomes true
+    } catch {
+      alert('Unable to access camera. Please check your browser permissions and ensure no other application is using the camera.');
+    }
+  }, []);
+
+  const stopCamera = useCallback(() => {
+    cameraStreamRef.current?.getTracks().forEach(t => t.stop());
+    cameraStreamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setIsCameraOpen(false);
+  }, []);
+
+  // Attach the camera stream to the video element once the modal renders
+  useEffect(() => {
+    if (isCameraOpen && videoRef.current && cameraStreamRef.current) {
+      videoRef.current.srcObject = cameraStreamRef.current;
+    }
+  }, [isCameraOpen]);
+
+  const capturePhoto = useCallback(() => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
+    canvas.toBlob(blob => {
+      if (blob) {
+        const file = new File([blob], `ar_capture_${Date.now()}.jpg`, { type: 'image/jpeg' });
+        batchProcessor.addFiles([file], scanType);
+        stopCamera();
+      }
+    }, 'image/jpeg', 0.95);
+  }, [scanType, stopCamera]);
 
   // File drop handling
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -328,7 +405,7 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
     : 0;
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+    <div className="relative flex flex-col h-full bg-white dark:bg-gray-900 rounded-xl shadow-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white">
         <div className="flex items-center gap-3">
@@ -379,7 +456,7 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
       
       {/* Controls */}
       <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-        {/* Add Files */}
+        {/* Photo Upload */}
         <input
           ref={fileInputRef}
           type="file"
@@ -391,12 +468,35 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
         <button
           onClick={() => fileInputRef.current?.click()}
           className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+          title="Upload photos or PDFs"
         >
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
           </svg>
           Add Files
         </button>
+
+        {/* Inline Camera Capture */}
+        <button
+          onClick={startCamera}
+          className="flex items-center gap-2 px-3 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors text-sm font-medium"
+          title="Take a photo with your camera"
+        >
+          <CameraIcon />
+          Camera
+        </button>
+
+        {/* Open Full AR Scanner */}
+        {onOpenARScanner && (
+          <button
+            onClick={onOpenARScanner}
+            className="flex items-center gap-2 px-3 py-2 bg-violet-600 text-white rounded-lg hover:bg-violet-700 transition-colors text-sm font-medium"
+            title="Open the full AR scanner"
+          >
+            <ScanIcon />
+            AR Scanner
+          </button>
+        )}
         
         {/* Scan Type Selector */}
         <select
@@ -566,6 +666,44 @@ export const BatchProcessingPanel: React.FC<BatchProcessingPanelProps> = ({
           Drag & drop files to add
         </span>
       </div>
+
+      {/* Inline camera capture modal */}
+      {isCameraOpen && (
+        <div
+          className="absolute inset-0 z-20 bg-black flex flex-col"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Camera Capture"
+        >
+          <button
+            onClick={stopCamera}
+            aria-label="Close Camera"
+            className="absolute top-4 right-4 z-10 p-3 bg-white/10 hover:bg-white/20 text-white rounded-full"
+          >
+            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <div className="flex-1 flex items-center justify-center overflow-hidden">
+            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-contain" />
+            {/* AR-style scan line overlay */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute left-8 right-8 top-1/2 -translate-y-1/2 h-px bg-violet-400/70 animate-pulse shadow-[0_0_8px_2px_rgba(139,92,246,0.6)]" />
+              <div className="absolute left-8 top-1/4 w-6 h-6 border-l-2 border-t-2 border-violet-400" />
+              <div className="absolute right-8 top-1/4 w-6 h-6 border-r-2 border-t-2 border-violet-400" />
+              <div className="absolute left-8 bottom-1/4 w-6 h-6 border-l-2 border-b-2 border-violet-400" />
+              <div className="absolute right-8 bottom-1/4 w-6 h-6 border-r-2 border-b-2 border-violet-400" />
+            </div>
+          </div>
+          <div className="p-8 flex justify-center bg-black/50 absolute bottom-0 left-0 right-0">
+            <button
+              onClick={capturePhoto}
+              aria-label="Capture Photo"
+              className="w-20 h-20 bg-white rounded-full shadow-[0_0_20px_rgba(255,255,255,0.5)] border-4 border-slate-200 active:scale-90 transition-transform"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 };
