@@ -262,6 +262,63 @@ to first `<canvas>` / first force-graph node attached, distinguishing the
 These are not optional. They were added because earlier rounds of "perf
 work" missed regressions in exactly these places.
 
+### 5.6 Batch screen & BatchProcessingPanel benchmarks (Phases 3.5 – 3.7)
+
+These phases guard the AR-scanner and batch-panel interaction paths added by the
+AR + batch processing feature set. Each phase is independently try/catch-isolated
+so a failure in one step does not suppress subsequent metrics.
+
+**Phase 3.5 — Batch screen AR/photo actions (`05b_*`)**
+
+| Metric | Description | Target | Max |
+|---|---|---|---|
+| `05b_batch_ar_button_visible` | Time until "Open AR Scanner" shortcut button appears on batch screen | 1 500 ms | 8 000 ms |
+| `05b_batch_camera_button_visible` | Time until "Take Photo with Camera" button is visible in BatchImporter | 2 000 ms | 8 000 ms |
+| `05b_batch_ar_navigates` | Time from "Open AR Scanner" click to AR tab becoming active | 800 ms | 5 000 ms |
+
+Implementation notes:
+- Steps A/B/C are each wrapped in their own try/catch so a missing button in step A
+  does not prevent steps B or C from running.
+- Step C uses `waitForFunction` polling (not a fixed `waitForTimeout` + `evaluate`)
+  so React's `startTransition` delay is correctly tolerated.
+
+**Phase 3.6 — BatchProcessingPanel close-out flow (`05c_*`)**
+
+| Metric | Description | Target | Max |
+|---|---|---|---|
+| `05c_batch_panel_open` | Time from start until BatchProcessingPanel overlay opens | 1 000 ms | 8 000 ms |
+| `05c_batch_panel_visible` | Time until "Batch Processing" heading is visible | 1 500 ms | 8 000 ms |
+| `05c_batch_panel_camera_btn` | Time until in-panel Camera button is visible | 2 000 ms | 8 000 ms |
+| `05c_batch_panel_ar_btn` | Time until in-panel AR Scanner button is visible | 2 000 ms | 8 000 ms |
+| `05c_batch_panel_closeout` | Time from close-button click until panel leaves the DOM | 500 ms | 5 000 ms |
+| `05c_onclose_assets_nav` | Time until Assets & Bundles tab is active after panel `onClose` | 800 ms | 5 000 ms |
+| `05c_post_closeout_responsive` | Time to navigate to Dashboard after panel close (pointer-event lock guard) | 1 000 ms | 3 000 ms |
+
+Implementation notes:
+- `ensureProcessingPanelOpen()` opens the legacy Processing Queue slide-out (via the
+  persistent `button[title="Processing Queue (Q)"]` header button, falling back to the
+  `q` keyboard shortcut) before looking for "Open Large Batch Manager".
+- Panel-close detection uses `waitForFunction` polling on the panel's drop-zone text
+  rather than `document.querySelector('[class*="z-50"]') === null` (which was always
+  `false` because many unrelated elements carry `z-50`).
+- `05c_onclose_assets_nav` asserts the Assets & Bundles tab activates after close,
+  which is the actual behaviour `onClose` is supposed to produce.
+
+**Phase 3.7 — In-panel AR Scanner navigation (`05d_*`)**
+
+| Metric | Description | Target | Max |
+|---|---|---|---|
+| `05d_panel_opened_for_ar` | Time until BatchProcessingPanel is open and ready for the AR test | 2 000 ms | 8 000 ms |
+| `05d_panel_ar_closes_panel` | Time from in-panel AR Scanner click until panel closes | 500 ms | 5 000 ms |
+| `05d_panel_ar_navigates` | Time from in-panel AR Scanner click until AR tab is active | 800 ms | 5 000 ms |
+
+Implementation notes:
+- Tests the `onOpenARScanner` prop end-to-end: opens the panel, clicks the in-panel
+  AR Scanner button (`button[title="Open the full AR scanner"]`), then asserts both
+  that the panel unmounts and that the AR tab becomes active.
+- Both assertions use `waitForFunction` polling so React state updates are caught
+  as soon as they happen rather than after an arbitrary fixed delay.
+
 ---
 
 ## 6. Reproducible scripts
