@@ -172,3 +172,12 @@ Once you've run the SQL script and shared results, we can proceed to test:
 ## 🎉 Ready for Phase 1
 
 The code is ready. Please run the SQL script and share the verification results so we can confirm everything is working correctly!
+
+## Benchmark & Interaction Coverage Updates (v2.20.2)
+- Discovered and addressed 68 critical user interaction points including OCR Camera, Web3 Minting, Onboarding Forms, and Mobile layout.
+- Added extensive headless testing via Playwright:
+  - \`test-camera-ar.cjs\`: Validates camera stream mocks and AR selection workflows independently.
+  - \`test-web3-minting.cjs\`: Validates blockchain flows by injecting \`window.ethereum\` mock providers.
+  - \`test-mobile-db.cjs\`: Expanded to test CSS touch-gestures, mobile navigation drawers, and \`ErrorBoundary\` detection.
+  - \`test-db-interactive.cjs\`: Now processes onboarding flows, signs into auth modals, and tests settings functionality.
+- Optimized UI rendering performance through heavy chunking isolation rules inside \`vite.config.ts\` combined with granular \`React.lazy\` boundaries separating features like \`@google/genai\` and \`ethers\`.

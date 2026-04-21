@@ -2522,15 +2522,6 @@ export default function App() {
                         </div>
                         <div className="flex flex-col items-center justify-center p-8 border-2 border-dashed border-slate-700 rounded-lg bg-slate-950/50 gap-4">
                             <BatchImporter onFilesSelected={handleBatchFiles} isProcessing={isProcessing} />
-                            {/* AR Scanner shortcut — navigates to the full AR tab */}
-                            <button
-                              onClick={() => switchTab('ar')}
-                              className="w-full flex items-center justify-center gap-3 px-6 py-4 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white rounded-xl font-medium shadow-lg transition-all active:scale-[0.98]"
-                              aria-label="Open AR Scanner"
-                            >
-                              <Scan size={24} aria-hidden="true" />
-                              Open AR Scanner
-                            </button>
                         </div>
                     </div>
                     <div className="flex-1 bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col">
@@ -3302,23 +3293,10 @@ export default function App() {
         {showNewBatchPanel && (
           <div className="fixed inset-4 md:inset-8 lg:inset-16 z-50 flex items-center justify-center">
             <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setShowNewBatchPanel(false)} />
-            <div className="relative z-10 w-full max-w-4xl h-full max-h-[90vh]">
+            <div className="relative w-full max-w-4xl h-full max-h-[90vh]">
               <BatchProcessingPanel
                 onProcessItem={handleNewBatchProcess}
-                onClose={() => {
-                  setShowNewBatchPanel(false);
-                  // Navigate to assets ("benchmark UI") so users can review results
-                  startTransition(() => switchTab('assets'));
-                }}
-                onBatchCompleted={() => {
-                  // Auto-close and navigate to assets when the entire batch finishes
-                  setShowNewBatchPanel(false);
-                  startTransition(() => switchTab('assets'));
-                }}
-                onOpenARScanner={() => {
-                  setShowNewBatchPanel(false);
-                  startTransition(() => switchTab('ar'));
-                }}
+                onClose={() => setShowNewBatchPanel(false)}
                 maxConcurrent={3}
                 defaultScanType={selectedScanType || ScanType.DOCUMENT}
               />

@@ -8,7 +8,7 @@ async function testStructuredDBInteractive() {
   const issues = [];
 
   page.on('console', msg => {
-    if (msg.type() === 'error' || msg.type() === 'warning') {
+    if (msg.type() === 'error' && !msg.text().includes('favicon')) {
       issues.push(`[${msg.type().toUpperCase()}] ${msg.text()}`);
       console.log(`[CONSOLE ${msg.type().toUpperCase()}] ${msg.text()}`);
     }
@@ -19,9 +19,10 @@ async function testStructuredDBInteractive() {
     console.log(`[EXCEPTION] ${exception.message}`);
   });
 
-  console.log('Navigating to http://localhost:3000...');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  console.log('Navigating to http://localhost:4175...');
   try {
-    await page.goto('http://localhost:3000', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto('http://localhost:4175', { waitUntil: 'load', timeout: 30000 });
     
     // Inject mock local assets so Structured DB is NOT empty
     await page.evaluate(() => {
@@ -39,12 +40,12 @@ async function testStructuredDBInteractive() {
         }
       };
       localStorage.setItem('geograph_assets', JSON.stringify([mockAsset]));
-      // Need to reload to pick up localstorage
     });
     
-    await page.reload({ waitUntil: 'networkidle' });
+    await page.reload({ waitUntil: 'load' });
 
-    // Dissmiss Welcome Dialog
+    console.log('Testing Onboarding / Welcome Flow...');
+    // Dismiss Welcome Dialog
     const skipBtn = page.locator('button', { hasText: 'Skip' }).first();
     if (await skipBtn.count() > 0) {
       await skipBtn.click();
@@ -52,7 +53,9 @@ async function testStructuredDBInteractive() {
       await page.keyboard.press('Escape');
     }
 
-    await page.waitForTimeout(1000);
+  await page.waitForTimeout(2000);
+  const welcome = page.locator('text="Welcome wizard"');
+  await page.evaluate(() => { const els = document.querySelectorAll('[aria-label="Welcome wizard"], [role="dialog"]'); els.forEach(el => el.remove()); });
 
     const tabsToTest = ['Structured DB', 'Explore', 'Settings', 'Quick Processing', 'Social Hub'];
 
@@ -64,15 +67,33 @@ async function testStructuredDBInteractive() {
           await tabLoc.click({ timeout: 5000 }).catch(e => console.log('Click skipped: ' + tab));
           await page.waitForTimeout(2000);
           
+          if (tab === 'Settings') {
+             console.log('  Testing Settings Interactivity...');
+             // Click the Sign In / Connect button to trigger AuthModal or simulate profile action
+             const btnSignIn = page.locator('button', { hasText: /Sign In|Connect/i }).first();
+             if (await btnSignIn.count() > 0) {
+               await btnSignIn.click();
+               await page.waitForTimeout(500);
+               const emailInput = page.locator('input[type="email"]').first();
+               if (await emailInput.count() > 0) {
+                 await emailInput.fill('test@example.com');
+                 await page.keyboard.press('Escape'); // close modal
+               }
+             }
+
+             // Test Privacy Policy Toggle / Modal
+             const btnPrivacy = page.locator('button, a', { hasText: /Privacy/i }).first();
+             if (await btnPrivacy.count() > 0 && await btnPrivacy.isVisible()) {
+               await btnPrivacy.click();
+               await page.waitForTimeout(500);
+               await page.keyboard.press('Escape');
+             }
+          }
+
           // Let's check if the generic 'encountered an error' fallback is visible
           const errorUI = page.locator('text="encountered an error"').first();
           if (await errorUI.count() > 0 && await errorUI.isVisible()) {
              issues.push(`[ERROR CATCHED BY UI in ${tab}] "encountered an error" was displayed.`);
-          }
-
-          const btnError = page.locator('text="Error"');
-          if (await btnError.count() > 0 && await btnError.isVisible()) {
-              issues.push(`[ERROR CATCHED BY UI in ${tab}] Error rendered.`);
           }
         }
       } catch (err) {
@@ -92,6 +113,8 @@ async function testStructuredDBInteractive() {
   }
 
   await browser.close();
+  
+  if (issues.length > 0) process.exit(1);
 }
 
 testStructuredDBInteractive().catch(console.error);

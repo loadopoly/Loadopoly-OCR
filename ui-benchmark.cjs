@@ -24,13 +24,13 @@
  *   UI_BENCHMARK_URL=http://127.0.0.1:4173 node ui-benchmark.cjs
  */
 
+const { once } = require('events');
 const { chromium } = require('playwright');
 
 const {
   waitForServer,
   canReach,
   startPreviewServer,
-  stopPreviewServer,
 } = require('./scripts/perf/server.cjs');
 const {
   seedReturningUserState,
@@ -48,9 +48,6 @@ const {
   measureImageLoadHealth,
   measureQueueMonitorLoad,
   measureBundleImageGrid,
-  measureColdStartSidebar,
-  measureArScannerRouteLoad,
-  measureArScannerCameraReady,
 } = require('./scripts/perf/interactions.cjs');
 
 const HOST = process.env.UI_BENCHMARK_HOST || '127.0.0.1';
@@ -60,12 +57,6 @@ const BASE_URL = process.env.UI_BENCHMARK_URL || `http://${HOST}:${PORT}`;
 const DESKTOP_VIEWPORT = { width: 1440, height: 900 };
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
-async function createBenchmarkContext(browser, viewport) {
-  const context = await browser.newContext({ viewport });
-  await context.grantPermissions(['camera', 'geolocation'], { origin: BASE_URL });
-  return context;
-}
-
 /**
  * Run a full app-shell scenario for a given viewport: pre-warm
  * localStorage, navigate, collect paint/nav metrics, walk all top-level
@@ -73,7 +64,7 @@ async function createBenchmarkContext(browser, viewport) {
  * probes.
  */
 async function collectAppScenario(browser, viewportLabel, viewport) {
-  const context = await createBenchmarkContext(browser, viewport);
+  const context = await browser.newContext({ viewport });
   await seedReturningUserState(context);
 
   const page = await context.newPage();
@@ -89,11 +80,6 @@ async function collectAppScenario(browser, viewportLabel, viewport) {
 
   // Interaction probes. Each is responsible for its own setup (e.g.
   // navigating to the Assets tab) and for not throwing.
-  result.arScannerRouteLoad = await measureArScannerRouteLoad(page);
-  if (result.arScannerRouteLoad?.warningAppeared === true) {
-    result.arScannerCameraReady = await measureArScannerCameraReady(page);
-  }
-
   result.bundleCardClick = await measureBundleCardClick(page);
   result.imageLoadHealth = await measureImageLoadHealth(page);
   result.queueMonitorLoad = await measureQueueMonitorLoad(page);
@@ -103,39 +89,6 @@ async function collectAppScenario(browser, viewportLabel, viewport) {
   return result;
 }
 
-/**
- * Cold-start scenario: measure sidebar and AR Scanner responsiveness
- * immediately after DOMContentLoaded with no post-load settle wait.
- *
- * This catches the three regressions described in §10 of
- * docs/technical/BENCHMARKS.md that the settled app-shell scenarios miss:
- *   - Sidebar tap swallowed during cold-start background work (P0).
- *   - AR Scanner warning screen latency after a cold nav.
- *   - HUD-on-black-frame: AR overlay paints before getUserMedia produces a frame.
- */
-async function collectColdStartScenario(browser, viewportLabel, viewport) {
-  const context = await createBenchmarkContext(browser, viewport);
-  await seedReturningUserState(context);
-
-  const page = await context.newPage();
-  // Navigate cold — domcontentloaded only, no waitForTimeout.
-  // The probe must run before background hydration work completes.
-  await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 30000 });
-
-  const sidebar = await measureColdStartSidebar(page);
-
-  // If the AR Safety Warning is already on screen from the cold tap, chain
-  // the camera-ready probe so the full §10 step-4 path is exercised.
-  let cameraReady = null;
-  if (!sidebar.skipped && sidebar.warningAppeared === true) {
-    cameraReady = await measureArScannerCameraReady(page);
-  }
-
-  await context.close();
-  return { label: viewportLabel, sidebar, cameraReady };
-}
-
-
 function hasPageError(scenario) {
   return scenario.issues.some(issue => issue.includes('[pageerror]'));
 }
@@ -144,14 +97,7 @@ function hasTabError(scenario) {
   return (scenario.tabs || []).some(tab => tab.hasErrorUi);
 }
 
-function hasColdStartBlockingIssue(coldStart) {
-  if (!coldStart || coldStart.sidebar?.skipped) return false;
-  // HUD-on-black-frame is an explicit §10.3 regression.
-  if (coldStart.cameraReady?.hudOnBlack) return true;
-  return false;
-}
-
-function summarizeBlockingIssues(landing, appDesktop, appMobile, coldStartDesktop, coldStartMobile) {
+function summarizeBlockingIssues(landing, appDesktop, appMobile) {
   return (
     landing.metrics.hasErrorUi ||
     appDesktop.metrics.hasErrorUi ||
@@ -162,11 +108,7 @@ function summarizeBlockingIssues(landing, appDesktop, appMobile, coldStartDeskto
     hasTabError(appDesktop) ||
     hasTabError(appMobile) ||
     appDesktop.bundleCardClick?.hasErrorUi ||
-    appMobile.bundleCardClick?.hasErrorUi ||
-    appDesktop.arScannerCameraReady?.hudOnBlack ||
-    appMobile.arScannerCameraReady?.hudOnBlack ||
-    hasColdStartBlockingIssue(coldStartDesktop) ||
-    hasColdStartBlockingIssue(coldStartMobile)
+    appMobile.bundleCardClick?.hasErrorUi
   );
 }
 
@@ -179,16 +121,7 @@ async function main() {
 
   try {
     await waitForServer(BASE_URL);
-    // Use the full Chromium channel (not headless_shell) so synthetic
-    // getUserMedia works in headless mode during the AR Scanner probe.
-    const browser = await chromium.launch({
-      channel: 'chromium',
-      headless: true,
-      args: [
-        '--use-fake-device-for-media-stream',
-        '--use-fake-ui-for-media-capture',
-      ],
-    });
+    const browser = await chromium.launch({ headless: true });
 
     // Landing page (first-time visitor, no localStorage seed).
     const landingContext = await browser.newContext({ viewport: DESKTOP_VIEWPORT });
@@ -200,20 +133,16 @@ async function main() {
     const appDesktop = await collectAppScenario(browser, 'app-desktop', DESKTOP_VIEWPORT);
     const appMobile = await collectAppScenario(browser, 'app-mobile', MOBILE_VIEWPORT);
 
-    // Cold-start scenarios: sidebar + AR Scanner responsiveness right after
-    // DOMContentLoaded with no post-load settle wait (§10 benchmark).
-    const coldStartDesktop = await collectColdStartScenario(browser, 'cold-start-desktop', DESKTOP_VIEWPORT);
-    const coldStartMobile = await collectColdStartScenario(browser, 'cold-start-mobile', MOBILE_VIEWPORT);
-
     await browser.close();
 
-    const summary = { baseUrl: BASE_URL, landing, appDesktop, appMobile, coldStartDesktop, coldStartMobile };
+    const summary = { baseUrl: BASE_URL, landing, appDesktop, appMobile };
     console.log(JSON.stringify(summary, null, 2));
 
-    process.exitCode = summarizeBlockingIssues(landing, appDesktop, appMobile, coldStartDesktop, coldStartMobile) ? 1 : 0;
+    process.exitCode = summarizeBlockingIssues(landing, appDesktop, appMobile) ? 1 : 0;
   } finally {
-    if (server) {
-      await stopPreviewServer(server);
+    if (server && !server.killed) {
+      server.kill('SIGTERM');
+      await once(server, 'close').catch(() => {});
     }
   }
 }

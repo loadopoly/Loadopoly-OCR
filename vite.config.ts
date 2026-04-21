@@ -193,7 +193,7 @@ export default defineConfig({
       },
     },
     // Set reasonable chunk size warning
-    chunkSizeWarningLimit: 300,
+    chunkSizeWarningLimit: 400,
     // Use esbuild for minification (faster than terser, included by default)
     minify: 'esbuild',
     // Enable CSS code splitting

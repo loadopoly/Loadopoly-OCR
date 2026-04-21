@@ -29,7 +29,7 @@ async function testStructuredDB() {
 
   console.log('Navigating to http://localhost:3000...');
   try {
-    await page.goto('http://localhost:3000', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto('http://localhost:3000', { waitUntil: 'load', timeout: 30000 });
     console.log('Page loaded successfully.');
     
     // Wait a bit to let initial rendering settle

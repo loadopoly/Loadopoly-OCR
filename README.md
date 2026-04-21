@@ -6,6 +6,8 @@
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
 
 > Advanced OCR-to-Graph platform with GIS metadata, semantic NLP, deduplication, and metaverse navigation.
+> Stable fallback baseline: **v2.20.1**.
+> Fallback runbook: [docs/technical/FALLBACK_POLICY.md](./docs/technical/FALLBACK_POLICY.md).
 
 ---
 

@@ -5,7 +5,7 @@ async function run() {
   page.on('framenavigated', frame => console.log('NAVIGATED:', frame.url()));
   page.on('requestfailed', req => console.log('FAILED:', req.url(), req.failure()?.errorText));
   page.on('console', msg => console.log('CONSOLE:', msg.text()));
-  await page.goto('http://localhost:3000', { waitUntil: 'networkidle' });
+  await page.goto('http://localhost:3000', { waitUntil: 'load' });
   await browser.close();
 }
 run();

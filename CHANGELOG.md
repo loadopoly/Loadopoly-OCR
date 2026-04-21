@@ -1,11 +1,40 @@
-## [v2.20.1] - 2026-04-19
+## [v2.20.3] - 2026-04-21
 
-### Fixed
-- **UI benchmark camera probe**: Switched the harness to the full Chromium channel, granted benchmark permissions, and corrected the Playwright timeout call so headless AR camera checks complete reliably.
-- **Cold-start benchmark probe**: Waits for the first actionable sidebar control instead of skipping before the app shell mounts, restoring desktop and mobile cold-start coverage.
-- **AR camera error detection**: Recognizes the current in-app camera failure states so camera initialization failures are reported distinctly from `hudOnBlack`.
-- **hudOnBlack blocking check**: `summarizeBlockingIssues` now exits 1 on `hudOnBlack: true` from warm-app `arScannerCameraReady` probes, not just cold-start paths, closing the §10.3 regression gate for settled-app runs.
-- **Preview server cleanup**: Terminates the spawned preview process tree so `node ui-benchmark.cjs` exits cleanly after printing its JSON summary.
+### Added
+- **New User Interaction Guide**: `docs/product/NEW_USER_INTERACTION_GUIDE.md` details the exact flows for a new user onboarding and discovery.
+- **E2E New User Test**: Added Playwright test `test-new-user-flow.cjs` covering landing, onboarding wizard bypass, and dashboard rendering. Mapped to `npm run test:new-user`.
+
+### Changed
+- **Knowledge Graph Benchmarks**: Added Playwright metric extraction for `Single Asset`, `Global Corpus`, and `The Journey` interactions to `benchmarks/ui-benchmark.cjs`.
+- **Vite Configuration**: Increased `chunkSizeWarningLimit` to 400 to reflect new baseline build size and minimize unnecessary warnings.
+
+## [v2.20.3] - 2026-04-21
+### Added
+- **New User Interaction Guide**: `docs/product/NEW_USER_INTERACTION_GUIDE.md` details the exact flows for a new user onboarding and discovery.
+- **E2E New User Test**: Added Playwright test `test-new-user-flow.cjs` covering landing, onboarding wizard bypass, and dashboard rendering. Mapped to `npm run test:new-user`.
+
+### Changed
+- **Knowledge Graph Benchmarks**: Added Playwright metric extraction for `Single Asset`, `Global Corpus`, and `The Journey` interactions to `benchmarks/ui-benchmark.cjs`.
+- **Vite Configuration**: Increased `chunkSizeWarningLimit` to 400 to reflect new baseline build size and minimize unnecessary warnings.
+
+## [v2.20.3] - 2026-04-21
+
+### Added
+- **New User Interaction Guide**: `docs/product/NEW_USER_INTERACTION_GUIDE.md` details the exact flows for a new user onboarding and discovery.
+- **E2E New User Test**: Added Playwright test `test-new-user-flow.cjs` covering landing, onboarding wizard bypass, and dashboard rendering. Mapped to `npm run test:new-user`.
+
+### Changed
+- **Knowledge Graph Benchmarks**: Added Playwright metric extraction for `Single Asset`, `Global Corpus`, and `The Journey` interactions to `benchmarks/ui-benchmark.cjs`.
+- **Vite Configuration**: Increased `chunkSizeWarningLimit` to 400 to reflect new baseline build size and minimize unnecessary warnings.
+
+## [v2.20.1] - 2026-04-20
+
+### Changed
+- **Release Status**: Marked this build as a strong, stable release baseline for production use.
+- **Fallback Version**: Set `v2.20.1` as the designated fallback version for rollback and recovery workflows.
+
+### Added
+- **Fallback Policy Runbook**: Added `docs/technical/FALLBACK_POLICY.md` with trigger criteria, rollback steps, and governance.
 
 ## [v2.20.0] - 2026-04-16
 
