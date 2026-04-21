@@ -1,3 +1,15 @@
+## [v2.20.1] - 2026-04-21
+
+### Fixed
+- **Benchmark Phase 3.5** (`05b_*`): Split single catch-all into three independent try/catch blocks so a missing button in step A no longer silently suppresses steps B and C. Replaced fixed 500 ms `waitForTimeout` + synchronous `evaluate` with `waitForFunction` polling so React `startTransition` delay is correctly tolerated.
+- **Benchmark Phase 3.6** (`05c_*`): Added `ensureProcessingPanelOpen()` helper that clicks the persistent `button[title="Processing Queue (Q)"]` header button (falling back to keyboard `q`) before searching for "Open Large Batch Manager", which is only visible when the legacy processing-panel slide-out is open. Fixed close-detection bug where `document.querySelector('[class*="z-50"]') === null` was always `false`; replaced with `waitForFunction` polling on the panel's drop-zone text.
+
+### Added
+- **Benchmark Phase 3.7** (`05d_*`): New `benchBatchPanelARNavigation` phase tests the `onOpenARScanner` prop end-to-end — opens the BatchProcessingPanel, clicks the in-panel AR Scanner button, then asserts both that the panel closes (`05d_panel_ar_closes_panel`) and that the AR tab becomes active (`05d_panel_ar_navigates`).
+- **Benchmark metric `05c_onclose_assets_nav`**: After panel close, asserts that the Assets & Bundles tab is active, which is the actual behaviour `onClose` is supposed to produce.
+- **`benchmarks/thresholds.json`**: Added 10 new entries (`05b_*`, `05c_*`, `05d_*`) so `--compare` and CI threshold checks are meaningful for all new metrics.
+- **`docs/technical/PERFORMANCE_BENCHMARKING.md`**: New section 5.6 documents Phase 3.5/3.6/3.7 — metric tables, implementation notes, and correctness rationale.
+
 ## [v2.20.0] - 2026-04-16
 
 ### Added
