@@ -169,7 +169,11 @@ export interface SpatialObject {
   confidence: number;
   bbox?: { x: number; y: number; w: number; h: number };
   knownSizeM?: number;
-  /** Projected world-space position (null if in the sinoidal gap region) */
+  /**
+   * Projected world-space position (null when in the sinusoidal gap region —
+   * the project-domain term for the angular zone near device pitch ≈ 0° where
+   * pitch-based distance estimation is unreliable and returns NaN).
+   */
   subjectLat?: number | null;
   subjectLng?: number | null;
   subjectBearingDeg?: number;
@@ -194,7 +198,8 @@ export interface SpatialJitterSample {
 /**
  * Result of sinusoidal weighted-average jitter resolution.
  *
- * The sinusoidal WA bridges the "sinoidal gap region": the angular zone
+ * The sinusoidal WA bridges the **sinusoidal gap region** (project term:
+ * "sinoidal gap region"): the angular zone
  * near device pitch ≈ 0° where `estimateDistanceFromPitch` returns NaN.
  * Weighting observations with sin(π × (i+1) / (N+1)) applies a smooth
  * approach curve converging toward a stable position as N → ∞, without

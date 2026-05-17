@@ -193,7 +193,8 @@ function estimateDistanceFromPitch(
  *   count = 20 → α ≈ 0.074
  *   count → ∞  → α → 0      (position stabilises)
  *
- * The "sinoidal gap region" is the angular band around device pitch ≈ 0°
+ * The **sinusoidal gap region** (project domain term: "sinoidal gap region")
+ * is the angular band around device pitch ≈ 0°
  * where `estimateDistanceFromPitch` returns NaN.  This update rule
  * smoothly bridges the gap by never committing fully to a single
  * observation, instead approaching the true position asymptotically.

@@ -190,7 +190,12 @@ of the GeographySense record.
 
 **Files:** `src/scb/geographySense.ts`, `supabase/functions/spatial-coordinates/index.ts`
 
-### The Problem: Sinoidal Gap Region
+### The Problem: Sinusoidal Gap Region
+
+> **Terminology note:** "sinoidal gap region" is the project-domain term used
+> in the problem specification.  It corresponds to the standard mathematical
+> concept of a **sinusoidal** interpolation zone.  Both terms refer to the
+> same phenomenon described below.
 
 `estimateDistanceFromPitch` returns `NaN` when device pitch is within ±2° of
 horizontal.  This creates a gap region where no distance can be computed.
