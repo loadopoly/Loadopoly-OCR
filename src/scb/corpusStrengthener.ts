@@ -61,11 +61,11 @@ export class CorpusStrengthener implements IProcessor {
     }
 
     try {
-      const assetRecord = asset as Record<string, unknown>;
-
       // 1. Compute fixity checksum
-      const ocrText = (assetRecord['RAW_OCR_TRANSCRIPTION'] as string) ?? '';
-      const title = (assetRecord['DOCUMENT_TITLE'] as string) ?? '';
+      // RAW_OCR_TRANSCRIPTION lives in the sqlRecord; fall back to ocrText for
+      // assets that haven't been committed to the DB yet.
+      const ocrText = (asset.sqlRecord?.RAW_OCR_TRANSCRIPTION ?? asset.ocrText) ?? '';
+      const title = (asset.sqlRecord?.DOCUMENT_TITLE ?? '') as string;
       const fixityChecksum = await this.computeFixityChecksum(ocrText, title);
 
       // 2. Infer co-occurrence edges between all nodes in the same asset
@@ -87,7 +87,7 @@ export class CorpusStrengthener implements IProcessor {
       };
 
       logger.info('[CorpusStrengthener] Corpus strengthened', {
-        assetId: assetRecord['ASSET_ID'] as string,
+        assetId: asset.id,
         fixityChecksumPrefix: fixityChecksum.slice(0, 8),
         edgesAdded,
       });
