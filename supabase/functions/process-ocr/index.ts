@@ -1,22 +1,34 @@
 
 /**
  * OCR Processing Edge Function
- * 
+ *
  * Supabase Edge Function for server-side image processing.
  * Triggered by:
  * - Direct HTTP invocation
  * - Database webhook on processing_queue insert
- * 
+ *
  * Features:
  * - Parallel processing of multiple jobs
  * - Automatic retry with exponential backoff
  * - Progress updates via database
  * - Circuit breaker for API failures
- * 
+ * - SCB route switch: redirect the auto-chain to an SCB endpoint instead of
+ *   self-reinvocation (set SCB_ENABLED=true and SCB_ENDPOINT=<url>)
+ * - Corpus strengthening before MINTED commit (set SCB_CORPUS_STRENGTHEN=true)
+ *
+ * SCB environment variables
+ * ─────────────────────────
+ *   SCB_ENABLED=true           activate SCB routing in the auto-chain
+ *   SCB_ENDPOINT=<url>         target URL for SCB batch processing
+ *   SCB_CORPUS_STRENGTHEN=true enrich knowledge graph before marking MINTED
+ *   SCB_INVERSE_DERIVE=true    (spatial-coordinates) gap-fill via graph topology
+ *
  * Deployment:
  * ```bash
  * supabase functions deploy process-ocr
  * ```
+ *
+ * @version 2.21.0
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -216,16 +228,47 @@ Deno.serve(async (req: Request) => {
       } else if ((pendingCount ?? 0) > 0) {
         console.log(`[${workerId}] ${pendingCount} jobs remaining. Triggering next batch...`);
         
-        // Fire-and-forget: invoke this function again to process the next batch
-        // We don't await to allow the current response to complete promptly
-        const functionUrl = `${supabaseUrl}/functions/v1/process-ocr`;
-        fetch(functionUrl, {
+        // SCB Route Switch
+        // ────────────────
+        // When SCB_ENABLED=true and SCB_ENDPOINT is set, redirect the next
+        // processing batch to the SCB endpoint instead of self-reinvoking
+        // the Gemini route.  This is the integration point described in the
+        // SCB architecture (process-ocr/index.ts:219-229).
+        //
+        // The SCB endpoint receives the same JSON payload as the self-invoke
+        // plus extra fields (routeMode, scbSession, strengthenCorpus) that
+        // enable downstream SCB processors to tune their behaviour.
+        //
+        // Without SCB env vars the behaviour is identical to the previous
+        // self-reinvoke (backwards-compatible).
+        const scbEnabled = Deno.env.get('SCB_ENABLED') === 'true';
+        const scbEndpoint = Deno.env.get('SCB_ENDPOINT');
+
+        const chainTarget = (scbEnabled && scbEndpoint)
+          ? scbEndpoint
+          : `${supabaseUrl}/functions/v1/process-ocr`;
+
+        // Correlation ID persists across the full chain for distributed tracing
+        const scbSession = crypto.randomUUID().slice(0, 12);
+        const routeMode = (scbEnabled && scbEndpoint) ? 'scb' : 'gemini';
+
+        const chainPayload: Record<string, unknown> = {
+          maxJobs,
+          routeMode,
+          scbSession,
+          strengthenCorpus: Deno.env.get('SCB_CORPUS_STRENGTHEN') === 'true',
+        };
+
+        console.log(`[${workerId}] Chaining to ${routeMode} (session: ${scbSession})`);
+
+        fetch(chainTarget, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${supabaseKey}`,
             'Content-Type': 'application/json',
+            'X-SCB-Session': scbSession,
           },
-          body: JSON.stringify({ maxJobs }),
+          body: JSON.stringify(chainPayload),
         }).catch((chainErr) => console.error(`[${workerId}] Chain invoke failed:`, chainErr));
       } else {
         console.log(`[${workerId}] Queue empty. Processing complete.`);
@@ -318,6 +361,23 @@ async function processJob(
     // Save to historical_documents_global
     await saveAsset(supabase, job, result);
 
+    // Corpus strengthening: enrich the knowledge graph and record fixity
+    // before the job is committed as MINTED.  Enabled via the environment
+    // variable SCB_CORPUS_STRENGTHEN=true.  Failures are non-fatal — the job
+    // will complete regardless.
+    let corpusStrengthened = false;
+    let strengtheningMeta: Record<string, unknown> | null = null;
+
+    if (Deno.env.get('SCB_CORPUS_STRENGTHEN') === 'true') {
+      await updateProgress(supabase, job.id, 85, 'STRENGTHENING_CORPUS');
+      try {
+        strengtheningMeta = await strengthenCorpus(supabase, job, result, workerId);
+        corpusStrengthened = true;
+      } catch (strengthenErr) {
+        console.warn(`[${workerId}] Corpus strengthening failed (non-fatal):`, strengthenErr);
+      }
+    }
+
     // Mark job complete WITH result data serialized as JSON
     const resultDataJson = {
       ocrText: result.ocrText,
@@ -330,6 +390,8 @@ async function processJob(
       confidence: result.confidence,
       processingTime: Date.now() - startTime,
       completedAt: new Date().toISOString(),
+      corpusStrengthened,
+      ...(strengtheningMeta ? { strengtheningMeta } : {}),
     };
 
     await supabase.rpc('complete_processing_job', {
@@ -562,4 +624,103 @@ async function saveAsset(
 
     if (error) throw error;
   }
+}
+
+// ============================================
+// SCB: Corpus Strengthening
+// ============================================
+
+/**
+ * Enrich the knowledge graph and persist the fixity checksum before an asset
+ * is committed as MINTED.  Called when `SCB_CORPUS_STRENGTHEN=true`.
+ *
+ * Steps
+ * ─────
+ *   1. Compute SHA-256 fixity checksum of OCR text + document title
+ *   2. Persist the checksum to `historical_documents_global.FIXITY_CHECKSUM`
+ *   3. Resolve graph_node IDs for the entities extracted in this job
+ *   4. Upsert `ENTITY_CO_OCCURS` edges for every entity pair (document-scoped
+ *      co-occurrence), strengthening knowledge-graph density before release
+ *
+ * All individual steps are wrapped in try/catch so a partial failure (e.g.
+ * FIXITY_CHECKSUM column not yet migrated) never fails the parent job.
+ *
+ * @param supabase   Supabase client with service-role key
+ * @param job        The processing job being completed
+ * @param result     Gemini extraction result for this job
+ * @param workerId   Worker identifier for log correlation
+ */
+async function strengthenCorpus(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  job: ProcessingJob,
+  result: ProcessingResult,
+  workerId: string
+): Promise<Record<string, unknown>> {
+  // 1. Compute fixity checksum (SHA-256 of title + OCR text)
+  const payload = `${result.documentTitle}\n${result.ocrText}`;
+  const encoded = new TextEncoder().encode(payload);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', encoded);
+  const fixityChecksum = Array.from(new Uint8Array(hashBuffer))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('');
+
+  // 2. Persist fixity checksum back to the document record
+  try {
+    await supabase
+      .from('historical_documents_global')
+      .update({ FIXITY_CHECKSUM: fixityChecksum })
+      .eq('ASSET_ID', job.asset_id);
+  } catch {
+    console.warn(`[${workerId}] FIXITY_CHECKSUM update skipped (column may not exist yet)`);
+  }
+
+  // 3. Resolve graph_node IDs for extracted entities (cap at 20 to avoid N² explosion)
+  const entityNodeIds: string[] = [];
+  const entityList = result.entities.slice(0, 20);
+
+  for (const entityLabel of entityList) {
+    if (!entityLabel?.trim()) continue;
+    const { data: node } = await supabase
+      .from('graph_nodes')
+      .select('ID')
+      .eq('LABEL', entityLabel.trim())
+      .maybeSingle();
+    if (node?.ID) entityNodeIds.push(node.ID as string);
+  }
+
+  // 4. Upsert ENTITY_CO_OCCURS edges for every entity pair
+  let edgesAdded = 0;
+  for (let i = 0; i < entityNodeIds.length; i++) {
+    for (let j = i + 1; j < entityNodeIds.length; j++) {
+      const { error } = await supabase
+        .from('graph_edges')
+        .upsert(
+          {
+            FROM_NODE_ID: entityNodeIds[i],
+            TO_NODE_ID: entityNodeIds[j],
+            RELATIONSHIP: 'ENTITY_CO_OCCURS',
+            CONFIDENCE: result.confidence,
+            WEIGHT: 0.5,
+            ASSET_IDS: [job.asset_id],
+          },
+          { onConflict: 'FROM_NODE_ID,TO_NODE_ID,RELATIONSHIP', ignoreDuplicates: true }
+        );
+      if (!error) edgesAdded++;
+    }
+  }
+
+  const strengthenedAt = new Date().toISOString();
+  console.log(
+    `[${workerId}] Corpus strengthened: ` +
+    `fixity=${fixityChecksum.slice(0, 8)}, ` +
+    `entities=${entityNodeIds.length}, edges=${edgesAdded}`
+  );
+
+  return {
+    fixityChecksum,
+    entitiesLinked: entityNodeIds.length,
+    edgesAdded,
+    strengthenedAt,
+  };
 }
