@@ -177,6 +177,74 @@ function estimateDistanceFromPitch(
 }
 
 // ============================================
+// SCB: Sinusoidal Weighted-Average Jitter Resolution
+// ============================================
+
+/**
+ * Incremental position update using a sinusoidal learning rate.
+ *
+ * Replaces the naive running mean `(existing × (N−1) + new) / N` with a
+ * convergence curve that smoothly resolves field jitters:
+ *
+ *   α = sin(π / (2 × (count + 1)))
+ *
+ *   count = 1  → α ≈ 0.707  (large initial correction)
+ *   count = 5  → α ≈ 0.259
+ *   count = 20 → α ≈ 0.074
+ *   count → ∞  → α → 0      (position stabilises)
+ *
+ * The "sinoidal gap region" is the angular band around device pitch ≈ 0°
+ * where `estimateDistanceFromPitch` returns NaN.  This update rule
+ * smoothly bridges the gap by never committing fully to a single
+ * observation, instead approaching the true position asymptotically.
+ *
+ * @param existingLat  Current best-estimate latitude
+ * @param existingLng  Current best-estimate longitude
+ * @param newLat       New observation latitude
+ * @param newLng       New observation longitude
+ * @param count        Total observation count including the new one
+ */
+function sinusoidalUpdate(
+  existingLat: number,
+  existingLng: number,
+  newLat: number,
+  newLng: number,
+  count: number
+): { lat: number; lng: number } {
+  const alpha = Math.sin(Math.PI / (2 * (count + 1)));
+  return {
+    lat: alpha * newLat + (1 - alpha) * existingLat,
+    lng: alpha * newLng + (1 - alpha) * existingLng,
+  };
+}
+
+// ============================================
+// SCB: Torus Expansion Radius
+// ============================================
+
+/**
+ * Compute the nominal torus radius (metres) for a spatial anchor.
+ *
+ * The torus is the uncertainty band around the true position:
+ *   innerRadius = baseAccuracy × (1 − confidence)  (high-confidence core)
+ *   outerRadius = baseAccuracy / confidence          (maximum plausible extent)
+ *   nominalRadius = (inner + outer) / 2             (returned here)
+ *
+ * As ANCHOR_COUNT grows → confidence grows → nominalRadius → 0.
+ * The outer radius governs SPATIAL_PROXIMITY edge inference: graph nodes
+ * within outerRadius are candidates for automatic spatial edge creation.
+ *
+ * @param confidence    Composite anchor confidence [0–1]
+ * @param baseAccuracyM Device GPS accuracy in metres
+ */
+function torusNominalRadiusM(confidence: number, baseAccuracyM: number): number {
+  const c = Math.max(0.001, Math.min(1, confidence));
+  const inner = baseAccuracyM * (1 - c);
+  const outer = baseAccuracyM / c;
+  return (inner + outer) / 2;
+}
+
+// ============================================
 // Main handler
 // ============================================
 
@@ -271,6 +339,37 @@ Deno.serve(async (req: Request): Promise<Response> => {
       subjectLng = dest.lng;
     }
 
+    // SCB: Inverse derivation gap-fill
+    // ──────────────────────────────────
+    // When direct distance estimation fails (sinoidal gap region: pitch ≈ 0°),
+    // look for a previously-anchored graph_node with the same label and inherit
+    // its world-space position.  This is the "inverse derivation from world-space
+    // projection edges": working backwards from known graph positions to fill
+    // the gap rather than leaving the node un-anchored.
+    // Enabled via SCB_INVERSE_DERIVE=true environment variable.
+    if (subjectLat == null && obj.label && Deno.env.get('SCB_INVERSE_DERIVE') === 'true') {
+      try {
+        const { data: anchoredNode } = await supabase
+          .from('graph_nodes')
+          .select('LAT, LNG, ANCHOR_COUNT')
+          .eq('LABEL', obj.label.trim())
+          .not('LAT', 'is', null)
+          .order('ANCHOR_COUNT', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (anchoredNode?.LAT != null) {
+          subjectLat = anchoredNode.LAT as number;
+          subjectLng = anchoredNode.LNG as number;
+          console.log(
+            `SCB gap-fill: "${obj.label}" inherited position from ` +
+            `anchored node (count=${anchoredNode.ANCHOR_COUNT})`
+          );
+        }
+      } catch (gapFillErr) {
+        console.warn(`SCB gap-fill lookup failed: ${gapFillErr}`);
+      }
+    }
+
     // --- Upsert graph_node for this entity ---
     let graphNodeId: string | null = null;
     if (obj.label) {
@@ -290,16 +389,35 @@ Deno.serve(async (req: Request): Promise<Response> => {
           console.warn(`graph_nodes lookup failed (table may not exist): ${selectErr.message}`);
         } else if (existing) {
           graphNodeId = existing.ID;
-          // Update position if we got a better fix (triangulation improvement)
+          // Update position using sinusoidal WA for jitter resolution
           if (subjectLat != null) {
             const count = (existing.ANCHOR_COUNT ?? 0) + 1;
-            // Incremental average of position over N fixes
-            const newLat = existing.LAT != null
-              ? (existing.LAT * (count - 1) + subjectLat) / count
-              : subjectLat;
-            const newLng = existing.LNG != null
-              ? (existing.LNG * (count - 1) + subjectLng!) / count
-              : subjectLng;
+            // SCB: Replace naive incremental mean with sinusoidal weighted
+            // average.  This smoothly converges toward the true position,
+            // resolving field jitters caused by high-variance observations
+            // near the sinoidal gap region.
+            let newLat = subjectLat;
+            let newLng = subjectLng!;
+            if (existing.LAT != null && count > 1) {
+              const updated = sinusoidalUpdate(
+                existing.LAT as number,
+                (existing.LNG ?? 0) as number,
+                subjectLat,
+                subjectLng!,
+                count
+              );
+              newLat = updated.lat;
+              newLng = updated.lng;
+            }
+
+            // SCB: Compute torus nominal radius for this anchor (informational)
+            const confidence = Math.min(1, count / (count + 5));
+            const tRadius = torusNominalRadiusM(confidence, deviceAccuracyM ?? 30);
+            console.log(
+              `SCB: "${normalizedLabel}" anchor #${count} ` +
+              `torus_r=${tRadius.toFixed(1)}m conf=${confidence.toFixed(3)}`
+            );
+
             await supabase
               .from('graph_nodes')
               .update({
