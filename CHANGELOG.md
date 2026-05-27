@@ -1,3 +1,16 @@
+## [v2.21.0] - 2026-05-17
+
+### Added
+- **SCB Integration Layer** (`src/scb/`): System Core Bridge — `GeographySense`, sinusoidal jitter resolution, torus expansion, inverse derivation, corpus strengthening.
+- **SCB Route Switch** in `process-ocr` auto-chain (lines 219–253): route next batch to `SCB_ENDPOINT` instead of Gemini self-invoke.
+- **Corpus Strengthening** (`SCB_CORPUS_STRENGTHEN=true`): SHA-256 fixity checksum + `ENTITY_CO_OCCURS` edges before MINTED commit.
+- **Sinusoidal Jitter Resolution** in `spatial-coordinates`: `sinusoidalUpdate()` replaces naive running mean for smooth gap-region convergence.
+- **Torus Expansion Radius** and **SCB Inverse Derivation Gap-fill** (`SCB_INVERSE_DERIVE=true`) in `spatial-coordinates`.
+- **`docs/SCB_INTEGRATION.md`**: full architecture reference.
+
+### Changed
+- `package.json` version bumped to 2.21.0.
+
 ## [v2.20.3] - 2026-04-21
 
 ### Added
