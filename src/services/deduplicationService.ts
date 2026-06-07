@@ -10,6 +10,7 @@
 
 import { DigitalAsset, HistoricalDocumentMetadata } from '../types';
 import { logger } from '../lib/logger';
+import { haversineDistanceM } from '../lib/geoUtils';
 
 // ============================================
 // Types
@@ -210,10 +211,12 @@ export function calculateSimilarity(assetA: DigitalAsset, assetB: DigitalAsset):
   
   // 8. GPS proximity (weight: 2)
   if (assetA.location && assetB.location) {
-    const latDiff = Math.abs(assetA.location.latitude - assetB.location.latitude);
-    const lonDiff = Math.abs(assetA.location.longitude - assetB.location.longitude);
-    // Within ~100 meters
-    if (latDiff < 0.001 && lonDiff < 0.001) {
+    const distM = haversineDistanceM(
+      assetA.location.latitude, assetA.location.longitude,
+      assetB.location.latitude, assetB.location.longitude
+    );
+    // Within ~100 metres
+    if (distM <= 100) {
       totalScore += 2;
       matchReasons.push('Same location');
     }
