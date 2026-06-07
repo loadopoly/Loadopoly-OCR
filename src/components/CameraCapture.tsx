@@ -73,6 +73,15 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
     return () => document.removeEventListener('visibilitychange', handleVisibility);
   }, [isOpen, stream, facingMode]);
 
+  // Reactively assign stream to the video element so the srcObject is always in sync,
+  // even if the video element mounts after getUserMedia resolves.
+  useEffect(() => {
+    if (videoRef.current && stream) {
+      videoRef.current.srcObject = stream;
+      videoRef.current.play().catch(err => console.error('Camera preview playback failed:', err));
+    }
+  }, [stream]);
+
   useEffect(() => {
     if (stream && zoomSupported) {
       const track = stream.getVideoTracks()[0];
@@ -256,6 +265,7 @@ export default function CameraCapture({ onCapture, isOnline = true, zoomEnabled 
             ref={videoRef} 
             autoPlay 
             playsInline 
+            muted
             className={`max-h-full max-w-full object-contain ${facingMode === 'user' ? 'scale-x-[-1]' : ''}`}
          />
       </div>
