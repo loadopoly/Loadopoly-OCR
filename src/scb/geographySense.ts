@@ -24,7 +24,7 @@
  *   - TorusExpansion   ↔  per-point positional uncertainty ellipsoid
  *
  * @module scb/geographySense
- * @version 2.21.0
+ * @version 2.22.0
  */
 
 import { CoordinateSource, GraphData } from '../types';

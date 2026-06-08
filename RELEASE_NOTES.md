@@ -1,6 +1,22 @@
-# 🚀 GeoGraph Node: v2.20.1 Release Notes
+# 🚀 GeoGraph Node: v2.22.0 Release Notes
 
-## ✅ v2.20.1 — Strong Stable State & Fallback Baseline (2026-04-20)
+## 📐 v2.22.0 — Haversine Great-Circle Distance & geoUtils Canonical Module (2026-06-08)
+
+- **`src/lib/geoUtils.ts`**: New canonical geospatial utility module. Exports `haversineDistanceM` — Haversine great-circle distance in metres — as the single source of truth for all proximity calculations.
+- **Deduplication Services**: `deduplicationService.ts` and `deduplicationServiceV2.ts` now use `haversineDistanceM` from `geoUtils`, replacing flat degree-difference (Manhattan) comparisons that ignored meridian convergence at high latitudes.
+- **AR Walk Proximity**: `WorldRenderer.tsx` proximity highlighting uses Haversine distance for accurate real-world metre values.
+- **SCB Geography Sense**: `geographySense.ts` private `haversineDistanceM` implementation removed; the canonical `geoUtils` version is imported and re-exported from the SCB module tree.
+
+## 🌐 v2.21.0 — SCB Integration Layer (2026-05-17)
+
+- **SCB Integration Layer** (`src/scb/`): System Core Bridge — `GeographySense`, sinusoidal jitter resolution, torus expansion, inverse derivation, corpus strengthening.
+- **SCB Route Switch**: Auto-chain in `process-ocr` routes next batch to `SCB_ENDPOINT` instead of Gemini self-invoke when `SCB_ENABLED=true`.
+- **Corpus Strengthening** (`SCB_CORPUS_STRENGTHEN=true`): SHA-256 fixity checksum + `ENTITY_CO_OCCURS` edges before MINTED commit.
+- **Sinusoidal Jitter Resolution**: `sinusoidalUpdate()` replaces naive running mean for smooth gap-region convergence.
+- **Torus Expansion & Inverse Derivation**: Spatial uncertainty torus and gap-fill via graph neighbour topology (`SCB_INVERSE_DERIVE=true`).
+- **`docs/SCB_INTEGRATION.md`**: Full architecture reference.
+
+ — Strong Stable State & Fallback Baseline (2026-04-20)
 
 - **Strong State Marker**: This release is now documented as a strong and stable application state.
 - **Fallback Baseline**: `v2.20.1` is designated as the fallback version for controlled rollback scenarios.
