@@ -1,3 +1,14 @@
+## [v2.22.0] - 2026-06-08
+
+### Added
+- **`src/lib/geoUtils.ts`**: Canonical geospatial utility module exporting `haversineDistanceM` — great-circle distance via the Haversine formula. Replaces ad-hoc degree-difference (Manhattan) comparisons across the codebase.
+
+### Changed
+- **GPS Proximity** in `src/services/deduplicationService.ts` and `src/services/deduplicationServiceV2.ts`: switched from flat degree-difference to `haversineDistanceM` for accurate Earth-surface proximity at any latitude.
+- **`src/components/metaverse/WorldRenderer.tsx`**: AR Walk proximity highlighting now uses Haversine great-circle distance in metres.
+- **`src/scb/geographySense.ts`**: removed private `haversineDistanceM` implementation; imports and re-exports the canonical version from `src/lib/geoUtils.ts`.
+- `package.json` version bumped to 2.22.0.
+
 ## [v2.21.0] - 2026-05-17
 
 ### Added

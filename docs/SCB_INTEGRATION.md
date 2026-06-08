@@ -1,7 +1,7 @@
 # SCB Integration Guide
 
 **System Core Bridge (SCB) — Architecture & Operations Reference**  
-Version 2.21.0 · Loadopoly-OCR
+Version 2.22.0 · Loadopoly-OCR
 
 ---
 
