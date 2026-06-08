@@ -37,6 +37,11 @@ import {
   TorusExpansionResult,
   InverseDerivationResult,
 } from './types';
+import { haversineDistanceM } from '../lib/geoUtils';
+
+// Re-export so SCB callers can access the canonical great-circle utility
+// without reaching outside the SCB module tree.
+export { haversineDistanceM };
 
 // ============================================
 // Coordinate Source Trust Weights
@@ -360,22 +365,4 @@ export function buildGeographySense(params: {
 // Internal utility
 // ============================================
 
-/**
- * Haversine distance between two lat/lng points in metres.
- * Used internally for residual jitter estimation.
- */
-function haversineDistanceM(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number
-): number {
-  const R = 6_371_000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const Δφ = toRad(lat2 - lat1);
-  const Δλ = toRad(lng2 - lng1);
-  const a =
-    Math.sin(Δφ / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(Δλ / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+// haversineDistanceM is imported from '../lib/geoUtils' and re-exported above.
