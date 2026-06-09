@@ -70,7 +70,7 @@ export const EXTENSION_TAB_MAP: Record<string, keyof ExtensionFlags> = {
 };
 
 // Tabs that are always available regardless of mode
-export const ALWAYS_AVAILABLE_TABS = ['dashboard', 'batch', 'assets', 'graph', 'database', 'settings'] as const;
+export const ALWAYS_AVAILABLE_TABS = ['operate', 'dashboard', 'batch', 'assets', 'graph', 'database', 'settings'] as const;
 
 // ============================================
 // Storage helpers

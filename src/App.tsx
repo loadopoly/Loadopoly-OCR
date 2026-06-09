@@ -114,6 +114,8 @@ const CreditGate = lazy(() => import('./components/CreditGate'));
 const CreditBadge = lazy(() => import('./components/CreditGate').then(m => ({ default: m.CreditBadge })));
 const CameraCapture = lazy(() => import('./components/CameraCapture'));
 const PrivacyPolicyModal = lazy(() => import('./components/PrivacyPolicyModal'));
+// Operate Console — capture-first home (photogrammetry → Supply Chain Brain)
+const OperateHome = lazy(() => import('./components/operate/OperateHome'));
 import { useUXPreferences, EXTENSION_TAB_MAP } from './hooks/useUXPreferences';
 import type { Persona } from './hooks/useUXPreferences';
 
@@ -251,6 +253,7 @@ const MobileNavigation = React.memo(({ activeTab, switchTab, isGlobalView, setIs
           </button>
         </div>
         <nav className="flex-1 px-2 space-y-1 overflow-y-auto">
+          <SidebarItem icon={Camera} label="Operate" active={activeTab === 'operate'} onClick={() => handleClick('operate')} />
           <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => handleClick('dashboard')} />
           <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => handleClick('batch')} />
           {isTabVisible('ar') && <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => handleClick('ar')} />}
@@ -309,7 +312,9 @@ const MobileNavigation = React.memo(({ activeTab, switchTab, isGlobalView, setIs
 });
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  // Capture-first: the Operate Console is the front door so an operator can
+  // go from app-open to live viewfinder in one tap.
+  const [activeTab, setActiveTab] = useState('operate');
   const [localAssets, setLocalAssets] = useState<DigitalAsset[]>([]);
   const [globalAssets, setGlobalAssets] = useState<DigitalAsset[]>([]);
   const [user, setUser] = useState<any>(null);
@@ -580,6 +585,7 @@ export default function App() {
       if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') return;
       
       switch(e.key.toLowerCase()) {
+        case '0': startTransition(() => setActiveTab('operate')); break;
         case '1': startTransition(() => setActiveTab('dashboard')); break;
         case '2': startTransition(() => setActiveTab('batch')); break;
         case '3': startTransition(() => setActiveTab('ar')); break;
@@ -1932,6 +1938,7 @@ export default function App() {
         </div>
 
         <nav className="flex-1 space-y-1 overflow-y-auto custom-scrollbar">
+          <SidebarItem icon={Camera} label="Operate" active={activeTab === 'operate'} onClick={() => switchTab('operate')} />
           <SidebarItem icon={Layers} label="Dashboard" active={activeTab === 'dashboard'} onClick={() => switchTab('dashboard')} />
           <SidebarItem icon={Zap} label="Quick Processing" active={activeTab === 'batch'} onClick={() => switchTab('batch')} />
           {isTabVisible('ar') && <SidebarItem icon={Scan} label="AR Scanner" active={activeTab === 'ar'} onClick={() => switchTab('ar')} onPointerEnter={preloadARScene} />}
@@ -2036,10 +2043,10 @@ export default function App() {
                    </>
                  )}
              </button>
-             {activeTab !== 'batch' && activeTab !== 'ar' && (
+             {activeTab !== 'batch' && activeTab !== 'ar' && activeTab !== 'operate' && (
                 <>
                   <Suspense fallback={null}>
-                  <CameraCapture 
+                  <CameraCapture
                     onCapture={(file) => ingestFile(file, isGlobalView ? "Global Contribution" : "Mobile Camera")} 
                     isOnline={isOnline}
                     zoomEnabled={zoomEnabled}
@@ -2071,7 +2078,7 @@ export default function App() {
           </div>
         </header>
 
-        <div className="flex-1 overflow-auto p-8 relative">
+        <div className="flex-1 overflow-auto p-4 sm:p-8 relative">
           <Suspense fallback={
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <div className="animate-spin rounded-full h-10 w-10 border-2 border-slate-700 border-t-primary-500"></div>
@@ -2083,6 +2090,14 @@ export default function App() {
             </div>
           }>
           
+          {activeTab === 'operate' && (
+            <OperateHome
+              onSwitchTab={switchTab}
+              onIngestFile={(file, source) => ingestFile(file, source)}
+              operatorEmail={user?.email || ''}
+            />
+          )}
+
           {activeTab === 'dashboard' && (
             <div className="space-y-8 max-w-6xl mx-auto">
               {/* Processing Queue Status - ALWAYS VISIBLE on Dashboard */}
