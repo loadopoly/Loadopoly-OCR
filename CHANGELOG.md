@@ -1,3 +1,19 @@
+## [v2.22.0] - 2026-06-09
+
+### Added
+- **Operate Console** (`src/components/operate/`): capture-first home screen — app now boots into the new `operate` tab; one tap from app-open to a live viewfinder. Legacy workspace unchanged and reachable from the sidebar (shortcut `0` returns to Operate).
+- **Guided Photogrammetry Capture HUD** (`PhotogrammetryCapture.tsx`): full-screen multi-shot capture with 12-sector orbit coverage ring, live variance-of-Laplacian sharpness meter, pitch/roll level bubble, GPS/compass status pills, LOW/MID/HIGH pass selector, torch toggle, per-shot pose stamping, quality flagging with thumbnail retake, and OS-interruption recovery.
+- **Capture presets** (`src/capture/presets.ts`): Stockpile/Volumetrics, Equipment/Asset, Pallet/Bin, Part/Component, Documents/Labels, Yard/Area Scan — each with shot targets, orbit guidance, and blur/exposure thresholds tuned for supply-chain subjects.
+- **Capture domain module** (`src/capture/`): self-contained Dexie DB (`LoadopolyCapture` — projects/sessions/photos, offline-first), `PoseTracker` (GPS + DeviceOrientation with iOS permission flow), frame quality analysis, SHA-256 fixity, dependency-free ZIP writer, and `scb_manifest.json` builder (schema `loadopoly.capture/1`).
+- **Supply Chain Brain delivery**: export bundles (`bundle_*.zip` = photos + manifest) for the Brain's `python -m src.photogrammetry` intake; optional live HTTP uplink with retry/backoff and reachability probe; optional hand-off of session photos into the legacy OCR → knowledge-graph pipeline.
+- **`docs/OPERATE_CONSOLE.md`**: operator guide, bundle contract, capture technique reference.
+
+### Changed
+- Default tab is now `operate`; `0` keyboard shortcut added; header Instant Capture hidden on the Operate tab (it has its own capture flow).
+- Main content padding is responsive (`p-4 sm:p-8`) for mobile operability.
+- `operate` added to `ALWAYS_AVAILABLE_TABS` in `useUXPreferences`.
+- `package.json` version bumped to 2.22.0.
+
 ## [v2.21.0] - 2026-05-17
 
 ### Added
