@@ -64,10 +64,10 @@ interface BrainStatus {
   available: boolean;
   reason?: string;
   mesh: {
-    observer?: string;
-    synchrony?: string;
+    observer?: number;
+    synchrony?: number;
     expansion_phase?: string;
-    node_count?: string;
+    node_count?: number;
     ran_at?: string;
   };
   learning?: { count_24h: number; last?: { kind: string; title: string; signal_strength: number; logged_at: string } } | null;
@@ -319,7 +319,7 @@ export default function OperateHome({ onSwitchTab, onIngestFile, operatorEmail =
               <div className="bg-slate-950/60 rounded-xl p-2.5">
                 <p className="text-slate-500 text-[10px] font-semibold uppercase">MESH Ω</p>
                 <p className="text-white font-bold text-sm mt-0.5">
-                  {(parseFloat(brainStatus.mesh.observer) * 100).toFixed(0)}%
+                  {(brainStatus.mesh.observer * 100).toFixed(0)}%
                 </p>
               </div>
             )}
@@ -327,7 +327,7 @@ export default function OperateHome({ onSwitchTab, onIngestFile, operatorEmail =
               <div className="bg-slate-950/60 rounded-xl p-2.5">
                 <p className="text-slate-500 text-[10px] font-semibold uppercase">Sync</p>
                 <p className="text-white font-bold text-sm mt-0.5">
-                  {(parseFloat(brainStatus.mesh.synchrony) * 100).toFixed(0)}%
+                  {(brainStatus.mesh.synchrony * 100).toFixed(0)}%
                 </p>
               </div>
             )}
