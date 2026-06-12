@@ -1,3 +1,14 @@
+## [v2.23.0] - 2026-06-12
+
+### Added
+- **SCB Daily Update card** in Operate Console (`OperateHome.tsx`): real-time PWA polling of Brain MESH Entirety state (observer coherence Ω, synchrony %, node count, per-node coherence table) with 30-second refresh interval via `/brain-status` endpoint. Displays learning activity (24h count + last event) and daily dispatch timestamp. Gracefully degrades when Brain DB unavailable.
+- **PWA manifest shortcuts** (`public/manifest.json`): three home-screen quick actions — Start Capture, Quick Process, AR Scanner — for faster app access on iOS/Android.
+- **MESH state polling integration**: Loadopoly-OCR now acts as a PWA client for Supply-Chain-Brain's System Entirety metrics, enabling field operators to monitor MESH coherence and synchrony during photogrammetry sessions.
+
+### Changed
+- PWA `start_url` updated to `/?tab=operate&source=pwa&v=2.23.0` with improved version tracking.
+- `package.json` version bumped to 2.23.0.
+
 ## [v2.22.0] - 2026-06-09
 
 ### Added
