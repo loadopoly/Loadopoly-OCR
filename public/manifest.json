@@ -5,7 +5,7 @@
   "description": "Advanced OCR-to-Graph platform for historical data extraction and GIS metadata generation.",
   "lang": "en",
   "dir": "ltr",
-  "start_url": "/?source=pwa&v=2.20.1",
+  "start_url": "/?tab=operate&source=pwa&v=2.22.0",
   "scope": "/",
   "display": "standalone",
   "background_color": "#020617",
@@ -79,30 +79,25 @@
   ],
   "shortcuts": [
     {
+      "name": "Start Capture",
+      "short_name": "Capture",
+      "description": "Open the Operate Console and start a photogrammetry capture session",
+      "url": "/?tab=operate&source=pwa-shortcut",
+      "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"}]
+    },
+    {
       "name": "Quick Process",
       "short_name": "Process",
       "description": "Start a new high-throughput batch scan",
       "url": "/?tab=batch",
-      "icons": [
-        {
-          "src": "/icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
+      "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"}]
     },
     {
       "name": "AR Scanner",
       "short_name": "AR",
       "description": "Open the immersive AR field scanner",
       "url": "/?tab=ar",
-      "icons": [
-        {
-          "src": "/icon-192.png",
-          "sizes": "192x192",
-          "type": "image/png"
-        }
-      ]
+      "icons": [{"src": "/icon-192.png", "sizes": "192x192", "type": "image/png"}]
     }
   ],
   "share_target": {

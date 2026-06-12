@@ -24,6 +24,7 @@ import {
   Network,
   Image as ImageIcon,
   Zap,
+  Cpu,
 } from 'lucide-react';
 import {
   CaptureProject,
@@ -59,6 +60,20 @@ const STATUS_META: Record<CaptureSession['status'], { label: string; cls: string
   UPLINKED: { label: 'In the Brain', cls: 'bg-violet-500/15 text-violet-300 border-violet-500/30' },
 };
 
+interface BrainStatus {
+  available: boolean;
+  reason?: string;
+  mesh: {
+    observer?: string;
+    synchrony?: string;
+    expansion_phase?: string;
+    node_count?: string;
+    ran_at?: string;
+  };
+  learning?: { count_24h: number; last?: { kind: string; title: string; signal_strength: number; logged_at: string } } | null;
+  last_daily_dispatch?: string | null;
+}
+
 export default function OperateHome({ onSwitchTab, onIngestFile, operatorEmail = '' }: Props) {
   const [project, setProject] = useState<CaptureProject | null>(null);
   const [projects, setProjects] = useState<CaptureProject[]>([]);
@@ -77,6 +92,7 @@ export default function OperateHome({ onSwitchTab, onIngestFile, operatorEmail =
   const [captureSession, setCaptureSession] = useState<CaptureSession | null>(null);
   const [detailSession, setDetailSession] = useState<CaptureSession | null>(null);
   const [loading, setLoading] = useState(true);
+  const [brainStatus, setBrainStatus] = useState<BrainStatus | null>(null);
 
   const refresh = useCallback(async (proj?: CaptureProject | null) => {
     const p = proj ?? (await ensureDefaultProject());
@@ -107,6 +123,24 @@ export default function OperateHome({ onSwitchTab, onIngestFile, operatorEmail =
       cancelled = true;
     };
   }, [showIntakeConfig]);
+
+  useEffect(() => {
+    const url = getIntakeUrl();
+    if (!url) return;
+    const base = url.replace(/\/intake\/?$/, '').replace(/\/$/, '');
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch(`${base}/brain-status`, {
+          signal: AbortSignal.timeout(5000),
+        });
+        if (res.ok && !cancelled) setBrainStatus(await res.json());
+      } catch { /* offline */ }
+    };
+    poll();
+    const id = setInterval(poll, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [intakeReachable]);
 
   // ---------------------------------------------------------------- actions
 
@@ -263,6 +297,66 @@ export default function OperateHome({ onSwitchTab, onIngestFile, operatorEmail =
           </p>
         </button>
       </div>
+
+      {/* SCB Daily Update — MESH status */}
+      {brainStatus?.available && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Cpu size={14} className="text-violet-400" aria-hidden="true" />
+            <span className="text-slate-400 text-xs font-bold uppercase tracking-wide">SCB Daily Update</span>
+            {brainStatus.mesh.expansion_phase && (
+              <span className={`ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                brainStatus.mesh.expansion_phase === 'broaden'
+                  ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                  : 'bg-violet-500/15 text-violet-300 border-violet-500/30'
+              }`}>
+                {brainStatus.mesh.expansion_phase}
+              </span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {brainStatus.mesh.observer != null && (
+              <div className="bg-slate-950/60 rounded-xl p-2.5">
+                <p className="text-slate-500 text-[10px] font-semibold uppercase">MESH Ω</p>
+                <p className="text-white font-bold text-sm mt-0.5">
+                  {(parseFloat(brainStatus.mesh.observer) * 100).toFixed(0)}%
+                </p>
+              </div>
+            )}
+            {brainStatus.mesh.synchrony != null && (
+              <div className="bg-slate-950/60 rounded-xl p-2.5">
+                <p className="text-slate-500 text-[10px] font-semibold uppercase">Sync</p>
+                <p className="text-white font-bold text-sm mt-0.5">
+                  {(parseFloat(brainStatus.mesh.synchrony) * 100).toFixed(0)}%
+                </p>
+              </div>
+            )}
+            {brainStatus.mesh.node_count != null && (
+              <div className="bg-slate-950/60 rounded-xl p-2.5">
+                <p className="text-slate-500 text-[10px] font-semibold uppercase">Nodes</p>
+                <p className="text-white font-bold text-sm mt-0.5">{brainStatus.mesh.node_count}</p>
+              </div>
+            )}
+            {brainStatus.learning != null && (
+              <div className="bg-slate-950/60 rounded-xl p-2.5">
+                <p className="text-slate-500 text-[10px] font-semibold uppercase">24h activity</p>
+                <p className="text-white font-bold text-sm mt-0.5">{brainStatus.learning.count_24h}</p>
+              </div>
+            )}
+          </div>
+          {(brainStatus.last_daily_dispatch || brainStatus.mesh.ran_at) && (
+            <p className="text-slate-600 text-[10px] mt-2.5">
+              {brainStatus.last_daily_dispatch && (
+                <>Dispatch sent {new Date(brainStatus.last_daily_dispatch).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</>
+              )}
+              {brainStatus.last_daily_dispatch && brainStatus.mesh.ran_at && ' · '}
+              {brainStatus.mesh.ran_at && (
+                <>MESH updated {new Date(brainStatus.mesh.ran_at).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</>
+              )}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Sessions */}
       <section>
