@@ -1,9 +1,13 @@
-name: Deploy Marketing Site to GitHub Pages
+name: Deploy OCR app to GitHub Pages
+
+# Builds the React app and deploys it to GitHub Pages with Supply-Chain-Brain
+# integration (cheap OCR/VLM tier). Set VITE_SCB_OCR_URL as a repository
+# variable to enable: Settings → Secrets and variables → Actions → Variables.
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
+    paths: ['src/**', 'index.html', 'package.json', 'vite.config.ts', '.github/workflows/deploy-pages.yml']
   workflow_dispatch:
 
 permissions:
@@ -16,30 +20,49 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        env:
+          # Project Pages live under /<repo>/ — derive base path from repo name.
+          VITE_BASE: /${{ github.event.repository.name }}/
+          # Supabase — set as repository Variables (Settings → Secrets and
+          # variables → Actions → Variables). The anon key is public by design.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
+          # Supply-Chain-Brain OCR endpoint (optional cheap tier before Gemini)
+          VITE_SCB_OCR_URL: ${{ vars.VITE_SCB_OCR_URL }}
+        run: npm run build
+
+      - name: SPA fallback (404 → index.html)
+        run: cp dist/index.html dist/404.html
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
   deploy:
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Copy app screenshots and icons into website folder
-        run: |
-          cp public/screenshot-desktop-1.png loadopoly-website/ 2>/dev/null || true
-          cp public/screenshot-desktop-2.png loadopoly-website/ 2>/dev/null || true
-          cp public/screenshot-desktop-3.png loadopoly-website/ 2>/dev/null || true
-          cp public/screenshot-mobile-1.png  loadopoly-website/ 2>/dev/null || true
-          cp public/screenshot-mobile-2.png  loadopoly-website/ 2>/dev/null || true
-          cp public/icon.svg                 loadopoly-website/ 2>/dev/null || true
-          cp public/icon-192.png             loadopoly-website/ 2>/dev/null || true
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: loadopoly-website
-
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
