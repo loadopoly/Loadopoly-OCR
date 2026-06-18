@@ -10,8 +10,6 @@ interface ImportMetaEnv {
   readonly VITE_LOADOPOLY_SUPABASE_ANON_KEY?: string;
 
   // AI providers
-  /** SCB GeoGraph VLM gateway (default http://127.0.0.1:8787) */
-  readonly VITE_SCB_VLM_URL?: string;
   readonly VITE_GEMINI_API_KEY?: string;
   readonly VITE_OPENAI_API_KEY?: string;
   /** Legacy / non-Vite key name used by some Google AI SDK examples */
