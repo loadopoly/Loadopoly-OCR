@@ -918,8 +918,8 @@ export default function App() {
       }
 
       const scanType = (asset.sqlRecord?.SCAN_TYPE as ScanType) || ScanType.DOCUMENT;
-      const { processImageWithGemini } = await import('./services/geminiService');
-      const analysis = await processImageWithGemini(file, location, scanType, debugMode);
+      const { processImageOptimized } = await import('./services/scbVlmService');
+      const analysis = await processImageOptimized(file, location, scanType, debugMode);
       
       const updatedSqlRecord: HistoricalDocumentMetadata = {
             ...asset.sqlRecord!,
@@ -1332,9 +1332,9 @@ export default function App() {
       
       onProgress(25, 'AI analysis...');
       
-      // Process with Gemini (client-side fallback or when server not available)
-      const { processImageWithGemini } = await import('./services/geminiService');
-      const analysis = await processImageWithGemini(file, location, scanType, debugMode);
+      // SCB VLM gateway preferred; Gemini fallback when gateway unreachable
+      const { processImageOptimized } = await import('./services/scbVlmService');
+      const analysis = await processImageOptimized(file, location, scanType, debugMode);
       
       onProgress(70, 'Building metadata...');
       
