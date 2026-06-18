@@ -10,6 +10,7 @@
 import { createWorker, Worker, RecognizeResult } from 'tesseract.js';
 import { logger } from '../lib/logger';
 import { CircuitBreaker } from '../lib/circuitBreaker';
+import { tryScbVlm } from './scbVlmService';
 
 const circuitBreaker = new CircuitBreaker();
 
@@ -513,6 +514,8 @@ class EdgeOCRService {
     edgeResult: EdgeOCRResult;
     geminiResult?: any;
     escalated: boolean;
+    /** Which tier answered the escalation, when one did. */
+    source?: 'scb' | 'gemini';
   }> {
     // First, try edge OCR
     const edgeResult = await this.recognizeText(imageData, {
@@ -520,7 +523,7 @@ class EdgeOCRService {
       preprocess: options.preprocess,
     });
 
-    // Check if we need to escalate to Gemini
+    // Check if we need to escalate beyond the free edge tier
     const shouldEscalate = options.forceGemini || edgeResult.needsGeminiRefinement;
 
     if (!shouldEscalate) {
@@ -530,7 +533,24 @@ class EdgeOCRService {
       };
     }
 
-    // Escalate to Gemini for NLP refinement
+    // Cheap before costed: try the Supply-Chain-Brain (free-tier ensemble + its
+    // content-addressed recall cache) before spending costed Gemini tokens.
+    // No-op when VITE_SCB_OCR_URL is unset, so default behaviour is unchanged.
+    const scbResult = await tryScbVlm(imageData, { hash: edgeResult.imageHash });
+    if (scbResult) {
+      logger.debug('OCR escalation served by SCB (cheap tier)', {
+        cached: scbResult.cached,
+        model: scbResult.model,
+      });
+      return {
+        edgeResult,
+        geminiResult: scbResult,
+        escalated: true,
+        source: 'scb',
+      };
+    }
+
+    // Escalate to Gemini for NLP refinement (costed — last resort)
     if (!options.geminiApiKey) {
       logger.warn('Gemini escalation needed but no API key provided');
       return {
@@ -550,6 +570,7 @@ class EdgeOCRService {
         edgeResult,
         geminiResult,
         escalated: true,
+        source: 'gemini',
       };
     } catch (error) {
       logger.error('Gemini escalation failed', { error });
