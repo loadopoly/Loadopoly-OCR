@@ -1,3 +1,48 @@
+## [v2.24.0] - 2026-07-07
+
+### Changed
+
+- Merged `main` (SCB VLM gateway tiering for edge OCR + GitHub Pages
+  Supabase env config) into the capture branch; typecheck / lint / build green.
+- PWA `start_url` cache-buster bumped to `v=2.24.0`.
+
+### Fixed (capture hardening)
+
+- **Photo-index collision that could corrupt a bundle** (`PhotogrammetryCapture.tsx`,
+  `capture/sessionStore.ts`): the next photo index was seeded from the session
+  photo *count*, so a resumed session whose photos had been deleted — or whose
+  `addPhoto` had failed — could reuse an index and emit two `IMG_000N.jpg`
+  records with different SHA-256s, failing the Brain's fixity check and silently
+  dropping a photo. The index is now seeded from the highest existing index in
+  the store (`nextPhotoIndex`), guarded so a shutter that fires before the async
+  seed resolves still can't collide.
+- **Camera stream leaks** (`PhotogrammetryCapture.tsx`): `getUserMedia` streams
+  are tracked in a ref with a generation guard, so a stream acquired while the
+  component is unmounting or backgrounded (the OS-interruption race) stops its
+  own tracks instead of re-lighting the camera; a superseded stream is stopped
+  before the new one is swapped in; and `cameraError` is cleared on a successful
+  (re)start so the error screen can't strand a live camera.
+- **Thumbnail object-URL leak** (`PhotogrammetryCapture.tsx`): URLs for
+  thumbnails scrolled past the 6-item strip are revoked, and any remaining are
+  revoked on unmount — a long capture day no longer pins hundreds of MB of Blob
+  memory.
+- **Uplink hang / mis-retry** (`capture/scbUplink.ts`): the bundle POST now has
+  a 120 s per-attempt abort timeout so a wedged receiver can't freeze the
+  session modal indefinitely; 408/429 are treated as retryable while other 4xx
+  still bail immediately.
+- **Session status regressions** (`capture/sessionStore.ts`): status is now
+  forward-only — exporting a still-ACTIVE work-in-progress no longer strips the
+  Resume action, and re-exporting an already-UPLINKED session no longer
+  downgrades it or re-adds it to the pending-uplink count.
+- **Coverage ring after delete** (`PhotogrammetryCapture.tsx`): removing a photo
+  from the strip recomputes sector coverage from the store instead of only
+  decrementing the count, so deleting the sole shot of a sector correctly
+  un-fills the ring.
+- **iOS orientation permission** (`PhotogrammetryCapture.tsx`): the first
+  shutter tap (a real user gesture) retries `DeviceOrientationEvent.requestPermission()`
+  when a heading hasn't arrived yet, so the orbit ring works on iOS instead of
+  silently degrading.
+
 ## [v2.23.0] - 2026-06-12
 
 ### Added

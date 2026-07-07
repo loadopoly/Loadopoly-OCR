@@ -42,7 +42,7 @@ import {
   sha256Hex,
   haptic,
 } from '../../capture/sensors';
-import { addPhoto, deletePhoto, setSessionStatus } from '../../capture/sessionStore';
+import { addPhoto, deletePhoto, getSession, nextPhotoIndex, setSessionStatus } from '../../capture/sessionStore';
 
 interface Props {
   session: CaptureSession;
@@ -69,6 +69,12 @@ export default function PhotogrammetryCapture({ session, project, onExit }: Prop
   const videoRef = useRef<HTMLVideoElement>(null);
   const trackerRef = useRef<PoseTracker | null>(null);
   const photoIndexRef = useRef(session.photoCount);
+  const indexSeededRef = useRef(false);
+  // Single source of truth for camera teardown + a generation guard so a
+  // late-resolving getUserMedia (unmount / OS-interruption race) stops its own
+  // tracks instead of re-lighting the camera.
+  const streamRef = useRef<MediaStream | null>(null);
+  const streamGenRef = useRef(0);
 
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -87,35 +93,51 @@ export default function PhotogrammetryCapture({ session, project, onExit }: Prop
 
   // ---------------------------------------------------------------- camera
 
+  const stopStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    streamRef.current = null;
+  }, []);
+
   const startStream = useCallback(async () => {
+    const gen = ++streamGenRef.current;
     try {
       const newStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'environment' },
         audio: false,
       });
+      if (gen !== streamGenRef.current) {
+        // Superseded while getUserMedia was in flight (unmount, backgrounding,
+        // or another start) — stop the tracks we just acquired, don't commit.
+        newStream.getTracks().forEach(t => t.stop());
+        return;
+      }
       const track = newStream.getVideoTracks()[0];
       const caps = (track.getCapabilities?.() ?? {}) as any;
       setTorchSupported(Boolean(caps.torch));
+      // Stop any previous live stream before swapping it in.
+      streamRef.current?.getTracks().forEach(t => t.stop());
+      streamRef.current = newStream;
+      setCameraError(null);
       setStream(newStream);
       // Upgrade resolution in the background — fast first frame matters more
       track
         .applyConstraints({ width: { ideal: 3840 }, height: { ideal: 2160 } })
         .catch(() => track.applyConstraints({ width: { ideal: 1920 }, height: { ideal: 1080 } }).catch(() => {}));
     } catch {
-      setCameraError('Camera unavailable. Check permissions and try again.');
+      if (gen === streamGenRef.current) {
+        setCameraError('Camera unavailable. Check permissions and try again.');
+      }
     }
   }, []);
 
   useEffect(() => {
     startStream();
     return () => {
-      // setStream callbacks may not have run yet — stop via state setter
-      setStream(s => {
-        s?.getTracks().forEach(t => t.stop());
-        return null;
-      });
+      streamGenRef.current++; // invalidate any in-flight getUserMedia
+      stopStream();
+      setStream(null);
     };
-  }, [startStream]);
+  }, [startStream, stopStream]);
 
   // Keep srcObject reactive (camera black-screen fix from CameraCapture)
   useEffect(() => {
@@ -129,24 +151,46 @@ export default function PhotogrammetryCapture({ session, project, onExit }: Prop
   useEffect(() => {
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        setStream(s => {
-          s?.getTracks().forEach(t => t.stop());
-          return null;
-        });
+        streamGenRef.current++; // invalidate any in-flight getUserMedia
+        stopStream();
+        setStream(null);
       } else if (document.visibilityState === 'visible') {
         startStream();
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => document.removeEventListener('visibilitychange', onVisibility);
-  }, [startStream]);
+  }, [startStream, stopStream]);
 
   // ---------------------------------------------------------------- sensors
+
+  // Revoke any thumbnail object URLs still held when the HUD unmounts.
+  const thumbsRef = useRef<ThumbEntry[]>([]);
+  useEffect(() => { thumbsRef.current = thumbs; }, [thumbs]);
+  useEffect(() => () => {
+    thumbsRef.current.forEach(t => URL.revokeObjectURL(t.url));
+  }, []);
+
+  // Seed the next photo index from the store (max existing index + 1), NOT the
+  // photo count — a resumed session whose photos were deleted or partially
+  // failed would otherwise reuse an index and corrupt the bundle.
+  useEffect(() => {
+    let cancelled = false;
+    nextPhotoIndex(session.id).then(n => {
+      if (!cancelled) {
+        photoIndexRef.current = n;
+        indexSeededRef.current = true;
+      }
+    });
+    return () => { cancelled = true; };
+  }, [session.id]);
 
   useEffect(() => {
     const tracker = new PoseTracker();
     trackerRef.current = tracker;
-    tracker.start(); // called from the tap that opened this screen on iOS
+    // Best-effort start on mount; on iOS, DeviceOrientation permission needs a
+    // user gesture, so the first shutter tap retries start() (see capturePhoto).
+    tracker.start();
     const unsub = tracker.subscribe(setPose);
     return () => {
       unsub();
@@ -204,8 +248,19 @@ export default function PhotogrammetryCapture({ session, project, onExit }: Prop
         canvas.toBlob(b => (b ? resolve(b) : reject(new Error('encode'))), 'image/jpeg', 0.92),
       );
 
+      // First real user gesture: if orientation never arrived (iOS needs an
+      // in-gesture permission grant), retry starting the tracker now.
+      if (trackerRef.current && trackerRef.current.current?.headingDeg == null) {
+        trackerRef.current.start();
+      }
+
       const quality = analyzeFrame(video, preset);
       const currentPose = trackerRef.current?.current;
+      // Guard against a shutter that fires before the async index seed landed.
+      if (!indexSeededRef.current) {
+        photoIndexRef.current = await nextPhotoIndex(session.id);
+        indexSeededRef.current = true;
+      }
       const index = photoIndexRef.current++;
       const sectorIdx = preset.orbit ? headingToSector(currentPose?.headingDeg ?? null) : null;
 
@@ -239,12 +294,16 @@ export default function PhotogrammetryCapture({ session, project, onExit }: Prop
       if (sectorIdx !== null) {
         setSectors(prev => new Set(prev).add(sectorIdx));
       }
-      setThumbs(prev =>
-        [
+      setThumbs(prev => {
+        const next = [
           { id: photo.id, url: URL.createObjectURL(blob), index, blurry: quality.blurry },
           ...prev,
-        ].slice(0, 6),
-      );
+        ];
+        // Revoke the object URLs of entries scrolled past the 6-thumb strip so
+        // long capture sessions don't pin hundreds of MB of Blob memory.
+        next.slice(6).forEach(t => URL.revokeObjectURL(t.url));
+        return next.slice(0, 6);
+      });
 
       if (quality.blurry) {
         setToast({ text: 'Soft frame — flagged. Consider a retake.', warn: true });
@@ -265,9 +324,17 @@ export default function PhotogrammetryCapture({ session, project, onExit }: Prop
     await deletePhoto(entry.id);
     URL.revokeObjectURL(entry.url);
     setThumbs(prev => prev.filter(t => t.id !== entry.id));
-    setPhotoCount(c => Math.max(0, c - 1));
+    // Recompute coverage from the store — deleting the only shot of a sector
+    // must un-fill the ring, not just decrement the count.
+    const fresh = await getSession(session.id);
+    if (fresh) {
+      setSectors(new Set(fresh.sectorsFilled));
+      setPhotoCount(fresh.photoCount);
+    } else {
+      setPhotoCount(c => Math.max(0, c - 1));
+    }
     announce('Photo removed.');
-  }, []);
+  }, [session.id]);
 
   const finishSession = useCallback(async () => {
     await setSessionStatus(session.id, 'COMPLETE');
