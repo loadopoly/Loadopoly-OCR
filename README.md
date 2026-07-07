@@ -11,6 +11,33 @@
 
 ---
 
+## 🎥 Operate Console — start capturing in 60 seconds
+
+**The app now boots into a capture-first Operate Console.** Open it, tap
+**Start Capture**, pick a preset (⛰️ Stockpile · 🚜 Equipment · 📦 Pallet ·
+⚙️ Part · 📄 Documents · 🏗️ Yard), and a guided photogrammetry HUD walks you
+through a reconstruction-ready photo set — orbit coverage ring, live
+sharpness meter, level bubble, GPS + compass pose stamped on every shot.
+
+Sessions are grouped into supply-chain projects and exported as
+**SCB capture bundles** (`photos/ + scb_manifest.json`, schema
+`loadopoly.capture/1`) that feed directly into the
+**[Supply Chain Brain](https://github.com/loadopoly/Supply-Chain-Brain)**:
+
+```bash
+# In Supply-Chain-Brain — ingest exported bundles
+cd pipeline
+python -m src.photogrammetry --watch     # sweeps data/photogrammetry/inbox/
+```
+
+Offline-first (IndexedDB), zero configuration, and the entire legacy
+workspace (Dashboard, Assets, Knowledge Graph, 3D World …) remains one tap
+away in the sidebar.
+
+📖 **Full guide:** [docs/OPERATE_CONSOLE.md](./docs/OPERATE_CONSOLE.md)
+
+---
+
 ## 💼 For Investors
 
 ### The $1.2B Market Opportunity: AI Training Data Crisis
