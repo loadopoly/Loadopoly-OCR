@@ -126,14 +126,36 @@ export async function listSessions(projectId?: string): Promise<CaptureSession[]
   );
 }
 
+const STATUS_RANK: Record<SessionStatus, number> = {
+  ACTIVE: 0,
+  COMPLETE: 1,
+  EXPORTED: 2,
+  UPLINKED: 3,
+};
+
 export async function setSessionStatus(
   id: string,
   status: SessionStatus,
 ): Promise<void> {
-  const changes: Partial<CaptureSession> = { status };
+  const session = await captureDb.sessions.get(id);
+  const changes: Partial<CaptureSession> = {};
   if (status === 'COMPLETE') changes.completedAt = new Date().toISOString();
   if (status === 'EXPORTED') changes.lastExportedAt = new Date().toISOString();
   if (status === 'UPLINKED') changes.lastUplinkedAt = new Date().toISOString();
+  // Forward-only lifecycle. The delivery states (EXPORTED/UPLINKED) apply only
+  // once a session is finished, so exporting a still-ACTIVE work-in-progress
+  // stamps the timestamp but leaves it ACTIVE (Resume keeps rendering); and a
+  // later action never regresses an already-delivered session (re-exporting an
+  // UPLINKED session must not un-deliver it or re-add it to the pending count).
+  if (!session) {
+    changes.status = status;
+  } else {
+    const cur = STATUS_RANK[session.status];
+    const next = STATUS_RANK[status];
+    if (next > cur && (status === 'COMPLETE' || cur >= STATUS_RANK.COMPLETE)) {
+      changes.status = status;
+    }
+  }
   await captureDb.sessions.update(id, changes);
 }
 
@@ -172,6 +194,17 @@ export async function addPhoto(photo: CapturePhoto): Promise<void> {
 export async function listPhotos(sessionId: string): Promise<CapturePhoto[]> {
   const rows = await captureDb.photos.where('sessionId').equals(sessionId).toArray();
   return rows.sort((a, b) => a.index - b.index);
+}
+
+/**
+ * Next free photo index for a session — one past the highest existing index,
+ * NOT the photo count. Seeding a resumed capture from the count collides after
+ * deletes or failed adds (two photos would claim `IMG_0003.jpg`, corrupting the
+ * ZIP + manifest and failing the Brain's fixity check).
+ */
+export async function nextPhotoIndex(sessionId: string): Promise<number> {
+  const rows = await captureDb.photos.where('sessionId').equals(sessionId).toArray();
+  return rows.reduce((mx, p) => Math.max(mx, p.index + 1), 0);
 }
 
 export async function deletePhoto(id: string): Promise<void> {

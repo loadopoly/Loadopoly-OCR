@@ -46,6 +46,11 @@ export interface UplinkResult {
  *
  * Retries transient failures with exponential backoff (2s, 4s, 8s).
  */
+// Per-attempt deadline — a receiver that accepts the connection then never
+// responds (wedged watcher, half-open yard Wi-Fi) must not hang the session
+// modal forever. Generous, since bundles can be hundreds of MB.
+const UPLINK_TIMEOUT_MS = 120_000;
+
 export async function uplinkBundle(
   bundle: Blob,
   fileName: string,
@@ -69,18 +74,25 @@ export async function uplinkBundle(
     if (attempt > 0) {
       await new Promise(r => setTimeout(r, 2000 * 2 ** (attempt - 1)));
     }
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), UPLINK_TIMEOUT_MS);
     try {
-      const res = await fetch(url, { method: 'POST', body: form });
+      const res = await fetch(url, { method: 'POST', body: form, signal: controller.signal });
       if (res.ok) {
         return { ok: true, status: res.status, message: 'Bundle delivered to Supply Chain Brain intake.' };
       }
-      // 4xx won't improve on retry
-      if (res.status >= 400 && res.status < 500) {
+      // 4xx won't improve on retry — except 408 (timeout) and 429 (rate limit).
+      if (res.status >= 400 && res.status < 500 && res.status !== 408 && res.status !== 429) {
         return { ok: false, status: res.status, message: `Intake rejected the bundle (HTTP ${res.status}).` };
       }
       lastError = `HTTP ${res.status}`;
     } catch (err) {
-      lastError = err instanceof Error ? err.message : 'network error';
+      lastError =
+        err instanceof DOMException && err.name === 'AbortError'
+          ? `timed out after ${UPLINK_TIMEOUT_MS / 1000}s`
+          : err instanceof Error ? err.message : 'network error';
+    } finally {
+      clearTimeout(timer);
     }
   }
   return { ok: false, status: 0, message: `Uplink failed after 3 attempts: ${lastError}` };
