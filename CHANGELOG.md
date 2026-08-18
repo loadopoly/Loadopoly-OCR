@@ -1,3 +1,18 @@
+## [Unreleased]
+
+## [v2.22.0] - 2026-08-20
+
+### Added
+- **Pixel-space lossy channel** (`src/lib/pixelSpaceChannel.ts`): Fisher / Cramér–Rao floor plus the QUIPU temporal-spatial rhythm (coherence, relational wash, 7-D Weyl centroid, boost in `[0.5, 1.5]`). Boost never invents information; it only scales effective independent-sample count for fusion. `npm run test:channel` covers the formulas.
+- Encode and geography consumers: `compressImage` breathes JPEG/WebP quality from the rhythm (wash keeps more bits); `computeTorusExpansion` / `buildGeographySense` scale the uncertainty torus by `period_factor`.
+- `compressImage` estimates a canvas rhythm when callers omit one, so encode quality is no longer stuck at dummy `boost = 1`. `estimateChannelFromRgba` / `rhythmFromRgba` are the shared helpers.
+- **QUIPU Observer client** (`src/services/quipuService.ts`): completed OCR posts unstructured observations; cached lexicon priors feed Gemini disambiguation. Optional via `VITE_QUIPU_URL`.
+- Docker + Cloudflare Tunnel origin for `https://www.loadopoly.com`. GitHub Pages now publishes `pages-redirect/` only. See [DOCKER.md](./DOCKER.md).
+
+### Changed
+- Marketing site and schema.org URLs point at `https://www.loadopoly.com` (was Vercel).
+- `wrangler.toml` no longer claims `www` while the tunnel is the origin.
+
 ## [v2.21.0] - 2026-05-17
 
 ### Added

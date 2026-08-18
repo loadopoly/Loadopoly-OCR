@@ -148,6 +148,8 @@ export interface GeographySense {
    * band. Shrinks as triangulationDepth increases, collapsing toward a point.
    */
   torusRadiusM: number;
+  /** QUIPU wash factor applied to the torus, if a pixel-space rhythm was supplied. */
+  rhythmBoost?: number;
 }
 
 /** Device pose at the moment of an OCR capture */

@@ -533,7 +533,7 @@ class EdgeOCRService {
       };
     }
 
-    // Cheap before costed: try the Supply-Chain-Brain (free-tier ensemble + its
+    // Cheap before costed: try the Supply-Chain-Architect (free-tier ensemble + its
     // content-addressed recall cache) before spending costed Gemini tokens.
     // No-op when VITE_SCB_OCR_URL is unset, so default behaviour is unchanged.
     const scbResult = await tryScbVlm(imageData, { hash: edgeResult.imageHash });

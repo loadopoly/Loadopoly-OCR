@@ -15,7 +15,7 @@ interface ImportMetaEnv {
   /** Legacy / non-Vite key name used by some Google AI SDK examples */
   readonly API_KEY?: string;
 
-  // Supply-Chain-Brain — optional cheap OCR/VLM tier (free-tier ensemble +
+  // Supply-Chain-Architect — optional cheap OCR/VLM tier (free-tier ensemble +
   // recall cache) tried ahead of costed providers when set.
   readonly VITE_SCB_OCR_URL?: string;
 

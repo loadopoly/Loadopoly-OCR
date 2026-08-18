@@ -1,13 +1,17 @@
-name: Deploy OCR app to GitHub Pages
+name: Redirect GitHub Pages to loadopoly.com
 
-# Builds the React app and deploys it to GitHub Pages with Supply-Chain-Brain
-# integration (cheap OCR/VLM tier). Set VITE_SCB_OCR_URL as a repository
-# variable to enable: Settings → Secrets and variables → Actions → Variables.
+# The live app now runs in Docker behind loadopoly.com / www.loadopoly.com.
+# GitHub Pages only publishes a static redirect so old
+# https://loadopoly.github.io/Loadopoly-OCR/ URLs follow the new origin.
+# Push this AFTER Cloudflare DNS leaves loadopoly.github.io, or www will
+# briefly serve this static page instead of the app.
 
 on:
   push:
     branches: [main]
-    paths: ['src/**', 'index.html', 'package.json', 'vite.config.ts', '.github/workflows/deploy-pages.yml']
+    paths:
+      - 'pages-redirect/**'
+      - '.github/workflows/deploy-pages.yml'
   workflow_dispatch:
 
 permissions:
@@ -26,35 +30,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - name: Install
-        run: npm ci
-
-      - name: Build
-        env:
-          # Project Pages live under /<repo>/ — derive base path from repo name.
-          VITE_BASE: /${{ github.event.repository.name }}/
-          # Supabase — set as repository Variables (Settings → Secrets and
-          # variables → Actions → Variables). The anon key is public by design.
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ vars.VITE_SUPABASE_ANON_KEY }}
-          # Supply-Chain-Brain OCR endpoint (optional cheap tier before Gemini)
-          VITE_SCB_OCR_URL: ${{ vars.VITE_SCB_OCR_URL }}
-        run: npm run build
-
-      - name: SPA fallback (404 → index.html)
-        run: cp dist/index.html dist/404.html
-
-      - name: Upload Pages artifact
+      - name: Upload Pages redirect
         uses: actions/upload-pages-artifact@v3
         with:
-          path: dist
+          path: pages-redirect
 
   deploy:
     needs: build

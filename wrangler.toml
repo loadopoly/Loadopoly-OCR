@@ -1,6 +1,8 @@
 # Cloudflare Workers configuration for the GeoGraph OCR application.
 # The Vite build output in ./dist is served as static assets.
-# Custom domain (www.loadopoly.com) is configured via Cloudflare dashboard routes.
+# Live custom domain now fronts the Docker container via Cloudflare Tunnel.
+# Keep this Worker for optional static fallback; do not bind www.loadopoly.com
+# here while the tunnel is the origin.
 
 name = "geograph"
 compatibility_date = "2024-09-23"

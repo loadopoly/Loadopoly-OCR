@@ -28,6 +28,7 @@
  */
 
 import { CoordinateSource, GraphData } from '../types';
+import { washSpatialRadius, type TemporalSpatialRhythm } from '../lib/pixelSpaceChannel';
 import {
   GeographySense,
   DevicePose,
@@ -222,11 +223,13 @@ export function resolveSpatialJitterIncremental(
  */
 export function computeTorusExpansion(
   confidence: number,
-  baseAccuracyM = DEFAULT_ACCURACY_M
+  baseAccuracyM = DEFAULT_ACCURACY_M,
+  rhythm?: TemporalSpatialRhythm
 ): TorusExpansionResult {
   const c = Math.max(0.001, Math.min(1, confidence));
-  const innerRadiusM = baseAccuracyM * (1 - c);
-  const outerRadiusM = baseAccuracyM / c;
+  const boost = rhythm?.boost ?? 1;
+  const innerRadiusM = washSpatialRadius(baseAccuracyM * (1 - c), boost);
+  const outerRadiusM = washSpatialRadius(baseAccuracyM / c, boost);
   const nominalRadiusM = (innerRadiusM + outerRadiusM) / 2;
   return { innerRadiusM, outerRadiusM, nominalRadiusM, confidence: c };
 }
@@ -330,6 +333,7 @@ export function buildGeographySense(params: {
   triangulationDepth: number;
   graphDelta: GraphData;
   sensorPayloadHash: string;
+  rhythm?: TemporalSpatialRhythm;
 }): GeographySense {
   const captureId = params.captureId ?? crypto.randomUUID();
   const confidence = calculateSenseConfidence(
@@ -339,7 +343,8 @@ export function buildGeographySense(params: {
   );
   const torus = computeTorusExpansion(
     confidence,
-    params.devicePose.accuracyM ?? DEFAULT_ACCURACY_M
+    params.devicePose.accuracyM ?? DEFAULT_ACCURACY_M,
+    params.rhythm
   );
 
   return {
@@ -353,6 +358,7 @@ export function buildGeographySense(params: {
     timestamp: new Date().toISOString(),
     fixityChecksum: params.sensorPayloadHash,
     torusRadiusM: torus.nominalRadiusM,
+    rhythmBoost: params.rhythm?.boost,
   };
 }
 

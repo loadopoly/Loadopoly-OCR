@@ -8,11 +8,9 @@ const __dirname = dirname(__filename);
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  // Set base path for GitHub Pages deployment.
-  // When a custom domain is configured, GitHub Pages serves from the root,
-  // so VITE_BASE should be '/' (the default). Without a custom domain
-  // (e.g. loadopoly.github.io/Loadopoly-OCR/), set VITE_BASE='/Loadopoly-OCR/'.
-  // The marketing site (loadopoly-website/) owns www.loadopoly.com.
+  // Docker + Cloudflare own https://www.loadopoly.com and https://loadopoly.com.
+  // Keep VITE_BASE='/' for that origin. GitHub Pages is redirect-only now
+  // (pages-redirect/) and must not rebuild the SPA under /Loadopoly-OCR/.
   base: process.env.VITE_BASE ?? '/',
   plugins: [react()],
   // Workers must use ES module format to support dynamic import() for code-splitting.
@@ -39,10 +37,14 @@ export default defineConfig({
     '__BUILD_TIME__': JSON.stringify(new Date().toISOString()),
   },
   server: {
+    host: true,
     port: 3000,
     // Ensure proper MIME types in dev
     headers: {
       'X-Content-Type-Options': 'nosniff',
+    },
+    watch: {
+      usePolling: true,
     },
   },
   build: {

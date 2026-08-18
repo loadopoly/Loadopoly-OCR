@@ -1,6 +1,6 @@
 # GeoGraph OCR Node
 
-[![Version](https://img.shields.io/badge/version-2.20.1-blue.svg)](./CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.22.0-blue.svg)](./CHANGELOG.md)
 [![License](https://img.shields.io/badge/license-Dual-green.svg)](./LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.6-blue.svg)](https://www.typescriptlang.org/)
 [![React](https://img.shields.io/badge/React-19-61DAFB.svg)](https://react.dev/)
@@ -123,6 +123,19 @@ cp .env.example .env.local
 npm run dev
 ```
 
+Live origin: **https://www.loadopoly.com** (Docker + Cloudflare Tunnel).
+GitHub Pages (`https://loadopoly.github.io/Loadopoly-OCR/`) only redirects
+there. See [DOCKER.md](./DOCKER.md) for compose and DNS cutover.
+
+Optional QUIPU Observer: set `VITE_QUIPU_URL` (compose default
+`http://localhost:7100`) so completed OCR feeds the mesh and lexicon
+priors can disambiguate glyphs. OCR still works when the Observer is away.
+
+```bash
+npm run test:channel   # pixel-space Fisher / QUIPU rhythm
+npm run typecheck
+```
+
 ### Environment Variables
 
 Create a `.env.local` file with:
@@ -134,6 +147,9 @@ VITE_GEMINI_API_KEY=your_gemini_api_key
 # Optional: Supabase for cloud sync
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your_anon_key
+
+# Optional: QUIPU Observer (leave unset to disable)
+VITE_QUIPU_URL=http://localhost:7100
 
 # Optional: Web3 features
 VITE_ALCHEMY_API_KEY=your_alchemy_key
