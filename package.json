@@ -1,6 +1,6 @@
 {
   "name": "geograph-ocr-node",
-  "version": "2.21.0",
+  "version": "2.22.0",
   "description": "Advanced OCR-to-Graph platform with GIS metadata, semantic NLP, deduplication, and metaverse navigation",
   "type": "module",
   "scripts": {
@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint src --ext .ts,.tsx",
     "test:new-user": "node test-new-user-flow.cjs",
+    "test:channel": "node test-pixel-space-channel.cjs",
     "bench": "node benchmarks/ui-benchmark.cjs --save",
     "bench:compare": "node benchmarks/ui-benchmark.cjs --compare",
     "bench:ci": "node benchmarks/ui-benchmark.cjs",

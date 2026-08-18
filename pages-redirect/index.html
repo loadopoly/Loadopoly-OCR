@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoGraph OCR has moved</title>
+  <meta name="robots" content="noindex, follow" />
+  <meta http-equiv="refresh" content="0;url=https://www.loadopoly.com/" />
+  <link rel="canonical" href="https://www.loadopoly.com/" />
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      font-family: Inter, Segoe UI, system-ui, sans-serif;
+      background: #020617;
+      color: #e2e8f0;
+    }
+    main { max-width: 36rem; padding: 2rem; text-align: center; }
+    a { color: #93c5fd; }
+  </style>
+  <script>
+    (function () {
+      var host = location.hostname;
+      if (host === 'www.loadopoly.com' || host === 'loadopoly.com') {
+        return;
+      }
+      var dest = new URL('https://www.loadopoly.com/');
+      var path = location.pathname.replace(/^\/Loadopoly-OCR\/?/, '/');
+      dest.pathname = path === '/' ? '/' : path;
+      dest.search = location.search;
+      dest.hash = location.hash;
+      location.replace(dest.toString());
+    })();
+  </script>
+</head>
+<body>
+  <main>
+    <h1>GeoGraph OCR now lives at loadopoly.com</h1>
+    <p>GitHub Pages no longer hosts the app. Continue at <a href="https://www.loadopoly.com/">https://www.loadopoly.com/</a>.</p>
+  </main>
+</body>
+</html>

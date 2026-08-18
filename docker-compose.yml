@@ -1,0 +1,141 @@
+services:
+  loadopoly-ocr:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    image: loadopoly-ocr:dev
+    container_name: loadopoly-ocr
+    ports:
+      - "3000:3000"
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      WATCHPACK_POLLING: "true"
+      # QUIPU Observer — the browser posts observations / pulls guidance
+      # through the host-mapped port.
+      VITE_QUIPU_URL: ${VITE_QUIPU_URL:-http://localhost:7100}
+    env_file:
+      - path: .env.local
+        required: false
+      - path: .env
+        required: false
+    volumes:
+      - .:/app
+      - loadopoly_ocr_node_modules:/app/node_modules
+    working_dir: /app
+    command: ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 20s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  loadopoly-ocr-prod:
+    profiles: ["prod"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+    image: loadopoly-ocr:prod
+    container_name: loadopoly-ocr-prod
+    ports:
+      - "8080:80"
+
+  # ---------------------------------------------------------------------
+  # QUIPU — the Observer. Both OCR apps feed observations in and receive
+  # the mesh's learnings back. Loadopoly-OCR (unstructured images) routes
+  # onto the vision axis; Bakugo (structured images) onto the touch axis.
+  # ---------------------------------------------------------------------
+  quipu:
+    build:
+      context: ../QUIPU
+      dockerfile: Dockerfile
+    image: quipu-observer:dev
+    container_name: quipu
+    ports:
+      - "7100:7100"
+    environment:
+      SCB_DB_PATH: /data/local_brain.sqlite
+      QUIPU_TRAIN_INTERVAL: "45"
+      QUIPU_TRAIN_BUDGET: "8"
+      QUIPU_HIDEOUT_HOST: scbrain-hideout
+      QUIPU_HIDEOUT_MESH: hideout-mesh
+      QUIPU_HIDEOUT_TUNNEL: scbrain-hideout.use2
+      QUIPU_HIDEOUT_PEER_DIR: /mesh/pipeline_bridge_state/compute_peers
+      QUIPU_HIDEOUT_PEER_DIR_2: /mesh/scb_bridge_state/compute_peers
+    volumes:
+      - quipu_brain:/data
+      - ../QUIPU/bridge_state:/app/bridge_state
+      - ../pipeline/bridge_state/compute_peers:/mesh/pipeline_bridge_state/compute_peers
+      - ../Supply-Chain-Brain/pipeline/bridge_state/compute_peers:/mesh/scb_bridge_state/compute_peers
+    restart: unless-stopped
+
+  # Bakugo — structured trading-card scans (cardcenter engine + Tesseract).
+  # Talks to QUIPU server-side over the compose network.
+  bakugo:
+    build:
+      context: ../Bakugo
+      dockerfile: Dockerfile
+    image: bakugo:dev
+    container_name: bakugo
+    depends_on:
+      quipu:
+        condition: service_started
+    ports:
+      - "8765:8765"
+    environment:
+      CARDCENTER_DB: /data/cardcenter.db
+      CARDCENTER_QUIPU_URL: http://quipu:7100
+      CARDCENTER_HIDEOUT: scbrain-hideout
+    volumes:
+      - bakugo_data:/data
+    restart: unless-stopped
+
+  caddy:
+    profiles: ["edge"]
+    image: caddy:2.10-alpine
+    container_name: loadopoly-caddy
+    depends_on:
+      loadopoly-ocr:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CADDY_UPSTREAM: loadopoly-ocr:3000
+      CADDY_ACME_EMAIL: ${CADDY_ACME_EMAIL:-contact@loadopoly.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:latest
+    container_name: loadopoly-cloudflared
+    depends_on:
+      loadopoly-ocr:
+        condition: service_healthy
+    command: tunnel --no-autoupdate --url http://loadopoly-ocr:3000
+    restart: unless-stopped
+
+  cloudflared-named:
+    profiles: ["named-tunnel"]
+    image: cloudflare/cloudflared:latest
+    container_name: loadopoly-cloudflared-named
+    depends_on:
+      loadopoly-ocr:
+        condition: service_healthy
+    command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
+    volumes:
+      - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
+      - ./cloudflared/credentials.json:/etc/cloudflared/credentials.json:ro
+    restart: unless-stopped
+
+volumes:
+  loadopoly_ocr_node_modules:
+  caddy_data:
+  caddy_config:
+  quipu_brain:
+  bakugo_data:

@@ -19,6 +19,11 @@
  */
 
 import { logger } from './logger';
+import {
+  recommendedEncodeQuality,
+  rhythmFromRgba,
+  type TemporalSpatialRhythm,
+} from './pixelSpaceChannel';
 
 // ============================================
 // Types
@@ -59,6 +64,10 @@ export interface CompressionResult {
   processingTime: number;
   /** Extracted GPS coordinates if available */
   gpsCoordinates?: { lat: number; lng: number };
+  /** JPEG / WebP quality after QUIPU wash (and any size-budget walk-down). */
+  qualityUsed?: number;
+  /** Boost that set the starting quality (caller rhythm or canvas estimate). */
+  rhythmBoost?: number;
 }
 
 export interface BatchCompressionResult {
@@ -243,7 +252,8 @@ function rationalsToDegrees(vals: [number, number, number]): number {
  */
 export async function compressImage(
   file: File,
-  options: CompressionOptions = {}
+  options: CompressionOptions = {},
+  rhythm?: TemporalSpatialRhythm
 ): Promise<CompressionResult> {
   const startTime = performance.now();
   const opts = { ...DEFAULT_OPTIONS, ...options };
@@ -295,9 +305,16 @@ export async function compressImage(
   if (outputFormat === 'image/webp' && !supportsWebP()) {
     outputFormat = 'image/jpeg';
   }
+
+  // Callers may omit a rhythm. Estimate one from the resized canvas so
+  // encode wash is live even when App / queue just call compressImage(file).
+  const scale = Math.min(width / Math.max(img.width, 1), height / Math.max(img.height, 1));
+  const resolvedRhythm = rhythm ?? estimateCanvasRhythm(ctx, width, height, scale);
   
-  // Compress with quality adjustment
-  let quality = opts.quality;
+  // Compress with quality adjustment. A QUIPU rhythm breathes the
+  // starting quality (wash keeps more bits; coherence can drop a
+  // little) but never invents resolution — maxDimension is unchanged.
+  let quality = recommendedEncodeQuality(resolvedRhythm, opts.quality);
   let blob = await canvasToBlob(canvas, outputFormat, quality);
   
   // Iteratively reduce quality if file is too large
@@ -341,7 +358,51 @@ export async function compressImage(
     height,
     processingTime,
     gpsCoordinates,
+    qualityUsed: quality,
+    rhythmBoost: resolvedRhythm.boost,
   };
+}
+
+/** Sample a downscaled canvas patch and map it onto the QUIPU rhythm. */
+function estimateCanvasRhythm(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  scale: number
+): TemporalSpatialRhythm {
+  const sampleW = Math.max(1, Math.min(width, 256));
+  const sampleH = Math.max(1, Math.min(height, 256));
+  const sx = Math.max(0, Math.floor((width - sampleW) / 2));
+  const sy = Math.max(0, Math.floor((height - sampleH) / 2));
+  let data: Uint8ClampedArray;
+  try {
+    data = ctx.getImageData(sx, sy, sampleW, sampleH).data;
+  } catch {
+    return {
+      boost: 1,
+      coherence: 0,
+      gradient: 0,
+      weyl: 0,
+      periodFactor: 1,
+      lrFactor: 1,
+      signals: {
+        vision: 0,
+        touch: 0,
+        smell: 0,
+        body: 0,
+        brain: 0,
+        perception: 0,
+      },
+      effectiveRows: 1,
+    };
+  }
+  return rhythmFromRgba(
+    { width: sampleW, height: sampleH, data },
+    {
+      pixelPitchPx: 1 / Math.max(scale, 1e-6),
+      rows: Math.min(width, height),
+    }
+  );
 }
 
 /**

@@ -1,0 +1,13 @@
+# Named Cloudflare Tunnel for loadopoly.com.
+# Credentials live in ./cloudflared/credentials.json (gitignored).
+# Create them with: cloudflared tunnel create loadopoly-ocr
+
+tunnel: ${TUNNEL_ID}
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  - hostname: loadopoly.com
+    service: http://loadopoly-ocr:3000
+  - hostname: www.loadopoly.com
+    service: http://loadopoly-ocr:3000
+  - service: http_status:404

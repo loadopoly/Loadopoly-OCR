@@ -1,0 +1,31 @@
+{
+  "name": "Loadopoly-OCR",
+  "dockerComposeFile": "../docker-compose.yml",
+  "service": "loadopoly-ocr",
+  "workspaceFolder": "/app",
+  "shutdownAction": "stopCompose",
+  "forwardPorts": [3000, 80, 443],
+  "portsAttributes": {
+    "3000": {
+      "label": "Loadopoly-OCR Vite",
+      "onAutoForward": "notify"
+    },
+    "80": {
+      "label": "Caddy HTTP",
+      "onAutoForward": "silent"
+    },
+    "443": {
+      "label": "Caddy HTTPS",
+      "onAutoForward": "silent"
+    }
+  },
+  "postCreateCommand": "npm ci",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "ms-azuretools.vscode-docker"
+      ]
+    }
+  }
+}

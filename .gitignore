@@ -17,6 +17,12 @@ dist-ssr
 .env.local
 .env.*.local
 
+# Cloudflare Tunnel credentials (never commit)
+cloudflared/credentials.json
+cloudflared/*.json
+!cloudflared/config.yml
+!cloudflared/config.quick.yml
+
 # Build artifacts
 *.tsbuildinfo
 vite.config.js

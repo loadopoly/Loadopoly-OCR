@@ -1,0 +1,5 @@
+# Used by `cloudflared tunnel --url` / compose quick tunnel.
+# Named-hostname routing still requires a Cloudflare login and DNS change.
+
+ingress:
+  - service: http://loadopoly-ocr:3000

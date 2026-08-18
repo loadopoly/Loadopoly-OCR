@@ -1,5 +1,5 @@
 /**
- * SCB VLM Service — route low-confidence OCR/VLM to the Supply-Chain-Brain
+ * SCB VLM Service — route low-confidence OCR/VLM to the Supply-Chain-Architect
  * (its free-tier ensemble + recall cache) *before* spending costed Gemini tokens.
  *
  * Cheap-before-costed tiering for the field-capture PWA:

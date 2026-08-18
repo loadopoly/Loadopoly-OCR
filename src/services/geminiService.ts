@@ -3,6 +3,7 @@ import { GISMetadata, GraphData, TokenizationData, AssetStatus, ScanType, Taxono
 import { validateGeminiResponse, sanitizeLLMOutput, formatValidationErrors } from "../lib/validation";
 import { geminiLogger as logger } from "../lib/logger";
 import { geminiCircuitBreaker } from "../lib/circuitBreaker";
+import { lexiconHint, observeOcr } from "./quipuService";
 
 // Using Gemini 2.5 Flash as requested for optimized speed and efficient extraction
 const GEMINI_MODEL = "gemini-2.5-flash";
@@ -143,10 +144,16 @@ const processImageWithGeminiInternal = async (
     ? `The image was captured at Latitude: ${location.lat}, Longitude: ${location.lng}.` 
     : "No geolocation data available for this image. Estimate GPS coordinates from visible landmarks, signage, architecture, vegetation, road markings, language on signs, and any other visual cues. Return your best estimate in the inferredCoordinates field with a confidence score.";
 
+  // QUIPU Observer guidance: cross-corpus lexicon priors learned from prior
+  // Loadopoly-OCR (unstructured) and Bakugo (structured) observations.
+  // Empty string when the Observer is unreachable — the prompt is unchanged.
+  const quipuHint = lexiconHint();
+
   const prompt = `
     You are an expert data extraction specialist and knowledge graph engineer.
     The user is scanning a visual input of type: ${scanType}.
     ${locString}
+    ${quipuHint}
 
     **CRITICAL GRAPH EXTRACTION RULES:**
     1. **List/Table Extraction**: If the image contains a list, table, roster, or catalog of items (e.g., Pokemon names, chemical elements, inventory parts, attendee list), you MUST extract **EVERY SINGLE ITEM** as a separate Node in the 'graphData.nodes' array.
@@ -407,6 +414,14 @@ const processImageWithGeminiInternal = async (
         errorCount: validationResult.errors.length,
       });
     }
+
+    // Feed the completed OCR result up to the QUIPU Observer (fire-and-forget;
+    // the mesh trains on it and re-radiates it as guidance to both apps).
+    observeOcr({
+      text: parsed.ocrText || parsed.preprocessOcrTranscription || "",
+      confidence: parsed.confidenceScore,
+      meta: { scanType, title: parsed.documentTitle, language: parsed.languageCode },
+    });
 
     return {
       ...parsed,
