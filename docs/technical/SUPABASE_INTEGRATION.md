@@ -3,6 +3,8 @@
 ## Overview
 This document describes the complete Supabase integration for the Loadopoly OCR application, including all database tables, relationships, and how they connect to the application code.
 
+Bakugo (card centering) shares this **Supabase project**, not the OCR document tables. See [Bakugo tables](#bakugo-card-centering-same-project) below.
+
 ## Database Schema
 
 ### Core Tables
@@ -395,6 +397,27 @@ Potential improvements:
 - [ ] PostgREST views for common queries
 - [ ] Automated backups and versioning
 - [ ] Data archival strategies
+
+## Bakugo (card centering, same project)
+
+Bakugo shares this **Supabase project**. It does **not** write `historical_documents_global`.
+
+OCR documents are UPPERCASE columns + `USER_ID` RLS (anon INSERT fails). Bakugo is metrology + provenance labels and must keep the contamination firewall, so it uses dedicated tables:
+
+| Table | Purpose |
+| --- | --- |
+| `bakugo_scans` | Measurement metadata (`device_id` + `local_id` unique). Photos stay on-device. |
+| `bakugo_labels` | Grade labels. `kind='certified'` requires `cert_number` (CHECK + RLS). |
+
+Migration: `supabase/migrations/20260820000000_bakugo_scans.sql`.
+
+RLS: `anon` and `authenticated` may `SELECT` and `INSERT`. No `UPDATE`/`DELETE` for anon. Pages / Pyodide use the **anon** key only — never a service-role key.
+
+Clients:
+- Python: `cardcenter.cloud` (`CARDCENTER_SUPABASE_URL` / `CARDCENTER_SUPABASE_ANON_KEY`, aliases of `VITE_SUPABASE_*`)
+- Pages: `Loadopoly-Portal/bakugo/config.json` (gitignored; copy `config.example.json`) or `window.__BAKUGO_SUPABASE__`
+
+Do not train grade models on cloud-imported `model_predicted` rows.
 
 ## Support
 
