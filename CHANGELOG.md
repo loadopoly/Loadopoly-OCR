@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+## [v2.23.0] - 2026-08-20
+
+### Added
+- **Vision-Channel World Model Grounding (`src/lib/worldModelGrounding.ts`)**: Defines `WorldModelState`, `RetrievalDirective`, and `VisionGrounding` interfaces, exporting `buildVisionGrounding()` to track document degradation (ink fading, archaic typography) and novel token ratios.
+- **Phase-Adaptive Guidance Ingestion**: `src/services/quipuService.ts` exports `getWorldModelState()` and `getRetrievalDirective()`, and adapts `lexiconHint()` to the Observer's cognitive phase (`receptive_hunger`, `empirical_precedent`, `targeted_epistemic`, `continuous_synthesis`).
+- **Vision Grounding Metadata Feed**: Injects `vision_grounding` metadata into `POST /observe` calls, grounding the QUIPU Observer in optical/historical document realities.
+
 ## [v2.22.1] - 2026-08-20
 
 ### Added
