@@ -18,6 +18,7 @@
  */
 
 import { logger } from '../lib/logger';
+import { WorldModelState, RetrievalDirective, VisionGrounding } from '../lib/worldModelGrounding';
 
 const QUIPU_URL = ((import.meta.env.VITE_QUIPU_URL as string | undefined) ?? '').replace(/\/$/, '');
 const GUIDANCE_TTL_MS = 5 * 60 * 1000;
@@ -41,6 +42,8 @@ export interface QuipuGuidance {
   sources: Record<string, { observations?: number; tokens?: number; confidence_ema?: number; last_seen?: string }>;
   mesh: { vocab: number | null; edges: number | null; weyl_tensor: number[] | null };
   last_train: Record<string, unknown> | null;
+  world_model?: WorldModelState;
+  retrieval_directive?: RetrievalDirective;
 }
 
 let guidanceCache: QuipuGuidance | null = null;
@@ -60,9 +63,16 @@ export const observeOcr = (input: {
   text: string;
   confidence?: number;
   meta?: Record<string, unknown>;
+  visionGrounding?: VisionGrounding;
 }): void => {
   if (!quipuEnabled() || !input.text?.trim()) return;
   const { signal, cancel } = withTimeout(FETCH_TIMEOUT_MS);
+  
+  const payloadMeta = { ...input.meta };
+  if (input.visionGrounding) {
+    payloadMeta.vision_grounding = input.visionGrounding;
+  }
+
   fetch(`${QUIPU_URL}/observe`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -71,7 +81,7 @@ export const observeOcr = (input: {
       kind: 'unstructured',
       text: input.text.slice(0, 20000),
       confidence: input.confidence,
-      meta: input.meta ?? {},
+      meta: payloadMeta,
     }),
     signal,
   })
@@ -141,6 +151,16 @@ export const getGuidance = (): QuipuGuidance | null => {
   return guidanceCache;
 };
 
+/** Returns the current world model state from cached guidance */
+export const getWorldModelState = (): WorldModelState | null => {
+  return getGuidance()?.world_model ?? null;
+};
+
+/** Returns the current retrieval directive from cached guidance */
+export const getRetrievalDirective = (): RetrievalDirective | null => {
+  return getGuidance()?.retrieval_directive ?? null;
+};
+
 /**
  * The enacted learning: a compact lexicon block for the extraction prompt.
  * Returns '' until guidance has been fetched at least once — the prompt is
@@ -149,8 +169,27 @@ export const getGuidance = (): QuipuGuidance | null => {
 export const lexiconHint = (maxTokens = 40): string => {
   const g = getGuidance();
   if (!g?.lexicon?.length) return '';
-  const terms = g.lexicon
-    .slice(0, maxTokens)
+  
+  const wm = getWorldModelState();
+  const dir = getRetrievalDirective();
+
+  if (wm?.phase === 'receptive_hunger') {
+    return '';
+  }
+
+  let limit = maxTokens;
+  let validLexicon = g.lexicon;
+
+  if (wm?.phase === 'targeted_epistemic' && dir?.confidence_floor !== undefined) {
+    validLexicon = validLexicon.filter(e => e.freq >= dir.confidence_floor!);
+  } else if (wm?.phase === 'continuous_synthesis') {
+    limit = maxTokens * 2;
+  }
+
+  if (!validLexicon.length) return '';
+
+  const terms = validLexicon
+    .slice(0, limit)
     .map((e) => e.token)
     .join(', ');
   return `

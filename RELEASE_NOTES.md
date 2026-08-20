@@ -1,4 +1,10 @@
-# 🚀 GeoGraph Node: v2.22.1 Release Notes
+# 🚀 GeoGraph Node: v2.23.0 Release Notes
+
+## 🌐 v2.23.0 — World Model Dialectic & Vision Channel Grounding (2026-08-20)
+
+- **Vision-Channel Grounding (`src/lib/worldModelGrounding.ts`)**: Models degradation factors (ink fading, archaic typography), novel token ratios, and estimated substrate age to teach the QUIPU Observer the physical noise characteristics of archival documents.
+- **Phase-Adaptive Guidance**: Adapted `lexiconHint()` in `src/services/quipuService.ts` to dynamically respond to QUIPU's 4-phase cognitive state (`receptive_hunger`, `empirical_precedent`, `targeted_epistemic`, `continuous_synthesis`) and retrieval directives.
+- **World Model State Access**: Exported `getWorldModelState()` and `getRetrievalDirective()` for runtime inspection and UI integration.
 
 ## 🌐 v2.22.1 — Tri-Repo Closed Loop & Systems Dynamics (2026-08-20)
 

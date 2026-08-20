@@ -1,6 +1,6 @@
 # System Dynamics — Loadopoly-OCR (Vision Axis & Archival Knowledge Ingestion)
 
-Version: 2.22.1  
+Version: 2.23.0  
 Date: 2026-08-20  
 
 ---
@@ -93,7 +93,27 @@ The complete system schema resides in `sql/CONSOLIDATED_SCHEMA.sql` and is mirro
 
 ---
 
-## 4. Observability & Telemetry Verification
+## 4. World Model Grounding & Phase-Adaptive Guidance (v2.23.0)
+
+Loadopoly-OCR enriches its vision observations with **vision-channel grounding metadata** (`src/lib/worldModelGrounding.ts`) and dynamically adapts prompt guidance based on the QUIPU Observer's active cognitive phase and retrieval directives.
+
+### 4.1. Vision-Channel Grounding (`buildVisionGrounding`)
+Observations sent to `POST /observe` include physical degradation and corpus characteristics:
+- **channel_type**: `archival_scan`, `live_camera`, or `digital_document`.
+- **estimated_age_years**: Inferred temporal baseline for document substrate degradation.
+- **degradation_factors**: Flags such as `ink_fading` (low confidence on historical substrate) and `archaic_typography` (high novel token ratio $> 15\%$).
+- **novel_token_ratio**: Fraction of candidate tokens outside the known mesh vocabulary.
+
+### 4.2. Phase-Adaptive Lexicon Injection
+The `lexiconHint()` prompt injector adapts to the Observer's cognitive phase:
+- **`receptive_hunger`**: Returns empty lexicon guidance to avoid biasing the model with insufficient or outdated priors.
+- **`empirical_precedent`**: Injects standard domain lexicon priors to stabilize noisy character recognition.
+- **`targeted_epistemic`**: Applies strict confidence filtering based on the Observer's retrieval directive, targeting known vocabulary gaps.
+- **`continuous_synthesis`**: Full lexicon and quipu bigram context injection with high confidence gating.
+
+---
+
+## 5. Observability & Telemetry Verification
 
 ```bash
 # 1. Verify Loadopoly-OCR Vite dev server
@@ -106,4 +126,7 @@ curl -s "http://127.0.0.1:7100/guidance?source=loadopoly-ocr" | jq '{ok: .ok, vo
 curl -s -H "apikey: $VITE_SUPABASE_ANON_KEY" \
      -H "Authorization: Bearer $VITE_SUPABASE_ANON_KEY" \
      "http://127.0.0.1:54321/rest/v1/user_avatars?select=*" | jq .
+
+# 4. Check QUIPU World Model dialectic state
+curl -s "http://127.0.0.1:7100/world-model" | jq .
 ```
