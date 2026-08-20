@@ -88,6 +88,10 @@ services:
       CARDCENTER_DB: /data/cardcenter.db
       CARDCENTER_QUIPU_URL: http://quipu:7100
       CARDCENTER_HIDEOUT: scbrain-hideout
+      CARDCENTER_SUPABASE_URL: ${CARDCENTER_SUPABASE_URL:-http://host.docker.internal:54321}
+      CARDCENTER_SUPABASE_ANON_KEY: ${CARDCENTER_SUPABASE_ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - bakugo_data:/data
     restart: unless-stopped

@@ -1,5 +1,12 @@
 ## [Unreleased]
 
+## [v2.22.1] - 2026-08-20
+
+### Added
+- **System Dynamics Documentation** (`docs/SYSTEM_DYNAMICS.md`): Defines Loadopoly-OCR's formal role as the **Vision Sense Axis** ($\text{axis}=0$) in the Tri-Repo Mesh with QUIPU (Observer) and Bakugo (Touch Axis).
+- **Vision-Touch Closed-Loop Learning Link**: Full end-to-end telemetry and guidance ingestion via `src/services/quipuService.ts` (`POST /observe`, `GET /guidance`, `POST /feedback` with $2\times$ weighting).
+- **Docker Compose Topology & Supabase RLS Alignment**: Synchronized environment variables, database grants, and PostgREST connectivity (`historical_documents_global`, `processing_queue`, `bakugo_scans`, `user_avatars`).
+
 ## [v2.22.0] - 2026-08-20
 
 ### Added

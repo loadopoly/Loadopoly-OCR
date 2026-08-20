@@ -1,4 +1,11 @@
-# 🚀 GeoGraph Node: v2.20.1 Release Notes
+# 🚀 GeoGraph Node: v2.22.1 Release Notes
+
+## 🌐 v2.22.1 — Tri-Repo Closed Loop & Systems Dynamics (2026-08-20)
+
+- **System Dynamics Reference**: Authored `docs/SYSTEM_DYNAMICS.md` defining Loadopoly-OCR's mathematical and operational role as the **Vision Sense Axis** ($\text{axis}=0$).
+- **Observer Learning Hub Integration**: Connected `quipuService.ts` to `quipu-observer` on port 7100 for bidirectional observation feeding (`POST /observe`) and domain lexicon prior retrieval (`GET /guidance`).
+- **PostgREST Database Sync**: Verified full consolidated database schema (v3.3.0) and role grants across `historical_documents_global`, `processing_queue`, `user_avatars`, `bakugo_scans`, and `bakugo_labels`.
+- **Docker Compose Fleet**: Integrated multi-service orchestration with healthchecks for `loadopoly-ocr`, `quipu`, and `bakugo`.
 
 ## ✅ v2.20.1 — Strong Stable State & Fallback Baseline (2026-04-20)
 
