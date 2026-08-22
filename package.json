@@ -1,6 +1,6 @@
 {
   "name": "geograph-ocr-node",
-  "version": "2.23.0",
+  "version": "2.24.0",
   "description": "Advanced OCR-to-Graph platform with GIS metadata, semantic NLP, deduplication, and metaverse navigation",
   "type": "module",
   "scripts": {
@@ -22,6 +22,7 @@
     "test:web3": "node test-web3-minting.cjs"
   },
   "dependencies": {
+    "@duckdb/duckdb-wasm": "^1.32.0",
     "@google/genai": "^1.0.0",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^9.0.0",

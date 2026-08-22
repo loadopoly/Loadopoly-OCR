@@ -6,6 +6,8 @@ tunnel: ${TUNNEL_ID}
 credentials-file: /etc/cloudflared/credentials.json
 
 ingress:
+  - hostname: bakugo.loadopoly.com
+    service: http://bakugo:8765
   - hostname: loadopoly.com
     service: http://loadopoly-ocr:3000
   - hostname: www.loadopoly.com

@@ -94,6 +94,7 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - bakugo_data:/data
+      - bakugo_parquet:/data/parquet
     restart: unless-stopped
 
   caddy:
@@ -131,6 +132,8 @@ services:
     depends_on:
       loadopoly-ocr:
         condition: service_healthy
+      bakugo:
+        condition: service_started
     command: tunnel --no-autoupdate --config /etc/cloudflared/config.yml run
     volumes:
       - ./cloudflared/config.yml:/etc/cloudflared/config.yml:ro
@@ -143,3 +146,4 @@ volumes:
   caddy_config:
   quipu_brain:
   bakugo_data:
+  bakugo_parquet:
