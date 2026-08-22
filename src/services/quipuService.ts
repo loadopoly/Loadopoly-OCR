@@ -116,11 +116,12 @@ export const reportCorrection = (expected: string, observed: string): void => {
 };
 
 /** Refresh the guidance cache in the background. */
-const refreshGuidance = (): void => {
+const refreshGuidance = (deviceId?: string): void => {
   if (!quipuEnabled() || guidanceInFlight) return;
   guidanceInFlight = true;
   const { signal, cancel } = withTimeout(FETCH_TIMEOUT_MS);
-  fetch(`${QUIPU_URL}/guidance?source=${SOURCE}`, { signal })
+  const devParam = deviceId ? `&device_id=${encodeURIComponent(deviceId)}` : '';
+  fetch(`${QUIPU_URL}/guidance?source=${SOURCE}${devParam}`, { signal })
     .then((r) => r.json())
     .then((g: QuipuGuidance) => {
       if (g?.ok) {
@@ -143,12 +144,31 @@ const refreshGuidance = (): void => {
 };
 
 /** Cached guidance (may be null before first successful refresh). */
-export const getGuidance = (): QuipuGuidance | null => {
+export const getGuidance = (deviceId?: string): QuipuGuidance | null => {
   if (!quipuEnabled()) return null;
   if (!guidanceCache || Date.now() - guidanceFetchedAt > GUIDANCE_TTL_MS) {
-    refreshGuidance();
+    refreshGuidance(deviceId);
   }
   return guidanceCache;
+};
+
+/** Trigger an epistemic self-annealing iteration in QUIPU. */
+export const triggerAnneal = async (): Promise<Record<string, unknown> | null> => {
+  if (!quipuEnabled()) return null;
+  try {
+    const { signal, cancel } = withTimeout(FETCH_TIMEOUT_MS);
+    const res = await fetch(`${QUIPU_URL}/anneal`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source: SOURCE }),
+      signal,
+    });
+    cancel();
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
 };
 
 /** Returns the current world model state from cached guidance */
