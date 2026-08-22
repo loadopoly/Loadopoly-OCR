@@ -20,7 +20,7 @@
 import { logger } from '../lib/logger';
 import { WorldModelState, RetrievalDirective, VisionGrounding } from '../lib/worldModelGrounding';
 
-const QUIPU_URL = ((import.meta.env.VITE_QUIPU_URL as string | undefined) ?? '').replace(/\/$/, '');
+const QUIPU_URL = ((import.meta.env.VITE_QUIPU_URL as string | undefined) ?? 'http://localhost:7100').replace(/\/$/, '');
 const GUIDANCE_TTL_MS = 5 * 60 * 1000;
 const FETCH_TIMEOUT_MS = 4000;
 const SOURCE = 'loadopoly-ocr';
@@ -51,6 +51,19 @@ let guidanceFetchedAt = 0;
 let guidanceInFlight = false;
 
 export const quipuEnabled = (): boolean => QUIPU_URL.length > 0;
+
+export const getObserverState = async (): Promise<Record<string, unknown> | null> => {
+  if (!quipuEnabled()) return null;
+  try {
+    const { signal, cancel } = withTimeout(FETCH_TIMEOUT_MS);
+    const res = await fetch(`${QUIPU_URL}/state`, { signal });
+    cancel();
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+};
 
 const withTimeout = (ms: number): { signal: AbortSignal; cancel: () => void } => {
   const controller = new AbortController();
