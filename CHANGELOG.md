@@ -1,5 +1,15 @@
 ## [Unreleased]
 
+## [v2.24.0] - 2026-08-22
+
+### Added
+- **DuckDB-WASM In-Browser Analytics (`src/lib/duckdbAnalytics.ts`)**: Client-side OLAP engine using `@duckdb/duckdb-wasm` for sub-second analytical queries over Parquet files exported from Bakugo's lakehouse. Provides `queryScanSummary()`, `queryCorpusStats()`, `queryTimeSeriesActivity()`, and `queryCrossCorpusSummary()` — all running entirely in the browser with no server roundtrips.
+- **Parquet Lakehouse Integration**: `loadParquet()` and `loadParquetBuffer()` register remote or in-memory Parquet files as DuckDB tables for instant federated querying across Bakugo scans and Loadopoly-OCR assets.
+- **Docker Compose Updates**: Added `bakugo_parquet` volume for Parquet lakehouse output. `cloudflared-named` now depends on both `loadopoly-ocr` and `bakugo` services for reliable tunnel startup.
+
+### Changed
+- **DOCKER.md**: Added DuckDB Analytics & Parquet Lakehouse architecture documentation with data flow diagram and volume mapping table.
+
 ## [v2.23.0] - 2026-08-20
 
 ### Added

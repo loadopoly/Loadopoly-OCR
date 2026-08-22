@@ -53,6 +53,42 @@ curl http://localhost:7100/digest    # today's learning
 
 Build contexts `../QUIPU` and `../Bakugo` must sit beside this repo.
 
+### DuckDB Analytics & Parquet Lakehouse
+
+Bakugo (v2.6.0+) includes a **DuckDB OLAP analytical layer** that attaches
+its live SQLite store (WAL mode) via zero-copy scanner. It also exports
+Hive-partitioned Parquet files to `/data/parquet/`.
+
+Loadopoly-OCR (v2.24.0+) includes **DuckDB-WASM** (`@duckdb/duckdb-wasm`)
+for in-browser analytical queries over those Parquet files — no server
+roundtrip needed.
+
+```
+┌──────────────┐     zero-copy attach     ┌──────────────┐
+│  SQLite WAL  │ ◄──────────────────────► │   DuckDB     │
+│ cardcenter.db│                          │   OLAP       │
+└──────────────┘                          └──────┬───────┘
+                                                 │ COPY TO
+                                          ┌──────▼───────┐
+                                          │   Parquet     │
+                                          │  Lakehouse    │
+                                          │ /data/parquet │
+                                          └──────┬───────┘
+                                                 │ fetch()
+                                          ┌──────▼───────┐
+                                          │  DuckDB-WASM │
+                                          │  (browser)   │
+                                          └──────────────┘
+```
+
+Docker volumes:
+
+| Volume | Service | Purpose |
+| --- | --- | --- |
+| `bakugo_data` | bakugo | SQLite WAL store (`cardcenter.db`) |
+| `bakugo_parquet` | bakugo | Parquet lakehouse output |
+| `quipu_brain` | quipu | Observer SLM brain |
+
 ## Production image
 
 ```bash
