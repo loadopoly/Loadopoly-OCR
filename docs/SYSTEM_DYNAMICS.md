@@ -1,7 +1,7 @@
 # System Dynamics — Loadopoly-OCR (Vision Axis & Archival Knowledge Ingestion)
 
-Version: 2.23.0  
-Date: 2026-08-20  
+Version: 2.25.0  
+Date: 2026-08-22  
 
 ---
 
@@ -130,3 +130,13 @@ curl -s -H "apikey: $VITE_SUPABASE_ANON_KEY" \
 # 4. Check QUIPU World Model dialectic state
 curl -s "http://127.0.0.1:7100/world-model" | jq .
 ```
+
+---
+
+## 6. DuckDB-WASM In-Browser Analytics & Epistemic Self-Annealing (v2.25.0)
+
+Loadopoly-OCR embeds an in-browser **DuckDB-WASM** analytical engine (`src/lib/duckdbAnalytics.ts`) capable of querying federated Parquet lakehouse files exported from Bakugo without server hops:
+- **`queryScanSummary()` / `queryCorpusStats()`**: Instant client-side OLAP aggregations.
+- **`triggerAnneal()`**: Initiates an on-demand epistemic self-annealing iteration in QUIPU to fold fresh sensory discoveries into the active mesh.
+- **Tenant Isolation**: Guidance queries pass `deviceId` to personalize prompts and lexicons while strictly protecting cross-tenant document boundaries.
+
