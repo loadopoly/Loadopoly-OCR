@@ -7,7 +7,8 @@ services:
     image: loadopoly-ocr:dev
     container_name: loadopoly-ocr
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
+    restart: unless-stopped
     environment:
       CHOKIDAR_USEPOLLING: "true"
       WATCHPACK_POLLING: "true"
@@ -54,7 +55,7 @@ services:
     image: quipu-observer:dev
     container_name: quipu
     ports:
-      - "7100:7100"
+      - "127.0.0.1:7100:7100"
     environment:
       SCB_DB_PATH: /data/local_brain.sqlite
       QUIPU_TRAIN_INTERVAL: "45"
@@ -83,7 +84,7 @@ services:
       quipu:
         condition: service_started
     ports:
-      - "8765:8765"
+      - "127.0.0.1:8765:8765"
     environment:
       CARDCENTER_DB: /data/cardcenter.db
       CARDCENTER_QUIPU_URL: http://quipu:7100
