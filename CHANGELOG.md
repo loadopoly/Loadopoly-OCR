@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [v2.25.0] - 2026-08-22
+
+### Added
+- **Epistemic Self-Annealing & Feedback Trigger (`src/services/quipuService.ts`)**: Exports `triggerAnneal()` to initiate on-demand MESH-SLM self-annealing iterations with QUIPU.
+- **Tenant Device Scoping**: Passes `deviceId` in guidance requests to personalize vocabulary directives without data leakage across tenants.
+
 ## [v2.24.0] - 2026-08-22
 
 ### Added
