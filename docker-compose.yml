@@ -1,3 +1,15 @@
+# SUPERSEDED for Black Bulls Hideout deployments.
+#
+# The node now runs as ONE compose project from the workspace root:
+#
+#     cd ..  &&  docker compose up -d          # project: hideout
+#
+# Starting services from this file puts them on the `loadopoly-ocr_default`
+# network instead of `hideout_fleet`, where HubCore cannot resolve them by the
+# `serviceHost` name its endpoint registry declares -- the fleet then reads as
+# unreachable while the containers are plainly running. Keep this file only for
+# standalone OCR development outside the Hideout stack.
+
 services:
   loadopoly-ocr:
     build:

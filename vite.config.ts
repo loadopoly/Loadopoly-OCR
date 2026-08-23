@@ -39,6 +39,9 @@ export default defineConfig({
   server: {
     host: true,
     port: 3000,
+    // HubCore health-probes this service by its compose bridge name, so Vite's
+    // host check must accept it or every probe comes back 403.
+    allowedHosts: ['loadopoly-ocr', 'localhost', '127.0.0.1'],
     // Ensure proper MIME types in dev
     headers: {
       'X-Content-Type-Options': 'nosniff',
