@@ -1,6 +1,10 @@
 ## [Unreleased]
 
-## [v2.25.0] - 2026-08-22
+## [v2.25.1] - 2026-09-08
+
+### Added
+- **Fleet Marketplace REST Client Fallback (`src/services/gard/shardMarket.ts`)**: Wired `getUserPortfolio()` and `getTokenizedAssets()` to query the GARD Shard Marketplace service (`http://127.0.0.1:8600`) directly via `VITE_MARKETPLACE_URL` before falling back to Supabase.
+
 
 ### Added
 - **Epistemic Self-Annealing & Feedback Trigger (`src/services/quipuService.ts`)**: Exports `triggerAnneal()` to initiate on-demand MESH-SLM self-annealing iterations with QUIPU.
