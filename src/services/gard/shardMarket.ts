@@ -13,12 +13,36 @@ import {
 } from '../../types';
 import { gardRoyaltyEngine } from './royaltyEngine';
 
+const MARKETPLACE_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_MARKETPLACE_URL) || 'http://127.0.0.1:8600';
+
 export class ShardMarketService {
 
   /**
-   * Fetch user's shard portfolio
+   * Fetch user's shard portfolio from Fleet Marketplace or Supabase fallback
    */
   async getUserPortfolio(userId: string): Promise<ShardHolding[]> {
+    try {
+      const res = await fetch(`${MARKETPLACE_BASE_URL}/api/v1/marketplace/portfolio/${encodeURIComponent(userId)}`);
+      if (res.ok) {
+        const d = await res.json();
+        if (d.ok && Array.isArray(d.holdings)) {
+          return d.holdings.map((h: any) => ({
+            id: h.holding_id || h.id,
+            userId: h.user_id || userId,
+            assetId: h.asset_id,
+            tokenId: h.token_id,
+            shardCount: h.shard_count,
+            acquisitionPrice: parseFloat(h.acquisition_price || '0'),
+            acquisitionDate: h.acquisition_date,
+            currentValue: parseFloat(h.current_value || '0'),
+            unrealizedGain: parseFloat(h.unrealized_gain || '0'),
+          }));
+        }
+      }
+    } catch (e) {
+      // Fallback to Supabase
+    }
+
     if (!supabase) return [];
     
     const { data, error } = await supabase
@@ -388,7 +412,34 @@ export class ShardMarketService {
   /**
    * Get all tokenized assets
    */
-  async getTokenizedAssets(): Promise<GARDDataAsset[]> {
+  async getTokenizedAssets(axis?: string): Promise<GARDDataAsset[]> {
+    try {
+      const url = `${MARKETPLACE_BASE_URL}/api/v1/marketplace/catalog` + (axis ? `?axis=${encodeURIComponent(axis)}` : '');
+      const res = await fetch(url);
+      if (res.ok) {
+        const d = await res.json();
+        if (d.ok && Array.isArray(d.assets)) {
+          return d.assets.map((a: any) => ({
+            ASSET_ID: a.asset_id,
+            NFT_TOKEN_ID: a.token_id,
+            SHARD_COUNT: a.shard_count,
+            SHARD_PRICE_BASE: parseFloat(a.shard_price_base || '1'),
+            ROYALTY_RATE: parseFloat(a.royalty_rate || '0.05'),
+            CONTRIBUTOR_WALLET: a.contributor_wallet,
+            AI_QUALITY_SCORE: parseFloat(a.quality_score || '0'),
+            GIS_PRECISION_SCORE: parseFloat(a.precision_score || '0'),
+            HISTORICAL_SIGNIFICANCE: 0.95,
+            IS_GENESIS_ASSET: Boolean(a.is_genesis),
+            RETAIL_DEMAND_DRIVEN: true,
+            TOKENIZED_AT: a.created_at,
+            LAST_TRADED_AT: a.last_traded_at,
+          }));
+        }
+      }
+    } catch (e) {
+      // Fallback
+    }
+
     if (!supabase) return [];
     
     const { data, error } = await supabase
