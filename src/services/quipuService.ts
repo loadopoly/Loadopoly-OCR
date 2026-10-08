@@ -71,7 +71,115 @@ const withTimeout = (ms: number): { signal: AbortSignal; cancel: () => void } =>
   return { signal: controller.signal, cancel: () => clearTimeout(timer) };
 };
 
-/** Fire-and-forget: feed one completed OCR result up to the Observer. */
+// ---------------------------------------------------------------------------
+// Outbox (v0.48.0): every write to QUIPU is queued in localStorage and sent
+// with an idempotency key, so an OCR result is not lost when the Observer is
+// down or the tab closes, and a retry is never learned twice (QUIPU answers a
+// repeat with {duplicate: true}).  The browser cannot hold a signing key, so
+// QUIPU accepts this surface at "origin" assurance from the origins the
+// operator bound to loadopoly-ocr in the edge grant.
+// ---------------------------------------------------------------------------
+
+const OUTBOX_KEY = 'quipu.outbox.v1';
+const OUTBOX_MAX = 500;
+const AUTH_HOLD_MS = 15 * 60 * 1000;
+
+interface OutboxItem {
+  id: string;
+  path: string;
+  body: string;
+  attempts: number;
+  nextAt: number;
+}
+
+const readOutbox = (): OutboxItem[] => {
+  try {
+    const raw = globalThis.localStorage?.getItem(OUTBOX_KEY);
+    const items = raw ? JSON.parse(raw) : [];
+    return Array.isArray(items) ? items : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeOutbox = (items: OutboxItem[]): void => {
+  try {
+    globalThis.localStorage?.setItem(OUTBOX_KEY, JSON.stringify(items.slice(-OUTBOX_MAX)));
+  } catch {
+    /* storage full or unavailable: the in-flight send still happens */
+  }
+};
+
+const newId = (): string => {
+  try {
+    return `ocr-${globalThis.crypto.randomUUID()}`;
+  } catch {
+    return `ocr-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+  }
+};
+
+let flushing = false;
+
+const sendOne = async (item: OutboxItem): Promise<'done' | 'retry' | 'drop'> => {
+  const { signal, cancel } = withTimeout(FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${QUIPU_URL}${item.path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Quipu-Idempotency': item.id },
+      body: item.body,
+      signal,
+    });
+    if (res.ok) return 'done';
+    if (res.status === 400 || res.status === 413) return 'drop';
+    if (res.status === 429) {
+      const wait = Number(res.headers.get('Retry-After') || '60');
+      item.nextAt = Date.now() + Math.max(1, wait) * 1000;
+    } else if (res.status === 401 || res.status === 403) {
+      item.nextAt = Date.now() + AUTH_HOLD_MS;
+    } else {
+      item.nextAt = Date.now() + Math.min(3600, 2 ** Math.min(item.attempts, 12)) * 1000;
+    }
+    return 'retry';
+  } catch {
+    item.nextAt = Date.now() + Math.min(3600, 2 ** Math.min(item.attempts, 12)) * 1000;
+    return 'retry';
+  } finally {
+    cancel();
+  }
+};
+
+/** Send everything that is due.  Safe to call any time; never throws. */
+export const flushOutbox = async (): Promise<void> => {
+  if (flushing || !quipuEnabled()) return;
+  flushing = true;
+  try {
+    const now = Date.now();
+    for (const item of readOutbox().filter((i) => i.nextAt <= now)) {
+      item.attempts += 1;
+      const outcome = await sendOne(item);
+      const rest = readOutbox().filter((i) => i.id !== item.id);
+      writeOutbox(outcome === 'retry' ? [...rest, item] : rest);
+      if (outcome === 'drop') logger.debug('QUIPU refused a write', { operation: 'quipuOutbox', id: item.id });
+    }
+  } finally {
+    flushing = false;
+  }
+};
+
+const enqueue = (path: string, payload: Record<string, unknown>): void => {
+  const item: OutboxItem = { id: newId(), path, body: JSON.stringify(payload), attempts: 0, nextAt: 0 };
+  writeOutbox([...readOutbox(), item]);
+  void flushOutbox();
+};
+
+if (typeof globalThis.addEventListener === 'function') {
+  globalThis.addEventListener('online', () => void flushOutbox());
+}
+if (typeof globalThis.setInterval === 'function') {
+  globalThis.setInterval(() => void flushOutbox(), 30_000);
+}
+
+/** Queue one completed OCR result for the Observer (kept until delivered). */
 export const observeOcr = (input: {
   text: string;
   confidence?: number;
@@ -79,53 +187,25 @@ export const observeOcr = (input: {
   visionGrounding?: VisionGrounding;
 }): void => {
   if (!quipuEnabled() || !input.text?.trim()) return;
-  const { signal, cancel } = withTimeout(FETCH_TIMEOUT_MS);
-  
+
   const payloadMeta = { ...input.meta };
   if (input.visionGrounding) {
     payloadMeta.vision_grounding = input.visionGrounding;
   }
 
-  fetch(`${QUIPU_URL}/observe`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      source: SOURCE,
-      kind: 'unstructured',
-      text: input.text.slice(0, 20000),
-      confidence: input.confidence,
-      meta: payloadMeta,
-    }),
-    signal,
-  })
-    .then((r) => r.json())
-    .then((res) => {
-      logger.debug('QUIPU observation accepted', {
-        operation: 'quipuObserve',
-        tokens: res?.tokens,
-        knownCoverage: res?.enacted?.known_token_coverage,
-      });
-    })
-    .catch(() => {
-      /* the Observer is optional; never surface transport errors */
-    })
-    .finally(cancel);
+  enqueue('/observe', {
+    source: SOURCE,
+    kind: 'unstructured',
+    text: input.text.slice(0, 20000),
+    confidence: input.confidence,
+    meta: payloadMeta,
+  });
 };
 
 /** Report ground truth (e.g. user-corrected OCR text) back to the Observer. */
 export const reportCorrection = (expected: string, observed: string): void => {
   if (!quipuEnabled() || !expected?.trim()) return;
-  const { signal, cancel } = withTimeout(FETCH_TIMEOUT_MS);
-  fetch(`${QUIPU_URL}/feedback`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ source: SOURCE, expected, observed }),
-    signal,
-  })
-    .catch(() => {
-      /* optional */
-    })
-    .finally(cancel);
+  enqueue('/feedback', { source: SOURCE, expected, observed });
 };
 
 /** Refresh the guidance cache in the background. */

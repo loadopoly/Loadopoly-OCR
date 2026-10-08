@@ -1,5 +1,10 @@
 ## [Unreleased]
 
+## [v2.25.2] - 2026-10-07
+
+### Added
+- **QUIPU Resilient Outbox (`src/services/quipuService.ts`)**: Durable localStorage outbox queue with exponential backoff and idempotency keys (`X-Quipu-Idempotency`). Ensures observation submissions are never lost during offline or network drops, and prevented from duplicate ingestion upon retry.
+
 ## [v2.25.1] - 2026-09-08
 
 ### Added
