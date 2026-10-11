@@ -1,5 +1,11 @@
 ## [Unreleased]
 
+## [v2.26.0] - 2026-10-11
+
+### Added
+- **Photogrammetric connection (`holon.metrology/1`)**: `src/lib/photoMetrology.ts` (TypeScript port of the umbrella `Metrology/photometrology.py`, parity-checked by `npm run test:metrology` against synced golden vectors) and `src/services/metrologyService.ts` (register a photo by content hash with its EXIF prior, record reference spans, save/use the signed-in user's own local standards with consent, read the fused scale).
+- **Migration `20261010000000_photo_metrology.sql`**: shared `metrology_photos`, `metrology_references` (seeded, linked to the older `graph_nodes` sizing seeds), owner-only `metrology_standards` (consent required), `metrology_observations` (StockOpoly mirrors here; personal-standard rows carry no pixel span, game units refused), views `metrology_photo_scales` and `metrology_exif_error_stats`.
+
 ## [v2.25.2] - 2026-10-07
 
 ### Added
