@@ -1,5 +1,13 @@
 ## [Unreleased]
 
+## [v2.26.1] - 2026-10-24
+
+### Changed
+- **GeoGraph moves to machamp.loadopoly.com; www.loadopoly.com is the landing page again.** The landing page's app
+  links (Launch App, Get started, Start Pro trial, the screenshot fallback) point to machamp. `nginx.conf` (the `prod`
+  image) answers for machamp, revalidates `/sw.js` and `index.html` so installed apps update, and adds security headers.
+  The fleet serves both (`loadopoly-www`, `geograph-web` in the fleet's docker-compose).
+
 ## [v2.26.0] - 2026-10-11
 
 ### Added
